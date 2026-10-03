@@ -1,0 +1,119 @@
+name: pr-standards
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label-and-check:
+    name: labels · size · risk · body
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: derive labels
+        id: derive
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path')
+          added=$(gh pr view "$PR" --repo "$REPO" --json files --jq '[.files[].additions] | add // 0')
+          deleted=$(gh pr view "$PR" --repo "$REPO" --json files --jq '[.files[].deletions] | add // 0')
+          total=$((added + deleted))
+
+          type=""
+          if [[ "$TITLE" =~ ^(feat|fix|sec|policy|host|docs|test|refactor|perf|build|ci|chore)(\([^)]+\))?!?: ]]; then
+            type="type/${BASH_REMATCH[1]}"
+          fi
+
+          areas=()
+          has() { grep -qE "$1" <<<"$files"; }
+          has '^crates/moat-core/'      && areas+=(area/core)
+          has '^crates/moat-hosts/'     && areas+=(area/hosts)
+          has '^crates/moat-audit/'     && areas+=(area/audit)
+          has '^crates/moat-cli/'       && areas+=(area/cli)
+          has '^(policies/|tests/conformance/)' && areas+=(area/policy)
+          has '^(\.github/|scripts/)'   && areas+=(area/ci)
+          has '(^docs/|\.md$)'          && areas+=(area/docs)
+          has '^(Cargo\.(toml|lock)|crates/[^/]+/Cargo\.toml|deny\.toml)$' && areas+=(area/deps)
+
+          if   (( total <= 10 ));  then size=size/XS
+          elif (( total <= 50 ));  then size=size/S
+          elif (( total <= 200 )); then size=size/M
+          elif (( total <= 500 )); then size=size/L
+          else size=size/XL; fi
+
+          risk=risk/low
+          if has '^(crates/moat-hosts/|crates/moat-cli/src/install/|crates/moat-audit/)'; then risk=risk/medium; fi
+          if has '^(crates/moat-core/src/(engine|policy|shell|lexer|pattern|paths)|policies/|\.github/workflows/|SECURITY\.md|crates/moat-cli/src/commands/guard\.rs|crates/moat-cli/src/exit\.rs)'; then risk=risk/high; fi
+
+          behaviour_change=false
+          has '^(crates/moat-core/src/|policies/)' && behaviour_change=true
+          fixture_touched=false
+          has '^tests/conformance/' && fixture_touched=true
+
+          {
+            echo "type=$type"
+            echo "areas=${areas[*]:-}"
+            echo "size=$size"
+            echo "risk=$risk"
+            echo "total=$total"
+            echo "behaviour_change=$behaviour_change"
+            echo "fixture_touched=$fixture_touched"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: apply labels
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name')
+          remove=$(grep -E '^(type|area|size|risk)/' <<<"$current" | grep -v '^size/override$' || true)
+          add="${{ steps.derive.outputs.type }} ${{ steps.derive.outputs.areas }} ${{ steps.derive.outputs.size }} ${{ steps.derive.outputs.risk }}"
+          if [[ "${{ steps.derive.outputs.behaviour_change }}" == "true" && "${{ steps.derive.outputs.fixture_touched }}" == "false" ]]; then
+            add="$add needs-fixture"
+          else
+            remove="$remove needs-fixture"
+          fi
+          args=()
+          for l in $remove; do args+=(--remove-label "$l"); done
+          for l in $add; do args+=(--add-label "$l"); done
+          if (( ${#args[@]} )); then gh pr edit "$PR" --repo "$REPO" "${args[@]}"; fi
+
+      - name: check body and size
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(gh pr view "$PR" --repo "$REPO" --json body --jq .body)
+          labels=$(gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name')
+          fail=0
+          section() { # heading -> non-empty, non-placeholder content required
+            local content
+            content=$(awk -v h="## $1" '
+              $0==h {on=1; next} /^## / {on=0} on' <<<"$body" | grep -vE '^\s*(<!--.*-->)?\s*$' | grep -vE '^- \[ \]' || true)
+            if [[ -z "$content" ]]; then echo "::error::PR body section '## $1' is missing or empty"; fail=1; fi
+          }
+          section "Testing"
+          section "Security impact"
+          if [[ -z "${{ steps.derive.outputs.type }}" ]]; then
+            echo "::error::title must start with a Conventional Commits type (feat, fix, sec, policy, host, docs, test, refactor, perf, build, ci, chore)"; fail=1
+          fi
+          if [[ "${{ steps.derive.outputs.size }}" == "size/XL" ]] && ! grep -qx 'size/override' <<<"$labels"; then
+            echo "::error::change is ${{ steps.derive.outputs.total }} lines; split it, or add the size/override label with a justification in the PR"; fail=1
+          fi
+          {
+            echo "### pr-standards"
+            echo "- type: \`${{ steps.derive.outputs.type }}\`"
+            echo "- areas: \`${{ steps.derive.outputs.areas }}\`"
+            echo "- size: \`${{ steps.derive.outputs.size }}\` (${{ steps.derive.outputs.total }} lines)"
+            echo "- risk: \`${{ steps.derive.outputs.risk }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $fail
