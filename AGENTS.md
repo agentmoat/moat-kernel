@@ -48,7 +48,7 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 - **Dependencies:** adding one needs a sentence in the PR on why std or an existing dep does not cover it; `cargo-deny` must stay green; `moat-core` additions need an ADR.
 - **Lints:** workspace `clippy::pedantic`, `unsafe_code = "forbid"`, rustdoc `-D warnings`. Do not `#[allow]` to get green; fix or justify in the PR.
 - **Formatting:** `cargo fmt` (max width 100). `.editorconfig` for everything else.
-- **Commits/PRs:** Conventional Commits (`feat`, `fix`, `sec`, `policy`, `host(codex)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`), lowercase subject, squash-merge. PR template sections **Testing** and **Security impact** are required.
+- **PR-only:** nothing is pushed to `main` directly. Branch `<type>/<topic>`, open a PR, let `pr-standards` label it (type/area/size/risk), keep it ≤ 500 lines, squash-merge. Conventional Commits title (`feat`, `fix`, `sec`, `policy`, `host(codex)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`), lowercase subject. PR body sections **Testing**, **Security impact** and **Release note** are required.
 - **Docs are code:** behaviour change ⇒ same PR updates `docs/POLICY.md` / `DESIGN.md` / `CHANGELOG.md` as applicable.
 
 ## 5. Skills (how to do the common jobs)
@@ -104,4 +104,4 @@ Copy the shape of `docs/adr/ADR-004-exit-code-contract.md`: Context, Decision, C
 - Do not disable lints, delete tests, or add `#[allow]`/`#[ignore]` to get green.
 - Do not run `moat init` against the real `~/.claude` of a machine where a Claude Code session is active; use `MOAT_HOME`, `CLAUDE_CONFIG_DIR` and a scratch project (see `docs/PROGRESS.md` §2.3).
 - Never commit credentials, real host payloads with tokens, or personal absolute paths.
-- Prefer small PRs: one concern, one title.
+- Prefer small PRs: one concern, one title, ≤ 500 lines. Never push to `main`; never merge your own PR while a required check is red.
