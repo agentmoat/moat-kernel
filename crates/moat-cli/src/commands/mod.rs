@@ -1,5 +1,6 @@
 //! Command dispatch.
 
+mod doctor;
 mod guard;
 mod init;
 mod policy;
@@ -17,6 +18,7 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Guard(args) => Ok(guard::run(&args)),
         Command::Show(args) => show::run(&args),
         Command::Status => status::run(),
+        Command::Doctor(args) => doctor::run(&args),
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),
             PolicyCommand::Check(args) => policy::check(&args),

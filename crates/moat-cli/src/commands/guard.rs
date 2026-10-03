@@ -138,9 +138,9 @@ fn integrity_violation(home: &Home) -> Result<Option<Decision>> {
     for d in drift {
         decision.reasons.push(format!("{d}"));
     }
-    decision
-        .reasons
-        .push("re-run `moat init` to re-pin after reviewing the change".to_owned());
+    decision.reasons.push(
+        "run `moat doctor` to inspect; `moat doctor --accept` or `moat init` to re-pin".to_owned(),
+    );
     Ok(Some(decision))
 }
 

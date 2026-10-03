@@ -28,6 +28,8 @@ pub enum Command {
     Show(ShowArgs),
     /// Report installation health: policy, hooks, recent activity.
     Status,
+    /// Verify policy lock, hooks and binary; `--accept` re-pins edits made by a person.
+    Doctor(DoctorArgs),
     /// Inspect and test policy files.
     Policy {
         #[command(subcommand)]
@@ -44,6 +46,14 @@ pub struct InitArgs {
     /// Print what would change without writing anything.
     #[arg(long)]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct DoctorArgs {
+    /// Accept the current policy and hook files as trusted and re-pin the lock.
+    /// Refused unless run from an interactive terminal.
+    #[arg(long)]
+    pub accept: bool,
 }
 
 #[derive(Debug, Args)]
