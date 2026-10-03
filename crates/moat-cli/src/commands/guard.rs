@@ -14,6 +14,7 @@ use moat_hosts::{HookEvent, HookRequest, Host};
 
 use crate::cli::GuardArgs;
 use crate::context;
+use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity::Lock;
@@ -86,7 +87,8 @@ fn evaluate(host: Host) -> Result<(Option<HookRequest>, Decision)> {
         project: context::path_string(&project::root_of(&cwd)),
         cwd: context::path_string(&cwd),
     };
-    let decision = CompiledPolicy::compile(&policy, &ctx)?.decide(action);
+    let snapshot = Snapshot::load(&home.environment_path())?;
+    let decision = CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot);
     Ok((Some(request), decision))
 }
 

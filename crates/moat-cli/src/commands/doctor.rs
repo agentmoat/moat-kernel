@@ -96,6 +96,18 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         }
     }
 
+    match crate::environment::Snapshot::load(&home.environment_path()) {
+        Ok(snapshot) => report.line(
+            true,
+            format!(
+                "environment      {} dirs, {} programs pinned",
+                snapshot.path.len(),
+                snapshot.programs.len()
+            ),
+        ),
+        Err(e) => report.line(false, format!("environment      {e:#}; run `moat init`")),
+    }
+
     let mut hook_files = Vec::new();
     for host in Host::ALL {
         let config = HostConfig::for_host(host)?;
@@ -147,7 +159,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         if drift.is_empty() && lock.is_some() {
             println!("nothing to accept: lock is intact");
         } else {
-            let mut paths = vec![home.policy_path()];
+            let mut paths = vec![home.policy_path(), home.environment_path()];
             paths.extend(hook_files);
             let lock = Lock::pin(&binary, &paths)?;
             lock.save(&lock_path)?;
