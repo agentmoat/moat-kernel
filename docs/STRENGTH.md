@@ -101,7 +101,7 @@ paths; Claude Code `ConfigChange` veto; Phase 2 signed policy bundles.
 |---|---|---|---|---|---|---|
 | Claude Code | hook + exec | hook | hook | hook (`mcp__*`) | yes (macOS/Linux) | no (host limitation) |
 | Codex | hook + exec | partial (hook on shell only; file tools via exec) | via shell | via MCP proxy | yes | no |
-| Cursor | hook + exec | `beforeReadFile`; edits post-hoc | hook | `beforeMCPExecution` | yes | **yes** (`failClosed`) |
+| Cursor | `beforeShellExecution` + exec | `beforeReadFile`; writes via `preToolUse` (Write/Edit/Delete) | via shell | `beforeMCPExecution` | yes | **yes** (`failClosed`, set by `init`) |
 | OpenClaw | plugin + exec | plugin (`derivedPaths`) | plugin | **MCP proxy only** | yes | no |
 | Any MCP host | — | via proxy mapping | via proxy | proxy | n/a | n/a |
 

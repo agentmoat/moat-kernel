@@ -8,7 +8,7 @@ Updated: 2026-10-03. Plan of record: `DESIGN.md` §10 (v0.1 spec),
 The kernel decides and records: Claude Code and Codex tool calls pass through
 `moat guard`, are evaluated against a committed policy, blocked with a rule id and
 reason when dangerous, and written to a redacted local audit log. OS enforcement
-(`moat exec`), self-protection, Cursor/OpenClaw and the public benchmark are not
+(`moat exec`), OpenClaw, the MCP proxy and the public benchmark are not
 built yet.
 
 ## 2. Completed
@@ -59,11 +59,11 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 - Secret paths are protected for writes too (`authorized_keys` planting).
 
 ## 3. Not done (honest list)
-- Self-protection: `policy.lock`, `moat doctor --accept` and the Claude Code `ConfigChange` veto are in; Codex and Cursor have no equivalent event, so for them the lock is checked on the next tool call only.
+- Self-protection: `policy.lock`, `moat doctor --accept` and the Claude Code `ConfigChange` veto are in; Codex and Cursor have no equivalent event, so for them the lock is checked on the next tool call only. Cursor file edits made by its own edit tools are governed through `preToolUse`; Cursor has no pre-write hook for edits that bypass that tool.
 - No OS enforcement: a wrong parse or an unknown obfuscation is still only a policy decision. `moat exec` (Seatbelt / Landlock+seccomp) is week 5.
 - No egress proxy; `net` rules are pattern-based.
 - No session taint, no approvals of our own, no `replay` timeline (only `show`).
-- Cursor and OpenClaw adapters not written; MCP proxy not written.
+- OpenClaw adapter and MCP proxy not written.
 - Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` not implemented; only the user policy is loaded.
 - Windows: builds in CI, PowerShell is not tokenised (any PowerShell command is `ask`).
 - Nothing committed or pushed; `agentmoat/moat-kernel` repository not created.
@@ -72,7 +72,6 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 
 | # | Work | Done when |
 |---|---|---|
-| 4 | **Cursor adapter** (`beforeShellExecution`, `beforeMCPExecution`, `preToolUse`; `permission` response; `failClosed: true` at init) | golden fixtures + e2e |
 | 5 | **`moat replay`** (session timeline with step detail) and `moat report` (asks/hour, top rules) | e2e |
 | 6 | **Approvals**: TTY prompt with once/session/permanent, session cache, `moat allow`; `permanent` appends a provenance-commented rule to the user policy | e2e |
 | 7 | **OpenClaw plugin** (TypeScript shim → `moat guard`/`serve`) and `moat serve` socket mode | plugin fixture |
