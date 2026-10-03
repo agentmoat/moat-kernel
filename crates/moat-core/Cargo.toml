@@ -1,0 +1,22 @@
+[package]
+name = "moat-core"
+description = "Policy model and decision engine for agentmoat. Pure: no I/O, no OS calls."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_yaml_ng.workspace = true
+globset.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

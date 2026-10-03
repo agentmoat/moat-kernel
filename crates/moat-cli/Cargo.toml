@@ -1,0 +1,31 @@
+[package]
+name = "moat-kernel"
+description = "agentmoat: the kernel your AI agents run on. Policy, OS enforcement and audit for Claude Code, Codex, Cursor, OpenClaw and any MCP host."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "moat"
+path = "src/main.rs"
+
+[dependencies]
+moat-core.workspace = true
+moat-hosts.workspace = true
+moat-audit.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

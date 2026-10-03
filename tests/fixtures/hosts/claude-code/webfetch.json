@@ -1,0 +1,8 @@
+{
+  "session_id": "7c1e4b2a",
+  "cwd": "/p",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "WebFetch",
+  "tool_input": { "url": "https://api.github.com/repos/x/y", "prompt": "summarise" },
+  "tool_use_id": "toolu_04JKL"
+}

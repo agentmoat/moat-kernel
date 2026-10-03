@@ -1,0 +1,41 @@
+# Actions that must pause for human approval.
+# Evaluation context: home=/Users/me, project=/p, cwd=/p.
+
+- id: ask-npm-install
+  action: { shell: "npm install left-pad-pro" }
+  expect: { verdict: ask, rules: [installs] }
+- id: ask-pip-install
+  action: { shell: "pip install requests==2.32.0" }
+  expect: { verdict: ask, rules: [installs] }
+- id: ask-git-push
+  action: { shell: "git push origin HEAD" }
+  expect: { verdict: ask, rules: [push] }
+- id: ask-npm-publish
+  action: { shell: "npm publish --access public" }
+  expect: { verdict: ask, rules: [push] }
+- id: ask-unknown-command
+  action: { shell: "terraform apply -auto-approve" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-write-git-internals
+  action: { fs_write: "/p/.git/config" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-write-outside-project
+  action: { fs_write: "/tmp/output.txt" }
+  expect: { verdict: ask, rules: [default] }
+
+# Unparseable input is never allowed.
+- id: ask-unbalanced-quote
+  action: { shell: "echo 'oops" }
+  expect: { verdict: ask, rules: [unparseable] }
+- id: ask-unterminated-substitution
+  action: { shell: "echo $(whoami" }
+  expect: { verdict: ask, rules: [unparseable] }
+- id: ask-unterminated-heredoc
+  action: { shell: "cat <<EOF\nno terminator" }
+  expect: { verdict: ask, rules: [unparseable] }
+- id: ask-nesting-too-deep
+  action: { shell: "bash -c \"eval eval eval eval eval eval true\"" }
+  expect: { verdict: ask, rules: [unparseable] }
+- id: ask-empty-command
+  action: { shell: "   " }
+  expect: { verdict: ask, rules: [unparseable] }

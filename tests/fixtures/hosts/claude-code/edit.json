@@ -1,0 +1,12 @@
+{
+  "session_id": "7c1e4b2a",
+  "cwd": "/p",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/Users/me/.claude/settings.json",
+    "old_string": "\"hooks\"",
+    "new_string": "\"hooks_disabled\""
+  },
+  "tool_use_id": "toolu_02DEF"
+}

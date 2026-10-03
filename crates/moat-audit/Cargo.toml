@@ -1,0 +1,21 @@
+[package]
+name = "moat-audit"
+description = "Append-only local audit log for agentmoat decisions (SQLite, WAL, redacted)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+moat-core.workspace = true
+rusqlite.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

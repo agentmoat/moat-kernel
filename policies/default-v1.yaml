@@ -1,0 +1,149 @@
+# agentmoat default policy, schema v1 (DESIGN.md §6.1).
+# Evaluation: deny → allow → ask → defaults. Strictest verdict wins across the
+# atomic actions of one tool call. `${project}` is the trusted project root.
+# Deny rules are absolute (allow can never override them), so deny-by-default
+# for a whole kind is expressed via `defaults`, with allow rules as the holes.
+version: 1
+defaults:
+  "*": ask
+  net: deny          # outbound network: only hosts listed under allow
+
+deny:
+  - id: secrets-paths
+    reason: secret material
+    fs.read: &secret-paths
+      - "~/.ssh/**"
+      - "~/.aws/**"
+      - "~/.gnupg/**"
+      - "~/.config/gh/**"
+      - "~/.netrc"
+      - "~/.docker/config.json"
+      - "~/.kube/**"
+      - "**/.env"
+      - "**/.env.*"
+      - "~/Library/Keychains/**"
+    fs.write: *secret-paths
+  - id: env-secrets
+    reason: secret environment variable
+    env.read: ["*_KEY", "*_TOKEN", "*_SECRET", "*_PASSWORD", "AWS_*", "GITHUB_TOKEN", "NPM_TOKEN"]
+  - id: env-poison
+    reason: changes how later commands resolve or load code
+    env.set: ["PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_*", "NODE_OPTIONS", "PYTHONPATH", "GIT_*", "BASH_ENV", "ENV", "PROMPT_COMMAND"]
+  - id: pipe-to-shell
+    reason: executes remote or decoded content
+    shell:
+      - "curl * | sh"
+      - "curl * | bash"
+      - "wget * | sh"
+      - "wget * | bash"
+      - "base64 -d | sh"
+      - "base64 -d | bash"
+      - "base64 --decode | sh"
+      - "base64 --decode | bash"
+      - "eval *"
+  - id: destructive
+    reason: irreversible damage
+    shell:
+      - "rm -rf /"
+      - "rm -rf /*"
+      - "rm -rf ~"
+      - "rm -rf ~/*"
+      - "rm -rf $HOME"
+      - "git push --force*"
+      - "git push -f*"
+      - "git reset --hard*"
+      - "git clean -fdx*"
+      - "sudo *"
+      - "mkfs*"
+      - "dd if=*"
+      - "shutdown *"
+      - "reboot"
+  - id: kernel-self
+    reason: agentmoat protects its own policy, hooks and binary
+    fs.write:
+      - "~/.moat/**"
+      - "~/.claude/settings.json"
+      - "~/.claude/settings.local.json"
+      - "~/.codex/**"
+      - "~/.cursor/hooks.json"
+      - "**/.claude/settings.json"
+      - "**/.claude/settings.local.json"
+      - "**/.cursor/hooks.json"
+      - "**/.codex/hooks.json"
+      - "**/.moat/**"
+    shell:
+      - "moat policy *"
+      - "moat init*"
+      - "moat doctor*"
+  - id: shell-rc
+    reason: edits persist into every future shell session
+    fs.write: ["~/.zshrc", "~/.bashrc", "~/.bash_profile", "~/.profile", "~/.zprofile", "~/.zshenv"]
+
+allow:
+  - id: project-fs
+    fs.read: ["${project}/**"]
+    fs.write: ["${project}/**", "!${project}/.git/**", "!${project}/.moat/**"]
+  - id: dev-shell
+    shell:
+      - "git status*"
+      - "git diff*"
+      - "git log*"
+      - "git show*"
+      - "git branch*"
+      - "git add *"
+      - "git commit *"
+      - "git checkout -b *"
+      - "git switch *"
+      - "git fetch*"
+      - "git pull*"
+      - "git stash*"
+      - "ls*"
+      - "cat *"
+      - "head *"
+      - "tail *"
+      - "grep *"
+      - "rg *"
+      - "find *"
+      - "pwd"
+      - "echo *"
+      - "which *"
+      - "npm test*"
+      - "npm run *"
+      - "pnpm *"
+      - "yarn *"
+      - "cargo *"
+      - "go test*"
+      - "go build*"
+      - "swift test*"
+      - "swift build*"
+      - "pytest*"
+      - "python -m pytest*"
+      - "make *"
+  - id: registries
+    net:
+      - "api.github.com"
+      - "github.com"
+      - "registry.npmjs.org"
+      - "crates.io"
+      - "static.crates.io"
+      - "index.crates.io"
+      - "proxy.golang.org"
+      - "pypi.org"
+      - "files.pythonhosted.org"
+  - id: safe-mcp
+    mcp: ["mcp__github__search_*", "mcp__github__get_*", "mcp__filesystem__read_*", "mcp__filesystem__list_*"]
+
+ask:
+  - id: installs
+    reason: new dependency
+    shell: ["npm install *", "npm i *", "pnpm add *", "yarn add *", "pip install *", "pip3 install *", "cargo add *", "cargo install *", "brew install *", "gem install *"]
+  - id: push
+    reason: publishes to a remote
+    shell: ["git push *", "npm publish*", "cargo publish*", "gh release *"]
+
+approval:
+  channel: terminal
+  remember: session
+  timeout_s: 300
+
+executables: {}
