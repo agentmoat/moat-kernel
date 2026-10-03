@@ -19,6 +19,7 @@ All notable changes to this project are documented here. The format follows
 - `moat status` reports lock state; re-running `moat init` re-pins.
 - Claude Code `ConfigChange` hook: when a settings file pinned by the lock is edited or deleted outside `moat`, the change is refused for the running session (rule `kernel-integrity`); unpinned settings files load and are audited.
 - Executable pinning: `moat init` snapshots the search path and the location of common programs in `~/.moat/environment.json` (pinned by the lock); `moat guard` resolves every shell command's program through the snapshot and denies pinned programs that resolve elsewhere (rule `executables`). Policy `executables:` pins are now enforced.
+- Approvals: `moat allow --last` (or `moat allow <command> --host … --session …`) grants one exact command to one host session; `moat allow … --always` appends a permanent allow rule to `~/.moat/policy.d/approved.yaml`, merged into the policy at load. Both files are pinned by the lock; `moat allow` is terminal-only and denied to agents by the default policy.
 - `moat doctor [--accept]`: verifies state directory, policy, lock, hooks, binary path and audit log; `--accept` re-pins and is refused outside an interactive terminal.
 
 ### Changed
