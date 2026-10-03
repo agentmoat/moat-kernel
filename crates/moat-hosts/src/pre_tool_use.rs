@@ -8,14 +8,12 @@ use moat_core::{Action, Decision, Verdict};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{HookRequest, Host, HostError};
+use crate::{HookEvent, HookRequest, Host, HostError};
 
-const EVENT: &str = "PreToolUse";
+pub(crate) const EVENT: &str = "PreToolUse";
 
 #[derive(Deserialize)]
 struct Payload {
-    #[serde(default)]
-    hook_event_name: Option<String>,
     #[serde(default)]
     session_id: Option<String>,
     #[serde(default)]
@@ -43,9 +41,6 @@ struct Output<'a> {
 
 pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError> {
     let p: Payload = serde_json::from_str(payload)?;
-    if let Some(event) = p.hook_event_name.as_deref().filter(|e| *e != EVENT) {
-        return Err(HostError::WrongEvent(event.to_owned()));
-    }
     let action = map_tool(&p.tool_name, &p.tool_input, p.cwd.as_deref())?;
     Ok(HookRequest {
         host,
@@ -54,6 +49,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
         cwd: p.cwd,
         tool: p.tool_name,
         action,
+        event: HookEvent::PreToolUse,
     })
 }
 
@@ -257,8 +253,10 @@ mod tests {
         decision
             .reasons
             .push("secret material: read /Users/me/.ssh/id_rsa".into());
-        let json: Value =
-            serde_json::from_str(&Host::ClaudeCode.render_response(&decision)).unwrap();
+        let json: Value = serde_json::from_str(
+            &Host::ClaudeCode.render_response(&HookEvent::PreToolUse, &decision),
+        )
+        .unwrap();
         let out = &json["hookSpecificOutput"];
         assert_eq!(out["hookEventName"], "PreToolUse");
         assert_eq!(out["permissionDecision"], "deny");

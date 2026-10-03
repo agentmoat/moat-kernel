@@ -183,8 +183,10 @@ its JSON to the kernel's internal `ToolCall`.
   "updatedInput":{…}}}`. Exit 2 = block, stderr shown to the model.
   Other non-zero = **non-blocking** (action proceeds) → we must never rely on it.
 - Timeout: 600 s default (plenty for human approval).
-- Extra: `ConfigChange` event (can block) lets us veto edits to settings; `PermissionDenied`,
-  `PostToolUse` for audit enrichment.
+- Extra: `ConfigChange` event (can block) is installed with matcher
+  `user_settings|project_settings|local_settings`; a pinned settings file that no longer
+  matches the lock is refused for the session (`{"decision":"block"}`), unpinned files load
+  and are audited. `PermissionDenied`, `PostToolUse` remain available for audit enrichment.
 - Install form: exec form with `args` (no shell), `command: "/abs/path/moat"`,
   `args: ["guard","--host","claude-code"]`, `timeout: 600`.
 
