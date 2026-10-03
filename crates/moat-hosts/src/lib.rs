@@ -5,6 +5,7 @@
 //! decide; `moat-core` does.
 
 mod config_change;
+mod cursor;
 mod pre_tool_use;
 
 pub use pre_tool_use::reason_line;
@@ -20,16 +21,18 @@ use thiserror::Error;
 pub enum Host {
     ClaudeCode,
     Codex,
+    Cursor,
 }
 
 impl Host {
-    pub const ALL: [Host; 2] = [Host::ClaudeCode, Host::Codex];
+    pub const ALL: [Host; 3] = [Host::ClaudeCode, Host::Codex, Host::Cursor];
 
     #[must_use]
     pub fn id(self) -> &'static str {
         match self {
             Self::ClaudeCode => "claude-code",
             Self::Codex => "codex",
+            Self::Cursor => "cursor",
         }
     }
 
@@ -38,6 +41,7 @@ impl Host {
         match self {
             Self::ClaudeCode => "Claude Code",
             Self::Codex => "Codex",
+            Self::Cursor => "Cursor",
         }
     }
 
@@ -51,6 +55,12 @@ impl Host {
         }
         let envelope: Envelope = serde_json::from_str(payload)?;
         match (self, envelope.hook_event_name.as_deref()) {
+            (Self::Cursor, Some(event)) if cursor::EVENTS.contains(&event) => {
+                cursor::parse(self, payload)
+            }
+            (Self::Cursor, _) => Err(HostError::WrongEvent(
+                envelope.hook_event_name.unwrap_or_default(),
+            )),
             (_, None | Some(pre_tool_use::EVENT)) => pre_tool_use::parse(self, payload),
             (Self::ClaudeCode, Some(config_change::EVENT)) => config_change::parse(self, payload),
             (_, Some(other)) => Err(HostError::WrongEvent(other.to_owned())),
@@ -60,9 +70,10 @@ impl Host {
     /// Render the response document the host expects on stdout for `event`.
     #[must_use]
     pub fn render_response(self, event: &HookEvent, decision: &Decision) -> String {
-        match event {
-            HookEvent::PreToolUse => pre_tool_use::render(decision),
-            HookEvent::ConfigChange { .. } => config_change::render(decision),
+        match (self, event) {
+            (Self::Cursor, _) => cursor::render(decision),
+            (_, HookEvent::PreToolUse) => pre_tool_use::render(decision),
+            (_, HookEvent::ConfigChange { .. }) => config_change::render(decision),
         }
     }
 }
@@ -108,7 +119,7 @@ pub struct HookRequest {
 
 #[derive(Debug, Error)]
 pub enum HostError {
-    #[error("unknown host `{0}`; supported: claude-code, codex")]
+    #[error("unknown host `{0}`; supported: claude-code, codex, cursor")]
     UnknownHost(String),
     #[error("payload is not valid JSON: {0}")]
     Json(#[from] serde_json::Error),
