@@ -16,7 +16,8 @@ use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use crate::home::write_private;
+use crate::home::{Home, write_private};
+use crate::install::{HookState, HostConfig};
 
 const LOCK_VERSION: u32 = 1;
 
@@ -28,6 +29,27 @@ pub struct Lock {
     pub binary: String,
     /// Canonical path → lowercase hex SHA-256 of the file contents.
     pub entries: BTreeMap<String, String>,
+}
+
+/// Pin everything the kernel trusts: policy, environment snapshot, approval
+/// files and every installed host hook file. Used by `init`, `doctor --accept`
+/// and `allow`, which are the only human paths that may re-pin.
+pub fn repin(home: &Home, binary: &Path) -> Result<Lock> {
+    let mut paths = vec![
+        home.policy_path(),
+        home.environment_path(),
+        home.grants_path(),
+        home.overlay_path(),
+    ];
+    for host in moat_hosts::Host::ALL {
+        let config = HostConfig::for_host(host)?;
+        if config.state(binary) == HookState::Installed {
+            paths.push(config.settings_path);
+        }
+    }
+    let lock = Lock::pin(binary, &paths)?;
+    lock.save(&home.lock_path())?;
+    Ok(lock)
 }
 
 /// One way a pinned file differs from the lock.

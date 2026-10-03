@@ -10,7 +10,7 @@ use crate::cli::DoctorArgs;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig};
-use crate::integrity::Lock;
+use crate::integrity::{self, Lock};
 
 struct Report {
     problems: Vec<String>,
@@ -159,10 +159,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         if drift.is_empty() && lock.is_some() {
             println!("nothing to accept: lock is intact");
         } else {
-            let mut paths = vec![home.policy_path(), home.environment_path()];
-            paths.extend(hook_files);
-            let lock = Lock::pin(&binary, &paths)?;
-            lock.save(&lock_path)?;
+            let lock = integrity::repin(&home, &binary)?;
             println!("✔ lock re-pinned for {} files", lock.entries.len());
             report
                 .problems

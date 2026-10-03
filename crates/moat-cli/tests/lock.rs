@@ -88,9 +88,18 @@ fn init_writes_a_lock_covering_policy_and_hooks() {
     let sb = Sandbox::new();
     let lock: Value = serde_json::from_str(&std::fs::read_to_string(sb.lock()).unwrap()).unwrap();
     let entries = lock["entries"].as_object().unwrap();
-    assert_eq!(entries.len(), 3, "{entries:?}");
-    assert!(entries.keys().any(|k| k.ends_with("policy.yaml")));
-    assert!(entries.keys().any(|k| k.ends_with("environment.json")));
+    assert_eq!(entries.len(), 5, "{entries:?}");
+    for name in [
+        "policy.yaml",
+        "environment.json",
+        "approvals.json",
+        "approved.yaml",
+    ] {
+        assert!(
+            entries.keys().any(|k| k.ends_with(name)),
+            "{name} not pinned: {entries:?}"
+        );
+    }
     assert!(entries.keys().any(|k| k.ends_with("settings.json")));
 }
 
