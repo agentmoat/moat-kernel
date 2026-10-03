@@ -59,7 +59,7 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 - Secret paths are protected for writes too (`authorized_keys` planting).
 
 ## 3. Not done (honest list)
-- Self-protection is partial: `policy.lock` + `moat doctor --accept` are in; the Claude Code `ConfigChange` veto is not.
+- Self-protection: `policy.lock`, `moat doctor --accept` and the Claude Code `ConfigChange` veto are in; Codex and Cursor have no equivalent event, so for them the lock is checked on the next tool call only.
 - No OS enforcement: a wrong parse or an unknown obfuscation is still only a policy decision. `moat exec` (Seatbelt / Landlock+seccomp) is week 5.
 - No egress proxy; `net` rules are pattern-based.
 - No session taint, no approvals of our own, no `replay` timeline (only `show`).
@@ -73,7 +73,6 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 
 | # | Work | Done when |
 |---|---|---|
-| 2 | **Self-protection, part 3**: Claude Code `ConfigChange` hook returning block for host settings edits not made by `moat`; file-permission checks in `doctor` | tamper tests |
 | 3 | **Executable pinning + PATH snapshot** at `init`; resolve programs against the snapshot, not the inherited PATH | T6 fixtures extended |
 | 4 | **Cursor adapter** (`beforeShellExecution`, `beforeMCPExecution`, `preToolUse`; `permission` response; `failClosed: true` at init) | golden fixtures + e2e |
 | 5 | **`moat replay`** (session timeline with step detail) and `moat report` (asks/hour, top rules) | e2e |

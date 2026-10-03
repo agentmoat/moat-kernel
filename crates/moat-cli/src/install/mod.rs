@@ -24,11 +24,18 @@ pub struct HookSpec {
 
 const TOOL_MATCHER: &str = "Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|WebFetch|mcp__.*";
 
-const CLAUDE_CODE_HOOKS: &[HookSpec] = &[HookSpec {
-    event: "PreToolUse",
-    matcher: TOOL_MATCHER,
-    timeout: 600,
-}];
+const CLAUDE_CODE_HOOKS: &[HookSpec] = &[
+    HookSpec {
+        event: "PreToolUse",
+        matcher: TOOL_MATCHER,
+        timeout: 600,
+    },
+    HookSpec {
+        event: "ConfigChange",
+        matcher: "user_settings|project_settings|local_settings",
+        timeout: 60,
+    },
+];
 
 const CODEX_HOOKS: &[HookSpec] = &[HookSpec {
     event: "PreToolUse",

@@ -1,0 +1,131 @@
+//! Claude Code `ConfigChange` veto: a pinned hook file that no longer matches the
+//! lock is refused for the session; untouched or unpinned files load normally.
+
+use std::io::Write as _;
+use std::path::PathBuf;
+use std::process::{Command, Output, Stdio};
+
+use serde_json::Value;
+use tempfile::TempDir;
+
+struct Sandbox {
+    _dir: TempDir,
+    home: PathBuf,
+}
+
+impl Sandbox {
+    fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        std::fs::create_dir_all(home.join(".claude")).unwrap();
+        let sb = Self { _dir: dir, home };
+        assert_eq!(sb.moat(&["init"], "").status.code(), Some(0));
+        sb
+    }
+
+    fn moat(&self, args: &[&str], stdin: &str) -> Output {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_moat"))
+            .args(args)
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("HOME", &self.home)
+            .env("USERPROFILE", &self.home)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(stdin.as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    }
+
+    fn settings(&self) -> PathBuf {
+        self.home.join(".claude/settings.json")
+    }
+
+    fn config_change(&self, path: &std::path::Path, change_type: &str) -> (Option<i32>, Value) {
+        let payload = serde_json::json!({
+            "session_id": "cfg", "cwd": self.home.to_string_lossy(),
+            "hook_event_name": "ConfigChange", "source": "user_settings",
+            "change_type": change_type, "file_path": path.to_string_lossy(),
+        });
+        let out = self.moat(&["guard", "--host", "claude-code"], &payload.to_string());
+        let doc: Value = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim())
+            .unwrap_or(Value::Null);
+        (out.status.code(), doc)
+    }
+}
+
+#[test]
+fn init_registers_the_config_change_hook() {
+    let sb = Sandbox::new();
+    let root: Value =
+        serde_json::from_str(&std::fs::read_to_string(sb.settings()).unwrap()).unwrap();
+    let entries = root["hooks"]["ConfigChange"].as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0]["matcher"],
+        "user_settings|project_settings|local_settings"
+    );
+    assert_eq!(
+        entries[0]["hooks"][0]["args"],
+        serde_json::json!(["guard", "--host", "claude-code"])
+    );
+}
+
+#[test]
+fn untouched_pinned_file_loads() {
+    let sb = Sandbox::new();
+    let (code, doc) = sb.config_change(&sb.settings(), "modified");
+    assert_eq!(code, Some(0));
+    assert_eq!(doc, serde_json::json!({}));
+}
+
+#[test]
+fn tampered_pinned_file_is_blocked() {
+    let sb = Sandbox::new();
+    let mut root: Value =
+        serde_json::from_str(&std::fs::read_to_string(sb.settings()).unwrap()).unwrap();
+    root["hooks"].as_object_mut().unwrap().remove("PreToolUse");
+    std::fs::write(sb.settings(), root.to_string()).unwrap();
+
+    let (code, doc) = sb.config_change(&sb.settings(), "modified");
+    assert_eq!(code, Some(2));
+    assert_eq!(doc["decision"], "block");
+    let reason = doc["reason"].as_str().unwrap();
+    assert!(reason.contains("kernel-integrity"), "{reason}");
+    assert!(reason.contains("settings.json"), "{reason}");
+
+    let shown = sb.moat(&["show", "--recent", "1", "--format", "json"], "");
+    let events: Value = serde_json::from_slice(&shown.stdout).unwrap();
+    assert_eq!(events[0]["tool"], "ConfigChange");
+    assert_eq!(events[0]["verdict"], "deny");
+}
+
+#[test]
+fn deleted_pinned_file_is_blocked() {
+    let sb = Sandbox::new();
+    std::fs::remove_file(sb.settings()).unwrap();
+    let (code, doc) = sb.config_change(&sb.settings(), "deleted");
+    assert_eq!(code, Some(2));
+    assert_eq!(doc["decision"], "block");
+}
+
+#[test]
+fn unpinned_project_settings_load_and_are_audited() {
+    let sb = Sandbox::new();
+    let project = sb.home.join("proj/.claude");
+    std::fs::create_dir_all(&project).unwrap();
+    let file = project.join("settings.json");
+    std::fs::write(&file, "{}").unwrap();
+    let (code, doc) = sb.config_change(&file, "created");
+    assert_eq!(code, Some(0));
+    assert_eq!(doc, serde_json::json!({}));
+    let shown = sb.moat(&["show", "--recent", "1"], "");
+    assert!(String::from_utf8_lossy(&shown.stdout).contains("allow"));
+}

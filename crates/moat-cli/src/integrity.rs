@@ -88,26 +88,42 @@ impl Lock {
 
     /// Compare pinned digests with the files on disk. Empty means intact.
     pub fn verify(&self) -> Vec<Drift> {
-        let mut drift = Vec::new();
-        for (path, expected) in &self.entries {
-            let path = PathBuf::from(path);
-            if !path.exists() {
-                drift.push(Drift::Missing(path));
-                continue;
-            }
-            match digest(&path) {
-                Ok(actual) if &actual == expected => {}
-                Ok(_) => drift.push(Drift::Modified(path)),
-                Err(e) => drift.push(Drift::Unreadable(path, format!("{e:#}"))),
-            }
+        self.entries
+            .keys()
+            .filter_map(|path| self.verify_one(Path::new(path)))
+            .collect()
+    }
+
+    /// Drift for one pinned file, or `None` when it is intact or not pinned.
+    pub fn verify_one(&self, path: &Path) -> Option<Drift> {
+        let expected = self.entries.get(&key(path))?;
+        let path = PathBuf::from(key(path));
+        if !path.exists() {
+            return Some(Drift::Missing(path));
         }
-        drift
+        match digest(&path) {
+            Ok(actual) if &actual == expected => None,
+            Ok(_) => Some(Drift::Modified(path)),
+            Err(e) => Some(Drift::Unreadable(path, format!("{e:#}"))),
+        }
+    }
+
+    pub fn pins(&self, path: &Path) -> bool {
+        self.entries.contains_key(&key(path))
     }
 }
 
+/// Canonical identity for a pinned file. A deleted file still resolves through
+/// its parent directory, so `/var/...` and `/private/var/...` agree on macOS.
 fn key(path: &Path) -> String {
+    let fallback = || match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => {
+            fs::canonicalize(parent).map_or_else(|_| path.to_path_buf(), |p| p.join(name))
+        }
+        _ => path.to_path_buf(),
+    };
     fs::canonicalize(path)
-        .unwrap_or_else(|_| path.to_path_buf())
+        .unwrap_or_else(|_| fallback())
         .to_string_lossy()
         .into_owned()
 }

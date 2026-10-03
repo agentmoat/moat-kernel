@@ -4,6 +4,7 @@
 //! [`Decision`] back into the host's response document. Adapters never
 //! decide; `moat-core` does.
 
+mod config_change;
 mod pre_tool_use;
 
 pub use pre_tool_use::reason_line;
@@ -40,18 +41,28 @@ impl Host {
         }
     }
 
-    /// Parse a hook payload read from the host.
+    /// Parse a hook payload read from the host. The event name selects the format;
+    /// a missing name means `PreToolUse`, the original contract.
     pub fn parse_request(self, payload: &str) -> Result<HookRequest, HostError> {
-        match self {
-            Self::ClaudeCode | Self::Codex => pre_tool_use::parse(self, payload),
+        #[derive(serde::Deserialize)]
+        struct Envelope {
+            #[serde(default)]
+            hook_event_name: Option<String>,
+        }
+        let envelope: Envelope = serde_json::from_str(payload)?;
+        match (self, envelope.hook_event_name.as_deref()) {
+            (_, None | Some(pre_tool_use::EVENT)) => pre_tool_use::parse(self, payload),
+            (Self::ClaudeCode, Some(config_change::EVENT)) => config_change::parse(self, payload),
+            (_, Some(other)) => Err(HostError::WrongEvent(other.to_owned())),
         }
     }
 
-    /// Render the response document the host expects on stdout.
+    /// Render the response document the host expects on stdout for `event`.
     #[must_use]
-    pub fn render_response(self, decision: &Decision) -> String {
-        match self {
-            Self::ClaudeCode | Self::Codex => pre_tool_use::render(decision),
+    pub fn render_response(self, event: &HookEvent, decision: &Decision) -> String {
+        match event {
+            HookEvent::PreToolUse => pre_tool_use::render(decision),
+            HookEvent::ConfigChange { .. } => config_change::render(decision),
         }
     }
 }
@@ -73,6 +84,15 @@ impl fmt::Display for Host {
     }
 }
 
+/// Which hook fired. Drives the response format and the guard's handling.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum HookEvent {
+    #[default]
+    PreToolUse,
+    /// A host settings file changed on disk (Claude Code only).
+    ConfigChange { source: String, change_type: String },
+}
+
 /// A host tool call, normalised.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HookRequest {
@@ -83,6 +103,7 @@ pub struct HookRequest {
     pub tool: String,
     /// `None` when the tool is outside the kernel's scope (e.g. a todo list).
     pub action: Option<Action>,
+    pub event: HookEvent,
 }
 
 #[derive(Debug, Error)]
@@ -91,7 +112,7 @@ pub enum HostError {
     UnknownHost(String),
     #[error("payload is not valid JSON: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("payload is for event `{0}`, expected PreToolUse")]
+    #[error("payload is for event `{0}`, which this host adapter does not handle")]
     WrongEvent(String),
     #[error("tool `{tool}` payload is missing field `{field}`")]
     MissingField { tool: String, field: &'static str },

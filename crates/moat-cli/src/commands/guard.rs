@@ -10,7 +10,7 @@ use std::time::Instant;
 use anyhow::{Context as _, Result, bail};
 use moat_audit::{NewEvent, Store};
 use moat_core::{CompiledPolicy, Decision, EvalContext, Verdict};
-use moat_hosts::{HookRequest, Host};
+use moat_hosts::{HookEvent, HookRequest, Host};
 
 use crate::cli::GuardArgs;
 use crate::context;
@@ -23,6 +23,7 @@ const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024;
 const UNGOVERNED_RULE: &str = "ungoverned";
 const KERNEL_ERROR_RULE: &str = "kernel-error";
 const INTEGRITY_RULE: &str = "kernel-integrity";
+const CONFIG_CHANGE_RULE: &str = "config-change";
 
 pub fn run(args: &GuardArgs) -> Code {
     let started = Instant::now();
@@ -37,7 +38,11 @@ pub fn run(args: &GuardArgs) -> Code {
         eprintln!("moat: audit unavailable: {error:#}");
     }
 
-    let response = host.render_response(&decision);
+    let event = request
+        .as_ref()
+        .map(|r| r.event.clone())
+        .unwrap_or_default();
+    let response = host.render_response(&event, &decision);
     let mut stdout = io::stdout().lock();
     let _ = writeln!(stdout, "{response}");
     let _ = stdout.flush();
@@ -62,6 +67,10 @@ fn evaluate(host: Host) -> Result<(Option<HookRequest>, Decision)> {
     };
 
     let home = Home::locate()?;
+    if let HookEvent::ConfigChange { change_type, .. } = &request.event {
+        let decision = config_change_decision(&home, action, change_type)?;
+        return Ok((Some(request), decision));
+    }
     if let Some(decision) = integrity_violation(&home)? {
         return Ok((Some(request), decision));
     }
@@ -142,6 +151,51 @@ fn integrity_violation(home: &Home) -> Result<Option<Decision>> {
         "run `moat doctor` to inspect; `moat doctor --accept` or `moat init` to re-pin".to_owned(),
     );
     Ok(Some(decision))
+}
+
+/// A settings file changed on disk. If `moat` pinned that file, it may only be
+/// loaded when it still matches the lock; otherwise the session keeps the old
+/// settings and the change is reported. Unpinned files are audited and allowed.
+fn config_change_decision(
+    home: &Home,
+    action: &moat_core::Action,
+    change_type: &str,
+) -> Result<Decision> {
+    let moat_core::Action::FsWrite { path } = action else {
+        bail!("config change without a file path");
+    };
+    let lock_path = home.lock_path();
+    if !lock_path.is_file() {
+        bail!("no policy lock at {}; run `moat init`", lock_path.display());
+    }
+    let lock = Lock::load(&lock_path)?;
+    let path = std::path::Path::new(path);
+    let mut decision = Decision::new(Verdict::Allow);
+    if !lock.pins(path) {
+        decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
+        decision.reasons.push(format!(
+            "{} {change_type}; not pinned by moat",
+            path.display()
+        ));
+        return Ok(decision);
+    }
+    match lock.verify_one(path) {
+        None => {
+            decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
+            decision.reasons.push(format!(
+                "{} {change_type}; matches the policy lock",
+                path.display()
+            ));
+        }
+        Some(drift) => {
+            decision = Decision::new(Verdict::Deny);
+            decision.rules.push(INTEGRITY_RULE.to_owned());
+            decision.reasons.push(format!(
+                "{drift} outside moat; the change is not loaded into this session. Run `moat doctor` to inspect, `moat doctor --accept` to accept it"
+            ));
+        }
+    }
+    Ok(decision)
 }
 
 fn ungoverned() -> Decision {
