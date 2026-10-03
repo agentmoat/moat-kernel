@@ -26,7 +26,7 @@ approval:
   remember: session                 # once | session | permanent
   timeout_s: 300
 
-executables:                        # pin program names to absolute paths (parsed; enforcement planned)
+executables:                        # pin program names to absolute paths (enforced, see §8.1)
   git: ["/usr/bin/git", "/opt/homebrew/bin/git"]
 ```
 
@@ -164,9 +164,20 @@ pinned file changed or disappeared, every action is denied with rule `kernel-int
 until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
 by re-running `moat init`. Edit the policy, then run `moat doctor --accept`.
 
+### 8.1 Executable pinning and the environment snapshot
+
+`moat init` also records the search path and the absolute location of common programs
+(`git`, `npm`, `node`, `python3`, `cargo`, `curl`, `ssh`, `sudo`, …) in
+`~/.moat/environment.json`, pinned by the lock. For every shell command, the first word is
+resolved through that snapshot, never through the environment the hook inherited. If the
+program is pinned, either by `executables:` in the policy or by the snapshot, and it now
+resolves somewhere else (a `git` planted in `node_modules/.bin`, an absolute path to a copy
+in `/tmp`), the command is denied with rule `executables`. Unpinned programs are not checked.
+After installing a tool in a new location, re-run `moat init` or `moat doctor --accept`.
+
 ## 9. Planned, not yet available
 
 Repository-level policy (`<repo>/.moat/policy.yaml`) with explicit trust, managed
-organisation policy, enforcement of `executables` pins, Telegram approvals, and
+organisation policy, Telegram approvals, and
 `moat policy add` for turning an approval into a permanent rule. Status and order:
 `PROGRESS.md`.

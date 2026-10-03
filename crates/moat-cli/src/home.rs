@@ -41,6 +41,10 @@ impl Home {
         self.root.join("policy.lock")
     }
 
+    pub fn environment_path(&self) -> PathBuf {
+        self.root.join("environment.json")
+    }
+
     pub fn exists(&self) -> bool {
         self.root.is_dir()
     }

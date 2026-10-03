@@ -7,6 +7,7 @@
 mod cli;
 mod commands;
 mod context;
+mod environment;
 mod exit;
 mod home;
 mod install;

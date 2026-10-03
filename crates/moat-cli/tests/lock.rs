@@ -88,8 +88,9 @@ fn init_writes_a_lock_covering_policy_and_hooks() {
     let sb = Sandbox::new();
     let lock: Value = serde_json::from_str(&std::fs::read_to_string(sb.lock()).unwrap()).unwrap();
     let entries = lock["entries"].as_object().unwrap();
-    assert_eq!(entries.len(), 2, "{entries:?}");
+    assert_eq!(entries.len(), 3, "{entries:?}");
     assert!(entries.keys().any(|k| k.ends_with("policy.yaml")));
+    assert!(entries.keys().any(|k| k.ends_with("environment.json")));
     assert!(entries.keys().any(|k| k.ends_with("settings.json")));
 }
 
@@ -155,4 +156,65 @@ fn status_reports_lock_state() {
     let out = sb.moat(&["status"], None);
     assert_eq!(out.status.code(), Some(64));
     assert!(text(&out).contains("was modified"));
+}
+
+#[cfg(unix)]
+#[test]
+fn planted_binary_earlier_on_the_search_path_is_denied() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("home");
+    let early = dir.path().join("early-bin");
+    let real = dir.path().join("real-bin");
+    for d in [home.join(".claude"), early.clone(), real.clone()] {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let script = |p: &Path| {
+        std::fs::write(p, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    };
+    script(&real.join("git"));
+    let search_path = format!("{}:{}", early.display(), real.display());
+    let run = |args: &[&str], stdin: &str| {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_moat"))
+            .args(args)
+            .env_clear()
+            .env("PATH", &search_path)
+            .env("HOME", &home)
+            .env("USERPROFILE", &home)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(stdin.as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    };
+    assert_eq!(run(&["init"], "").status.code(), Some(0));
+    let payload = serde_json::json!({
+        "session_id": "pin", "cwd": home.to_string_lossy(), "tool_name": "Bash",
+        "tool_input": {"command": "git status --short"}, "tool_use_id": "t"
+    })
+    .to_string();
+    let decision = |out: Output| -> Value {
+        serde_json::from_str::<Value>(String::from_utf8_lossy(&out.stdout).trim()).unwrap()
+            ["hookSpecificOutput"]
+            .clone()
+    };
+    assert_eq!(
+        decision(run(&["guard", "--host", "claude-code"], &payload))["permissionDecision"],
+        "allow"
+    );
+
+    script(&early.join("git"));
+    let d = decision(run(&["guard", "--host", "claude-code"], &payload));
+    assert_eq!(d["permissionDecision"], "deny");
+    let reason = d["permissionDecisionReason"].as_str().unwrap();
+    assert!(reason.contains("executables"), "{reason}");
+    assert!(reason.contains("early-bin"), "{reason}");
 }

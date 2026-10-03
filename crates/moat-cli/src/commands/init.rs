@@ -5,6 +5,7 @@ use moat_audit::Store;
 use moat_hosts::Host;
 
 use crate::cli::InitArgs;
+use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HostConfig, Outcome};
@@ -51,7 +52,23 @@ pub fn run(args: &InitArgs) -> Result<Code> {
     if hosts.is_empty() {
         println!("· hooks            no supported host found; pass --hosts to force");
     }
-    let mut pinned = vec![home.policy_path()];
+    if dry_run {
+        println!(
+            "would environment      {}",
+            home.environment_path().display()
+        );
+    } else {
+        let snapshot = Snapshot::capture();
+        snapshot.save(&home.environment_path())?;
+        println!(
+            "✔ environment      {} ({} dirs, {} programs pinned)",
+            home.environment_path().display(),
+            snapshot.path.len(),
+            snapshot.programs.len()
+        );
+    }
+
+    let mut pinned = vec![home.policy_path(), home.environment_path()];
     for host in hosts {
         let config = HostConfig::for_host(host)?;
         let outcome = config.install(&binary, dry_run)?;
