@@ -1,0 +1,30 @@
+name: Feature request
+description: A host integration, a rule kind, a command, or a workflow moat should support.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what happens today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should moat do? Policy YAML or CLI sketches are welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [policy semantics, shell classification, host integration, audit and replay, enforcement (moat exec), CLI and UX, documentation]
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security impact
+      description: Does this widen what an agent can do, or narrow it? Any new trust assumptions?

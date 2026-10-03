@@ -1,0 +1,5 @@
+[build]
+rustdocflags = ["-D", "warnings"]
+
+[alias]
+gate = "run -q -p moat-kernel -- policy lint policies/default-v1.yaml"

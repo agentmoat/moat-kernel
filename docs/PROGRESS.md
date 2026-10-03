@@ -1,6 +1,6 @@
 # agentmoat — Progress and Next Steps
 
-Updated: 2026-10-02 (end of build day 1). Plan of record: `DESIGN.md` §10 (v0.1 spec),
+Updated: 2026-10-03. Plan of record: `DESIGN.md` §10 (v0.1 spec),
 `STRENGTH.md` §3 (benchmark gate), `REPO_STRUCTURE.md` (layout and conventions).
 
 ## 1. Where we are in one line
@@ -36,7 +36,22 @@ built yet.
 Totals: ~5,400 lines including tests; guard latency ≈ 11 ms including SQLite open
 (budget 15 ms).
 
-### 2.3 Design decisions made while building (now in `DESIGN.md`)
+### 2.3 Live test (2026-10-03)
+Real Claude Code 2.1.288 session, project-scoped `PreToolUse` hook, isolated `MOAT_HOME`:
+`git status --short` allowed (`dev-shell`), `curl -sI https://example.com` denied (`default.net`),
+`cat ~/.ssh/id_rsa` denied (`secrets-paths`). The agent reported each block verbatim and all
+three decisions were in the audit log. CI is green on macOS (arm64, x64), Linux and Windows.
+
+### 2.4 Engineering standards (2026-10-03, after surveying OpenHands, OpenCode, OpenClaw, ZeroClaw, NanoClaw)
+`AGENTS.md` + `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md` (scope tables), `CODE_OF_CONDUCT.md`,
+`CHANGELOG.md`, `.editorconfig`; `.github/` with pinned-SHA workflows, PR-title lint (Conventional
+Commits), dependabot with cooldown, CODEOWNERS, issue forms, PR template requiring Testing and
+Security impact; `scripts/ci/quality-gate.sh` used by CI and the pre-push hook; clippy thresholds
+(200-line functions, cognitive complexity 30) and `anyhow!` banned; rustdoc `-D warnings`;
+architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `docs/adr/` ADR-001…004;
+`shell` and `lexer` split into module directories.
+
+### 2.5 Design decisions made while building (now in `DESIGN.md`)
 - Deny is absolute; "deny by default with holes" is `defaults: {net: deny}` + allow rules, never `deny: ["*"]`.
 - Shell rule `*` matches any number of tokens; pipelines are matched per sub-command and as whole suffixes.
 - `ask` from `guard` returns the host's own `ask` decision (the host prompts the user); our own terminal/Telegram approval comes later.
@@ -53,13 +68,11 @@ Totals: ~5,400 lines including tests; guard latency ≈ 11 ms including SQLite o
 - Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` not implemented; only the user policy is loaded.
 - Windows: builds in CI, PowerShell is not tokenised (any PowerShell command is `ask`).
 - Nothing committed or pushed; `agentmoat/moat-kernel` repository not created.
-- Not yet exercised inside a real Claude Code session (only via the hook contract with recorded payloads).
 
 ## 4. Next, in order (DESIGN.md §10.9, weeks 2–6)
 
 | # | Work | Done when |
 |---|---|---|
-| 1 | **Live run**: `moat init` on the developer machine, real Claude Code session, `cat ~/.ssh/id_rsa` blocked; fix anything the real payloads reveal | screenshot + audit row |
 | 2 | **Self-protection**: `policy.lock` (sha256 of policy + host hook files), verified on every `guard`, mismatch ⇒ deny-all with "run `moat doctor --accept`"; `moat doctor` (hooks intact, binary path, perms, lock); Claude Code `ConfigChange` hook returning block | tamper tests in `tests/tamper/` |
 | 3 | **Executable pinning + PATH snapshot** at `init`; resolve programs against the snapshot, not the inherited PATH | T6 fixtures extended |
 | 4 | **Cursor adapter** (`beforeShellExecution`, `beforeMCPExecution`, `preToolUse`; `permission` response; `failClosed: true` at init) | golden fixtures + e2e |
@@ -72,8 +85,8 @@ Totals: ~5,400 lines including tests; guard latency ≈ 11 ms including SQLite o
 | 11 | **MoatBench v0**: ≥ 40 scenarios, Linux containers, Claude Code + Codex, 4 conditions, published results with CIs | gate in `STRENGTH.md` §3.3 |
 | 12 | **Release**: `cargo-dist`, Homebrew tap, installers, `THREAT_MODEL.md`, coverage matrix, README chart, Show HN | v0.1 tag only if the gate passes |
 
-Housekeeping before item 2: create `agentmoat/moat-kernel`, first commit, CI green on
-all three operating systems, branch protection.
+Housekeeping done: repository `agentmoat/moat-kernel` exists, CI is green on all three
+operating systems. Remaining: branch protection and a release workflow.
 
 ## 5. How to verify the current state yourself
 ```bash
