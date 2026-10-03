@@ -37,6 +37,10 @@ impl Home {
         self.root.join("audit.db")
     }
 
+    pub fn lock_path(&self) -> PathBuf {
+        self.root.join("policy.lock")
+    }
+
     pub fn exists(&self) -> bool {
         self.root.is_dir()
     }

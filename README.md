@@ -120,9 +120,10 @@ Full reference, including the default policy table and recipes: [docs/POLICY.md]
 | `moat-audit` | SQLite audit log, append-only, credentials redacted before storage. |
 | `moat-cli` | The `moat` binary: `init`, `guard`, `show`, `status`, `policy`. |
 
-Security properties the code enforces today: fail-closed on every error path, exit
-code 2 reserved for `deny`, protected paths for its own configuration, redacted audit,
-owner-only file permissions. Design, threat model and roadmap:
+Security properties the code enforces today: a policy lock checked on every call (an
+edited policy or hook file denies everything until you re-pin), fail-closed on every error
+path, exit code 2 reserved for `deny`, protected paths for its own configuration, redacted
+audit, owner-only file permissions. Design, threat model and roadmap:
 [docs/DESIGN.md](docs/DESIGN.md) · [docs/STRENGTH.md](docs/STRENGTH.md) ·
 [docs/PROGRESS.md](docs/PROGRESS.md).
 
