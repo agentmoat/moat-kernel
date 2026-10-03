@@ -271,7 +271,7 @@ mod tests {
             assert_eq!(host.id().parse::<Host>().unwrap(), host);
         }
         assert!(matches!(
-            "cursor".parse::<Host>(),
+            "windsurf".parse::<Host>(),
             Err(HostError::UnknownHost(_))
         ));
     }

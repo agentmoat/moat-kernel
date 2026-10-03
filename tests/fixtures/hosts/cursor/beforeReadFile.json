@@ -1,0 +1,6 @@
+{
+  "conversation_id": "conv-42", "generation_id": "gen-9", "hook_event_name": "beforeReadFile",
+  "cursor_version": "2.3.1", "workspace_roots": ["/p"],
+  "file_path": "/Users/me/.aws/credentials", "content": "[default]\naws_access_key_id = AKIA...",
+  "attachments": []
+}

@@ -43,12 +43,47 @@ const CODEX_HOOKS: &[HookSpec] = &[HookSpec {
     timeout: 600,
 }];
 
+const CURSOR_HOOKS: &[HookSpec] = &[
+    HookSpec {
+        event: "beforeShellExecution",
+        matcher: "",
+        timeout: 600,
+    },
+    HookSpec {
+        event: "beforeMCPExecution",
+        matcher: "",
+        timeout: 600,
+    },
+    HookSpec {
+        event: "beforeReadFile",
+        matcher: "",
+        timeout: 600,
+    },
+    HookSpec {
+        event: "preToolUse",
+        matcher: "",
+        timeout: 600,
+    },
+];
+
+/// How a host's hook file is laid out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookFormat {
+    /// `{"hooks": {"<Event>": [{"matcher", "hooks": [{type, command, args, timeout}]}]}}`
+    /// (Claude Code `settings.json`, Codex `hooks.json`).
+    Nested,
+    /// `{"version": 1, "hooks": {"<event>": [{"command": "<shell string>", "timeout", "failClosed"}]}}`
+    /// (Cursor `hooks.json`). Cursor is fail-open unless `failClosed` is set.
+    Cursor,
+}
+
 /// Where a host keeps its hook configuration and which events we subscribe to.
 #[derive(Debug, Clone)]
 pub struct HostConfig {
     pub host: Host,
     pub settings_path: PathBuf,
     pub hooks: &'static [HookSpec],
+    pub format: HookFormat,
 }
 
 impl HostConfig {
@@ -61,6 +96,7 @@ impl HostConfig {
                     .unwrap_or_else(|| home.join(".claude"))
                     .join("settings.json"),
                 hooks: CLAUDE_CODE_HOOKS,
+                format: HookFormat::Nested,
             },
             Host::Codex => Self {
                 host,
@@ -68,6 +104,15 @@ impl HostConfig {
                     .unwrap_or_else(|| home.join(".codex"))
                     .join("hooks.json"),
                 hooks: CODEX_HOOKS,
+                format: HookFormat::Nested,
+            },
+            Host::Cursor => Self {
+                host,
+                settings_path: env_dir("CURSOR_CONFIG_DIR")
+                    .unwrap_or_else(|| home.join(".cursor"))
+                    .join("hooks.json"),
+                hooks: CURSOR_HOOKS,
+                format: HookFormat::Cursor,
             },
         };
         Ok(config)
