@@ -1,8 +1,8 @@
 //! Idempotent edits to a host's JSON hook file.
 //!
 //! Claude Code (`settings.json`) and Codex (`hooks.json`) share the shape
-//! `{"hooks": {"PreToolUse": [{"matcher": …, "hooks": [{type, command, args, timeout}]}]}}`.
-//! Our entry is recognised by its `args` (`guard --host <id>`), so re-running
+//! `{"hooks": {"<Event>": [{"matcher": …, "hooks": [{type, command, args, timeout}]}]}}`.
+//! Our entries are recognised by their `args` (`guard --host <id>`), so re-running
 //! `init` updates the binary path and matcher in place and never duplicates.
 //! Unrelated settings are preserved byte-for-byte as JSON values.
 
@@ -12,25 +12,23 @@ use std::path::Path;
 use anyhow::{Context as _, Result, bail};
 use serde_json::{Map, Value, json};
 
-use super::HostConfig;
+use super::{HookSpec, HostConfig};
 use crate::home::write_private;
 
-const EVENT: &str = "PreToolUse";
-const TIMEOUT_SECONDS: u64 = 600;
 const BACKUP_SUFFIX: &str = ".moat-backup";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Outcome {
-    Installed,
-    Updated,
     Unchanged,
+    Updated,
+    Installed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HookState {
     Missing,
     Installed,
-    /// Present but pointing at a different binary or matcher.
+    /// Present but pointing at a different binary or matcher, or missing one event.
     Stale {
         command: String,
     },
@@ -39,10 +37,11 @@ pub enum HookState {
 
 pub fn install(config: &HostConfig, binary: &Path, dry_run: bool) -> Result<Outcome> {
     let path = &config.settings_path;
-    let original = read_or_empty(path)?;
-    let mut root = original.clone();
-    let desired = desired_entry(config, binary);
-    let outcome = upsert(&mut root, config, desired)?;
+    let mut root = read_or_empty(path)?;
+    let mut outcome = Outcome::Unchanged;
+    for spec in config.hooks {
+        outcome = outcome.max(upsert(&mut root, config, spec, binary)?);
+    }
     if outcome == Outcome::Unchanged || dry_run {
         return Ok(outcome);
     }
@@ -69,36 +68,45 @@ pub fn state(config: &HostConfig, binary: &Path) -> HookState {
         Ok(v) => v,
         Err(e) => return HookState::Unreadable(format!("{e:#}")),
     };
-    let Some(entries) = root
-        .pointer(&format!("/hooks/{EVENT}"))
-        .and_then(Value::as_array)
-    else {
-        return HookState::Missing;
-    };
-    let Some(ours) = entries.iter().find(|e| is_ours(e, config)) else {
-        return HookState::Missing;
-    };
-    let desired = desired_entry(config, binary);
-    if *ours == desired {
-        HookState::Installed
-    } else {
-        let command = ours
-            .pointer("/hooks/0/command")
-            .and_then(Value::as_str)
-            .unwrap_or("?")
-            .to_owned();
-        HookState::Stale { command }
+    let mut found = 0;
+    let mut stale_command = None;
+    for spec in config.hooks {
+        let ours = root
+            .pointer(&format!("/hooks/{}", spec.event))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.iter().find(|e| is_ours(e, config)));
+        match ours {
+            Some(entry) if *entry == desired_entry(config, spec, binary) => found += 1,
+            Some(entry) => {
+                stale_command.get_or_insert_with(|| {
+                    entry
+                        .pointer("/hooks/0/command")
+                        .and_then(Value::as_str)
+                        .unwrap_or("?")
+                        .to_owned()
+                });
+            }
+            None => {}
+        }
+    }
+    match (found, stale_command) {
+        (n, None) if n == config.hooks.len() => HookState::Installed,
+        (0, None) => HookState::Missing,
+        (_, Some(command)) => HookState::Stale { command },
+        (_, None) => HookState::Stale {
+            command: binary.to_string_lossy().into_owned(),
+        },
     }
 }
 
-fn desired_entry(config: &HostConfig, binary: &Path) -> Value {
+fn desired_entry(config: &HostConfig, spec: &HookSpec, binary: &Path) -> Value {
     json!({
-        "matcher": config.matcher,
+        "matcher": spec.matcher,
         "hooks": [{
             "type": "command",
             "command": binary.to_string_lossy(),
             "args": ["guard", "--host", config.host.id()],
-            "timeout": TIMEOUT_SECONDS,
+            "timeout": spec.timeout,
         }]
     })
 }
@@ -117,7 +125,13 @@ fn is_ours(entry: &Value, config: &HostConfig) -> bool {
         })
 }
 
-fn upsert(root: &mut Value, config: &HostConfig, desired: Value) -> Result<Outcome> {
+fn upsert(
+    root: &mut Value,
+    config: &HostConfig,
+    spec: &HookSpec,
+    binary: &Path,
+) -> Result<Outcome> {
+    let desired = desired_entry(config, spec, binary);
     let Value::Object(top) = root else {
         bail!("{} is not a JSON object", config.settings_path.display());
     };
@@ -131,11 +145,12 @@ fn upsert(root: &mut Value, config: &HostConfig, desired: Value) -> Result<Outco
         );
     };
     let entries = hooks
-        .entry(EVENT)
+        .entry(spec.event)
         .or_insert_with(|| Value::Array(Vec::new()));
     let Value::Array(entries) = entries else {
         bail!(
-            "`hooks.{EVENT}` in {} is not an array",
+            "`hooks.{}` in {} is not an array",
+            spec.event,
             config.settings_path.display()
         );
     };
@@ -168,16 +183,33 @@ mod tests {
     use super::*;
     use moat_hosts::Host;
 
+    const SPECS: &[HookSpec] = &[
+        HookSpec {
+            event: "PreToolUse",
+            matcher: "Bash|Edit",
+            timeout: 600,
+        },
+        HookSpec {
+            event: "ConfigChange",
+            matcher: "user_settings",
+            timeout: 60,
+        },
+    ];
+
     fn config(dir: &Path) -> HostConfig {
         HostConfig {
             host: Host::ClaudeCode,
             settings_path: dir.join("settings.json"),
-            matcher: "Bash|Edit",
+            hooks: SPECS,
         }
     }
 
+    fn root(cfg: &HostConfig) -> Value {
+        serde_json::from_str(&fs::read_to_string(&cfg.settings_path).unwrap()).unwrap()
+    }
+
     #[test]
-    fn install_is_idempotent_and_preserves_other_settings() {
+    fn installs_every_event_idempotently_and_preserves_other_settings() {
         let dir = tempfile::tempdir().unwrap();
         let cfg = config(dir.path());
         fs::write(
@@ -200,19 +232,39 @@ mod tests {
         );
         assert_eq!(install(&cfg, moved, false).unwrap(), Outcome::Updated);
 
-        let root: Value =
-            serde_json::from_str(&fs::read_to_string(&cfg.settings_path).unwrap()).unwrap();
+        let root = root(&cfg);
         assert_eq!(root["theme"], "dark");
         assert_eq!(root["hooks"]["PostToolUse"].as_array().unwrap().len(), 1);
         let pre = root["hooks"]["PreToolUse"].as_array().unwrap();
         assert_eq!(pre.len(), 1, "no duplicates after three installs");
         assert_eq!(pre[0]["hooks"][0]["command"], "/usr/local/bin/moat");
         assert_eq!(pre[0]["hooks"][0]["timeout"], 600);
+        let cfg_change = root["hooks"]["ConfigChange"].as_array().unwrap();
+        assert_eq!(cfg_change.len(), 1);
+        assert_eq!(cfg_change[0]["matcher"], "user_settings");
+        assert_eq!(cfg_change[0]["hooks"][0]["timeout"], 60);
         assert!(
             cfg.settings_path
                 .with_extension("json.moat-backup")
                 .exists()
         );
+    }
+
+    #[test]
+    fn a_missing_event_entry_is_stale_not_installed() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = config(dir.path());
+        let binary = Path::new("/x/moat");
+        install(&cfg, binary, false).unwrap();
+        let mut root = root(&cfg);
+        root["hooks"]
+            .as_object_mut()
+            .unwrap()
+            .remove("ConfigChange");
+        fs::write(&cfg.settings_path, root.to_string()).unwrap();
+        assert!(matches!(state(&cfg, binary), HookState::Stale { .. }));
+        assert_eq!(install(&cfg, binary, false).unwrap(), Outcome::Installed);
+        assert_eq!(state(&cfg, binary), HookState::Installed);
     }
 
     #[test]
@@ -237,9 +289,8 @@ mod tests {
         )
         .unwrap();
         install(&cfg, Path::new("/x/moat"), false).unwrap();
-        let root: Value =
-            serde_json::from_str(&fs::read_to_string(&cfg.settings_path).unwrap()).unwrap();
-        let pre = root["hooks"]["PreToolUse"].as_array().unwrap();
+        let pre = root(&cfg)["hooks"]["PreToolUse"].clone();
+        let pre = pre.as_array().unwrap();
         assert_eq!(pre.len(), 2);
         assert_eq!(pre[0]["hooks"][0]["command"], "lint.sh");
     }
