@@ -38,6 +38,7 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 6. **No secrets in the audit log.** Everything persisted passes `moat_audit::redact`.
 7. **Pure core.** `moat-core` depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`.
 8. **Idempotent install.** `moat init` never overwrites a policy, never duplicates a hook, always backs up before editing a host file.
+9. **Lock before decide.** `moat guard` verifies `policy.lock` first; drift ⇒ `deny` (`kernel-integrity`). Only a person re-running `moat init` (later: `moat doctor --accept`) may re-pin.
 
 ## 4. Engineering rules
 

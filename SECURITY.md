@@ -31,7 +31,6 @@ and are being built rather than being bugs:
 |---|---|
 | OS-level enforcement of a decision (a parse the policy misjudges is still only a decision) | `moat exec` sandbox, planned |
 | Network enforcement beyond pattern matching | egress proxy, planned |
-| Integrity verification of the policy and hook files on every call | policy lock + `moat doctor`, planned |
 | PowerShell / cmd tokenisation on Windows | any such command is `ask` |
 | Hosts that proceed when the hook binary is missing | host limitation; `moat status` reports it |
 | Agents running in a vendor's cloud rather than on the host | not a target |
@@ -47,7 +46,7 @@ every attempt. Full version: `docs/DESIGN.md` §3.
 
 ## Hardening already in place
 
-Deterministic decisions (no model in the loop); fail-closed on every error path;
+Deterministic decisions (no model in the loop); a policy lock verified on every call (edits to the policy or hook files deny everything until a person re-pins); fail-closed on every error path;
 exit code 2 reserved for `deny`; protected paths for the kernel's own configuration;
 redaction before audit storage; owner-only permissions on state files; a pure core
 with no I/O and no `unsafe`; dependency and licence auditing in CI.

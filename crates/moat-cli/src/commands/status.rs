@@ -11,6 +11,7 @@ use sha2::{Digest as _, Sha256};
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig};
+use crate::integrity::Lock;
 use crate::render;
 
 pub fn run() -> Result<Code> {
@@ -39,6 +40,27 @@ pub fn run() -> Result<Code> {
         Err(error) => {
             healthy = false;
             println!("policy           ✗ {error:#}");
+        }
+    }
+
+    match Lock::load(&home.lock_path()) {
+        Ok(lock) => {
+            let drift = lock.verify();
+            if drift.is_empty() {
+                println!(
+                    "lock             ✔ {} files pinned, intact",
+                    lock.entries.len()
+                );
+            } else {
+                healthy = false;
+                for d in drift {
+                    println!("lock             ✗ {d} (re-run `moat init`)");
+                }
+            }
+        }
+        Err(error) => {
+            healthy = false;
+            println!("lock             ✗ {error:#}");
         }
     }
 
