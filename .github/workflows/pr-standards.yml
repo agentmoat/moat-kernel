@@ -31,7 +31,8 @@ jobs:
           total=$((added + deleted))
 
           type=""
-          if [[ "$TITLE" =~ ^(feat|fix|sec|policy|host|docs|test|refactor|perf|build|ci|chore)(\([^)]+\))?!?: ]]; then
+          title_re='^(feat|fix|sec|policy|host|docs|test|refactor|perf|build|ci|chore)(\([^)]+\))?!?: '
+          if [[ "$TITLE" =~ $title_re ]]; then
             type="type/${BASH_REMATCH[1]}"
           fi
 
