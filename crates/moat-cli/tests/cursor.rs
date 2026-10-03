@@ -113,10 +113,14 @@ fn shell_exfiltration_is_denied_in_cursor_format() {
 #[test]
 fn secret_file_read_and_safe_mcp_tool() {
     let sb = Sandbox::new();
-    let read = fixture("beforeReadFile.json").replace(
-        "/Users/me/.aws/credentials",
-        &sb.home.join(".aws/credentials").to_string_lossy(),
-    );
+    let read = serde_json::json!({
+        "conversation_id": "conv-42", "generation_id": "gen-9",
+        "hook_event_name": "beforeReadFile", "cursor_version": "2.3.1",
+        "workspace_roots": [sb.home.to_string_lossy()],
+        "file_path": sb.home.join(".aws").join("credentials").to_string_lossy(),
+        "content": "[default]", "attachments": []
+    })
+    .to_string();
     let (code, doc) = sb.guard(&read);
     assert_eq!(code, Some(2), "{doc}");
     assert_eq!(doc["permission"], "deny");
@@ -124,7 +128,8 @@ fn secret_file_read_and_safe_mcp_tool() {
         doc["user_message"]
             .as_str()
             .unwrap()
-            .contains("secrets-paths")
+            .contains("secrets-paths"),
+        "{doc}"
     );
 
     let (code, doc) = sb.guard(&fixture("beforeMCPExecution.json"));
