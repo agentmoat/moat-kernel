@@ -12,6 +12,7 @@ use moat_audit::{NewEvent, Store};
 use moat_core::{CompiledPolicy, Decision, EvalContext, Verdict};
 use moat_hosts::{HookEvent, HookRequest, Host};
 
+use crate::approvals::Grants;
 use crate::cli::GuardArgs;
 use crate::context;
 use crate::environment::Snapshot;
@@ -25,6 +26,7 @@ const UNGOVERNED_RULE: &str = "ungoverned";
 const KERNEL_ERROR_RULE: &str = "kernel-error";
 const INTEGRITY_RULE: &str = "kernel-integrity";
 const CONFIG_CHANGE_RULE: &str = "config-change";
+const SESSION_GRANT_RULE: &str = "approved-session";
 
 pub fn run(args: &GuardArgs) -> Code {
     let started = Instant::now();
@@ -88,7 +90,17 @@ fn evaluate(host: Host) -> Result<(Option<HookRequest>, Decision)> {
         cwd: context::path_string(&cwd),
     };
     let snapshot = Snapshot::load(&home.environment_path())?;
-    let decision = CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot);
+    let mut decision = CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot);
+    if decision.verdict == Verdict::Ask
+        && let moat_core::Action::Shell { command } = action
+        && Grants::load(&home.grants_path())?.matches(host.id(), &request.session_id, command)
+    {
+        decision = Decision::new(Verdict::Allow);
+        decision.rules.push(SESSION_GRANT_RULE.to_owned());
+        decision
+            .reasons
+            .push("approved for this session with `moat allow`".to_owned());
+    }
     Ok((Some(request), decision))
 }
 

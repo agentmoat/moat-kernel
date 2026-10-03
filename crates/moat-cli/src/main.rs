@@ -4,6 +4,7 @@
 //! by `moat-core`. Exit codes are a stable contract used by host hooks:
 //! see [`exit::Code`].
 
+mod approvals;
 mod cli;
 mod commands;
 mod context;

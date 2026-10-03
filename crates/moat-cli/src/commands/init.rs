@@ -9,7 +9,7 @@ use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HostConfig, Outcome};
-use crate::integrity::Lock;
+use crate::integrity;
 
 pub fn run(args: &InitArgs) -> Result<Code> {
     let dry_run = args.dry_run;
@@ -68,11 +68,12 @@ pub fn run(args: &InitArgs) -> Result<Code> {
         );
     }
 
-    let mut pinned = vec![home.policy_path(), home.environment_path()];
+    if !dry_run {
+        home.ensure_approval_files()?;
+    }
     for host in hosts {
         let config = HostConfig::for_host(host)?;
         let outcome = config.install(&binary, dry_run)?;
-        pinned.push(config.settings_path.clone());
         let verb = match outcome {
             Outcome::Installed => "installed",
             Outcome::Updated => "updated",
@@ -90,8 +91,7 @@ pub fn run(args: &InitArgs) -> Result<Code> {
     if dry_run {
         println!("would lock             {}", home.lock_path().display());
     } else {
-        let lock = Lock::pin(&binary, &pinned)?;
-        lock.save(&home.lock_path())?;
+        let lock = integrity::repin(&home, &binary)?;
         println!(
             "✔ lock             {} ({} files pinned)",
             home.lock_path().display(),
