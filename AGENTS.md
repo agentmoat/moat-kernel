@@ -48,7 +48,7 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 - **Dependencies:** adding one needs a sentence in the PR on why std or an existing dep does not cover it; `cargo-deny` must stay green; `moat-core` additions need an ADR.
 - **Lints:** workspace `clippy::pedantic`, `unsafe_code = "forbid"`, rustdoc `-D warnings`. Do not `#[allow]` to get green; fix or justify in the PR.
 - **Formatting:** `cargo fmt` (max width 100). `.editorconfig` for everything else.
-- **PR-only:** nothing is pushed to `main` directly. Branch `<type>/<topic>`, open a PR, let `pr-standards` label it (type/area/size/risk), keep it ≤ 500 lines, squash-merge. Conventional Commits title (`feat`, `fix`, `sec`, `policy`, `host(codex)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`), lowercase subject. PR body sections **Testing**, **Security impact** and **Release note** are required.
+- **PR-only:** nothing is pushed to `main` directly. Branch `<type>/<topic>`, open a PR, let `pr-standards` label it (`type: …`, `area: …`, `size: …`, `risk: …`), keep it ≤ 500 lines, squash-merge. Conventional Commits title (`feat`, `fix`, `sec`, `policy`, `host(codex)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`), lowercase subject. PR body sections **Testing**, **Security impact** and **Release note** are required.
 - **Docs are code:** behaviour change ⇒ same PR updates `docs/POLICY.md` / `DESIGN.md` / `CHANGELOG.md` as applicable.
 
 ## 5. Skills (how to do the common jobs)

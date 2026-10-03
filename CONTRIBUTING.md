@@ -28,7 +28,7 @@ is pushed to `main` directly.
 1. Open an issue first for anything that changes what an agent is allowed to do.
 2. Branch from `main` as `<type>/<short-topic>` (for example `feat/doctor-command`,
    `fix/windows-paths`); keep the PR to one concern and under 500 changed lines.
-   Larger changes are split into a stack of PRs or justified with the `size/override` label.
+   Larger changes are split into a stack of PRs or justified with the `size: override` label.
 3. Behaviour changes come with tests at the right level:
    - unit tests next to the code (`#[cfg(test)]`),
    - conformance fixtures in `tests/conformance/` for every rule or parser change,
@@ -43,15 +43,15 @@ is pushed to `main` directly.
 
 | Label group | How it is set | Meaning |
 |---|---|---|
-| `type/*` | from the Conventional Commits title | what kind of change |
-| `area/*` | from changed paths | `core`, `hosts`, `audit`, `cli`, `policy`, `ci`, `docs`, `deps` |
-| `size/*` | additions + deletions | `XS` ≤ 10 · `S` ≤ 50 · `M` ≤ 200 · `L` ≤ 500 · `XL` fails without `size/override` |
-| `risk/*` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
-| `needs-fixture` | core or policy changed without `tests/conformance/` | add a fixture |
+| `type: *` | from the Conventional Commits title | what kind of change |
+| `area: *` | from changed paths | `core`, `hosts`, `audit`, `cli`, `policy`, `ci`, `docs`, `deps` |
+| `size: *` | additions + deletions | `XS` ≤ 10 · `S` ≤ 50 · `M` ≤ 200 · `L` ≤ 500 · `XL` fails without `size: override` |
+| `risk: *` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
+| `needs: fixture` | core or policy changed without `tests/conformance/` | add a fixture |
 
 Checks that must pass before merge (enforced by the `main` ruleset): the quality gate on
 macOS, Linux and Windows, wasm purity, `cargo-deny`, `pr-title`, `pr-standards`. The PR body must have
-non-empty **Testing** and **Security impact** sections. `risk/high` PRs need
+non-empty **Testing** and **Security impact** sections. `risk: high` PRs need
 maintainer review (CODEOWNERS). Squash-merge; the PR title becomes the commit subject
 and the **Release note** line feeds `CHANGELOG.md`.
 
