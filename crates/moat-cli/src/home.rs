@@ -45,6 +45,14 @@ impl Home {
         self.root.join("environment.json")
     }
 
+    pub fn grants_path(&self) -> PathBuf {
+        self.root.join("approvals.json")
+    }
+
+    pub fn overlay_path(&self) -> PathBuf {
+        self.root.join("policy.d").join("approved.yaml")
+    }
+
     pub fn exists(&self) -> bool {
         self.root.is_dir()
     }
@@ -67,13 +75,32 @@ impl Home {
         Ok(true)
     }
 
-    /// Load and lint the installed user policy.
+    /// Load and lint the installed user policy, with `moat allow --always` rules merged in.
     pub fn load_policy(&self) -> Result<Policy> {
         let path = self.policy_path();
         if !path.is_file() {
             bail!("no policy at {}; run `moat init`", path.display());
         }
-        context::load_policy(&path)
+        let mut policy = context::load_policy(&path)?;
+        let overlay = crate::approvals::Overlay::load(&self.overlay_path())?;
+        if !overlay.allow.is_empty() {
+            policy.allow.extend(overlay.allow);
+            policy
+                .lint()
+                .with_context(|| format!("merging {}", self.overlay_path().display()))?;
+        }
+        Ok(policy)
+    }
+
+    /// Create empty approval files so the lock covers them from the first run.
+    pub fn ensure_approval_files(&self) -> Result<()> {
+        if !self.grants_path().exists() {
+            crate::approvals::Grants::default().save(&self.grants_path())?;
+        }
+        if !self.overlay_path().exists() {
+            crate::approvals::Overlay::default().save(&self.overlay_path())?;
+        }
+        Ok(())
     }
 }
 
