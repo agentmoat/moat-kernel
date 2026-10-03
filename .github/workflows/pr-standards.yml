@@ -84,20 +84,23 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t current < <(gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name')
+          desired=()
+          [[ -n "$TYPE" ]] && desired+=("$TYPE")
+          while IFS= read -r a; do [[ -n "$a" ]] && desired+=("$a"); done <<<"$AREAS"
+          desired+=("$SIZE" "$RISK")
+          if [[ "$BEHAVIOUR_CHANGE" == "true" && "$FIXTURE_TOUCHED" == "false" ]]; then
+            desired+=("needs: fixture")
+          fi
+          managed() { case "$1" in "size: override") return 1 ;; "type: "*|"area: "*|"size: "*|"risk: "*|"needs: fixture") return 0 ;; *) return 1 ;; esac; }
+          contains() { local x; for x in "${@:2}"; do [[ "$x" == "$1" ]] && return 0; done; return 1; }
           args=()
           for l in "${current[@]}"; do
-            case "$l" in
-              "size: override") ;;
-              "type: "*|"area: "*|"size: "*|"risk: "*|"needs: fixture") args+=(--remove-label "$l") ;;
-            esac
+            if managed "$l" && ! contains "$l" "${desired[@]}"; then args+=(--remove-label "$l"); fi
           done
-          [[ -n "$TYPE" ]] && args+=(--add-label "$TYPE")
-          while IFS= read -r a; do [[ -n "$a" ]] && args+=(--add-label "$a"); done <<<"$AREAS"
-          args+=(--add-label "$SIZE" --add-label "$RISK")
-          if [[ "$BEHAVIOUR_CHANGE" == "true" && "$FIXTURE_TOUCHED" == "false" ]]; then
-            args+=(--add-label "needs: fixture")
-          fi
-          gh pr edit "$PR" --repo "$REPO" "${args[@]}"
+          for l in "${desired[@]}"; do
+            if ! contains "$l" "${current[@]}"; then args+=(--add-label "$l"); fi
+          done
+          if (( ${#args[@]} )); then gh pr edit "$PR" --repo "$REPO" "${args[@]}"; else echo "labels already correct"; fi
 
       - name: check body and size
         shell: bash
