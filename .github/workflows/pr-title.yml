@@ -29,5 +29,7 @@ jobs:
             ci
             chore
           requireScope: false
+          ignoreLabels: |
+            dependencies
           subjectPattern: ^(?![A-Z]).+$
           subjectPatternError: Subject must start lowercase and describe the change for a user.
