@@ -42,6 +42,21 @@ Real Claude Code 2.1.288 session, project-scoped `PreToolUse` hook, isolated `MO
 `cat ~/.ssh/id_rsa` denied (`secrets-paths`). The agent reported each block verbatim and all
 three decisions were in the audit log. CI is green on macOS (arm64, x64), Linux and Windows.
 
+### 2.3b Live test 2 (2026-10-03, after #8–#21)
+Real Claude Code 2.1.288 sessions against the merged binary, project-scoped hook, isolated
+`MOAT_HOME`. Observed in the audit log and in the agent's own reports: `git status` allowed
+(`dev-shell`); `curl` to an unlisted host denied (`default.net`); `cat ~/.ssh/id_rsa` denied
+(`secrets-paths`); `npm install …` asked (`installs`; Claude Code's non-interactive mode treats
+`ask` as blocked). `moat allow --last --always` from a pseudo-terminal wrote `approved-1` and the
+next session ran the command (`allow [approved-1]`). Appending a comment to `policy.yaml` made
+every following call `deny [kernel-integrity]` with the file named in the reason; `moat doctor`
+listed the drift; `moat doctor --accept` re-pinned and the next session was allowed again.
+`moat replay --since 1h` grouped four sessions with the right glyphs and rules; `moat report`
+counted 1 allowed / 2 asked / 4 denied with `installs` and `kernel-integrity` on top.
+
+Harness notes: hooks must be invoked with the same `CLAUDE_CONFIG_DIR` the lock was pinned under;
+`doctor` reports a present-but-uninstalled host (Codex on this machine) as a problem by design.
+
 ### 2.4 Engineering standards (2026-10-03, after surveying OpenHands, OpenCode, OpenClaw, ZeroClaw, NanoClaw)
 `AGENTS.md` + `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md` (scope tables), `CODE_OF_CONDUCT.md`,
 `CHANGELOG.md`, `.editorconfig`; `.github/` with pinned-SHA workflows, PR-title lint (Conventional
