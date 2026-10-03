@@ -22,8 +22,13 @@ Rust 1.95 (pinned in `rust-toolchain.toml`). No other tooling is required.
 
 ## Making a change
 
+Every change lands through a pull request, including maintainers' own work; nothing
+is pushed to `main` directly.
+
 1. Open an issue first for anything that changes what an agent is allowed to do.
-2. Branch from `main`; keep the PR to one concern.
+2. Branch from `main` as `<type>/<short-topic>` (for example `feat/doctor-command`,
+   `fix/windows-paths`); keep the PR to one concern and under 500 changed lines.
+   Larger changes are split into a stack of PRs or justified with the `size/override` label.
 3. Behaviour changes come with tests at the right level:
    - unit tests next to the code (`#[cfg(test)]`),
    - conformance fixtures in `tests/conformance/` for every rule or parser change,
@@ -31,6 +36,26 @@ Rust 1.95 (pinned in `rust-toolchain.toml`). No other tooling is required.
    - architecture tests (`crates/*/tests/architecture.rs`) when crate boundaries move.
 4. Run `scripts/ci/quality-gate.sh`. CI runs the same script on macOS, Linux and Windows.
 5. Fill in the PR template: **Testing** and **Security impact** are required sections.
+
+## Pull request standards
+
+`pr-standards.yml` labels every PR and fails it when the standards are not met:
+
+| Label group | How it is set | Meaning |
+|---|---|---|
+| `type/*` | from the Conventional Commits title | what kind of change |
+| `area/*` | from changed paths | `core`, `hosts`, `audit`, `cli`, `policy`, `ci`, `docs`, `deps` |
+| `size/*` | additions + deletions | `XS` ≤ 10 · `S` ≤ 50 · `M` ≤ 200 · `L` ≤ 500 · `XL` fails without `size/override` |
+| `risk/*` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
+| `needs-fixture` | core or policy changed without `tests/conformance/` | add a fixture |
+
+Checks that must pass before merge: the quality gate on macOS, Linux and Windows,
+wasm purity, `cargo-deny`, `pr-title`, `pr-standards`. The PR body must have
+non-empty **Testing** and **Security impact** sections. `risk/high` PRs need
+maintainer review (CODEOWNERS). Squash-merge; the PR title becomes the commit subject
+and the **Release note** line feeds `CHANGELOG.md`.
+
+Labels are defined in `scripts/ci/sync-labels.sh`; edit that script, not the GitHub UI.
 
 ## Conventions
 
