@@ -93,11 +93,10 @@ fn init_creates_state_and_installs_claude_code_hook() {
         hooks[0]["hooks"][0]["args"],
         serde_json::json!(["guard", "--host", "claude-code"])
     );
+    let command = hooks[0]["hooks"][0]["command"].as_str().unwrap();
     assert!(
-        hooks[0]["hooks"][0]["command"]
-            .as_str()
-            .unwrap()
-            .ends_with("moat")
+        command.ends_with("moat") || command.ends_with("moat.exe"),
+        "{command}"
     );
 
     let again = sb.moat(&["init"]);
