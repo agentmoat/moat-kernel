@@ -254,7 +254,7 @@ fn guard_fails_closed() {
         );
     }
 
-    let out = sb.moat_with_stdin(&["guard", "--host", "cursor"], Some("{}"));
+    let out = sb.moat_with_stdin(&["guard", "--host", "windsurf"], Some("{}"));
     assert_eq!(out.status.code(), Some(64));
 }
 

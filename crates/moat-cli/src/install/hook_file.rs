@@ -12,7 +12,7 @@ use std::path::Path;
 use anyhow::{Context as _, Result, bail};
 use serde_json::{Map, Value, json};
 
-use super::{HookSpec, HostConfig};
+use super::{HookFormat, HookSpec, HostConfig};
 use crate::home::write_private;
 
 const BACKUP_SUFFIX: &str = ".moat-backup";
@@ -100,18 +100,38 @@ pub fn state(config: &HostConfig, binary: &Path) -> HookState {
 }
 
 fn desired_entry(config: &HostConfig, spec: &HookSpec, binary: &Path) -> Value {
-    json!({
-        "matcher": spec.matcher,
-        "hooks": [{
-            "type": "command",
-            "command": binary.to_string_lossy(),
-            "args": ["guard", "--host", config.host.id()],
+    match config.format {
+        HookFormat::Nested => json!({
+            "matcher": spec.matcher,
+            "hooks": [{
+                "type": "command",
+                "command": binary.to_string_lossy(),
+                "args": ["guard", "--host", config.host.id()],
+                "timeout": spec.timeout,
+            }]
+        }),
+        HookFormat::Cursor => json!({
+            "command": cursor_command(config, binary),
             "timeout": spec.timeout,
-        }]
-    })
+            "failClosed": true,
+        }),
+    }
+}
+
+/// Cursor takes one shell string; the binary path is quoted so spaces survive.
+fn cursor_command(config: &HostConfig, binary: &Path) -> String {
+    let path = binary.to_string_lossy().replace('"', "\\\"");
+    format!("\"{path}\" guard --host {}", config.host.id())
 }
 
 fn is_ours(entry: &Value, config: &HostConfig) -> bool {
+    if config.format == HookFormat::Cursor {
+        let suffix = format!(" guard --host {}", config.host.id());
+        return entry
+            .get("command")
+            .and_then(Value::as_str)
+            .is_some_and(|c| c.trim_end().ends_with(&suffix));
+    }
     entry
         .get("hooks")
         .and_then(Value::as_array)
@@ -135,6 +155,9 @@ fn upsert(
     let Value::Object(top) = root else {
         bail!("{} is not a JSON object", config.settings_path.display());
     };
+    if config.format == HookFormat::Cursor {
+        top.entry("version").or_insert_with(|| json!(1));
+    }
     let hooks = top
         .entry("hooks")
         .or_insert_with(|| Value::Object(Map::new()));
@@ -201,7 +224,47 @@ mod tests {
             host: Host::ClaudeCode,
             settings_path: dir.join("settings.json"),
             hooks: SPECS,
+            format: HookFormat::Nested,
         }
+    }
+
+    #[test]
+    fn cursor_format_sets_version_fail_closed_and_a_quoted_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = HostConfig {
+            host: Host::Cursor,
+            settings_path: dir.path().join("hooks.json"),
+            hooks: &[HookSpec {
+                event: "beforeShellExecution",
+                matcher: "",
+                timeout: 600,
+            }],
+            format: HookFormat::Cursor,
+        };
+        let binary = Path::new("/Applications/My Tools/moat");
+        assert_eq!(install(&cfg, binary, false).unwrap(), Outcome::Installed);
+        assert_eq!(install(&cfg, binary, false).unwrap(), Outcome::Unchanged);
+        assert_eq!(state(&cfg, binary), HookState::Installed);
+        let doc = root(&cfg);
+        assert_eq!(doc["version"], 1);
+        let entry = &doc["hooks"]["beforeShellExecution"][0];
+        assert_eq!(
+            entry["command"],
+            "\"/Applications/My Tools/moat\" guard --host cursor"
+        );
+        assert_eq!(entry["failClosed"], true);
+        assert_eq!(entry["timeout"], 600);
+        assert!(entry.get("args").is_none());
+        let moved = Path::new("/usr/local/bin/moat");
+        assert!(matches!(state(&cfg, moved), HookState::Stale { .. }));
+        assert_eq!(install(&cfg, moved, false).unwrap(), Outcome::Updated);
+        assert_eq!(
+            root(&cfg)["hooks"]["beforeShellExecution"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     fn root(cfg: &HostConfig) -> Value {
