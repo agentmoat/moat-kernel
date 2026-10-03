@@ -5,7 +5,7 @@
 `moat` sits between an AI agent and your machine. Every tool call the agent makes
 (a shell command, a file read or write, a web fetch, an MCP tool) is checked against a
 policy you control, blocked or allowed with a reason, and written to a local audit log.
-One policy, one audit log, every agent: Claude Code, Codex, and more to come.
+One policy, one audit log, every agent: Claude Code, Codex, Cursor, and more to come.
 
 ```
 agent tool call ──► moat guard ──► allow ──► runs, logged
@@ -44,7 +44,8 @@ moat status                             # verify (moat doctor for a full check)
 
 `moat init` writes `~/.moat/policy.yaml`, creates the audit database, and registers a
 `PreToolUse` hook with Claude Code (`~/.claude/settings.json`) and Codex
-(`~/.codex/hooks.json`). It never overwrites an existing policy and never duplicates
+(`~/.codex/hooks.json`), and fail-closed shell, MCP, file-read and tool hooks with
+Cursor (`~/.cursor/hooks.json`). It never overwrites an existing policy and never duplicates
 a hook; re-run it any time.
 
 ## See it work

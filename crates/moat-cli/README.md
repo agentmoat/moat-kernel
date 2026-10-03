@@ -17,4 +17,4 @@ Exit codes are a contract (ADR-004): 0 allow/ok, 2 deny, 3 unresolved ask,
 64 usage or configuration error.
 
 Environment: `MOAT_HOME` (state directory, default `~/.moat`), `CLAUDE_CONFIG_DIR`,
-`CODEX_HOME` (host configuration directories).
+`CODEX_HOME`, `CURSOR_CONFIG_DIR` (host configuration directories).
