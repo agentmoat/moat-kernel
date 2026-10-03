@@ -68,6 +68,14 @@ impl Sandbox {
     }
 }
 
+fn text(out: &Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    )
+}
+
 #[test]
 fn init_pins_grants_and_overlay() {
     let sb = Sandbox::new();
@@ -168,5 +176,19 @@ fn permanent_overlay_rules_merge_into_the_policy() {
     assert_eq!(
         d["permissionDecision"], "deny",
         "a malformed overlay fails closed: {d}"
+    );
+}
+
+#[test]
+fn allow_requires_a_terminal() {
+    let sb = Sandbox::new();
+    let out = sb.moat(&["allow", "npm install x", "--always"], "");
+    assert_eq!(out.status.code(), Some(64));
+    assert!(text(&out).contains("must be run by a person in a terminal"));
+    assert!(
+        !sb.home.join(".moat/policy.d/approved.yaml").exists()
+            || std::fs::read_to_string(sb.home.join(".moat/policy.d/approved.yaml"))
+                .unwrap()
+                .contains("allow: []")
     );
 }

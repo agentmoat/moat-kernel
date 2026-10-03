@@ -77,6 +77,7 @@ See a whole session or a week at a glance:
 ```bash
 moat replay --since today        # one tree per agent session
 moat report --since 7d          # totals, hosts, top rules, asks per active hour
+moat allow --last               # make the last "ask" stick for that session (--always for a rule)
 ```
 
 Test a command against a policy without installing anything:

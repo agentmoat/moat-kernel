@@ -175,9 +175,26 @@ resolves somewhere else (a `git` planted in `node_modules/.bin`, an absolute pat
 in `/tmp`), the command is denied with rule `executables`. Unpinned programs are not checked.
 After installing a tool in a new location, re-run `moat init` or `moat doctor --accept`.
 
+## 8.2 Approvals
+
+When a host prompts you because the verdict was `ask`, you can make the answer stick:
+
+```bash
+moat allow --last                  # grant the most recent ask to that host session (exact command)
+moat allow --last --always         # or add a permanent allow rule
+moat allow "npm install left-pad" --host claude-code --session 7c1e
+```
+
+Session grants live in `~/.moat/approvals.json` and match the exact command text for
+one host session; they never override a `deny`. Permanent rules are appended to
+`~/.moat/policy.d/approved.yaml` with ids `approved-1`, `approved-2`, … and a provenance
+comment, and are merged into your policy at load time so `policy.yaml` is never rewritten.
+Shell rules are prefixes, so a permanently approved `npm install left-pad` also allows
+extra arguments after it; edit the overlay if you want it tighter. Both files are pinned
+by the lock; `moat allow` must be run from a terminal and is denied to agents.
+
 ## 9. Planned, not yet available
 
 Repository-level policy (`<repo>/.moat/policy.yaml`) with explicit trust, managed
-organisation policy, Telegram approvals, and
-`moat policy add` for turning an approval into a permanent rule. Status and order:
+organisation policy, and Telegram approvals. Status and order:
 `PROGRESS.md`.
