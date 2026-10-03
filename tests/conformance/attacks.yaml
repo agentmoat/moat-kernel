@@ -187,3 +187,18 @@
 - id: T12-ssh-unknown
   action: { shell: "ssh deploy@prod.example.com uptime" }
   expect: { verdict: deny, rules: [default.net] }
+
+# T6 planted binaries: a pinned program must run from its recorded path
+- id: T6-planted-git-in-project-bin
+  action: { shell: "git status" }
+  resolve: { git: /p/node_modules/.bin/git }
+  pins: { git: /usr/bin/git }
+  expect: { verdict: deny, rules: [executables] }
+- id: T6-absolute-path-to-planted-npm
+  action: { shell: "/tmp/tools/npm test" }
+  pins: { npm: /opt/homebrew/bin/npm }
+  expect: { verdict: deny, rules: [executables] }
+- id: T6-pinned-program-vanished
+  action: { shell: "curl https://api.github.com" }
+  pins: { curl: /usr/bin/curl }
+  expect: { verdict: deny, rules: [executables] }

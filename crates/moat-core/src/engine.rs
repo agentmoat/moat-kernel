@@ -9,6 +9,7 @@ use crate::action::{Action, AtomicAction};
 use crate::paths;
 use crate::pattern::{GlobPattern, ShellPattern, any_match};
 use crate::policy::{Policy, PolicyError, RuleGroup};
+use crate::programs::{self, NoResolver, ProgramResolver};
 use crate::shell::{ParseOutcome, ShellContext, classify};
 use crate::verdict::{Decision, Verdict};
 
@@ -195,20 +196,34 @@ fn host_of_url(url: &str) -> Option<String> {
 }
 
 impl CompiledPolicy<'_> {
-    /// Decide one host action.
+    /// Decide one host action without executable resolution.
     ///
     /// Unparseable input yields `ask` with the parser's reason, never `allow`.
     #[must_use]
     pub fn decide(&self, action: &Action) -> Decision {
+        self.decide_with(action, &NoResolver)
+    }
+
+    /// Decide one host action, resolving shell programs through `resolver` so
+    /// that `executables` pins and installation pins are enforced.
+    #[must_use]
+    pub fn decide_with(&self, action: &Action, resolver: &dyn ProgramResolver) -> Decision {
         let atoms = match classify_action(action, &self.ctx) {
             ParseOutcome::Parsed(atoms) => atoms,
             ParseOutcome::Unparseable { reason } => {
                 return unparseable(format!("could not parse action safely: {reason}"));
             }
         };
+        let pins = atoms.iter().filter_map(|atom| match atom {
+            AtomicAction::Shell { argv } => {
+                programs::check(&argv[0], &self.policy.executables, resolver)
+            }
+            _ => None,
+        });
         atoms
             .iter()
             .filter_map(|atom| self.evaluate_atomic(atom))
+            .chain(pins)
             .reduce(|mut acc, next| {
                 acc.merge(next);
                 acc
@@ -327,6 +342,34 @@ mod tests {
         )
         .unwrap();
         assert_eq!(d.verdict, Verdict::Ask);
+    }
+
+    #[test]
+    fn pinned_executables_are_enforced_through_the_resolver() {
+        use crate::programs::MapResolver;
+        use std::collections::BTreeMap;
+        let p = policy("version: 1\ndefaults: allow\nexecutables:\n  git: ['/usr/bin/git']\n");
+        let compiled = CompiledPolicy::compile(&p, &ctx()).unwrap();
+        let planted = MapResolver {
+            resolved: BTreeMap::from([("git".to_owned(), "/p/.bin/git".to_owned())]),
+            pins: BTreeMap::new(),
+        };
+        let d = compiled.decide_with(&shell("git status"), &planted);
+        assert_eq!(d.verdict, Verdict::Deny);
+        assert_eq!(d.rules, ["executables"]);
+        let genuine = MapResolver {
+            resolved: BTreeMap::from([("git".to_owned(), "/usr/bin/git".to_owned())]),
+            pins: BTreeMap::new(),
+        };
+        assert_eq!(
+            compiled.decide_with(&shell("git status"), &genuine).verdict,
+            Verdict::Allow
+        );
+        assert_eq!(
+            compiled.decide(&shell("git status")).verdict,
+            Verdict::Deny,
+            "pinned but unresolvable"
+        );
     }
 
     #[test]
