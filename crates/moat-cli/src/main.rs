@@ -10,6 +10,7 @@ mod context;
 mod exit;
 mod home;
 mod install;
+mod integrity;
 mod project;
 mod render;
 

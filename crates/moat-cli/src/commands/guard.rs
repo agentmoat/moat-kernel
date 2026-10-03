@@ -16,11 +16,13 @@ use crate::cli::GuardArgs;
 use crate::context;
 use crate::exit::Code;
 use crate::home::Home;
+use crate::integrity::Lock;
 use crate::project;
 
 const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024;
 const UNGOVERNED_RULE: &str = "ungoverned";
 const KERNEL_ERROR_RULE: &str = "kernel-error";
+const INTEGRITY_RULE: &str = "kernel-integrity";
 
 pub fn run(args: &GuardArgs) -> Code {
     let started = Instant::now();
@@ -60,6 +62,9 @@ fn evaluate(host: Host) -> Result<(Option<HookRequest>, Decision)> {
     };
 
     let home = Home::locate()?;
+    if let Some(decision) = integrity_violation(&home)? {
+        return Ok((Some(request), decision));
+    }
     let policy = home.load_policy()?;
     let cwd = request
         .cwd
@@ -116,6 +121,27 @@ fn read_stdin() -> Result<String> {
         bail!("empty hook payload on stdin");
     }
     Ok(payload)
+}
+
+/// `Some(deny)` when the pinned policy or hook files changed since `moat init`.
+fn integrity_violation(home: &Home) -> Result<Option<Decision>> {
+    let lock_path = home.lock_path();
+    if !lock_path.is_file() {
+        bail!("no policy lock at {}; run `moat init`", lock_path.display());
+    }
+    let drift = Lock::load(&lock_path)?.verify();
+    if drift.is_empty() {
+        return Ok(None);
+    }
+    let mut decision = Decision::new(Verdict::Deny);
+    decision.rules.push(INTEGRITY_RULE.to_owned());
+    for d in drift {
+        decision.reasons.push(format!("{d}"));
+    }
+    decision
+        .reasons
+        .push("re-run `moat init` to re-pin after reviewing the change".to_owned());
+    Ok(Some(decision))
 }
 
 fn ungoverned() -> Decision {

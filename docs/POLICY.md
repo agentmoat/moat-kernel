@@ -156,7 +156,14 @@ moat policy check "npm install left-pad" --policy ./policy.yaml --project ~/code
 moat policy check "~/.aws/credentials" --kind fs-read --policy ./policy.yaml
 ```
 
-## 8. Planned, not yet available
+## 8. The policy lock
+
+`moat init` records SHA-256 digests of the policy file and of every host hook file it
+installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
+pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
+until a person re-pins by re-running `moat init` (a `moat doctor --accept` command follows).
+
+## 9. Planned, not yet available
 
 Repository-level policy (`<repo>/.moat/policy.yaml`) with explicit trust, managed
 organisation policy, enforcement of `executables` pins, Telegram approvals, and

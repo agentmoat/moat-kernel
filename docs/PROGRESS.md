@@ -59,7 +59,7 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 - Secret paths are protected for writes too (`authorized_keys` planting).
 
 ## 3. Not done (honest list)
-- No self-protection yet: an agent could still edit `~/.moat/policy.yaml` via a tool the policy allows… except that `kernel-self` denies writes to those paths. What is missing is the **lock**: hash verification per call, `doctor`, Claude Code `ConfigChange` veto.
+- Self-protection is partial: `policy.lock` verified on every `guard` call is in; `moat doctor --accept` and the Claude Code `ConfigChange` veto are not.
 - No OS enforcement: a wrong parse or an unknown obfuscation is still only a policy decision. `moat exec` (Seatbelt / Landlock+seccomp) is week 5.
 - No egress proxy; `net` rules are pattern-based.
 - No session taint, no approvals of our own, no `replay` timeline (only `show`).
@@ -73,7 +73,7 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 
 | # | Work | Done when |
 |---|---|---|
-| 2 | **Self-protection**: `policy.lock` (sha256 of policy + host hook files), verified on every `guard`, mismatch ⇒ deny-all with "run `moat doctor --accept`"; `moat doctor` (hooks intact, binary path, perms, lock); Claude Code `ConfigChange` hook returning block | tamper tests in `tests/tamper/` |
+| 2 | **Self-protection, part 2**: `moat doctor [--accept]` (terminal-only re-pin), Claude Code `ConfigChange` hook returning block for host settings edits not made by `moat` | tamper tests |
 | 3 | **Executable pinning + PATH snapshot** at `init`; resolve programs against the snapshot, not the inherited PATH | T6 fixtures extended |
 | 4 | **Cursor adapter** (`beforeShellExecution`, `beforeMCPExecution`, `preToolUse`; `permission` response; `failClosed: true` at init) | golden fixtures + e2e |
 | 5 | **`moat replay`** (session timeline with step detail) and `moat report` (asks/hour, top rules) | e2e |
