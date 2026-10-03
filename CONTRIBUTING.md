@@ -49,8 +49,8 @@ is pushed to `main` directly.
 | `risk/*` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
 | `needs-fixture` | core or policy changed without `tests/conformance/` | add a fixture |
 
-Checks that must pass before merge: the quality gate on macOS, Linux and Windows,
-wasm purity, `cargo-deny`, `pr-title`, `pr-standards`. The PR body must have
+Checks that must pass before merge (enforced by the `main` ruleset): the quality gate on
+macOS, Linux and Windows, wasm purity, `cargo-deny`, `pr-title`, `pr-standards`. The PR body must have
 non-empty **Testing** and **Security impact** sections. `risk/high` PRs need
 maintainer review (CODEOWNERS). Squash-merge; the PR title becomes the commit subject
 and the **Release note** line feeds `CHANGELOG.md`.
