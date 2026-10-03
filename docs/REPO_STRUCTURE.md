@@ -143,8 +143,9 @@ moat-ffi ──► moat-core (only)
   and ship a migrator (`moat policy migrate`).
 - **Trunk-based, PR-only**: `main` always releasable; every change via a `<type>/<topic>` branch and a
   pull request (maintainers included); squash merge; required checks: quality gate on all OS, wasm
-  purity, cargo-deny, pr-title, pr-standards. Branch protection rulesets are enabled once the
-  repository is public (GitHub does not offer them on private free-plan repositories).
+  purity, cargo-deny, pr-title, pr-standards. A branch ruleset on `main` enforces this: pull
+  request required, squash merge only, linear history, all eight checks required and up to date,
+  no force-push, no deletion.
 - **Conventional Commits** (`feat:`, `fix:`, `sec:`, `policy:`, `host(codex):`, `docs:`);
   changelog generated; `sec:` entries always get a CHANGELOG security section.
 - **Release**: tag `vX.Y.Z` → `release.yml` → `cargo-dist` builds all targets, generates
