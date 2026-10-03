@@ -39,7 +39,7 @@ What the default policy stops out of the box:
 ```bash
 cargo install --path crates/moat-cli    # binary: moat   (release installers coming)
 moat init                               # policy, audit log, hooks for the agents found on this machine
-moat status                             # verify
+moat status                             # verify (moat doctor for a full check)
 ```
 
 `moat init` writes `~/.moat/policy.yaml`, creates the audit database, and registers a
