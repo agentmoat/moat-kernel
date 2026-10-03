@@ -109,7 +109,7 @@ ask:
 Shell rules understand pipelines, `&&` lists, `sh -c`, `eval`, `$(…)`, `sudo`/`env`/`xargs`
 wrappers and inline `python -c` / `node -e` code, so `echo … | base64 -d | sh` is caught
 wherever it appears. Anything the parser cannot understand is `ask`, never `allow`.
-Full semantics: [docs/DESIGN.md §6](docs/DESIGN.md).
+Full reference, including the default policy table and recipes: [docs/POLICY.md](docs/POLICY.md).
 
 ## How it is built
 
@@ -135,8 +135,9 @@ cargo build -p moat-core --target wasm32-unknown-unknown
 ```
 
 Conformance fixtures live in `tests/conformance/` (one file per outcome: attacks,
-benign, ask). Add a fixture with every rule or parser change. Conventions and layout:
-[docs/REPO_STRUCTURE.md](docs/REPO_STRUCTURE.md).
+benign, ask). Add a fixture with every rule or parser change. Working contract:
+[AGENTS.md](AGENTS.md) · layout and conventions: [docs/REPO_STRUCTURE.md](docs/REPO_STRUCTURE.md) ·
+all documents: [docs/README.md](docs/README.md).
 
 ## Security
 

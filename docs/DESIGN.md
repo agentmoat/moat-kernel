@@ -2,7 +2,9 @@
 
 Version 0.1 · 2026-10-02 · Status: **design frozen for prototype; evaluate after Phase 1**
 
-Companion documents: `OVERVIEW.md` (product/positioning), `TECH_STACK.md` (language decision).
+Companion documents: `OVERVIEW.md` (product/positioning), `TECH_STACK.md` (language decision),
+`POLICY.md` (user-facing policy reference), `PROGRESS.md` (**implementation status**: this
+document is the spec; §10 lists everything v0.1 will contain, not everything that exists today).
 This document is the engineering truth: problem, threat model, integration surfaces
 (verified against vendor docs), architecture, policy semantics, hard problems, and the
 exact prototype we will build first.

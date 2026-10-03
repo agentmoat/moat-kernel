@@ -20,6 +20,8 @@ Rule: a new repo needs a reason from the right-hand column. Default is the monor
 
 ## 2. Monorepo layout
 
+Legend: unmarked = exists today; **(planned)** = designed, not yet in the tree. `docs/PROGRESS.md` tracks the order.
+
 ```
 moat-kernel/
 ├── Cargo.toml                  # [workspace] members, shared [workspace.package], [workspace.dependencies], lints
@@ -31,61 +33,67 @@ moat-kernel/
 ├── dist-workspace.toml         # cargo-dist: targets, installers, Homebrew tap, MSI
 │
 ├── crates/
-│   ├── moat-core/              # PURE: policy model, shell normaliser, path canon, env rules, matcher, verdict, taint, integrity. No I/O, no OS calls.
-│   ├── moat-hosts/             # adapters: claude_code, codex, cursor, openclaw, mcp_proxy → ToolCall; host response encoders
+│   ├── moat-core/              # PURE: policy model, lexer/, shell/ classifier, patterns, paths, engine, verdict. No I/O, no OS calls.
+│   │   ├── src/lexer/{mod,tests}.rs
+│   │   ├── src/shell/{mod,commands,tokens,tables,tests}.rs
+│   │   └── tests/{conformance,architecture}.rs
+│   ├── moat-hosts/             # adapters: pre_tool_use (Claude Code, Codex); cursor, openclaw, mcp_proxy (planned)
 │   ├── moat-audit/             # SQLite (WAL) store, schema migrations, replay, export, hash chain
-│   ├── moat-approve/           # TTY prompt, approval cache, Telegram channel (feature-gated)
-│   ├── moat-sandbox/           # `moat exec`: profile builders (Seatbelt, Landlock+seccomp, bwrap), launcher; Windows stub → Phase 2 AppContainer
-│   ├── moat-proxy/             # egress proxy: CONNECT/SNI allowlist, connection log, taint feed
-│   ├── moat-mcp/               # MCP stdio proxy (v0.1) → secure MCP host (Phase 2); uses rmcp
-│   ├── moat-ffi/               # Phase 3: C ABI (`libmoat`) over moat-core for embedding
-│   ├── moat-cli/               # published crate `moat-kernel`, binary `moat` (crates.io `moat` is a squatted placeholder; transfer request later)
-│   └── xtask/                  # dev automation: refresh host fixtures, regenerate coverage matrix, release checks
+│   ├── moat-approve/           # (planned) TTY prompt, approval cache, Telegram channel (feature-gated)
+│   ├── moat-sandbox/           # (planned) `moat exec`: profile builders (Seatbelt, Landlock+seccomp, bwrap), launcher; Windows stub → Phase 2 AppContainer
+│   ├── moat-proxy/             # (planned) egress proxy: CONNECT/SNI allowlist, connection log, taint feed
+│   ├── moat-mcp/               # (planned) MCP stdio proxy (v0.1) → secure MCP host (Phase 2); uses rmcp
+│   ├── moat-ffi/               # (planned) Phase 3: C ABI (`libmoat`) over moat-core for embedding
+│   ├── moat-cli/               # published crate `moat-kernel`, binary `moat`: cli, commands/{init,guard,show,status,policy}, install/, home, context, render, exit
+│   └── xtask/                  # (planned) dev automation: refresh host fixtures, regenerate coverage matrix, release checks
 │
-├── hosts/                      # host-side artefacts that are not Rust
+├── hosts/                      # (planned) host-side artefacts that are not Rust
 │   ├── claude-code-plugin/     # plugin manifest + hooks.json (marketplace install path)
 │   ├── openclaw-plugin/        # TypeScript shim: before_tool_call → moat guard / serve
 │   ├── codex/                  # hooks.json templates, requirements.toml example
 │   └── cursor/                 # hooks.json template with failClosed=true
 │
-├── sdks/
+├── sdks/                       # (planned)
 │   ├── typescript/             # @agentmoat/sdk: policy types, audit reader, embedding helpers
 │   └── python/                 # agentmoat: same surface
 │
 ├── policies/
 │   ├── default-v1.yaml         # shipped defaults (versioned, changelog entry on change)
-│   ├── schema/policy.v1.schema.json   # JSON Schema for editors and `policy lint`
-│   └── examples/               # minimal, strict, team examples
+│   ├── schema/policy.v1.schema.json   # (planned) JSON Schema for editors and `policy lint`
+│   └── examples/               # (planned) minimal, strict, team examples
 │
 ├── tests/
 │   ├── conformance/            # YAML fixtures T1–T12 + benign; runner (decide-only, runs on all OS)
-│   ├── e2e/                    # executing fixtures under `moat exec` (macOS/Linux CI only)
+│   ├── e2e/                    # (planned) executing fixtures under `moat exec` (macOS/Linux CI only)
 │   ├── fixtures/hosts/         # golden host payloads per host and version
-│   └── tamper/                 # self-protection scenarios (edit policy, remove hook, swap binary, poison PATH)
+│   └── tamper/                 # (planned) self-protection scenarios (edit policy, remove hook, swap binary, poison PATH)
 │
-├── fuzz/                       # cargo-fuzz targets: shell tokenizer, path canon, policy loader, host adapters
-├── benches/                    # criterion: guard latency, parser throughput
+├── fuzz/                       # (planned) cargo-fuzz targets: shell tokenizer, path canon, policy loader, host adapters
+├── benches/                    # (planned) criterion: guard latency, parser throughput
 │
 ├── docs/
 │   ├── OVERVIEW.md · DESIGN.md · STRENGTH.md · TECH_STACK.md · REPO_STRUCTURE.md
-│   ├── THREAT_MODEL.md         # Phase 1 week 4
-│   ├── COVERAGE_MATRIX.md      # generated by xtask from host adapters' capability tables
+│   ├── POLICY.md               # user-facing policy reference
+│   ├── README.md               # documentation map
+│   ├── THREAT_MODEL.md         # (planned) expanded from DESIGN.md §3
+│   ├── COVERAGE_MATRIX.md      # (planned) generated by xtask from host adapters' capability tables
 │   └── adr/                    # Architecture Decision Records, 0001-…; one per irreversible decision
 │
 ├── installers/
-│   ├── install.sh · install.ps1   # generated by cargo-dist, committed for review
+│   ├── install.sh · install.ps1   # (planned) generated by cargo-dist, committed for review
 │
 ├── scripts/ci/quality-gate.sh  # the one gate: fmt, clippy -D warnings, doc, tests, policy lint (CI and pre-push run it)
 ├── .githooks/pre-push          # enable with `git config core.hooksPath .githooks`
 ├── .github/
 │   ├── workflows/
-│   │   ├── ci.yml              # fmt, clippy -D warnings, test (matrix: macos-14 arm64, macos-13 x64, ubuntu x64/arm64, windows x64), conformance, e2e (mac/linux)
-│   │   ├── security.yml        # cargo-deny, cargo-audit, SBOM (cyclonedx), dependency review
-│   │   ├── fuzz.yml            # nightly 30-min fuzz per target; crashes → issues with minimised input
-│   │   ├── mutants.yml         # weekly cargo-mutants on moat-core; fail if score < 95%
-│   │   ├── release.yml         # cargo-dist on tag: binaries, installers, Homebrew tap PR, MSI, Sigstore signatures, SBOM attach
-│   │   └── hosts-watch.yml     # weekly: refresh host fixtures against latest host releases; open issue on schema drift
-│   ├── CODEOWNERS              # moat-core, moat-sandbox, policies/default-v1.yaml require two maintainers
+│   │   ├── ci.yml              # quality gate on macos-14, macos-15-intel, ubuntu, windows + wasm purity + cargo-deny
+│   │   ├── pr-title.yml        # Conventional Commits title check (dependency PRs exempt)
+│   │   ├── security.yml        # (planned) cargo-deny, cargo-audit, SBOM (cyclonedx), dependency review
+│   │   ├── fuzz.yml            # (planned) nightly 30-min fuzz per target; crashes → issues with minimised input
+│   │   ├── mutants.yml         # (planned) weekly cargo-mutants on moat-core; fail if score < 95%
+│   │   ├── release.yml         # (planned) cargo-dist on tag: binaries, installers, Homebrew tap PR, MSI, Sigstore signatures, SBOM attach
+│   │   └── hosts-watch.yml     # (planned) weekly: refresh host fixtures against latest host releases; open issue on schema drift
+│   ├── CODEOWNERS              # trusted core, policy, fixtures, workflows routed to maintainers
 │   ├── ISSUE_TEMPLATE/         # bug, bypass report (private route pointer), host-integration request, policy-pack proposal
 │   ├── PULL_REQUEST_TEMPLATE.md
 │   └── dependabot.yml          # cargo + github-actions + npm (sdks)
@@ -93,6 +101,7 @@ moat-kernel/
 ├── AGENTS.md · CLAUDE.md       # compact contract for people and coding agents (CLAUDE.md just points at AGENTS.md)
 ├── SECURITY.md                 # private reporting, in/out of scope tables, threat model summary
 ├── CONTRIBUTING.md · CODE_OF_CONDUCT.md · .editorconfig
+├── crates/*/README.md          # one-paragraph crate purpose and rules
 ├── CHANGELOG.md                # Keep a Changelog, generated from Conventional Commits
 ├── LICENSE-APACHE · LICENSE-MIT
 └── README.md                   # pitch, install, coverage matrix, benchmark chart, links
