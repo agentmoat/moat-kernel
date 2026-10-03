@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = ["crates/moat-core", "crates/moat-hosts", "crates/moat-audit", "crates/moat-cli"]
+
+[workspace.package]
+version = "0.1.0-dev"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/agentmoat/moat-kernel"
+homepage = "https://github.com/agentmoat/moat-kernel"
+authors = ["agentmoat contributors"]
+keywords = ["ai-agents", "security", "sandbox", "policy", "mcp"]
+categories = ["command-line-utilities", "development-tools"]
+
+[workspace.dependencies]
+moat-core = { path = "crates/moat-core", version = "0.1.0-dev" }
+moat-hosts = { path = "crates/moat-hosts", version = "0.1.0-dev" }
+moat-audit = { path = "crates/moat-audit", version = "0.1.0-dev" }
+serde = { version = "1", features = ["derive"] }
+serde_yaml_ng = "0.10"
+serde_json = "1"
+globset = "0.4"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+regex = "1"
+sha2 = "0.10"
+tempfile = "3"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
