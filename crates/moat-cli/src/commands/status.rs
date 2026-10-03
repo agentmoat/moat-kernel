@@ -54,7 +54,7 @@ pub fn run() -> Result<Code> {
             } else {
                 healthy = false;
                 for d in drift {
-                    println!("lock             ✗ {d} (re-run `moat init`)");
+                    println!("lock             ✗ {d} (run `moat doctor`)");
                 }
             }
         }
