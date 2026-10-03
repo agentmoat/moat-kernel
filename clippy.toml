@@ -1,1 +1,10 @@
 msrv = "1.95"
+too-many-lines-threshold = 200
+cognitive-complexity-threshold = 30
+too-many-arguments-threshold = 7
+disallowed-macros = [
+    { path = "anyhow::anyhow", reason = "use `bail!`/`ensure!` in the CLI and typed `thiserror` errors in libraries" },
+]
+disallowed-methods = [
+    { path = "std::env::set_var", reason = "mutating process environment is unsound in multithreaded programs" },
+]

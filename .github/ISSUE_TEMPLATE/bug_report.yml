@@ -1,0 +1,48 @@
+name: Bug report
+description: Something behaves differently from what the docs or policy say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: For a policy bypass or anything security-relevant, use the private advisory link instead of this form.
+  - type: input
+    id: version
+    attributes:
+      label: moat version
+      placeholder: output of `moat --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      options: [Claude Code, Codex, policy check only, other]
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.1 / Ubuntu 24.04 / Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: action
+    attributes:
+      label: The action and the decision you got
+      description: The command or path, the rule ids reported, and the output of `moat show <id>` if there is one.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: policy
+    attributes:
+      label: Relevant policy rules
+      description: The rule groups involved, or "default policy".
+      render: yaml

@@ -7,7 +7,7 @@
 use std::io::{self, Read as _, Write as _};
 use std::time::Instant;
 
-use anyhow::{Context as _, Result, anyhow};
+use anyhow::{Context as _, Result, bail};
 use moat_audit::{NewEvent, Store};
 use moat_core::{CompiledPolicy, Decision, EvalContext, Verdict};
 use moat_hosts::{HookRequest, Host};
@@ -84,10 +84,7 @@ fn record(
 ) -> Result<()> {
     let home = Home::locate()?;
     if !home.exists() {
-        return Err(anyhow!(
-            "{} does not exist; run `moat init`",
-            home.root().display()
-        ));
+        bail!("{} does not exist; run `moat init`", home.root().display());
     }
     let store = Store::open(&home.audit_path())?;
     let latency_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
@@ -116,7 +113,7 @@ fn read_stdin() -> Result<String> {
         .read_to_string(&mut payload)
         .context("reading hook payload from stdin (must be UTF-8)")?;
     if payload.trim().is_empty() {
-        return Err(anyhow!("empty hook payload on stdin"));
+        bail!("empty hook payload on stdin");
     }
     Ok(payload)
 }
