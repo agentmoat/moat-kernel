@@ -90,11 +90,13 @@ moat-kernel/
 │   │   ├── ci.yml              # quality gate on macos-14, macos-15-intel, ubuntu, windows + wasm purity + cargo-deny
 │   │   ├── pr-title.yml        # Conventional Commits title check (dependency PRs exempt)
 │   │   ├── pr-standards.yml    # auto labels `type: …` `area: …` `size: …` `risk: …`, `needs: fixture`; fails on missing Testing/Security sections or XL size
+│   │   ├── pr-review.yml       # `moat-reviewer` GitHub App: advisory first-pass review against AGENTS.md (inline 🔴/🟠/🟡/💡 + summary); `@moat-reviewer` re-runs
 │   │   ├── security.yml        # (planned) cargo-deny, cargo-audit, SBOM (cyclonedx), dependency review
 │   │   ├── fuzz.yml            # (planned) nightly 30-min fuzz per target; crashes → issues with minimised input
 │   │   ├── mutants.yml         # (planned) weekly cargo-mutants on moat-core; fail if score < 95%
 │   │   ├── release.yml         # (planned) cargo-dist on tag: binaries, installers, Homebrew tap PR, MSI, Sigstore signatures, SBOM attach
 │   │   └── hosts-watch.yml     # (planned) weekly: refresh host fixtures against latest host releases; open issue on schema drift
+│   ├── moat-reviewer/          # reviewer app: setup README, avatar
 │   ├── CODEOWNERS              # trusted core, policy, fixtures, workflows routed to maintainers
 │   ├── ISSUE_TEMPLATE/         # bug, bypass report (private route pointer), host-integration request, policy-pack proposal
 │   ├── PULL_REQUEST_TEMPLATE.md
