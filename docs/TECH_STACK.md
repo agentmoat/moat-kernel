@@ -143,7 +143,7 @@ neighbours.
 | Sandbox | Phase 2: `skarn-sandbox` and/or crates adapted from Codex (`linux-sandbox`, `bwrap`, `execpolicy`), `rust-landlock`; evaluate `cap-std` for in-kernel file handling |
 | WASM skills | Wasmtime + Component Model (Phase 2/3) |
 | Storage | `rusqlite` (bundled SQLite) for audit; `keyring` crate for OS keychain |
-| Policy format | YAML via `serde_yaml` with a JSON Schema published for editors |
+| Policy format | YAML via `serde_yaml_ng` (maintained fork of `serde_yaml`); JSON Schema for editors planned |
 | Release | `cargo-dist` → `curl \| sh`, Homebrew tap, winget/MSI, GitHub Releases; `cargo install moat` |
 | Lint / CI | clippy (deny warnings), rustfmt, `cargo-deny` (licenses + advisories), GitHub Actions matrix: macOS arm64/x64, Linux x64/arm64 (musl), Windows x64 |
 | Embedding | `moat-core` crate + C ABI (`libmoat`) so Go / TypeScript / Swift hosts can link the policy engine |
