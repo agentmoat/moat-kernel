@@ -4,8 +4,10 @@
 //! once (parallel tool calls, several agents), so writes are single statements
 //! with a busy timeout and no long-lived transactions.
 
+mod query;
 mod redact;
 mod store;
 
+pub use query::{SessionSummary, Summary};
 pub use redact::redact;
 pub use store::{Event, EventId, NewEvent, Store, StoreError};
