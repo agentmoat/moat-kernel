@@ -30,6 +30,10 @@ pub enum Command {
     Status,
     /// Verify policy lock, hooks and binary; `--accept` re-pins edits made by a person.
     Doctor(DoctorArgs),
+    /// Replay agent sessions as a timeline of decisions.
+    Replay(ReplayArgs),
+    /// Summarise decisions over a window: verdicts, hosts, top rules, asks per hour.
+    Report(ReportArgs),
     /// Inspect and test policy files.
     Policy {
         #[command(subcommand)]
@@ -46,6 +50,40 @@ pub struct InitArgs {
     /// Print what would change without writing anything.
     #[arg(long)]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ReplayArgs {
+    /// Window start: all, today, yesterday, 12h, 7d, 2w or YYYY-MM-DD (UTC).
+    #[arg(long, default_value = "24h", conflicts_with = "session")]
+    pub since: String,
+
+    /// Only this host.
+    #[arg(long, value_parser = parse_host, conflicts_with = "session")]
+    pub host: Option<Host>,
+
+    /// One session by id, regardless of window.
+    #[arg(long)]
+    pub session: Option<String>,
+
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
+}
+
+#[derive(Debug, Args)]
+pub struct ReportArgs {
+    /// Window start: all, today, yesterday, 12h, 7d, 2w or YYYY-MM-DD (UTC).
+    #[arg(long, default_value = "7d")]
+    pub since: String,
+
+    /// Only this host.
+    #[arg(long, value_parser = parse_host)]
+    pub host: Option<Host>,
+
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
 }
 
 #[derive(Debug, Args)]

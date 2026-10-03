@@ -10,7 +10,7 @@ All notable changes to this project are documented here. The format follows
 - Policy engine: schema v1 with `deny → allow → ask → defaults` evaluation, per-kind defaults, absolute deny, strictest-wins across atomic actions.
 - Shell classification: POSIX lexer (quotes, escapes, redirects, `$(…)`, backticks, here-documents), sub-commands, subshells, `eval`, `sh -c`, wrappers, inline interpreters, environment reads/sets, path and host extraction.
 - Host adapters for Claude Code and Codex `PreToolUse` hooks, and for Cursor (`beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse`; `moat init` writes a fail-closed `~/.cursor/hooks.json`).
-- Audit log in SQLite (WAL) with credential redaction; `moat show` and `moat status`.
+- Audit log in SQLite (WAL) with credential redaction; `moat show`, `moat status`, `moat replay` (per-session timeline) and `moat report` (verdict totals, hosts, top rules, asks per active hour).
 - `moat init` (policy, audit log, idempotent hook installation), `moat guard` (fail-closed), `moat policy lint|check`.
 - Default policy v1 and 83 conformance fixtures.
 

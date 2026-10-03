@@ -72,6 +72,13 @@ $ moat show 1
    reason  : secret material: read /Users/you/.ssh/id_rsa
 ```
 
+See a whole session or a week at a glance:
+
+```bash
+moat replay --since today        # one tree per agent session
+moat report --since 7d          # totals, hosts, top rules, asks per active hour
+```
+
 Test a command against a policy without installing anything:
 
 ```bash

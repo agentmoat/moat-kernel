@@ -4,6 +4,8 @@ mod doctor;
 mod guard;
 mod init;
 mod policy;
+mod replay;
+mod report;
 mod show;
 mod status;
 
@@ -19,6 +21,8 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Show(args) => show::run(&args),
         Command::Status => status::run(),
         Command::Doctor(args) => doctor::run(&args),
+        Command::Replay(args) => replay::run(&args),
+        Command::Report(args) => report::run(&args),
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),
             PolicyCommand::Check(args) => policy::check(&args),
