@@ -14,6 +14,7 @@ use moat_core::RuleGroup;
 use serde::{Deserialize, Serialize};
 
 use crate::home::write_private;
+use crate::time;
 
 const GRANTS_VERSION: u32 = 1;
 const OVERLAY_VERSION: u32 = 1;
@@ -67,6 +68,19 @@ impl Grants {
             path,
             (serde_json::to_string_pretty(self)? + "\n").as_bytes(),
         )
+    }
+
+    pub fn grant(&mut self, host: &str, session_id: &str, command: &str) {
+        let command = command.trim();
+        if self.matches(host, session_id, command) {
+            return;
+        }
+        self.entries.push(Grant {
+            host: host.to_owned(),
+            session_id: session_id.to_owned(),
+            command: command.to_owned(),
+            granted_at_ms: time::now_ms(),
+        });
     }
 
     /// Exact command match for this host session; no prefix or glob semantics.
@@ -134,28 +148,35 @@ impl Overlay {
         );
         write_private(path, text.as_bytes())
     }
+
+    /// Append an allow rule for one shell command. Shell rules are prefixes, so
+    /// extra arguments after the approved command are accepted too.
+    pub fn allow_command(&mut self, command: &str) -> &RuleGroup {
+        let n = self.allow.len() + 1;
+        self.allow.push(RuleGroup {
+            id: format!("{OVERLAY_PREFIX}{n}"),
+            reason: Some(format!(
+                "approved with `moat allow --always` on {}",
+                time::timestamp(time::now_ms())
+            )),
+            shell: vec![command.trim().to_owned()],
+            ..RuleGroup::default()
+        });
+        self.allow.last().expect("just pushed")
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn grant(host: &str, session: &str, command: &str) -> Grant {
-        Grant {
-            host: host.to_owned(),
-            session_id: session.to_owned(),
-            command: command.to_owned(),
-            granted_at_ms: 0,
-        }
-    }
-
     #[test]
     fn grants_match_exactly_per_host_session() {
-        let g = Grants {
-            entries: vec![grant("claude-code", "s1", "npm install left-pad")],
-            ..Grants::default()
-        };
-        assert!(g.matches("claude-code", "s1", " npm install left-pad "));
+        let mut g = Grants::default();
+        g.grant("claude-code", "s1", " npm install left-pad ");
+        g.grant("claude-code", "s1", "npm install left-pad");
+        assert_eq!(g.entries.len(), 1, "duplicates collapse");
+        assert!(g.matches("claude-code", "s1", "npm install left-pad"));
         assert!(!g.matches("claude-code", "s2", "npm install left-pad"));
         assert!(!g.matches("cursor", "s1", "npm install left-pad"));
         assert!(!g.matches("claude-code", "s1", "npm install left-pad --save"));
@@ -165,10 +186,8 @@ mod tests {
     fn grants_and_overlay_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let grants_path = dir.path().join("approvals.json");
-        let g = Grants {
-            entries: vec![grant("codex", "k1", "cargo add serde")],
-            ..Grants::default()
-        };
+        let mut g = Grants::default();
+        g.grant("codex", "k1", "cargo add serde");
         g.save(&grants_path).unwrap();
         assert_eq!(Grants::load(&grants_path).unwrap(), g);
         assert_eq!(
@@ -177,17 +196,20 @@ mod tests {
         );
 
         let overlay_path = dir.path().join("approved.yaml");
-        let o = Overlay {
-            allow: vec![RuleGroup {
-                id: "approved-1".into(),
-                reason: Some("test".into()),
-                shell: vec!["pip install requests".into()],
-                ..RuleGroup::default()
-            }],
-            ..Overlay::default()
-        };
+        let mut o = Overlay::default();
+        assert_eq!(o.allow_command("npm install left-pad").id, "approved-1");
+        assert_eq!(o.allow_command("pip install requests").id, "approved-2");
         o.save(&overlay_path).unwrap();
-        assert_eq!(Overlay::load(&overlay_path).unwrap(), o);
+        let loaded = Overlay::load(&overlay_path).unwrap();
+        assert_eq!(loaded.allow.len(), 2);
+        assert_eq!(loaded.allow[1].shell, ["pip install requests"]);
+        assert!(
+            loaded.allow[0]
+                .reason
+                .as_deref()
+                .unwrap()
+                .contains("moat allow --always")
+        );
 
         fs::write(
             &overlay_path,

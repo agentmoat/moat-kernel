@@ -75,6 +75,7 @@ deny:
       - "moat policy *"
       - "moat init*"
       - "moat doctor*"
+      - "moat allow*"
   - id: shell-rc
     reason: edits persist into every future shell session
     fs.write: ["~/.zshrc", "~/.bashrc", "~/.bash_profile", "~/.profile", "~/.zprofile", "~/.zshenv"]

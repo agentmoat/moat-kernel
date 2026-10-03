@@ -30,6 +30,8 @@ pub enum Command {
     Status,
     /// Verify policy lock, hooks and binary; `--accept` re-pins edits made by a person.
     Doctor(DoctorArgs),
+    /// Approve a shell command for one session, or permanently.
+    Allow(AllowArgs),
     /// Replay agent sessions as a timeline of decisions.
     Replay(ReplayArgs),
     /// Summarise decisions over a window: verdicts, hosts, top rules, asks per hour.
@@ -84,6 +86,29 @@ pub struct ReportArgs {
     /// Output format.
     #[arg(long, value_enum, default_value_t = Format::Text)]
     pub format: Format,
+}
+
+#[derive(Debug, Args)]
+pub struct AllowArgs {
+    /// The exact shell command to approve.
+    #[arg(conflicts_with = "last")]
+    pub command: Option<String>,
+
+    /// Take host, session and command from the most recent `ask` in the audit log.
+    #[arg(long)]
+    pub last: bool,
+
+    /// Host of the session to approve (with --session).
+    #[arg(long, value_parser = parse_host, requires = "session")]
+    pub host: Option<Host>,
+
+    /// Approve for this session id only (exact command match).
+    #[arg(long, conflicts_with = "always")]
+    pub session: Option<String>,
+
+    /// Add a permanent allow rule to ~/.moat/policy.d/approved.yaml instead.
+    #[arg(long)]
+    pub always: bool,
 }
 
 #[derive(Debug, Args)]
