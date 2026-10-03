@@ -57,6 +57,24 @@ and the **Release note** line feeds `CHANGELOG.md`.
 
 Labels are defined in `scripts/ci/sync-labels.sh`; edit that script, not the GitHub UI.
 
+Every pull request also gets a first-pass review from `moat-reviewer`, an automated
+reviewer that checks the diff against `AGENTS.md` and posts inline comments tagged
+`🔴 blocker` · `🟠 should fix` · `🟡 nit` · `💡 idea` plus one summary per revision. It is
+advisory: address or answer its 🔴/🟠 items, push back in a reply when it is wrong, and
+expect a maintainer to make the final call. Comment `@moat-reviewer` to run it again
+(this is also how maintainers trigger it on fork PRs). Details and setup:
+`.github/moat-reviewer/README.md`.
+
+## AI-assisted contributions
+
+Built with Claude Code, Codex, Cursor, OpenClaw or any other tool? Welcome. No disclosure,
+label or attribution is required, and none is forbidden; commit trailers and PR footers are
+your choice. The bar is the same for every change: you have read and understood what you
+are submitting, you ran the quality gate, the Testing and Security impact sections are
+true, and you can answer review questions about it. Keep PR descriptions the size a
+reviewer can read; a generated wall of text is a reason to ask for a rewrite, not a merit.
+`AGENTS.md` is written for coding agents as much as for people; point your tool at it.
+
 ## Conventions
 
 - Commit and PR titles follow Conventional Commits:

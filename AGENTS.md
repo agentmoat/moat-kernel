@@ -106,3 +106,4 @@ Copy the shape of `docs/adr/ADR-004-exit-code-contract.md`: Context, Decision, C
 - Do not run `moat init` against the real `~/.claude` of a machine where a Claude Code session is active; use `MOAT_HOME`, `CLAUDE_CONFIG_DIR` and a scratch project (see `docs/PROGRESS.md` §2.3).
 - Never commit credentials, real host payloads with tokens, or personal absolute paths.
 - Prefer small PRs: one concern, one title, ≤ 500 lines. Never push to `main`; never merge your own PR while a required check is red.
+- `moat-reviewer` posts an automated first-pass review on every PR (inline `🔴/🟠/🟡/💡` comments and a summary). Resolve or answer each 🔴 and 🟠 item before asking a maintainer to review; it is advisory and does not replace that review.
