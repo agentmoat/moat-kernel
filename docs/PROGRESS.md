@@ -85,10 +85,10 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 | 11 | **MoatBench v0**: ≥ 40 scenarios, Linux containers, Claude Code + Codex, 4 conditions, published results with CIs | gate in `STRENGTH.md` §3.3 |
 | 12 | **Release**: `cargo-dist`, Homebrew tap, installers, `THREAT_MODEL.md`, coverage matrix, README chart, Show HN | v0.1 tag only if the gate passes |
 
-Housekeeping done: repository `agentmoat/moat-kernel` exists, CI is green on all three
-operating systems, Dependabot is active (first four PRs reviewed and merged: rusqlite 0.40,
-sha2 0.11, actions/checkout v7, semantic-pull-request v6). Remaining: branch protection and a
-release workflow.
+Housekeeping done: repository `agentmoat/moat-kernel` is public, CI is green on all three
+operating systems, Dependabot alerts/updates, secret scanning and push protection are on, a
+branch ruleset enforces PR-only squash merges with all checks required, and `pr-standards`
+auto-labels every PR (type/area/size/risk). Remaining: a release workflow.
 
 ## 5. How to verify the current state yourself
 ```bash
