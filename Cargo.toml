@@ -26,7 +26,7 @@ clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 regex = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 tempfile = "3"
 
 [workspace.lints.rust]
