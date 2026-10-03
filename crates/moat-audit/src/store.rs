@@ -102,7 +102,7 @@ pub struct Event {
 
 #[derive(Debug)]
 pub struct Store {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Store {
@@ -147,6 +147,11 @@ impl Store {
 
     /// Append one decision and return its id.
     pub fn record(&self, event: &NewEvent<'_>) -> Result<EventId, StoreError> {
+        self.record_at(event, now_ms())
+    }
+
+    /// Append one decision with an explicit timestamp (milliseconds since the epoch).
+    pub fn record_at(&self, event: &NewEvent<'_>, ts_ms: i64) -> Result<EventId, StoreError> {
         let action_json = match event.action {
             Some(action) => redact(&serde_json::to_string(action)?),
             None => "null".to_owned(),
@@ -156,7 +161,7 @@ impl Store {
             "INSERT INTO events (ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
-                now_ms(),
+                ts_ms,
                 event.host,
                 event.session_id,
                 event.call_id,
@@ -212,9 +217,9 @@ impl Store {
     }
 }
 
-const SELECT: &str = "SELECT id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us FROM events";
+pub(crate) const SELECT: &str = "SELECT id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us FROM events";
 
-fn row_to_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
+pub(crate) fn row_to_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
     fn decode<T: serde::de::DeserializeOwned>(
         row: &rusqlite::Row<'_>,
         index: usize,
