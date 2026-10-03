@@ -33,29 +33,29 @@ jobs:
           type=""
           title_re='^(feat|fix|sec|policy|host|docs|test|refactor|perf|build|ci|chore)(\([^)]+\))?!?: '
           if [[ "$TITLE" =~ $title_re ]]; then
-            type="type/${BASH_REMATCH[1]}"
+            type="type: ${BASH_REMATCH[1]}"
           fi
 
           areas=()
           has() { grep -qE "$1" <<<"$files"; }
-          has '^crates/moat-core/'      && areas+=(area/core)
-          has '^crates/moat-hosts/'     && areas+=(area/hosts)
-          has '^crates/moat-audit/'     && areas+=(area/audit)
-          has '^crates/moat-cli/'       && areas+=(area/cli)
-          has '^(policies/|tests/conformance/)' && areas+=(area/policy)
-          has '^(\.github/|scripts/)'   && areas+=(area/ci)
-          has '(^docs/|\.md$)'          && areas+=(area/docs)
-          has '^(Cargo\.(toml|lock)|crates/[^/]+/Cargo\.toml|deny\.toml)$' && areas+=(area/deps)
+          has '^crates/moat-core/'      && areas+=("area: core")
+          has '^crates/moat-hosts/'     && areas+=("area: hosts")
+          has '^crates/moat-audit/'     && areas+=("area: audit")
+          has '^crates/moat-cli/'       && areas+=("area: cli")
+          has '^(policies/|tests/conformance/)' && areas+=("area: policy")
+          has '^(\.github/|scripts/)'   && areas+=("area: ci")
+          has '(^docs/|\.md$)'          && areas+=("area: docs")
+          has '^(Cargo\.(toml|lock)|crates/[^/]+/Cargo\.toml|deny\.toml)$' && areas+=("area: deps")
 
-          if   (( total <= 10 ));  then size=size/XS
-          elif (( total <= 50 ));  then size=size/S
-          elif (( total <= 200 )); then size=size/M
-          elif (( total <= 500 )); then size=size/L
-          else size=size/XL; fi
+          if   (( total <= 10 ));  then size="size: XS"
+          elif (( total <= 50 ));  then size="size: S"
+          elif (( total <= 200 )); then size="size: M"
+          elif (( total <= 500 )); then size="size: L"
+          else size="size: XL"; fi
 
-          risk=risk/low
-          if has '^(crates/moat-hosts/|crates/moat-cli/src/install/|crates/moat-audit/)'; then risk=risk/medium; fi
-          if has '^(crates/moat-core/src/(engine|policy|shell|lexer|pattern|paths)|policies/|\.github/workflows/|SECURITY\.md|crates/moat-cli/src/commands/guard\.rs|crates/moat-cli/src/exit\.rs)'; then risk=risk/high; fi
+          risk="risk: low"
+          if has '^(crates/moat-hosts/|crates/moat-cli/src/install/|crates/moat-audit/)'; then risk="risk: medium"; fi
+          if has '^(crates/moat-core/src/(engine|policy|shell|lexer|pattern|paths)|policies/|\.github/workflows/|SECURITY\.md|crates/moat-cli/src/commands/guard\.rs|crates/moat-cli/src/exit\.rs)'; then risk="risk: high"; fi
 
           behaviour_change=false
           has '^(crates/moat-core/src/|policies/)' && behaviour_change=true
@@ -64,7 +64,7 @@ jobs:
 
           {
             echo "type=$type"
-            echo "areas=${areas[*]:-}"
+            printf 'areas<<EOF\n%s\nEOF\n' "$(printf '%s\n' "${areas[@]:-}")"
             echo "size=$size"
             echo "risk=$risk"
             echo "total=$total"
@@ -74,20 +74,30 @@ jobs:
 
       - name: apply labels
         shell: bash
+        env:
+          TYPE: ${{ steps.derive.outputs.type }}
+          AREAS: ${{ steps.derive.outputs.areas }}
+          SIZE: ${{ steps.derive.outputs.size }}
+          RISK: ${{ steps.derive.outputs.risk }}
+          BEHAVIOUR_CHANGE: ${{ steps.derive.outputs.behaviour_change }}
+          FIXTURE_TOUCHED: ${{ steps.derive.outputs.fixture_touched }}
         run: |
           set -euo pipefail
-          current=$(gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name')
-          remove=$(grep -E '^(type|area|size|risk)/' <<<"$current" | grep -v '^size/override$' || true)
-          add="${{ steps.derive.outputs.type }} ${{ steps.derive.outputs.areas }} ${{ steps.derive.outputs.size }} ${{ steps.derive.outputs.risk }}"
-          if [[ "${{ steps.derive.outputs.behaviour_change }}" == "true" && "${{ steps.derive.outputs.fixture_touched }}" == "false" ]]; then
-            add="$add needs-fixture"
-          else
-            remove="$remove needs-fixture"
-          fi
+          mapfile -t current < <(gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name')
           args=()
-          for l in $remove; do args+=(--remove-label "$l"); done
-          for l in $add; do args+=(--add-label "$l"); done
-          if (( ${#args[@]} )); then gh pr edit "$PR" --repo "$REPO" "${args[@]}"; fi
+          for l in "${current[@]}"; do
+            case "$l" in
+              "size: override") ;;
+              "type: "*|"area: "*|"size: "*|"risk: "*|"needs: fixture") args+=(--remove-label "$l") ;;
+            esac
+          done
+          [[ -n "$TYPE" ]] && args+=(--add-label "$TYPE")
+          while IFS= read -r a; do [[ -n "$a" ]] && args+=(--add-label "$a"); done <<<"$AREAS"
+          args+=(--add-label "$SIZE" --add-label "$RISK")
+          if [[ "$BEHAVIOUR_CHANGE" == "true" && "$FIXTURE_TOUCHED" == "false" ]]; then
+            args+=(--add-label "needs: fixture")
+          fi
+          gh pr edit "$PR" --repo "$REPO" "${args[@]}"
 
       - name: check body and size
         shell: bash
@@ -107,8 +117,8 @@ jobs:
           if [[ -z "${{ steps.derive.outputs.type }}" ]]; then
             echo "::error::title must start with a Conventional Commits type (feat, fix, sec, policy, host, docs, test, refactor, perf, build, ci, chore)"; fail=1
           fi
-          if [[ "${{ steps.derive.outputs.size }}" == "size/XL" ]] && ! grep -qx 'size/override' <<<"$labels"; then
-            echo "::error::change is ${{ steps.derive.outputs.total }} lines; split it, or add the size/override label with a justification in the PR"; fail=1
+          if [[ "${{ steps.derive.outputs.size }}" == "size: XL" ]] && ! grep -qx 'size: override' <<<"$labels"; then
+            echo "::error::change is ${{ steps.derive.outputs.total }} lines; split it, or add the 'size: override' label with a justification in the PR"; fail=1
           fi
           {
             echo "### pr-standards"

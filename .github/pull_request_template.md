@@ -1,8 +1,8 @@
 <!--
 Title: Conventional Commits, lowercase subject — e.g. `feat(cli): add moat doctor`.
 Types: feat fix sec policy host docs test refactor perf build ci chore.
-Labels (type/area/size/risk) are applied automatically. Keep changes ≤ 500 lines;
-larger PRs fail the size check unless a reviewer adds `size/override`.
+Labels (`type: …`, `area: …`, `size: …`, `risk: …`) are applied automatically. Keep changes
+≤ 500 lines; larger PRs fail the size check unless a reviewer adds `size: override`.
 -->
 
 ## What
