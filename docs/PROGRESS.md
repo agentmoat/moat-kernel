@@ -62,7 +62,7 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 - Self-protection: `policy.lock`, `moat doctor --accept` and the Claude Code `ConfigChange` veto are in; Codex and Cursor have no equivalent event, so for them the lock is checked on the next tool call only. Cursor file edits made by its own edit tools are governed through `preToolUse`; Cursor has no pre-write hook for edits that bypass that tool.
 - No OS enforcement: a wrong parse or an unknown obfuscation is still only a policy decision. `moat exec` (Seatbelt / Landlock+seccomp) is week 5.
 - No egress proxy; `net` rules are pattern-based.
-- No session taint, no approvals of our own, no `replay` timeline (only `show`).
+- No session taint and no approvals of our own yet.
 - OpenClaw adapter and MCP proxy not written.
 - Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` not implemented; only the user policy is loaded.
 - Windows: builds in CI, PowerShell is not tokenised (any PowerShell command is `ask`).
@@ -72,7 +72,6 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 
 | # | Work | Done when |
 |---|---|---|
-| 5 | **`moat replay`** (session timeline with step detail) and `moat report` (asks/hour, top rules) | e2e |
 | 6 | **Approvals**: TTY prompt with once/session/permanent, session cache, `moat allow`; `permanent` appends a provenance-commented rule to the user policy | e2e |
 | 7 | **OpenClaw plugin** (TypeScript shim → `moat guard`/`serve`) and `moat serve` socket mode | plugin fixture |
 | 8 | **MCP stdio proxy** with tool-description pinning | e2e with a fake MCP server |

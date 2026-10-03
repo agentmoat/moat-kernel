@@ -3,7 +3,7 @@
 use std::io::{self, Write};
 
 use anyhow::Result;
-use moat_audit::Event;
+use moat_audit::{Event, SessionSummary, Summary};
 use moat_core::{Action, Decision, Verdict};
 use serde::Serialize;
 
@@ -73,6 +73,114 @@ pub fn event_table(events: &[Event]) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+pub fn sessions_json(sessions: &[SessionSummary]) -> Result<()> {
+    let mut out = io::stdout().lock();
+    serde_json::to_writer_pretty(&mut out, sessions)?;
+    writeln!(out)?;
+    Ok(())
+}
+
+pub fn summary_json(summary: &Summary) -> Result<()> {
+    let mut out = io::stdout().lock();
+    serde_json::to_writer_pretty(&mut out, summary)?;
+    writeln!(out)?;
+    Ok(())
+}
+
+/// One block per session: header, then a tree of decisions.
+pub fn replay(sessions: &[SessionSummary]) -> Result<()> {
+    let mut out = io::stdout().lock();
+    if sessions.is_empty() {
+        writeln!(out, "no sessions in this window")?;
+        return Ok(());
+    }
+    for (i, session) in sessions.iter().enumerate() {
+        if i > 0 {
+            writeln!(out)?;
+        }
+        writeln!(
+            out,
+            "{}  {}  {}  {}  {} decisions ({} denied, {} asked)",
+            clock(session.first_ms),
+            session.session_id,
+            session.host,
+            session.cwd.as_deref().unwrap_or("-"),
+            session.events.len(),
+            session.count(Verdict::Deny),
+            session.count(Verdict::Ask),
+        )?;
+        let last = session.events.len().saturating_sub(1);
+        for (n, event) in session.events.iter().enumerate() {
+            let branch = if n == last { "└─" } else { "├─" };
+            let kind = event.action.as_ref().map_or("tool", kind_of);
+            writeln!(
+                out,
+                "  {branch} {:<8} {:<52} {} {}",
+                kind,
+                truncate(&describe(event.action.as_ref(), &event.tool), 52),
+                verdict_glyph(event.verdict),
+                event.rules.join(", "),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+pub fn report(summary: &Summary, window: &str) -> Result<()> {
+    let mut out = io::stdout().lock();
+    writeln!(
+        out,
+        "since {window} ({}): {} decisions in {} sessions — {} allowed, {} asked, {} denied",
+        timestamp(summary.since_ms),
+        summary.total,
+        summary.sessions,
+        summary.allowed,
+        summary.asked,
+        summary.denied,
+    )?;
+    let centi = summary.asks_per_active_hour_centi();
+    writeln!(
+        out,
+        "asks per active hour: {}.{:02}  ({} active hours)",
+        centi / 100,
+        centi % 100,
+        summary.active_hours
+    )?;
+    if !summary.by_host.is_empty() {
+        let hosts: Vec<String> = summary
+            .by_host
+            .iter()
+            .map(|(h, n)| format!("{h} {n}"))
+            .collect();
+        writeln!(out, "hosts: {}", hosts.join(" · "))?;
+    }
+    if !summary.top_rules.is_empty() {
+        writeln!(out, "top rules (ask + deny):")?;
+        for (rule, n) in &summary.top_rules {
+            writeln!(out, "  {n:>5}  {rule}")?;
+        }
+    }
+    Ok(())
+}
+
+fn verdict_glyph(verdict: Verdict) -> &'static str {
+    match verdict {
+        Verdict::Allow => "✔",
+        Verdict::Ask => "❓",
+        Verdict::Deny => "⛔",
+    }
+}
+
+fn kind_of(action: &Action) -> &'static str {
+    match action {
+        Action::Shell { .. } => "shell",
+        Action::FsRead { .. } => "fs.read",
+        Action::FsWrite { .. } => "fs.write",
+        Action::Net { .. } => "net",
+        Action::McpTool { .. } => "mcp",
+    }
 }
 
 pub fn event_detail(event: &Event) -> Result<()> {
