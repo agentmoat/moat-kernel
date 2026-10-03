@@ -11,7 +11,9 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use moat_core::{Action, CompiledPolicy, EvalContext, Policy, Verdict};
+use std::collections::BTreeMap;
+
+use moat_core::{Action, CompiledPolicy, EvalContext, MapResolver, Policy, Verdict};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -20,6 +22,12 @@ struct Fixture {
     id: String,
     action: FixtureAction,
     expect: Expect,
+    /// Program name → path it resolves to on the kernel search path.
+    #[serde(default)]
+    resolve: BTreeMap<String, String>,
+    /// Program name → path recorded at install time.
+    #[serde(default)]
+    pins: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -111,7 +119,11 @@ fn default_policy_conformance() {
 
     for (file, fixture) in fixtures {
         let action = fixture.action.into_action(&fixture.id);
-        let decision = compiled.decide(&action);
+        let resolver = MapResolver {
+            resolved: fixture.resolve.clone(),
+            pins: fixture.pins.clone(),
+        };
+        let decision = compiled.decide_with(&action, &resolver);
         let missing: Vec<&String> = fixture
             .expect
             .rules

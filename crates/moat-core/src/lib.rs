@@ -14,10 +14,12 @@ pub mod lexer;
 pub mod paths;
 pub mod pattern;
 pub mod policy;
+pub mod programs;
 pub mod shell;
 pub mod verdict;
 
 pub use action::{Action, AtomicAction};
 pub use engine::{CompiledPolicy, EvalContext, evaluate};
 pub use policy::{Defaults, Policy, PolicyError, RuleGroup};
+pub use programs::{MapResolver, NoResolver, ProgramResolver};
 pub use verdict::{Decision, Verdict};

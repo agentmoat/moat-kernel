@@ -49,3 +49,12 @@
 - id: benign-mcp-read
   action: { mcp_tool: "mcp__github__get_pull_request" }
   expect: { verdict: allow, rules: [safe-mcp] }
+- id: benign-pinned-git-from-recorded-path
+  action: { shell: "git status --short" }
+  resolve: { git: /usr/bin/git }
+  pins: { git: /usr/bin/git }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-unpinned-program-is-not-checked
+  action: { shell: "rg TODO ./src" }
+  resolve: { rg: /opt/homebrew/bin/rg }
+  expect: { verdict: allow, rules: [dev-shell] }
