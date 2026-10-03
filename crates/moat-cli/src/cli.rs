@@ -73,6 +73,10 @@ pub struct ShowArgs {
     #[arg(long)]
     pub session: Option<String>,
 
+    /// Events since a window start, oldest first: all, today, yesterday, 12h, 7d, 2w or YYYY-MM-DD (UTC).
+    #[arg(long, conflicts_with_all = ["id", "session"])]
+    pub since: Option<String>,
+
     /// Most recent events (default when nothing else is given).
     #[arg(long, default_value_t = 10)]
     pub recent: usize,

@@ -203,6 +203,18 @@ fn guard_allows_ordinary_work_and_asks_for_installs() {
         stderr(&out)
     );
 
+    let since = sb.moat(&["show", "--since", "1h"]);
+    assert_eq!(since.status.code(), Some(0), "{}", stderr(&since));
+    assert_eq!(
+        stdout(&since).lines().count(),
+        4,
+        "header + three events:\n{}",
+        stdout(&since)
+    );
+    let bad = sb.moat(&["show", "--since", "soon"]);
+    assert_eq!(bad.status.code(), Some(64));
+    assert!(stderr(&bad).contains("time window"));
+
     let session = sb.moat(&["show", "--session", "s-allow"]);
     assert_eq!(
         stdout(&session).lines().count(),

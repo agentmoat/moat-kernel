@@ -7,6 +7,7 @@ use crate::cli::{Format, ShowArgs};
 use crate::exit::Code;
 use crate::home::Home;
 use crate::render;
+use crate::time;
 
 pub fn run(args: &ShowArgs) -> Result<Code> {
     let home = Home::locate()?;
@@ -24,6 +25,8 @@ pub fn run(args: &ShowArgs) -> Result<Code> {
         }
     } else if let Some(session) = &args.session {
         store.session(session)?
+    } else if let Some(since) = &args.since {
+        store.since(time::parse_since(since, time::now_ms())?, None)?
     } else {
         store.recent(args.recent)?
     };

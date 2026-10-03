@@ -14,6 +14,7 @@ mod install;
 mod integrity;
 mod project;
 mod render;
+mod time;
 
 use std::process::ExitCode;
 
