@@ -17,6 +17,7 @@ All notable changes to this project are documented here. The format follows
 ### Added (self-protection)
 - `policy.lock`: `moat init` pins SHA-256 digests of the policy and every installed host hook file; `moat guard` verifies them on every call and denies everything with rule `kernel-integrity` when a pinned file changed or disappeared.
 - `moat status` reports lock state; re-running `moat init` re-pins.
+- `moat doctor [--accept]`: verifies state directory, policy, lock, hooks, binary path and audit log; `--accept` re-pins and is refused outside an interactive terminal.
 
 ### Changed
 - Project standards: `AGENTS.md` contract, CONTRIBUTING, SECURITY, Code of Conduct, pinned-SHA workflows, Conventional Commits PR titles, Dependabot, CODEOWNERS, issue forms, PR template, single quality-gate script, clippy thresholds, rustdoc `-D warnings`, architecture tests, ADR-001…004.

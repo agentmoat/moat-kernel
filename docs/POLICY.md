@@ -161,7 +161,8 @@ moat policy check "~/.aws/credentials" --kind fs-read --policy ./policy.yaml
 `moat init` records SHA-256 digests of the policy file and of every host hook file it
 installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
 pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
-until a person re-pins by re-running `moat init` (a `moat doctor --accept` command follows).
+until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
+by re-running `moat init`. Edit the policy, then run `moat doctor --accept`.
 
 ## 9. Planned, not yet available
 
