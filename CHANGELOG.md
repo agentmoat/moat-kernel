@@ -18,6 +18,7 @@ All notable changes to this project are documented here. The format follows
 - `policy.lock`: `moat init` pins SHA-256 digests of the policy and every installed host hook file; `moat guard` verifies them on every call and denies everything with rule `kernel-integrity` when a pinned file changed or disappeared.
 - `moat status` reports lock state; re-running `moat init` re-pins.
 - Claude Code `ConfigChange` hook: when a settings file pinned by the lock is edited or deleted outside `moat`, the change is refused for the running session (rule `kernel-integrity`); unpinned settings files load and are audited.
+- Executable pinning: `moat init` snapshots the search path and the location of common programs in `~/.moat/environment.json` (pinned by the lock); `moat guard` resolves every shell command's program through the snapshot and denies pinned programs that resolve elsewhere (rule `executables`). Policy `executables:` pins are now enforced.
 - `moat doctor [--accept]`: verifies state directory, policy, lock, hooks, binary path and audit log; `--accept` re-pins and is refused outside an interactive terminal.
 
 ### Changed

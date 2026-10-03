@@ -620,7 +620,7 @@ Each item: why it is hard → Phase 1 answer → Phase 2 answer → open questio
 
 ### G3 Environment poisoning
 - Why hard: `export PATH=…`, `LD_PRELOAD`, aliases and functions change what an allowlisted command *is*.
-- Phase 1: `env.set` deny list; `executables` pinning; program resolution against a kernel PATH snapshot, not the inherited one; `alias`/`function` definitions ⇒ deny; `moat exec` launches with a kernel-controlled env and PATH (macOS/Linux).
+- Phase 1: `env.set` deny list; `executables` pinning and an install-time snapshot of common programs (`environment.json`), with program resolution against the snapshot search path, not the inherited one (shipped); `alias`/`function` definitions ⇒ deny; `moat exec` launches with a kernel-controlled env and PATH (macOS/Linux).
 - Phase 2: Windows parity; secrets injected per capability instead of inherited.
 - Open: shell rc files (`~/.zshrc`) edited by the agent change future sessions; treat rc files as protected paths (deny write) in defaults.
 

@@ -64,7 +64,6 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 - No egress proxy; `net` rules are pattern-based.
 - No session taint, no approvals of our own, no `replay` timeline (only `show`).
 - Cursor and OpenClaw adapters not written; MCP proxy not written.
-- Executable pinning (`executables:` in policy) is parsed and linted but not enforced.
 - Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` not implemented; only the user policy is loaded.
 - Windows: builds in CI, PowerShell is not tokenised (any PowerShell command is `ask`).
 - Nothing committed or pushed; `agentmoat/moat-kernel` repository not created.
@@ -73,7 +72,6 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 
 | # | Work | Done when |
 |---|---|---|
-| 3 | **Executable pinning + PATH snapshot** at `init`; resolve programs against the snapshot, not the inherited PATH | T6 fixtures extended |
 | 4 | **Cursor adapter** (`beforeShellExecution`, `beforeMCPExecution`, `preToolUse`; `permission` response; `failClosed: true` at init) | golden fixtures + e2e |
 | 5 | **`moat replay`** (session timeline with step detail) and `moat report` (asks/hour, top rules) | e2e |
 | 6 | **Approvals**: TTY prompt with once/session/permanent, session cache, `moat allow`; `permanent` appends a provenance-commented rule to the user policy | e2e |
