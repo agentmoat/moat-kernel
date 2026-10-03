@@ -1,28 +1,45 @@
 //! Path normalisation without touching the filesystem (DESIGN.md §7.3).
 //!
+//! All paths are handled in a slash-separated canonical form on every platform:
+//! `/Users/me/x` on Unix, `C:/Users/me/x` or `//server/share/x` on Windows.
+//! Callers convert OS paths to this form (`\` → `/`) before passing them in.
 //! Symlink resolution needs I/O and is done by the caller, which may pass both
-//! the literal and the resolved path through [`crate::engine::evaluate`].
+//! the literal and the resolved path through the engine.
 
 /// Expand `~`, `$HOME`, `${project}` and make the path absolute against `cwd`,
 /// then collapse `.` and `..` lexically.
 #[must_use]
 pub fn normalise(raw: &str, home: &str, project: &str, cwd: &str) -> String {
-    let mut s = expand_home(raw, home);
-    s = s
+    let unified = raw.replace('\\', "/");
+    let mut s = expand_home(&unified, home)
         .replace("${project}", project)
         .replace("${HOME}", home)
         .replace("$HOME", home);
-    if !s.starts_with('/') {
+    if !is_absolute(&s) {
         s = format!("{cwd}/{s}");
     }
     collapse(&s)
 }
 
-/// Lexically collapse `//`, `/./` and `/../` segments.
+/// Absolute in canonical form: `/…`, `X:/…`, or UNC `//…`.
+#[must_use]
+pub fn is_absolute(path: &str) -> bool {
+    path.starts_with('/') || drive_prefix(path).is_some()
+}
+
+/// `C:` for `C:/x`, `C:x` or `c:\x`; `None` otherwise.
+fn drive_prefix(path: &str) -> Option<&str> {
+    let bytes = path.as_bytes();
+    (bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':').then(|| &path[..2])
+}
+
+/// Lexically collapse `//`, `/./` and `/../` segments while preserving the root
+/// (`/`, `C:/` or `//server`).
 #[must_use]
 pub fn collapse(path: &str) -> String {
+    let (root, rest) = split_root(path);
     let mut out: Vec<&str> = Vec::new();
-    for seg in path.split('/') {
+    for seg in rest.split('/') {
         match seg {
             "" | "." => {}
             ".." => {
@@ -31,8 +48,20 @@ pub fn collapse(path: &str) -> String {
             s => out.push(s),
         }
     }
-    let joined = out.join("/");
-    format!("/{joined}")
+    format!("{root}{}", out.join("/"))
+}
+
+fn split_root(path: &str) -> (String, &str) {
+    if let Some(drive) = drive_prefix(path) {
+        let rest = &path[2..];
+        let root = format!("{}:/", drive[..1].to_ascii_uppercase());
+        return (root, rest.trim_start_matches('/'));
+    }
+    if let Some(unc) = path.strip_prefix("//") {
+        let (server, rest) = unc.split_once('/').unwrap_or((unc, ""));
+        return (format!("//{server}/"), rest);
+    }
+    ("/".to_owned(), path.trim_start_matches('/'))
 }
 
 /// Expand `~` and `${project}` inside a *pattern* (not a path), leaving globs intact.
@@ -64,9 +93,14 @@ pub fn looks_like_path(token: &str) -> bool {
         || token == "~"
         || token.starts_with("./")
         || token.starts_with("../")
+        || token.starts_with(".\\")
+        || token.starts_with("..\\")
         || token.starts_with("$HOME/")
         || token.starts_with("${HOME}/")
         || token.starts_with("${project}/")
+        || drive_prefix(token)
+            .is_some_and(|_| matches!(token.as_bytes().get(2), Some(b'/' | b'\\')))
+        || token.starts_with("\\\\")
 }
 
 #[cfg(test)]
@@ -74,7 +108,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn normalises() {
+    fn normalises_unix_paths() {
         assert_eq!(
             normalise("~/.ssh/id_rsa", "/Users/me", "/p", "/p"),
             "/Users/me/.ssh/id_rsa"
@@ -84,6 +118,53 @@ mod tests {
             "/p/app/.env"
         );
         assert_eq!(normalise("${project}/x", "/h", "/p", "/c"), "/p/x");
+        assert_eq!(
+            normalise("$HOME/.aws/credentials", "/h", "/p", "/c"),
+            "/h/.aws/credentials"
+        );
         assert_eq!(collapse("/a//b/./c/../d"), "/a/b/d");
+        assert_eq!(collapse("/../x"), "/x");
+    }
+
+    #[test]
+    fn normalises_windows_paths() {
+        let home = "C:/Users/me";
+        assert_eq!(
+            normalise("~/.ssh/id_rsa", home, "C:/p", "C:/p"),
+            "C:/Users/me/.ssh/id_rsa"
+        );
+        assert_eq!(
+            normalise(r"C:\p\src\main.rs", home, "C:/p", "C:/p"),
+            "C:/p/src/main.rs"
+        );
+        assert_eq!(
+            normalise(r"src\lib.rs", home, "C:/p", "C:/p"),
+            "C:/p/src/lib.rs"
+        );
+        assert_eq!(normalise("c:/P/../q", home, "C:/p", "C:/p"), "C:/q");
+        assert_eq!(
+            normalise(r"\\server\share\f.txt", home, "C:/p", "C:/p"),
+            "//server/share/f.txt"
+        );
+        assert!(is_absolute("D:/x") && is_absolute("//srv/s") && !is_absolute("x/y"));
+    }
+
+    #[test]
+    fn path_heuristics() {
+        for token in [
+            "/etc/passwd",
+            "~/.ssh",
+            "./a",
+            "../a",
+            r"C:\x",
+            "D:/y",
+            r".\x",
+            r"\\srv\s",
+        ] {
+            assert!(looks_like_path(token), "{token}");
+        }
+        for token in ["main.rs", "C:", "https://x", "-v", "ab/cd"] {
+            assert!(!looks_like_path(token), "{token}");
+        }
     }
 }
