@@ -182,6 +182,16 @@ moat policy check "npm install left-pad" --policy ./policy.yaml --project ~/code
 moat policy check "~/.aws/credentials" --kind fs-read --policy ./policy.yaml
 ```
 
+`policy lint` fails (exit 64) on errors: wrong version, unknown keys, missing or duplicate
+ids, empty rules, bad globs or shell patterns, `executables` paths that are not absolute
+(`/usr/bin/git` or `C:/…`). It prints warnings, and still exits 0, for rules that cannot
+decide anything because an earlier list already matches everything they match: an `ask`
+pattern covered by an `allow` pattern (allow is evaluated first, e.g. allow `cargo *` makes
+ask `cargo publish*` unreachable), an `allow` pattern covered by a `deny` pattern, and
+`defaults` keys that are not a known kind (`netw: deny` is silently ignored otherwise). The
+check is conservative: a list with `!` exclusions is never assumed to cover anything, so no
+warning does not prove a rule is reachable.
+
 ## 8. The policy lock
 
 `moat init` records SHA-256 digests of the policy file and of every host hook file it

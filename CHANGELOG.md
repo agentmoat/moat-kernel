@@ -25,6 +25,7 @@ All notable changes to this project are documented here. The format follows
 - Claude Code and Cursor adapters derive those paths and hosts from MCP `tool_input` by argument name (`path`, `paths`, `file_path`, `source`, `destination`, `url`, …); write-shaped tool names (`write_*`, `edit_*`, `move_*`, `delete_*`) and `destination`/`target` arguments produce `fs.write`.
 
 ### Changed
+- `moat policy lint` prints warnings (exit 0) for `ask` patterns an `allow` pattern already covers, `allow` patterns a `deny` pattern covers, and unknown `defaults` kinds; `executables` paths in Windows form (`C:/…`) are accepted as absolute.
 - Shell patterns: a trailing bare `$` anchors the end of argv (`env $` matches `env` but not `env FOO=1 cmd`); `$` elsewhere is literal and a pattern of only `$` fails lint (ADR-010).
 - Default policy: `dev-shell` lists explicit subcommands instead of `pnpm *`, `yarn *`, `cargo *`, `make *`, so the `installs` and `push` ask rules are reachable again (`cargo add/install/publish`, `pnpm add/install`, `yarn add/install` now ask; `npx`/`dlx` ask). New `dev-tools` allow group (`tsc`, `eslint`, `prettier`, `vitest`, `jest`, `ruff`, `mypy`, …). `destructive` matches `rm -rf /*` literally (no longer every absolute path), adds `-fr` variants, `--no-preserve-root`, `git branch -D`, `git stash drop/clear`. `kernel-self` also matches `moat` run by absolute path. `secrets-paths` adds `.envrc`.
 
