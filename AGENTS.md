@@ -17,14 +17,14 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 
 | Path | Contents | Rules |
 |---|---|---|
-| `crates/moat-core` | policy model (`policy.rs`), lexer (`lexer/`), classifier (`shell/`), patterns, paths, engine, verdict | **pure**: no I/O, no `unsafe`, no internal deps; builds for `wasm32`; architecture tests enforce it |
-| `crates/moat-hosts` | host adapters (`pre_tool_use.rs` for Claude Code and Codex) | translate payload ⇄ `Action`/`Decision`; never decide |
-| `crates/moat-audit` | SQLite store (`store.rs`), redaction (`redact.rs`) | typed `thiserror` errors; redact before persisting; never log secrets |
-| `crates/moat-cli` | the `moat` binary: `cli.rs` grammar, `commands/*`, `install/*`, `home.rs`, `context.rs`, `render.rs`, `exit.rs` | the only crate that touches files, env, terminal; `anyhow` allowed; all user output goes through `render.rs` or the command module |
+| `crates/moat-core` | policy model (`policy.rs`), lexer (`lexer/`), classifier (`shell/`), patterns (`pattern.rs`), paths, engine, executable pins (`programs.rs`, `ProgramResolver`), actions, verdict | **pure**: no I/O, no `unsafe`, no internal deps; builds for `wasm32`; architecture tests enforce it |
+| `crates/moat-hosts` | host adapters: `pre_tool_use.rs` (Claude Code, Codex), `config_change.rs` (Claude Code), `cursor.rs` | translate payload ⇄ `Action`/`Decision`; never decide |
+| `crates/moat-audit` | SQLite store (`store.rs`), time-window and session queries (`query.rs`), redaction (`redact.rs`) | typed `thiserror` errors; redact before persisting; never log secrets |
+| `crates/moat-cli` | the `moat` binary: `cli.rs` grammar, `commands/{init,guard,show,status,doctor,allow,replay,report,policy}.rs`, `install/{mod,hook_file}.rs`, `home.rs`, `context.rs`, `project.rs`, `time.rs`, `environment.rs` (search-path snapshot), `integrity.rs` (policy lock), `approvals.rs` (grants and overlay), `render.rs`, `exit.rs` | the only crate that touches files, env, terminal; `anyhow` allowed; all user output goes through `render.rs` or the command module |
 | `policies/default-v1.yaml` | shipped default policy | every change needs a conformance fixture and a CHANGELOG line |
 | `tests/conformance/{attacks,benign,ask}.yaml` | executable security claims | ids unique, one action each, `rules` must appear in the decision |
 | `tests/fixtures/hosts/<host>/*.json` | real host payloads | golden inputs; never include real tokens or personal paths |
-| `crates/*/tests/` | end-to-end (`cli.rs`, `guard.rs`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
+| `crates/*/tests/` | end-to-end (`cli`, `guard`, `cursor`, `config_change`, `lock`, `approvals`, `replay_report`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
 | `docs/` | OVERVIEW, DESIGN, STRENGTH, TECH_STACK, REPO_STRUCTURE, PROGRESS, POLICY, `adr/` | design is the spec; ADRs are immutable, superseded by new ADRs |
 | `scripts/ci/quality-gate.sh` | the one gate | CI and the pre-push hook run exactly this |
 
@@ -49,7 +49,7 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 - **Dependencies:** adding one needs a sentence in the PR on why std or an existing dep does not cover it; `cargo-deny` must stay green; `moat-core` additions need an ADR.
 - **Lints:** workspace `clippy::pedantic`, `unsafe_code = "forbid"`, rustdoc `-D warnings`. Do not `#[allow]` to get green; fix or justify in the PR.
 - **Formatting:** `cargo fmt` (max width 100). `.editorconfig` for everything else.
-- **PR-only:** nothing is pushed to `main` directly. Branch `<type>/<topic>`, open a PR, let `pr-standards` label it (`type: …`, `area: …`, `size: …`, `risk: …`), keep it ≤ 500 lines, squash-merge. Conventional Commits title (`feat`, `fix`, `sec`, `policy`, `host(codex)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`), lowercase subject. PR body sections **Testing**, **Security impact** and **Release note** are required.
+- **PR-only:** nothing is pushed to `main` directly. Branch `<type>/<topic>`, open a PR, let `pr-standards` label it (`type: …`, `area: …`, `size: …`, `risk: …`), keep it ≤ 500 lines, squash-merge. Conventional Commits title (`feat`, `fix`, `sec`, `policy`, `host(codex)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`), lowercase subject. PR body sections **Testing** and **Security impact** are required (`pr-standards` fails without them); **Release note** is recommended and feeds `CHANGELOG.md`.
 - **Docs are code:** behaviour change ⇒ same PR updates `docs/POLICY.md` / `DESIGN.md` / `CHANGELOG.md` as applicable.
 
 ## 5. Skills (how to do the common jobs)

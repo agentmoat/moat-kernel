@@ -11,7 +11,7 @@ Start with the top-level `README.md` for what `moat` is and how to install it.
 | [TECH_STACK.md](TECH_STACK.md) | see why Rust and the chosen crates (scored comparison) |
 | [REPO_STRUCTURE.md](REPO_STRUCTURE.md) | find where code lives, crate dependency rules, CI/release and contribution conventions |
 | [PROGRESS.md](PROGRESS.md) | know exactly what is built, what is not, and what comes next |
-| [adr/](adr/) | read the record of decisions that constrain the code (Rust, deny-absolute, decide-and-enforce, exit codes) |
+| [adr/](adr/) | read the record of decisions that constrain the code (Rust, deny-absolute, decide-and-enforce, exit codes, own shell lexer, policy lock, approvals, executable pinning) |
 
 Contributor files live at the repository root: `AGENTS.md` (working contract),
 `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`.
