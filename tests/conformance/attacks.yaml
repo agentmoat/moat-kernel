@@ -253,3 +253,25 @@
 - id: T2-read-envrc
   action: { shell: "cat .envrc" }
   expect: { verdict: deny, rules: [secrets-paths] }
+
+# T11 symlinks: a path is checked where it really points, not only as written
+- id: T11-read-key-through-symlinked-dir
+  action: { shell: "cat ./s/id_rsa" }
+  links: { /p/s: /Users/me/.ssh }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T11-plant-authorized-key-through-symlink
+  action: { shell: "echo 'ssh-ed25519 AAAA attacker' >> keys" }
+  links: { /p/keys: /Users/me/.ssh/authorized_keys }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T11-file-tool-read-through-symlink
+  action: { fs_read: "/p/docs/notes.txt" }
+  links: { /p/docs/notes.txt: /Users/me/.aws/credentials }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T11-mcp-read-through-symlink
+  action: { mcp_tool: { name: mcp__filesystem__read_file, reads: [/p/cfg/hosts.yml] } }
+  links: { /p/cfg: /Users/me/.config/gh }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T11-write-shell-rc-through-symlink
+  action: { fs_write: "/p/profile.sh" }
+  links: { /p/profile.sh: /Users/me/.zshrc }
+  expect: { verdict: deny, rules: [shell-rc] }

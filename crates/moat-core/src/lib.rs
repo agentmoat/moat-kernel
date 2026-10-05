@@ -15,6 +15,7 @@ pub mod paths;
 pub mod pattern;
 pub mod policy;
 pub mod programs;
+pub mod realpath;
 pub mod shell;
 pub mod verdict;
 
@@ -22,4 +23,5 @@ pub use action::{Action, AtomicAction};
 pub use engine::{CompiledPolicy, EvalContext, evaluate};
 pub use policy::{Defaults, Policy, PolicyError, RuleGroup};
 pub use programs::{MapResolver, NoResolver, ProgramResolver};
+pub use realpath::{MapPathResolver, PathResolver};
 pub use verdict::{Decision, Verdict};
