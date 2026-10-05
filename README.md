@@ -13,9 +13,11 @@ agent tool call ──► moat guard ──► allow ──► runs, logged
                                  └► ask   ──► your agent's own permission prompt, with the reason
 ```
 
-> **Status: early development.** Policy decisions, the three agent integrations, the
-> audit log, approvals and self-protection work today. OS-level sandboxing, a network
-> proxy and the public benchmark are in progress. Expect breaking changes before v0.1.
+> **Status: pre-alpha, decide-only.** Policy decisions, the three agent integrations, the
+> audit log, approvals and self-protection work today. Decisions are not yet enforced by
+> the operating system: an allowed command runs with your permissions, so a classifier
+> mistake is a security bug. OS enforcement (`moat exec`) and a network proxy gate the
+> beta; the public benchmark gates 1.0 (ADR-013). Expect breaking changes before v0.1.
 
 ## Why you would want this
 
