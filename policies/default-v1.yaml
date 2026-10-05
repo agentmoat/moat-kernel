@@ -21,6 +21,7 @@ deny:
       - "~/.kube/**"
       - "**/.env"
       - "**/.env.*"
+      - "**/.envrc"
       - "~/Library/Keychains/**"
     fs.write: *secret-paths
   - id: env-secrets
@@ -45,14 +46,20 @@ deny:
     reason: irreversible damage
     shell:
       - "rm -rf /"
-      - "rm -rf /*"
+      - "rm -fr /"
+      - "rm -rf /[*]"
+      - "rm -rf --no-preserve-root*"
       - "rm -rf ~"
-      - "rm -rf ~/*"
+      - "rm -fr ~"
+      - "rm -rf ~/[*]"
       - "rm -rf $HOME"
       - "git push --force*"
       - "git push -f*"
       - "git reset --hard*"
       - "git clean -fdx*"
+      - "git branch -D *"
+      - "git stash drop*"
+      - "git stash clear*"
       - "sudo *"
       - "mkfs*"
       - "dd if=*"
@@ -76,6 +83,10 @@ deny:
       - "moat init*"
       - "moat doctor*"
       - "moat allow*"
+      - "*/moat policy *"
+      - "*/moat init*"
+      - "*/moat doctor*"
+      - "*/moat allow*"
   - id: shell-rc
     reason: edits persist into every future shell session
     fs.write: ["~/.zshrc", "~/.bashrc", "~/.bash_profile", "~/.profile", "~/.zprofile", "~/.zshenv"]
@@ -110,16 +121,53 @@ allow:
       - "which *"
       - "npm test*"
       - "npm run *"
-      - "pnpm *"
-      - "yarn *"
-      - "cargo *"
+      - "pnpm test*"
+      - "pnpm run *"
+      - "pnpm build*"
+      - "pnpm lint*"
+      - "pnpm typecheck*"
+      - "pnpm exec *"
+      - "yarn exec *"
+      - "npm exec *"
+      - "yarn test*"
+      - "yarn run *"
+      - "yarn build*"
+      - "yarn lint*"
+      - "cargo build*"
+      - "cargo test*"
+      - "cargo check*"
+      - "cargo clippy*"
+      - "cargo fmt*"
+      - "cargo run*"
+      - "cargo doc*"
+      - "cargo bench*"
+      - "cargo nextest*"
+      - "cargo tree*"
+      - "cargo metadata*"
       - "go test*"
       - "go build*"
+      - "go vet*"
       - "swift test*"
       - "swift build*"
       - "pytest*"
       - "python -m pytest*"
-      - "make *"
+      - "make test*"
+      - "make build*"
+      - "make check*"
+      - "make lint*"
+  - id: dev-tools
+    shell:
+      - "tsc*"
+      - "eslint *"
+      - "prettier *"
+      - "biome *"
+      - "vitest*"
+      - "jest*"
+      - "mocha*"
+      - "ruff *"
+      - "black *"
+      - "mypy *"
+      - "golangci-lint*"
   - id: registries
     net:
       - "api.github.com"
@@ -137,10 +185,10 @@ allow:
 ask:
   - id: installs
     reason: new dependency
-    shell: ["npm install *", "npm i *", "pnpm add *", "yarn add *", "pip install *", "pip3 install *", "cargo add *", "cargo install *", "brew install *", "gem install *"]
+    shell: ["npm install *", "npm i *", "npm ci*", "pnpm add *", "pnpm install*", "pnpm dlx *", "yarn add *", "yarn install*", "yarn dlx *", "npx *", "pip install *", "pip3 install *", "cargo add *", "cargo install *", "brew install *", "gem install *"]
   - id: push
     reason: publishes to a remote
-    shell: ["git push *", "npm publish*", "cargo publish*", "gh release *"]
+    shell: ["git push *", "npm publish*", "pnpm publish*", "yarn publish*", "cargo publish*", "gh release *"]
 
 approval:
   channel: terminal

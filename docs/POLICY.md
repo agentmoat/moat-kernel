@@ -126,21 +126,24 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 
 | List | Rule id | What it covers |
 |---|---|---|
-| deny | `secrets-paths` | read **and** write of `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.config/gh`, `.env*`, keychains |
+| deny | `secrets-paths` | read **and** write of `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.config/gh`, `~/.netrc`, `~/.docker/config.json`, `.env`, `.env.*`, `.envrc`, keychains |
 | deny | `env-secrets` | reading `*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `AWS_*`, `GITHUB_TOKEN`, `NPM_TOKEN` |
 | deny | `env-poison` | setting `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `GIT_*`, `BASH_ENV`, `PROMPT_COMMAND` |
 | deny | `pipe-to-shell` | `curl/wget … \| sh/bash`, `base64 -d \| sh`, `eval` |
-| deny | `destructive` | `rm -rf /`, `rm -rf ~`, `git push --force*`, `git reset --hard`, `git clean -fdx`, `sudo`, `mkfs`, `dd if=`, `shutdown`, `reboot` |
-| deny | `kernel-self` | writes to `~/.moat`, host hook/settings files; `moat policy/init/doctor` from an agent |
+| deny | `destructive` | `rm -rf /`, `rm -rf /*`, `rm -rf ~`, `rm -rf ~/*`, `rm -rf $HOME` (and `-fr`, `--no-preserve-root`), `git push --force*`/`-f*`, `git reset --hard`, `git clean -fdx`, `git branch -D`, `git stash drop/clear`, `sudo`, `mkfs`, `dd if=`, `shutdown`, `reboot` |
+| deny | `kernel-self` | writes to `~/.moat`, `~/.codex`, host hook/settings files; `moat policy/init/doctor/allow` from an agent, also by absolute path (`*/moat …`) |
 | deny | `shell-rc` | writes to `~/.zshrc`, `~/.bashrc`, `~/.profile` and friends |
 | allow | `project-fs` | read anywhere in `${project}`; write anywhere except `.git/` and `.moat/` |
-| allow | `dev-shell` | `git status/diff/log/add/commit/fetch/pull/stash`, `ls`, `cat`, `grep`, `rg`, `find`, test and build commands for npm/pnpm/yarn/cargo/go/swift/pytest/make |
+| allow | `dev-shell` | `git status/diff/log/show/branch/add/commit/checkout -b/switch/fetch/pull/stash`, `ls`, `cat`, `head`, `tail`, `grep`, `rg`, `find`, `pwd`, `echo`, `which`; `npm test/run`, `pnpm test/run/build/lint/typecheck/exec`, `yarn test/run/build/lint/exec`, `npm exec`, `cargo build/test/check/clippy/fmt/run/doc/bench/nextest/tree/metadata`, `go test/build/vet`, `swift test/build`, `pytest`, `make test/build/check/lint`. `exec` forms are allowed only because the wrapped program is evaluated on its own |
+| allow | `dev-tools` | `tsc`, `eslint`, `prettier`, `biome`, `vitest`, `jest`, `mocha`, `ruff`, `black`, `mypy`, `golangci-lint` |
 | allow | `registries` | `api.github.com`, `github.com`, npm, crates.io, Go proxy, PyPI |
 | allow | `safe-mcp` | read-only GitHub and filesystem MCP tools |
 
 MCP calls are judged by name **and** by what their arguments touch: adapters map path-like arguments (`path`, `paths`, `file_path`, `source`, `destination`, …) to `fs.read`/`fs.write` atoms (write for `write_*`, `edit_*`, `move_*`, `delete_*`-shaped tools and for `destination`/`target`) and URL-like arguments (`url`, `uri`, `endpoint`) to `net` atoms, so `mcp__filesystem__read_file {path: ~/.aws/credentials}` is denied by `secrets-paths` even though `safe-mcp` allows the tool name.
 | ask | `installs` | `npm install`, `pip install`, `cargo add/install`, `brew install`, `gem install` |
 | ask | `push` | `git push`, `npm publish`, `cargo publish`, `gh release` |
+| ask | `installs` | `npm install/i/ci`, `pnpm add/install/dlx`, `yarn add/install/dlx`, `npx`, `pip install`, `cargo add/install`, `brew install`, `gem install` |
+| ask | `push` | `git push`, `npm/pnpm/yarn publish`, `cargo publish`, `gh release` |
 | defaults | `default`, `default.net` | everything else asks; outbound network to unlisted hosts is denied |
 
 ## 7. Recipes

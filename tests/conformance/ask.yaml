@@ -47,5 +47,20 @@
   action: { shell: "node -e 'console.log(process.version)'" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-pnpm-exec-unlisted-tool
-  action: { shell: "pnpm exec tsc --noEmit" }
+  action: { shell: "pnpm exec some-unlisted-tool --flag" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-cargo-add
+  action: { shell: "cargo add serde" }
+  expect: { verdict: ask, rules: [installs] }
+- id: ask-cargo-publish
+  action: { shell: "cargo publish" }
+  expect: { verdict: ask, rules: [push] }
+- id: ask-pnpm-install
+  action: { shell: "pnpm install" }
+  expect: { verdict: ask, rules: [installs] }
+- id: ask-npx-downloads-a-tool
+  action: { shell: "npx prettier --check ." }
+  expect: { verdict: ask, rules: [installs] }
+- id: ask-rm-rf-temp-dir-is-not-destructive
+  action: { shell: "rm -rf /tmp/build" }
   expect: { verdict: ask, rules: [default] }
