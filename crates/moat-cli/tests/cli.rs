@@ -83,11 +83,12 @@ fn lint_warns_about_unreachable_rules_without_failing() {
     assert!(text.contains("2 warnings)"), "{text}");
 }
 
-/// `--project` is canonicalised; on Windows that adds a `\\?\` prefix which used
-/// to make `${project}` match nothing.
-#[cfg(windows)]
+/// A project and a file inside it, written the same way, must match
+/// `${project}/**`. Temporary directories sit behind symlinks or short names on
+/// macOS (`/var` → `/private/var`) and Windows (`RUNNER~1`), so canonicalising
+/// only `--project` broke this; on Windows the paths are drive-letter paths.
 #[test]
-fn project_flag_matches_drive_letter_paths_on_windows() {
+fn project_flag_matches_paths_written_the_same_way() {
     let dir = tempfile::tempdir().unwrap();
     let project = dir.path().to_string_lossy().replace('\\', "/");
     let file = format!("{project}/src/main.rs");

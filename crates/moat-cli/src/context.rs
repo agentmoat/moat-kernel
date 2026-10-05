@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io::Read as _;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
 use moat_core::{EvalContext, Policy};
@@ -53,13 +53,27 @@ pub fn eval_context(cwd: Option<&Path>, project: Option<&Path>) -> Result<EvalCo
     })
 }
 
-/// Canonical path when it exists (resolving symlinks such as macOS `/tmp`),
-/// otherwise a lexically absolute path.
+/// Absolute and lexically normalised (`.` and `..` removed) without touching
+/// the filesystem, the way `guard` takes the host's `cwd`.
+///
+/// `--project` and `--cwd` must name directories the same way the checked
+/// action does: canonicalising only the roots turned `/tmp/p` into
+/// `/private/tmp/p` on macOS and `RUNNER~1` into the long name on Windows, so
+/// a file inside the project no longer matched `${project}/**`.
 fn absolute(path: &Path) -> Result<PathBuf> {
-    if let Ok(canonical) = fs::canonicalize(path) {
-        return Ok(canonical);
+    let absolute =
+        std::path::absolute(path).with_context(|| format!("resolving {}", path.display()))?;
+    let mut normalised = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalised.pop();
+            }
+            other => normalised.push(other),
+        }
     }
-    std::path::absolute(path).with_context(|| format!("resolving {}", path.display()))
+    Ok(normalised)
 }
 
 /// The slash-separated canonical form the core works in (`DESIGN.md` §7.3).
@@ -89,6 +103,17 @@ pub fn strip_verbatim(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn roots_are_made_absolute_lexically() {
+        let base = std::env::current_dir().unwrap();
+        assert_eq!(
+            absolute(Path::new("a/./b/../c")).unwrap(),
+            base.join("a").join("c")
+        );
+        let root = base.ancestors().last().unwrap();
+        assert_eq!(absolute(&root.join("..")).unwrap(), root);
+    }
 
     #[test]
     fn windows_verbatim_paths_become_canonical_slash_form() {
