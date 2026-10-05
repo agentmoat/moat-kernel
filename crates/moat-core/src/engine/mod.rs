@@ -6,6 +6,7 @@
 //! is expressed through per-kind `defaults`, never through a deny rule.
 
 use crate::action::{Action, AtomicAction};
+use crate::kind::Kind;
 use crate::pattern::{GlobPattern, ShellPattern, any_match};
 use crate::policy::{Policy, PolicyError, RuleGroup};
 use crate::programs::{self, NoResolver, ProgramResolver};
@@ -17,9 +18,15 @@ use crate::{host, paths};
 /// Everything the engine needs from the environment. Supplied by the caller.
 #[derive(Debug, Clone)]
 pub struct EvalContext {
+    /// The user's home directory, for `~` and `$HOME`.
     pub home: String,
+    /// The trusted project root, for `${project}`.
     pub project: String,
+    /// The directory relative paths are taken from.
     pub cwd: String,
+    /// Whether file paths compare case-insensitively, as on the default macOS
+    /// and Windows file systems. Host names always do; names never do.
+    pub case_insensitive_paths: bool,
 }
 
 /// A policy with all patterns compiled for one evaluation context.
@@ -39,62 +46,24 @@ pub struct CompiledPolicy<'p> {
 struct CompiledGroup<'p> {
     group: &'p RuleGroup,
     shell: Vec<ShellPattern>,
-    fs_read: Vec<GlobPattern>,
-    fs_write: Vec<GlobPattern>,
-    net: Vec<GlobPattern>,
-    env_read: Vec<GlobPattern>,
-    env_set: Vec<GlobPattern>,
-    mcp: Vec<GlobPattern>,
+    /// Glob patterns per kind, indexed by `Kind as usize`; the shell slot is empty.
+    globs: [Vec<GlobPattern>; Kind::ALL.len()],
 }
-
-const PATH_CASE_INSENSITIVE: bool = cfg!(any(target_os = "macos", windows));
 
 impl<'p> CompiledPolicy<'p> {
     pub fn compile(policy: &'p Policy, ctx: &EvalContext) -> Result<Self, PolicyError> {
-        let compile_group = |g: &'p RuleGroup| -> Result<CompiledGroup<'p>, PolicyError> {
-            let globs = |pats: &[String], case_insensitive: bool| {
-                pats.iter()
-                    .map(|p| {
-                        GlobPattern::compile(
-                            &paths::expand_pattern(p, &ctx.home, &ctx.project),
-                            case_insensitive,
-                        )
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-            };
-            Ok(CompiledGroup {
-                group: g,
-                shell: g
-                    .shell
-                    .iter()
-                    .map(|p| ShellPattern::compile(p))
-                    .collect::<Result<_, _>>()?,
-                fs_read: globs(&g.fs_read, PATH_CASE_INSENSITIVE)?,
-                fs_write: globs(&g.fs_write, PATH_CASE_INSENSITIVE)?,
-                net: globs(&g.net, true)?,
-                env_read: globs(&g.env_read, false)?,
-                env_set: globs(&g.env_set, false)?,
-                mcp: globs(&g.mcp, false)?,
-            })
+        let compile_list = |groups: &'p [RuleGroup]| {
+            groups
+                .iter()
+                .map(|g| CompiledGroup::compile(g, ctx))
+                .collect::<Result<Vec<_>, _>>()
         };
         Ok(Self {
             policy,
             ctx: ctx.clone(),
-            deny: policy
-                .deny
-                .iter()
-                .map(compile_group)
-                .collect::<Result<_, _>>()?,
-            allow: policy
-                .allow
-                .iter()
-                .map(compile_group)
-                .collect::<Result<_, _>>()?,
-            ask: policy
-                .ask
-                .iter()
-                .map(compile_group)
-                .collect::<Result<_, _>>()?,
+            deny: compile_list(&policy.deny)?,
+            allow: compile_list(&policy.allow)?,
+            ask: compile_list(&policy.ask)?,
         })
     }
 
@@ -136,18 +105,45 @@ impl<'p> CompiledPolicy<'p> {
     }
 }
 
-impl CompiledGroup<'_> {
+impl<'p> CompiledGroup<'p> {
+    fn compile(group: &'p RuleGroup, ctx: &EvalContext) -> Result<Self, PolicyError> {
+        let shell = group
+            .shell
+            .iter()
+            .map(|p| ShellPattern::compile(p))
+            .collect::<Result<_, _>>()?;
+        let mut globs: [Vec<GlobPattern>; Kind::ALL.len()] = Default::default();
+        for kind in Kind::ALL.into_iter().filter(|k| *k != Kind::Shell) {
+            let case_insensitive = match kind {
+                Kind::FsRead | Kind::FsWrite => ctx.case_insensitive_paths,
+                Kind::Net => true,
+                _ => false,
+            };
+            globs[kind as usize] = group
+                .patterns(kind)
+                .iter()
+                .map(|p| {
+                    GlobPattern::compile(
+                        &paths::expand_pattern(p, &ctx.home, &ctx.project),
+                        case_insensitive,
+                    )
+                })
+                .collect::<Result<_, _>>()?;
+        }
+        Ok(Self {
+            group,
+            shell,
+            globs,
+        })
+    }
+
     fn matches(&self, action: &AtomicAction) -> bool {
-        match action {
-            AtomicAction::Shell { argv } | AtomicAction::Pipeline { argv } => {
+        match (action, action.subject()) {
+            (AtomicAction::Shell { argv } | AtomicAction::Pipeline { argv }, _) => {
                 any_match(&self.shell, argv.as_slice())
             }
-            AtomicAction::FsRead { path } => any_match(&self.fs_read, path),
-            AtomicAction::FsWrite { path } => any_match(&self.fs_write, path),
-            AtomicAction::Net { host } => any_match(&self.net, host),
-            AtomicAction::EnvRead { name } => any_match(&self.env_read, name),
-            AtomicAction::EnvSet { name } => any_match(&self.env_set, name),
-            AtomicAction::McpTool { name } => any_match(&self.mcp, name),
+            (_, Some(subject)) => any_match(&self.globs[action.kind() as usize], subject),
+            (_, None) => false,
         }
     }
 }

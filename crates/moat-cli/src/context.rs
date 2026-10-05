@@ -50,6 +50,7 @@ pub fn eval_context(cwd: Option<&Path>, project: Option<&Path>) -> Result<EvalCo
         home: path_string(&home::user_home()?),
         project: path_string(&project),
         cwd: path_string(&cwd),
+        case_insensitive_paths: CASE_INSENSITIVE_PATHS,
     })
 }
 
@@ -75,6 +76,10 @@ fn absolute(path: &Path) -> Result<PathBuf> {
     }
     Ok(normalised)
 }
+
+/// Default file systems on macOS (APFS) and Windows (NTFS) ignore case, so
+/// `~/.SSH/id_rsa` names the same file as `~/.ssh/id_rsa` there.
+pub const CASE_INSENSITIVE_PATHS: bool = cfg!(any(target_os = "macos", windows));
 
 /// The slash-separated canonical form the core works in (`DESIGN.md` §7.3).
 pub fn path_string(path: &Path) -> String {

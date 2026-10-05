@@ -14,6 +14,7 @@
 mod action;
 mod engine;
 mod host;
+mod kind;
 mod lexer;
 pub mod lint;
 mod paths;
@@ -26,6 +27,7 @@ mod verdict;
 
 pub use action::{Action, AtomicAction};
 pub use engine::{CompiledPolicy, EvalContext, evaluate};
+pub use kind::{Kind, UnknownKind};
 pub use pattern::literal_shell_pattern;
 pub use policy::{Defaults, Policy, PolicyError, RuleGroup};
 pub use programs::{MapResolver, NoResolver, ProgramResolver};

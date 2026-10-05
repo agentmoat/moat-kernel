@@ -17,10 +17,10 @@ pub enum Defaults {
 impl Defaults {
     /// Verdict and synthetic rule id (`default` or `default.<kind>`) for a kind.
     #[must_use]
-    pub fn for_kind(&self, kind: &str) -> (Verdict, String) {
+    pub fn for_kind(&self, kind: Kind) -> (Verdict, String) {
         match self {
             Self::All(v) => (*v, "default".to_owned()),
-            Self::PerKind(map) => map.get(kind).map_or_else(
+            Self::PerKind(map) => map.get(kind.as_str()).map_or_else(
                 || {
                     (
                         map.get("*").copied().unwrap_or(Verdict::Ask),
@@ -36,6 +36,7 @@ impl Defaults {
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::kind::Kind;
 use crate::pattern::{GlobPattern, ShellPattern};
 use crate::verdict::Verdict;
 
@@ -89,14 +90,22 @@ pub struct RuleGroup {
 }
 
 impl RuleGroup {
+    /// The patterns this group lists for `kind`.
+    #[must_use]
+    pub fn patterns(&self, kind: Kind) -> &[String] {
+        match kind {
+            Kind::Shell => &self.shell,
+            Kind::FsRead => &self.fs_read,
+            Kind::FsWrite => &self.fs_write,
+            Kind::Net => &self.net,
+            Kind::EnvRead => &self.env_read,
+            Kind::EnvSet => &self.env_set,
+            Kind::Mcp => &self.mcp,
+        }
+    }
+
     fn is_empty(&self) -> bool {
-        self.shell.is_empty()
-            && self.fs_read.is_empty()
-            && self.fs_write.is_empty()
-            && self.net.is_empty()
-            && self.env_read.is_empty()
-            && self.env_set.is_empty()
-            && self.mcp.is_empty()
+        Kind::ALL.iter().all(|k| self.patterns(*k).is_empty())
     }
 }
 
@@ -221,19 +230,15 @@ impl Policy {
             if group.is_empty() {
                 return Err(PolicyError::EmptyRule(group.id.clone()));
             }
-            for p in &group.shell {
-                ShellPattern::compile(p).map_err(|e| rule_err(&group.id, &e))?;
-            }
-            for p in group
-                .fs_read
-                .iter()
-                .chain(&group.fs_write)
-                .chain(&group.net)
-                .chain(&group.env_read)
-                .chain(&group.env_set)
-                .chain(&group.mcp)
-            {
-                GlobPattern::compile(p, false).map_err(|e| rule_err(&group.id, &e))?;
+            for kind in Kind::ALL {
+                for p in group.patterns(kind) {
+                    let compiled = if kind == Kind::Shell {
+                        ShellPattern::compile(p).map(drop)
+                    } else {
+                        GlobPattern::compile(p, false).map(drop)
+                    };
+                    compiled.map_err(|e| rule_err(&group.id, &e))?;
+                }
             }
         }
         for (name, paths) in &self.executables {
@@ -302,11 +307,11 @@ mod tests {
     fn per_kind_defaults() {
         let p = Policy::parse("version: 1\ndefaults: { net: deny, '*': ask }\n").unwrap();
         assert_eq!(
-            p.defaults.for_kind("net"),
+            p.defaults.for_kind(Kind::Net),
             (Verdict::Deny, "default.net".to_owned())
         );
         assert_eq!(
-            p.defaults.for_kind("shell"),
+            p.defaults.for_kind(Kind::Shell),
             (Verdict::Ask, "default".to_owned())
         );
     }

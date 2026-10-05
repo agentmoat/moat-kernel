@@ -5,6 +5,7 @@ fn ctx() -> EvalContext {
         home: "/h".into(),
         project: "/p".into(),
         cwd: "/p".into(),
+        case_insensitive_paths: false,
     }
 }
 
@@ -191,4 +192,22 @@ fn compiled_policy_is_reusable() {
     for _ in 0..3 {
         assert_eq!(compiled.decide(&shell("ls -la")).verdict, Verdict::Allow);
     }
+}
+
+#[test]
+fn path_case_sensitivity_comes_from_the_context() {
+    let p =
+        policy("version: 1\ndefaults: allow\ndeny:\n  - id: secret\n    fs.read: ['~/.ssh/**']\n");
+    let read = Action::FsRead {
+        path: "/h/.SSH/id_rsa".into(),
+    };
+    let insensitive = EvalContext {
+        case_insensitive_paths: true,
+        ..ctx()
+    };
+    assert_eq!(
+        evaluate(&p, &insensitive, &read).unwrap().verdict,
+        Verdict::Deny
+    );
+    assert_eq!(evaluate(&p, &ctx(), &read).unwrap().verdict, Verdict::Allow);
 }

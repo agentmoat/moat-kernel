@@ -109,6 +109,7 @@ fn evaluate(host: Host) -> Result<(Option<HookRequest>, Decision)> {
         home: context::path_string(&crate::home::user_home()?),
         project: context::path_string(&project::root_of(&cwd)),
         cwd: context::path_string(&cwd),
+        case_insensitive_paths: context::CASE_INSENSITIVE_PATHS,
     };
     let snapshot = Snapshot::load(&home.environment_path())?;
     let paths = FsPathResolver::new(&ctx);

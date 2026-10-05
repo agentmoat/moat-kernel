@@ -11,7 +11,7 @@ dependencies. The crate builds for `wasm32-unknown-unknown` in CI, and
 use moat_core::{Action, CompiledPolicy, EvalContext, Policy};
 
 let policy = Policy::parse(include_str!("../../policies/default-v1.yaml"))?;
-let ctx = EvalContext { home: "/Users/me".into(), project: "/p".into(), cwd: "/p".into() };
+let ctx = EvalContext { home: "/Users/me".into(), project: "/p".into(), cwd: "/p".into(), case_insensitive_paths: false };
 let compiled = CompiledPolicy::compile(&policy, &ctx)?;
 let decision = compiled.decide(&Action::Shell { command: "cat ~/.ssh/id_rsa".into() });
 assert_eq!(decision.verdict, moat_core::Verdict::Deny);

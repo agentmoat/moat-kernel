@@ -8,14 +8,10 @@
 
 use std::fmt;
 
+use crate::kind::Kind;
 use crate::paths;
 use crate::pattern::{GlobPattern, ShellPattern};
 use crate::policy::{Defaults, Policy, RuleGroup};
-
-/// Kinds a `defaults` map may name.
-const KINDS: &[&str] = &[
-    "*", "shell", "fs.read", "fs.write", "net", "env.read", "env.set", "mcp",
-];
 
 /// Placeholders so `~` and `${project}` compare equal on both sides without
 /// `{…}` being read as glob alternation.
@@ -48,20 +44,24 @@ fn unknown_default_kinds(defaults: &Defaults) -> Vec<Warning> {
     let Defaults::PerKind(map) = defaults else {
         return Vec::new();
     };
+    let known: Vec<&str> = std::iter::once("*")
+        .chain(Kind::ALL.iter().map(|k| k.as_str()))
+        .collect();
     map.keys()
-        .filter(|k| !KINDS.contains(&k.as_str()))
+        .filter(|k| !known.contains(&k.as_str()))
         .map(|k| Warning {
             rule: "defaults".to_owned(),
             message: format!(
                 "unknown kind `{k}` is ignored; known kinds: {}",
-                KINDS.join(", ")
+                known.join(", ")
             ),
         })
         .collect()
 }
 
 /// Warn for every pattern in `later` that a pattern of the same kind in
-/// `earlier` (evaluated first) fully covers.
+/// `earlier` (evaluated first) fully covers. Lists with `!` exclusions are
+/// never assumed to cover anything.
 fn shadowed(
     later: &[RuleGroup],
     earlier: &[RuleGroup],
@@ -70,88 +70,42 @@ fn shadowed(
     out: &mut Vec<Warning>,
 ) {
     for group in later {
-        for (kind, patterns) in globs(group) {
-            for pattern in patterns {
-                let Some(target) = glob(pattern) else {
-                    continue;
-                };
+        for kind in Kind::ALL {
+            for pattern in group.patterns(kind) {
                 let hit = earlier.iter().find_map(|e| {
-                    let list = globs(e).into_iter().find(|(k, _)| *k == kind)?.1;
+                    let list = e.patterns(kind);
                     if list.iter().any(|p| p.starts_with('!')) {
                         return None;
                     }
                     list.iter()
-                        .find(|p| glob(p).is_some_and(|g| g.covers(&target)))
-                        .map(|p| (&e.id, p))
+                        .find(|by| covers(kind, by, pattern))
+                        .map(|by| (&e.id, by))
                 });
-                if let Some((id, by)) = hit {
-                    out.push(cover_warning(
-                        group,
-                        kind,
-                        pattern,
-                        later_name,
-                        earlier_name,
-                        id,
-                        by,
-                    ));
+                if let Some((by_rule, by_pattern)) = hit {
+                    out.push(Warning {
+                        rule: group.id.clone(),
+                        message: format!(
+                            "{later_name} {kind} pattern `{pattern}` is unreachable: \
+                             {earlier_name} rule `{by_rule}` pattern `{by_pattern}` matches \
+                             everything it matches and {earlier_name} is evaluated first"
+                        ),
+                    });
                 }
-            }
-        }
-        for pattern in &group.shell {
-            let Ok(target) = ShellPattern::compile(pattern) else {
-                continue;
-            };
-            let hit = earlier.iter().find_map(|e| {
-                if e.shell.iter().any(|p| p.starts_with('!')) {
-                    return None;
-                }
-                e.shell
-                    .iter()
-                    .find(|p| ShellPattern::compile(p).is_ok_and(|s| s.covers(&target)))
-                    .map(|p| (&e.id, p))
-            });
-            if let Some((id, by)) = hit {
-                out.push(cover_warning(
-                    group,
-                    "shell",
-                    pattern,
-                    later_name,
-                    earlier_name,
-                    id,
-                    by,
-                ));
             }
         }
     }
 }
 
-fn cover_warning(
-    group: &RuleGroup,
-    kind: &str,
-    pattern: &str,
-    later: &str,
-    earlier: &str,
-    by_rule: &str,
-    by_pattern: &str,
-) -> Warning {
-    Warning {
-        rule: group.id.clone(),
-        message: format!(
-            "{later} {kind} pattern `{pattern}` is unreachable: {earlier} rule `{by_rule}` \
-             pattern `{by_pattern}` matches everything it matches and {earlier} is evaluated first"
-        ),
+/// Does pattern `by` match everything pattern `target` matches?
+fn covers(kind: Kind, by: &str, target: &str) -> bool {
+    if kind == Kind::Shell {
+        match (ShellPattern::compile(by), ShellPattern::compile(target)) {
+            (Ok(by), Ok(target)) => by.covers(&target),
+            _ => false,
+        }
+    } else {
+        matches!((glob(by), glob(target)), (Some(by), Some(target)) if by.covers(&target))
     }
-}
-
-fn globs(group: &RuleGroup) -> [(&'static str, &[String]); 6] {
-    [
-        ("fs.read", &group.fs_read),
-        ("fs.write", &group.fs_write),
-        ("net", &group.net),
-        ("env.read", &group.env_read),
-        ("env.set", &group.env_set),
-        ("mcp", &group.mcp),
-    ]
 }
 
 fn glob(raw: &str) -> Option<GlobPattern> {
