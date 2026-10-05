@@ -1,92 +1,40 @@
 //! Self-protection: the policy lock and fail-closed `guard` on tampering.
 
-use std::io::Write as _;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::path::PathBuf;
 
 use serde_json::Value;
-use tempfile::TempDir;
 
-struct Sandbox {
-    _dir: TempDir,
-    home: PathBuf,
+use crate::common::{Sandbox, fixture, hook_output, text};
+
+fn sandbox() -> Sandbox {
+    Sandbox::installed(&[".claude"])
 }
 
-impl Sandbox {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let home = dir.path().join("home");
-        std::fs::create_dir_all(home.join(".claude")).unwrap();
-        let sb = Self { _dir: dir, home };
-        assert_eq!(sb.moat(&["init"], None).status.code(), Some(0));
-        sb
-    }
-
-    fn moat(&self, args: &[&str], stdin: Option<&str>) -> Output {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_moat"))
-            .args(args)
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .env("HOME", &self.home)
-            .env("USERPROFILE", &self.home)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        match stdin {
-            Some(payload) => child
-                .stdin
-                .take()
-                .unwrap()
-                .write_all(payload.as_bytes())
-                .unwrap(),
-            None => drop(child.stdin.take()),
-        }
-        child.wait_with_output().unwrap()
-    }
-
-    fn guard_read_src(&self) -> Value {
-        let payload = fixture("claude-code/read.json");
-        let out = self.moat(&["guard", "--host", "claude-code"], Some(&payload));
-        let doc: Value = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
-        let mut d = doc["hookSpecificOutput"].clone();
-        d["exit"] = Value::from(out.status.code().unwrap_or(-1));
-        d
-    }
-
-    fn policy(&self) -> PathBuf {
-        self.home.join(".moat/policy.yaml")
-    }
-
-    fn lock(&self) -> PathBuf {
-        self.home.join(".moat/policy.lock")
-    }
-
-    fn settings(&self) -> PathBuf {
-        self.home.join(".claude/settings.json")
-    }
+/// `guard` on the golden `Read src/lib.rs` payload, with the exit code folded in.
+fn guard_read_src(sb: &Sandbox) -> Value {
+    let out = sb.guard("claude-code", &fixture("claude-code/read.json"));
+    let mut d = hook_output(&out);
+    d["exit"] = Value::from(out.status.code().unwrap_or(-1));
+    d
 }
 
-fn fixture(name: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/hosts")
-        .join(name);
-    std::fs::read_to_string(path).unwrap()
+fn policy_path(sb: &Sandbox) -> PathBuf {
+    sb.home.join(".moat/policy.yaml")
 }
 
-fn text(out: &Output) -> String {
-    format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    )
+fn lock_path(sb: &Sandbox) -> PathBuf {
+    sb.home.join(".moat/policy.lock")
+}
+
+fn settings_path(sb: &Sandbox) -> PathBuf {
+    sb.home.join(".claude/settings.json")
 }
 
 #[test]
 fn init_writes_a_lock_covering_policy_and_hooks() {
-    let sb = Sandbox::new();
-    let lock: Value = serde_json::from_str(&std::fs::read_to_string(sb.lock()).unwrap()).unwrap();
+    let sb = sandbox();
+    let lock: Value =
+        serde_json::from_str(&std::fs::read_to_string(lock_path(&sb)).unwrap()).unwrap();
     let entries = lock["entries"].as_object().unwrap();
     assert_eq!(entries.len(), 5, "{entries:?}");
     for name in [
@@ -105,40 +53,36 @@ fn init_writes_a_lock_covering_policy_and_hooks() {
 
 #[test]
 fn edited_policy_makes_guard_fail_closed_until_repinned() {
-    let sb = Sandbox::new();
-    assert_eq!(sb.guard_read_src()["permissionDecision"], "allow");
+    let sb = sandbox();
+    assert_eq!(guard_read_src(&sb)["permissionDecision"], "allow");
 
-    let mut policy = std::fs::read_to_string(sb.policy()).unwrap();
+    let mut policy = std::fs::read_to_string(policy_path(&sb)).unwrap();
     policy.push_str("\n# tampered by an agent\n");
-    std::fs::write(sb.policy(), policy).unwrap();
+    std::fs::write(policy_path(&sb), policy).unwrap();
 
-    let d = sb.guard_read_src();
+    let d = guard_read_src(&sb);
     assert_eq!(d["permissionDecision"], "deny");
     assert_eq!(d["exit"], 2);
     let reason = d["permissionDecisionReason"].as_str().unwrap();
     assert!(reason.contains("kernel-integrity"), "{reason}");
     assert!(reason.contains("policy.yaml"), "{reason}");
 
-    assert_eq!(
-        sb.moat(&["init"], None).status.code(),
-        Some(0),
-        "init re-pins"
-    );
-    assert_eq!(sb.guard_read_src()["permissionDecision"], "allow");
+    assert_eq!(sb.moat(&["init"]).status.code(), Some(0), "init re-pins");
+    assert_eq!(guard_read_src(&sb)["permissionDecision"], "allow");
 }
 
 #[cfg(unix)]
 #[test]
 fn policy_swapped_for_a_symlink_is_denied_even_with_identical_bytes() {
-    let sb = Sandbox::new();
-    assert_eq!(sb.guard_read_src()["permissionDecision"], "allow");
+    let sb = sandbox();
+    assert_eq!(guard_read_src(&sb)["permissionDecision"], "allow");
 
     let copy = sb.home.join("elsewhere.yaml");
-    std::fs::copy(sb.policy(), &copy).unwrap();
-    std::fs::remove_file(sb.policy()).unwrap();
-    std::os::unix::fs::symlink(&copy, sb.policy()).unwrap();
+    std::fs::copy(policy_path(&sb), &copy).unwrap();
+    std::fs::remove_file(policy_path(&sb)).unwrap();
+    std::os::unix::fs::symlink(&copy, policy_path(&sb)).unwrap();
 
-    let d = sb.guard_read_src();
+    let d = guard_read_src(&sb);
     assert_eq!(
         d["permissionDecision"], "deny",
         "a link to the same bytes is still a swap"
@@ -148,7 +92,7 @@ fn policy_swapped_for_a_symlink_is_denied_even_with_identical_bytes() {
     assert!(reason.contains("kernel-integrity"), "{reason}");
     assert!(reason.contains("policy.yaml"), "{reason}");
 
-    let status = sb.moat(&["status"], None);
+    let status = sb.moat(&["status"]);
     assert_eq!(status.status.code(), Some(64));
     assert!(text(&status).contains("policy.yaml"), "{}", text(&status));
 }
@@ -158,8 +102,8 @@ fn policy_swapped_for_a_symlink_is_denied_even_with_identical_bytes() {
 #[cfg(unix)]
 #[test]
 fn directory_of_a_pinned_file_swapped_for_a_symlink_is_denied() {
-    let sb = Sandbox::new();
-    assert_eq!(sb.guard_read_src()["permissionDecision"], "allow");
+    let sb = sandbox();
+    assert_eq!(guard_read_src(&sb)["permissionDecision"], "allow");
 
     let claude = sb.home.join(".claude");
     let moved = sb.home.join("claude-original");
@@ -169,7 +113,7 @@ fn directory_of_a_pinned_file_swapped_for_a_symlink_is_denied() {
     std::fs::copy(moved.join("settings.json"), copy.join("settings.json")).unwrap();
     std::os::unix::fs::symlink(&copy, &claude).unwrap();
 
-    let d = sb.guard_read_src();
+    let d = guard_read_src(&sb);
     assert_eq!(d["permissionDecision"], "deny", "{d}");
     let reason = d["permissionDecisionReason"].as_str().unwrap();
     assert!(reason.contains("kernel-integrity"), "{reason}");
@@ -178,9 +122,9 @@ fn directory_of_a_pinned_file_swapped_for_a_symlink_is_denied() {
 
 #[test]
 fn removed_hook_file_is_detected() {
-    let sb = Sandbox::new();
-    std::fs::remove_file(sb.settings()).unwrap();
-    let d = sb.guard_read_src();
+    let sb = sandbox();
+    std::fs::remove_file(settings_path(&sb)).unwrap();
+    let d = guard_read_src(&sb);
     assert_eq!(d["permissionDecision"], "deny");
     assert!(
         d["permissionDecisionReason"]
@@ -192,22 +136,22 @@ fn removed_hook_file_is_detected() {
 
 #[test]
 fn doctor_reports_health_drift_and_refuses_to_accept_outside_a_terminal() {
-    let sb = Sandbox::new();
-    let out = sb.moat(&["doctor"], None);
+    let sb = sandbox();
+    let out = sb.moat(&["doctor"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     assert!(text(&out).contains("healthy"), "{}", text(&out));
 
-    let mut policy = std::fs::read_to_string(sb.policy()).unwrap();
+    let mut policy = std::fs::read_to_string(policy_path(&sb)).unwrap();
     policy.push_str("\n# edited by hand\n");
-    std::fs::write(sb.policy(), policy).unwrap();
-    let out = sb.moat(&["doctor"], None);
+    std::fs::write(policy_path(&sb), policy).unwrap();
+    let out = sb.moat(&["doctor"]);
     assert_eq!(out.status.code(), Some(64), "{}", text(&out));
     let report = text(&out);
     assert!(report.contains("✗"), "{report}");
     assert!(report.contains("policy.yaml"), "{report}");
     assert!(report.contains("problem(s)"), "{report}");
 
-    let out = sb.moat(&["doctor", "--accept"], None);
+    let out = sb.moat(&["doctor", "--accept"]);
     assert_eq!(
         out.status.code(),
         Some(64),
@@ -215,22 +159,22 @@ fn doctor_reports_health_drift_and_refuses_to_accept_outside_a_terminal() {
     );
     assert!(text(&out).contains("terminal"), "{}", text(&out));
     assert_eq!(
-        sb.guard_read_src()["permissionDecision"],
+        guard_read_src(&sb)["permissionDecision"],
         "deny",
         "still denied after the refused accept"
     );
 
     std::fs::remove_file(sb.home.join(".claude/settings.json")).unwrap();
-    let out = sb.moat(&["doctor"], None);
+    let out = sb.moat(&["doctor"]);
     assert_eq!(out.status.code(), Some(64));
     assert!(text(&out).contains("settings.json"), "{}", text(&out));
 }
 
 #[test]
 fn missing_lock_denies_and_points_to_init() {
-    let sb = Sandbox::new();
-    std::fs::remove_file(sb.lock()).unwrap();
-    let d = sb.guard_read_src();
+    let sb = sandbox();
+    std::fs::remove_file(lock_path(&sb)).unwrap();
+    let d = guard_read_src(&sb);
     assert_eq!(d["permissionDecision"], "deny");
     assert!(
         d["permissionDecisionReason"]
@@ -242,12 +186,12 @@ fn missing_lock_denies_and_points_to_init() {
 
 #[test]
 fn status_reports_lock_state() {
-    let sb = Sandbox::new();
-    let out = sb.moat(&["status"], None);
+    let sb = sandbox();
+    let out = sb.moat(&["status"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     assert!(text(&out).contains("lock"));
-    std::fs::write(sb.policy(), "version: 1\n").unwrap();
-    let out = sb.moat(&["status"], None);
+    std::fs::write(policy_path(&sb), "version: 1\n").unwrap();
+    let out = sb.moat(&["status"]);
     assert_eq!(out.status.code(), Some(64));
     assert!(text(&out).contains("was modified"));
 }
@@ -256,11 +200,15 @@ fn status_reports_lock_state() {
 #[test]
 fn planted_binary_earlier_on_the_search_path_is_denied() {
     use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use crate::common::output;
+    let sb = Sandbox::bare(&[".claude"]);
     let dir = tempfile::tempdir().unwrap();
-    let home = dir.path().join("home");
+    let home = sb.home.clone();
     let early = dir.path().join("early-bin");
     let real = dir.path().join("real-bin");
-    for d in [home.join(".claude"), early.clone(), real.clone()] {
+    for d in [early.clone(), real.clone()] {
         std::fs::create_dir_all(d).unwrap();
     }
     let script = |p: &Path| {
@@ -270,24 +218,10 @@ fn planted_binary_earlier_on_the_search_path_is_denied() {
     script(&real.join("git"));
     let search_path = format!("{}:{}", early.display(), real.display());
     let run = |args: &[&str], stdin: &str| {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_moat"))
-            .args(args)
-            .env_clear()
-            .env("PATH", &search_path)
-            .env("HOME", &home)
-            .env("USERPROFILE", &home)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(stdin.as_bytes())
-            .unwrap();
-        child.wait_with_output().unwrap()
+        output(
+            sb.command().args(args).env("PATH", &search_path),
+            Some(stdin),
+        )
     };
     assert_eq!(run(&["init"], "").status.code(), Some(0));
     let payload = serde_json::json!({
@@ -295,11 +229,7 @@ fn planted_binary_earlier_on_the_search_path_is_denied() {
         "tool_input": {"command": "git status --short"}, "tool_use_id": "t"
     })
     .to_string();
-    let decision = |out: Output| -> Value {
-        serde_json::from_str::<Value>(String::from_utf8_lossy(&out.stdout).trim()).unwrap()
-            ["hookSpecificOutput"]
-            .clone()
-    };
+    let decision = |out| hook_output(&out);
     assert_eq!(
         decision(run(&["guard", "--host", "claude-code"], &payload))["permissionDecision"],
         "allow"
