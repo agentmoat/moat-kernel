@@ -4,31 +4,72 @@
 //! [`Decision`] back into the host's response document. Adapters never
 //! decide; `moat-core` does.
 
+#![warn(missing_docs)]
+
 mod config_change;
 mod cursor;
 mod mcp;
 mod patch;
 mod pre_tool_use;
 
-pub use pre_tool_use::reason_line;
-
 use std::fmt;
 use std::str::FromStr;
 
 use moat_core::{Action, Decision};
+use serde_json::Value;
 use thiserror::Error;
+
+/// Session id recorded when a host omits it.
+const UNKNOWN_SESSION: &str = "unknown";
+
+/// One line the model can act on: verdict, rule ids, then the reasons.
+#[must_use]
+pub fn reason_line(decision: &Decision) -> String {
+    let verdict = decision.verdict.as_str();
+    let rules = decision.rules.join(", ");
+    let reasons = decision.reasons.join("; ");
+    match (rules.is_empty(), reasons.is_empty()) {
+        (true, true) => format!("moat: {verdict}"),
+        (false, true) => format!("moat: {verdict} [{rules}]"),
+        (true, false) => format!("moat: {verdict} — {reasons}"),
+        (false, false) => format!("moat: {verdict} [{rules}] — {reasons}"),
+    }
+}
+
+/// A non-empty string field of a tool's input, or the error naming it.
+fn input_str(input: &Value, tool: &str, field: &'static str) -> Result<String, HostError> {
+    input
+        .get(field)
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .ok_or(HostError::MissingField {
+            tool: tool.to_owned(),
+            field,
+        })
+}
+
+/// The host's session id, or a placeholder when it sent none.
+fn session_or_unknown(session: Option<String>) -> String {
+    session.unwrap_or_else(|| UNKNOWN_SESSION.to_owned())
+}
 
 /// Agents with a supported integration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Host {
+    /// Anthropic's Claude Code (`PreToolUse`, `ConfigChange`).
     ClaudeCode,
+    /// The Codex CLI (`PreToolUse`).
     Codex,
+    /// Cursor (`beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse`).
     Cursor,
 }
 
 impl Host {
+    /// Every supported host, in the order commands list them.
     pub const ALL: [Host; 3] = [Host::ClaudeCode, Host::Codex, Host::Cursor];
 
+    /// The identifier used on the command line and in the audit log.
     #[must_use]
     pub fn id(self) -> &'static str {
         match self {
@@ -38,6 +79,7 @@ impl Host {
         }
     }
 
+    /// The product name shown to people.
     #[must_use]
     pub fn display_name(self) -> &'static str {
         match self {
@@ -48,7 +90,7 @@ impl Host {
     }
 
     /// Parse a hook payload read from the host. The event name selects the format;
-    /// a missing name means `PreToolUse`, the original contract.
+    /// Claude Code and Codex may omit it on `PreToolUse`.
     pub fn parse_request(self, payload: &str) -> Result<HookRequest, HostError> {
         #[derive(serde::Deserialize)]
         struct Envelope {
@@ -100,33 +142,63 @@ impl fmt::Display for Host {
 /// Which hook fired. Drives the response format and the guard's handling.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum HookEvent {
+    /// A tool is about to run.
     #[default]
     PreToolUse,
     /// A host settings file changed on disk (Claude Code only).
-    ConfigChange { source: String, change_type: String },
+    ConfigChange {
+        /// Which settings scope changed (`user_settings`, `project_settings`, …).
+        source: String,
+        /// The kind of change Claude Code reports.
+        change_type: String,
+    },
 }
 
 /// A host tool call, normalised.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HookRequest {
+    /// The host that sent the payload.
     pub host: Host,
+    /// The host's session or conversation id (`unknown` when omitted).
     pub session_id: String,
+    /// The host's id for this tool call, when it sends one.
     pub call_id: Option<String>,
+    /// The working directory the tool runs in, when the host sends it.
     pub cwd: Option<String>,
+    /// The tool name as the host spells it.
     pub tool: String,
     /// `None` when the tool is outside the kernel's scope (e.g. a todo list).
     pub action: Option<Action>,
+    /// Which hook fired.
     pub event: HookEvent,
 }
 
+/// Why a payload could not be turned into a request. `guard` denies on any of these.
 #[derive(Debug, Error)]
 pub enum HostError {
+    /// `--host` named no supported host.
     #[error("unknown host `{0}`; supported: claude-code, codex, cursor")]
     UnknownHost(String),
+    /// The payload is not JSON or does not fit the host's schema.
     #[error("payload is not valid JSON: {0}")]
     Json(#[from] serde_json::Error),
+    /// The payload is for a hook event this adapter does not handle.
     #[error("payload is for event `{0}`, which this host adapter does not handle")]
     WrongEvent(String),
+    /// A governed tool's payload lacks a field the decision needs.
     #[error("tool `{tool}` payload is missing field `{field}`")]
-    MissingField { tool: String, field: &'static str },
+    MissingField {
+        /// The tool or event name.
+        tool: String,
+        /// The missing field.
+        field: &'static str,
+    },
+    /// A tool's arguments cannot be read, so what it touches cannot be checked.
+    #[error("tool `{tool}` arguments cannot be checked: {problem}")]
+    MalformedArguments {
+        /// The tool name.
+        tool: String,
+        /// What is wrong with the arguments.
+        problem: String,
+    },
 }

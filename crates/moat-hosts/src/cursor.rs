@@ -6,7 +6,7 @@
 //! exit 2 also denies. Cursor is fail-open unless the hook entry sets
 //! `failClosed`, which the installer does.
 
-use moat_core::{Action, Decision, Verdict};
+use moat_core::{Action, Decision};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -73,7 +73,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
             let tool = required(p.tool_name, "tool_name")?;
             let server = p.mcp_server_name.unwrap_or_else(|| "unknown".to_owned());
             let name = format!("mcp__{server}__{tool}");
-            let action = crate::mcp::action(&name, &p.tool_input);
+            let action = crate::mcp::action(&name, &p.tool_input)?;
             (name, Some(action))
         }
         "beforeReadFile" => (
@@ -95,7 +95,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
         .or_else(|| p.workspace_roots.first().cloned());
     Ok(HookRequest {
         host,
-        session_id: p.conversation_id.unwrap_or_else(|| "unknown".to_owned()),
+        session_id: crate::session_or_unknown(p.conversation_id),
         call_id: p.tool_use_id.or(p.generation_id),
         cwd,
         tool,
@@ -107,17 +107,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
 /// Shell commands are governed by `beforeShellExecution`, so `Shell` here is
 /// deliberately ungoverned to avoid deciding and auditing the same command twice.
 fn pre_tool_action(tool: &str, input: &Value) -> Result<Option<Action>, HostError> {
-    let field = |name: &'static str| -> Result<String, HostError> {
-        input
-            .get(name)
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned)
-            .ok_or(HostError::MissingField {
-                tool: tool.to_owned(),
-                field: name,
-            })
-    };
+    let field = |name: &'static str| crate::input_str(input, tool, name);
     Ok(match tool {
         "Write" | "Edit" | "MultiEdit" | "StrReplace" | "Delete" => Some(Action::FsWrite {
             path: field("file_path")?,
@@ -130,11 +120,7 @@ fn pre_tool_action(tool: &str, input: &Value) -> Result<Option<Action>, HostErro
 }
 
 pub(crate) fn render(decision: &Decision) -> String {
-    let permission = match decision.verdict {
-        Verdict::Allow => "allow",
-        Verdict::Ask => "ask",
-        Verdict::Deny => "deny",
-    };
+    let permission = decision.verdict.as_str();
     let message = crate::reason_line(decision);
     serde_json::to_string(&Response {
         permission,
@@ -146,6 +132,8 @@ pub(crate) fn render(decision: &Decision) -> String {
 
 #[cfg(test)]
 mod tests {
+    use moat_core::Verdict;
+
     use super::*;
 
     const FIXTURES: &str = concat!(

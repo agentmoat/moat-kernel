@@ -2,12 +2,15 @@
 //!
 //! Servers are not standardised, so this is key-based: arguments named like a
 //! path become `fs.read` (or `fs.write` for write-shaped tools), arguments named
-//! like a URL become `net`. Unknown shapes add nothing and the call is judged by
-//! its name alone, exactly as before. Adding resources can only make a verdict
-//! stricter.
+//! like a URL become `net`, at any depth of nesting. Unknown shapes add nothing
+//! and the call is judged by its name alone. Adding resources can only make a
+//! verdict stricter, so arguments that cannot be read are an error (the guard
+//! fails closed) rather than silently ignored.
 
 use moat_core::Action;
 use serde_json::Value;
+
+use crate::HostError;
 
 const PATH_KEYS: &[&str] = &[
     "path",
@@ -31,14 +34,22 @@ const WRITE_TOOL_PREFIXES: &[&str] = &[
     "save", "patch", "update",
 ];
 
+/// Nesting below this is not searched; arguments are rarely more than two deep.
+const MAX_DEPTH: usize = 8;
+/// More derived resources than this is refused rather than half-checked.
+const MAX_RESOURCES: usize = 1024;
+
 /// Build the action for `mcp__<server>__<tool>` from the host's `tool_input`.
-/// Cursor sends the input as a JSON string, Claude Code as an object.
-#[must_use]
-pub fn action(name: &str, input: &Value) -> Action {
+/// Cursor sends the input as a JSON string, Claude Code and Codex as an object.
+pub(crate) fn action(name: &str, input: &Value) -> Result<Action, HostError> {
     let parsed;
     let args = match input {
         Value::String(text) => {
-            parsed = serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
+            parsed =
+                serde_json::from_str::<Value>(text).map_err(|e| HostError::MalformedArguments {
+                    tool: name.to_owned(),
+                    problem: e.to_string(),
+                })?;
             &parsed
         }
         other => other,
@@ -48,29 +59,70 @@ pub fn action(name: &str, input: &Value) -> Action {
         .next()
         .unwrap_or(name)
         .to_ascii_lowercase();
-    let writes_by_default = WRITE_TOOL_PREFIXES.iter().any(|p| tool.starts_with(p));
+    let mut found = Resources {
+        writes_by_default: WRITE_TOOL_PREFIXES.iter().any(|p| tool.starts_with(p)),
+        ..Resources::default()
+    };
+    found.walk(args, 0);
+    if found.count() > MAX_RESOURCES {
+        return Err(HostError::MalformedArguments {
+            tool: name.to_owned(),
+            problem: format!("more than {MAX_RESOURCES} paths and URLs"),
+        });
+    }
+    Ok(Action::McpTool {
+        name: name.to_owned(),
+        reads: found.reads,
+        writes: found.writes,
+        hosts: found.hosts,
+    })
+}
 
-    let mut reads = Vec::new();
-    let mut writes = Vec::new();
-    let mut hosts = Vec::new();
-    for (key, value) in args.as_object().into_iter().flatten() {
-        let key = key.to_ascii_lowercase();
-        if URL_KEYS.contains(&key.as_str()) {
-            hosts.extend(strings(value).filter(|v| v.contains("://")));
-        } else if PATH_KEYS.contains(&key.as_str())
-            || key.ends_with("_path")
-            || key.ends_with("_dir")
-        {
-            let is_write = writes_by_default || matches!(key.as_str(), "destination" | "target");
-            let sink = if is_write { &mut writes } else { &mut reads };
-            sink.extend(strings(value));
+#[derive(Default)]
+struct Resources {
+    writes_by_default: bool,
+    reads: Vec<String>,
+    writes: Vec<String>,
+    hosts: Vec<String>,
+}
+
+impl Resources {
+    fn count(&self) -> usize {
+        self.reads.len() + self.writes.len() + self.hosts.len()
+    }
+
+    fn walk(&mut self, value: &Value, depth: usize) {
+        if depth > MAX_DEPTH || self.count() > MAX_RESOURCES {
+            return;
+        }
+        match value {
+            Value::Object(map) => {
+                for (key, value) in map {
+                    self.key(&key.to_ascii_lowercase(), value);
+                    self.walk(value, depth + 1);
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    self.walk(item, depth + 1);
+                }
+            }
+            _ => {}
         }
     }
-    Action::McpTool {
-        name: name.to_owned(),
-        reads,
-        writes,
-        hosts,
+
+    fn key(&mut self, key: &str, value: &Value) {
+        if URL_KEYS.contains(&key) {
+            self.hosts.extend(strings(value));
+        } else if PATH_KEYS.contains(&key) || key.ends_with("_path") || key.ends_with("_dir") {
+            let is_write = self.writes_by_default || matches!(key, "destination" | "target");
+            let sink = if is_write {
+                &mut self.writes
+            } else {
+                &mut self.reads
+            };
+            sink.extend(strings(value));
+        }
     }
 }
 
@@ -87,9 +139,13 @@ fn strings(value: &Value) -> impl Iterator<Item = String> + '_ {
 
 #[cfg(test)]
 mod tests {
-    use super::action;
+    use super::{MAX_RESOURCES, action};
     use moat_core::Action;
     use serde_json::json;
+
+    fn ok(name: &str, input: &serde_json::Value) -> Action {
+        action(name, input).unwrap()
+    }
 
     fn parts(a: Action) -> (Vec<String>, Vec<String>, Vec<String>) {
         match a {
@@ -105,7 +161,7 @@ mod tests {
 
     #[test]
     fn filesystem_read_tools_yield_reads() {
-        let a = action(
+        let a = ok(
             "mcp__filesystem__read_file",
             &json!({"path": "~/.aws/credentials"}),
         );
@@ -113,7 +169,7 @@ mod tests {
             parts(a),
             (vec!["~/.aws/credentials".into()], vec![], vec![])
         );
-        let a = action(
+        let a = ok(
             "mcp__filesystem__read_multiple_files",
             &json!({"paths": ["/p/a", "/p/b"]}),
         );
@@ -122,12 +178,12 @@ mod tests {
 
     #[test]
     fn write_shaped_tools_and_destinations_yield_writes() {
-        let a = action(
+        let a = ok(
             "mcp__filesystem__write_file",
             &json!({"path": "~/.zshrc", "content": "x"}),
         );
         assert_eq!(parts(a).1, ["~/.zshrc"]);
-        let a = action(
+        let a = ok(
             "mcp__filesystem__move_file",
             &json!({"source": "/p/a", "destination": "/p/b"}),
         );
@@ -138,9 +194,9 @@ mod tests {
 
     #[test]
     fn url_arguments_yield_hosts_and_cursor_strings_are_parsed() {
-        let a = action("mcp__fetch__fetch", &json!({"url": "https://evil.com/x"}));
+        let a = ok("mcp__fetch__fetch", &json!({"url": "https://evil.com/x"}));
         assert_eq!(parts(a).2, ["https://evil.com/x"]);
-        let a = action(
+        let a = ok(
             "mcp__fetch__fetch",
             &json!("{\"url\":\"https://evil.com/x\"}"),
         );
@@ -149,10 +205,36 @@ mod tests {
 
     #[test]
     fn unrelated_arguments_add_nothing() {
-        let a = action(
+        let a = ok(
             "mcp__github__get_pull_request",
             &json!({"owner": "x", "repo": "y", "number": 42}),
         );
         assert_eq!(a, Action::mcp("mcp__github__get_pull_request"));
+    }
+
+    #[test]
+    fn nested_arguments_and_bare_hosts_are_found() {
+        let a = ok(
+            "mcp__custom__run",
+            &json!({"options": {"files": [{"path": "~/.ssh/id_rsa"}]}, "endpoint": "intranet:8080"}),
+        );
+        let (reads, _, hosts) = parts(a);
+        assert_eq!(reads, ["~/.ssh/id_rsa"]);
+        assert_eq!(
+            hosts,
+            ["intranet:8080"],
+            "a URL argument without a scheme is still a host"
+        );
+    }
+
+    #[test]
+    fn unreadable_arguments_are_errors_not_silence() {
+        let err = action("mcp__filesystem__read_file", &json!("{not json")).unwrap_err();
+        assert!(
+            err.to_string().contains("mcp__filesystem__read_file"),
+            "{err}"
+        );
+        let many: Vec<String> = (0..=MAX_RESOURCES).map(|i| format!("/p/{i}")).collect();
+        assert!(action("mcp__fs__read_multiple_files", &json!({"paths": many})).is_err());
     }
 }

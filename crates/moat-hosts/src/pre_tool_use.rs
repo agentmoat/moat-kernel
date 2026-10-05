@@ -4,7 +4,7 @@
 //! Output: JSON on stdout with `hookSpecificOutput.permissionDecision`
 //! (`allow` | `deny` | `ask`) and a reason the model gets to see.
 
-use moat_core::{Action, Decision, Verdict};
+use moat_core::{Action, Decision};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -44,7 +44,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
     let action = map_tool(&p.tool_name, &p.tool_input, p.cwd.as_deref())?;
     Ok(HookRequest {
         host,
-        session_id: p.session_id.unwrap_or_else(|| "unknown".to_owned()),
+        session_id: crate::session_or_unknown(p.session_id),
         call_id: p.tool_use_id,
         cwd: p.cwd,
         tool: p.tool_name,
@@ -54,17 +54,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
 }
 
 fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Action>, HostError> {
-    let field = |name: &'static str| -> Result<String, HostError> {
-        input
-            .get(name)
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned)
-            .ok_or(HostError::MissingField {
-                tool: tool.to_owned(),
-                field: name,
-            })
-    };
+    let field = |name: &'static str| crate::input_str(input, tool, name);
     let action = match tool {
         "Bash" => Action::Shell {
             command: field("command")?,
@@ -94,19 +84,15 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
                 path: path.to_owned(),
             }
         }
-        name if name.starts_with("mcp__") => crate::mcp::action(name, input),
+        name if name.starts_with("mcp__") => crate::mcp::action(name, input)?,
         _ => return Ok(None),
     };
     Ok(Some(action))
 }
 
 pub(crate) fn render(decision: &Decision) -> String {
-    let permission = match decision.verdict {
-        Verdict::Allow => "allow",
-        Verdict::Ask => "ask",
-        Verdict::Deny => "deny",
-    };
-    let reason = reason_line(decision);
+    let permission = decision.verdict.as_str();
+    let reason = crate::reason_line(decision);
     let response = Response {
         hook_specific_output: Output {
             hook_event_name: EVENT,
@@ -117,20 +103,10 @@ pub(crate) fn render(decision: &Decision) -> String {
     serde_json::to_string(&response).expect("response is plain data")
 }
 
-/// One line the model can act on: verdict, rule ids, then the reasons.
-pub fn reason_line(decision: &Decision) -> String {
-    let rules = decision.rules.join(", ");
-    let reasons = decision.reasons.join("; ");
-    match (rules.is_empty(), reasons.is_empty()) {
-        (true, true) => format!("moat: {}", decision.verdict.as_str()),
-        (false, true) => format!("moat: {} [{rules}]", decision.verdict.as_str()),
-        (true, false) => format!("moat: {} — {reasons}", decision.verdict.as_str()),
-        (false, false) => format!("moat: {} [{rules}] — {reasons}", decision.verdict.as_str()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use moat_core::Verdict;
+
     use super::*;
 
     const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/hosts");
