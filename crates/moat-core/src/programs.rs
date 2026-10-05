@@ -37,7 +37,9 @@ impl ProgramResolver for NoResolver {
 /// In-memory resolver for tests and conformance fixtures.
 #[derive(Debug, Default, Clone)]
 pub struct MapResolver {
+    /// Program name → path it resolves to on the search path.
     pub resolved: BTreeMap<String, String>,
+    /// Program name → path recorded at install time.
     pub pins: BTreeMap<String, String>,
 }
 

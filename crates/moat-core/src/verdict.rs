@@ -9,8 +9,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Verdict {
+    /// The action may run.
     Allow,
+    /// A person must decide; the host prompts or blocks.
     Ask,
+    /// The action is blocked.
     Deny,
 }
 
@@ -50,6 +53,7 @@ impl FromStr for Verdict {
 /// sees the full picture without the headline being noisy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Decision {
+    /// The strictest verdict across the matched rules.
     pub verdict: Verdict,
     /// Ids of the rule groups that produced `verdict`, in evaluation order, de-duplicated.
     pub rules: Vec<String>,

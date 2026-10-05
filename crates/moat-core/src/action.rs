@@ -10,26 +10,50 @@ use crate::kind::Kind;
 #[serde(rename_all = "snake_case")]
 pub enum Action {
     /// A shell command string as the host would execute it.
-    Shell { command: String },
+    /// A shell command line, exactly as the host would run it.
+    Shell {
+        /// The command line.
+        command: String,
+    },
     /// A direct file read through a host tool (e.g. Claude Code `Read`).
-    FsRead { path: String },
+    /// A file read by a host tool (`Read`, `Glob`, `Grep`, `beforeReadFile`).
+    FsRead {
+        /// Path as the tool gave it; normalised during classification.
+        path: String,
+    },
     /// A direct file write/edit through a host tool.
-    FsWrite { path: String },
+    /// A file write or edit by a host tool (`Edit`, `Write`, `NotebookEdit`).
+    FsWrite {
+        /// Path as the tool gave it; normalised during classification.
+        path: String,
+    },
     /// A direct network request through a host tool (e.g. `WebFetch`).
-    Net { url: String },
+    /// A URL fetched by a host tool (`WebFetch`).
+    Net {
+        /// The URL as the tool gave it.
+        url: String,
+    },
     /// A patch that edits several files in one call (Codex `apply_patch`):
     /// every path it adds, updates, deletes or moves to is written.
-    Patch { writes: Vec<String> },
+    /// Files changed by one multi-file patch (Codex `apply_patch`).
+    Patch {
+        /// Every file the patch adds, updates, deletes or moves to.
+        writes: Vec<String>,
+    },
     /// An MCP tool call, `mcp__<server>__<tool>`. Adapters that understand a
     /// server's arguments add the paths and hosts the call touches so the
     /// usual `fs.*` and `net` rules apply to it as well.
     McpTool {
+        /// `mcp__<server>__<tool>`.
         name: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        /// Paths the call reads, derived from its arguments.
         reads: Vec<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        /// Paths the call writes, derived from its arguments.
         writes: Vec<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        /// URLs or hosts the call contacts, derived from its arguments.
         hosts: Vec<String>,
     },
 }
@@ -68,33 +92,45 @@ impl Action {
 pub enum AtomicAction {
     /// Normalised argv of one (sub-)command.
     Shell {
+        /// Program and arguments after quote removal.
         argv: Vec<String>,
     },
     /// A whole pipeline / list (`a | b && c`) with separators kept as tokens, so
     /// rules such as `curl * | sh` can match across sub-commands. Never carries
     /// a default verdict (see `engine/mod.rs`).
     Pipeline {
+        /// Words and separator tokens of the whole pipeline or list.
         argv: Vec<String>,
     },
     /// Absolute path in slash-separated canonical form (`~`, `${project}` and
     /// `cwd` already applied).
     FsRead {
+        /// Absolute path in canonical form.
         path: String,
     },
+    /// A file write, create, delete or move.
     FsWrite {
+        /// Absolute path in canonical form.
         path: String,
     },
     /// Host name only (no scheme, no port).
     Net {
+        /// Lowercase host name.
         host: String,
     },
+    /// An environment variable read (`$NAME`, `printenv NAME`).
     EnvRead {
+        /// Variable name.
         name: String,
     },
+    /// An environment variable set (`NAME=value`, `export NAME=…`).
     EnvSet {
+        /// Variable name.
         name: String,
     },
+    /// An MCP tool invocation.
     McpTool {
+        /// `mcp__<server>__<tool>`.
         name: String,
     },
 }

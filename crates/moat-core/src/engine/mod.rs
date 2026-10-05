@@ -51,6 +51,7 @@ struct CompiledGroup<'p> {
 }
 
 impl<'p> CompiledPolicy<'p> {
+    /// Compile every pattern of `policy` for `ctx`. Fails on a pattern that does not compile.
     pub fn compile(policy: &'p Policy, ctx: &EvalContext) -> Result<Self, PolicyError> {
         let compile_list = |groups: &'p [RuleGroup]| {
             groups
