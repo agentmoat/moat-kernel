@@ -137,6 +137,8 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | allow | `dev-shell` | `git status/diff/log/add/commit/fetch/pull/stash`, `ls`, `cat`, `grep`, `rg`, `find`, test and build commands for npm/pnpm/yarn/cargo/go/swift/pytest/make |
 | allow | `registries` | `api.github.com`, `github.com`, npm, crates.io, Go proxy, PyPI |
 | allow | `safe-mcp` | read-only GitHub and filesystem MCP tools |
+
+MCP calls are judged by name **and** by what their arguments touch: adapters map path-like arguments (`path`, `paths`, `file_path`, `source`, `destination`, …) to `fs.read`/`fs.write` atoms (write for `write_*`, `edit_*`, `move_*`, `delete_*`-shaped tools and for `destination`/`target`) and URL-like arguments (`url`, `uri`, `endpoint`) to `net` atoms, so `mcp__filesystem__read_file {path: ~/.aws/credentials}` is denied by `secrets-paths` even though `safe-mcp` allows the tool name.
 | ask | `installs` | `npm install`, `pip install`, `cargo add/install`, `brew install`, `gem install` |
 | ask | `push` | `git push`, `npm publish`, `cargo publish`, `gh release` |
 | defaults | `default`, `default.net` | everything else asks; outbound network to unlisted hosts is denied |

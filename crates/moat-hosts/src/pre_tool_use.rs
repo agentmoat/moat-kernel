@@ -90,7 +90,7 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
                 path: path.to_owned(),
             }
         }
-        name if name.starts_with("mcp__") => Action::mcp(name.to_owned()),
+        name if name.starts_with("mcp__") => crate::mcp::action(name, input),
         _ => return Ok(None),
     };
     Ok(Some(action))

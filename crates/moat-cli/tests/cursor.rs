@@ -138,6 +138,16 @@ fn secret_file_read_and_safe_mcp_tool() {
 }
 
 #[test]
+fn mcp_fetch_to_an_unlisted_host_is_denied() {
+    let sb = Sandbox::new();
+    let (code, doc) = sb.guard(&fixture("beforeMCPExecution-fetch.json"));
+    assert_eq!(code, Some(2));
+    assert_eq!(doc["permission"], "deny");
+    let msg = doc["agent_message"].to_string();
+    assert!(msg.contains("default.net"), "{msg}");
+}
+
+#[test]
 fn pre_tool_use_write_inside_the_workspace_is_allowed() {
     let sb = Sandbox::new();
     let project = sb.home.join("proj");

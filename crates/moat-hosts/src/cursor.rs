@@ -73,7 +73,8 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
             let tool = required(p.tool_name, "tool_name")?;
             let server = p.mcp_server_name.unwrap_or_else(|| "unknown".to_owned());
             let name = format!("mcp__{server}__{tool}");
-            (name.clone(), Some(Action::mcp(name)))
+            let action = crate::mcp::action(&name, &p.tool_input);
+            (name, Some(action))
         }
         "beforeReadFile" => (
             "Read".to_owned(),
