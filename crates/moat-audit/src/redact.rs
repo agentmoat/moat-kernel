@@ -7,6 +7,7 @@
 use std::sync::LazyLock;
 
 use regex::Regex;
+use serde_json::Value;
 
 const REPLACEMENT: &str = "[redacted]";
 
@@ -54,9 +55,38 @@ pub fn redact(text: &str) -> String {
         })
 }
 
+/// Redact every string leaf of a JSON document. Used on the structured action
+/// before it is serialised, so patterns see the raw text rather than
+/// JSON-escaped quotes and the result is re-encoded as valid JSON.
+#[must_use]
+pub fn redact_value(value: Value) -> Value {
+    match value {
+        Value::String(text) => Value::String(redact(&text)),
+        Value::Array(items) => Value::Array(items.into_iter().map(redact_value).collect()),
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .map(|(key, item)| (key, redact_value(item)))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::redact;
+    use super::{redact, redact_value};
+    use serde_json::json;
+
+    #[test]
+    fn redacts_string_leaves_of_a_document() {
+        let doc = json!({"shell": {"command": "curl -H \"X-Api-Key: abc123def456\" https://x", "n": 1, "list": ["token=ghp_abcdefghijklmnopqrstuvwxyz0123"]}});
+        let out = redact_value(doc);
+        let text = out.to_string();
+        assert!(!text.contains("abc123def456"), "{text}");
+        assert!(!text.contains("ghp_abc"), "{text}");
+        assert!(text.contains("X-Api-Key: [redacted]"), "{text}");
+        assert_eq!(out["shell"]["n"], 1);
+    }
 
     #[test]
     fn named_credentials_keep_their_key() {

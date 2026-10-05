@@ -9,5 +9,5 @@ mod redact;
 mod store;
 
 pub use query::{SessionSummary, Summary};
-pub use redact::redact;
+pub use redact::{redact, redact_value};
 pub use store::{Event, EventId, NewEvent, Store, StoreError};
