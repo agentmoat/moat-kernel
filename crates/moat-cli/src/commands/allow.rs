@@ -32,7 +32,7 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
     if args.always {
         let path = home.overlay_path();
         let mut overlay = Overlay::load(&path)?;
-        let rule = overlay.allow_command(&command).clone();
+        let rule = overlay.allow_command(&command)?.clone();
         overlay.save(&path)?;
         println!("✔ permanent rule {} allows shell \"{command}\"", rule.id);
     } else {
