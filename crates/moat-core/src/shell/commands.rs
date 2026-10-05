@@ -1,8 +1,9 @@
 //! From tokens to simple commands to atomic actions.
 
 use super::tables::{
-    ENV_BUILTINS, INLINE_INTERPRETERS, SHELLS, SOURCE_BUILTINS, WRAPPER_OPTIONS_WITH_VALUE,
-    WRAPPERS, WRAPPERS_WITH_VALUE, WRITE_ALL_PATHS, WRITE_LAST_PATH,
+    ENV_BUILTINS, INLINE_INTERPRETERS, PACKAGE_RUNNERS, SHELLS, SOURCE_BUILTINS,
+    WRAPPER_OPTIONS_WITH_VALUE, WRAPPER_SUBCOMMANDS, WRAPPERS, WRAPPERS_WITH_VALUE,
+    WRITE_ALL_PATHS, WRITE_LAST_PATH,
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, host_of, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
@@ -158,6 +159,11 @@ fn classify_simple(
         }
         return Ok(());
     }
+    if PACKAGE_RUNNERS.contains(&program)
+        && let Some(payload) = flag_payload(&argv, &["-c", "--call"])
+    {
+        return classify_into(payload, ctx, out, depth + 1);
+    }
     if let Some(inner) = wrapped_command(&argv, program) {
         return classify_wrapped(inner, ctx, out, depth);
     }
@@ -197,6 +203,26 @@ fn classify_wrapped(
 /// For `sudo -u x cmd …`, `env A=1 cmd …`, `xargs -0 cmd …`, `timeout 5 cmd …`
 /// return the wrapped argv.
 fn wrapped_command<'a>(argv: &'a [String], program: &str) -> Option<&'a [String]> {
+    if let Some((_, subcommands)) = WRAPPER_SUBCOMMANDS
+        .iter()
+        .find(|(name, _)| *name == program)
+    {
+        if !subcommands.contains(&argv.get(1)?.as_str()) {
+            return None;
+        }
+        let mut i = 2;
+        while let Some(arg) = argv.get(i) {
+            if arg == "--" {
+                i += 1;
+                break;
+            }
+            if !arg.starts_with('-') {
+                break;
+            }
+            i += 1;
+        }
+        return argv.get(i..).filter(|rest| !rest.is_empty());
+    }
     if !WRAPPERS.contains(&program) {
         return None;
     }

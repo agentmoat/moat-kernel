@@ -113,6 +113,22 @@ fn dotted_identifiers_are_not_hosts() {
 }
 
 #[test]
+fn package_runner_exec_exposes_inner_command() {
+    let a = parsed("pnpm exec -- sh -c 'cat ~/.ssh/id_rsa'");
+    assert!(has_shell(&a, "cat ~/.ssh/id_rsa"), "{a:?}");
+    assert!(has_read(&a, "/Users/me/.ssh/id_rsa"), "{a:?}");
+
+    let a = parsed("npx -y -c 'cat ~/.aws/credentials'");
+    assert!(has_read(&a, "/Users/me/.aws/credentials"), "{a:?}");
+
+    let a = parsed("pnpm test --filter core");
+    assert!(
+        !has_shell(&a, "--filter core"),
+        "ordinary subcommands are not unwrapped: {a:?}"
+    );
+}
+
+#[test]
 fn wrappers_expose_inner_command() {
     let a = parsed("sudo -u root rm -rf /");
     assert!(has_shell(&a, "sudo -u root rm -rf /"));
