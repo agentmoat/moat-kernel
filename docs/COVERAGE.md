@@ -13,7 +13,7 @@ the verdict and rule ids the default policy must produce for it.
 | T4 | Destructive git / filesystem operations | 9 | 4 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 0 | 0 |
-| T7 | Obfuscation and nested execution | 28 | 24 | 0 |
+| T7 | Obfuscation and nested execution | 30 | 24 | 0 |
 | T8 | MCP tool poisoning / over-privileged tools | 4 | 0 | 0 |
 | T9 | Hook / policy tampering by the agent | 23 | 3 | 0 |
 | T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
@@ -160,6 +160,8 @@ the verdict and rule ids the default policy must produce for it.
 - `T7-wget-allowed-host-into-zsh` (attacks): Deny [pipe-to-shell]
 - `T7-find-exec-shell-exfil` (attacks): Deny [default.net]
 - `T7-find-exec-reads-key` (attacks): Deny [secrets-paths]
+- `T7-pipe-all-decoded-into-sh` (attacks): Deny [pipe-to-shell]
+- `T7-pipe-all-curl-into-bash` (attacks): Deny [pipe-to-shell]
 
 ## T8: MCP tool poisoning / over-privileged tools
 

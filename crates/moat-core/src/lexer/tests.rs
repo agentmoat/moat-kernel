@@ -19,6 +19,12 @@ fn splits_unspaced_operators() {
         ["cmd", ">&", "1", ">", "out", "<", "in"]
     );
     assert_eq!(words("echo x >>log"), ["echo", "x", ">>", "log"]);
+    assert_eq!(
+        words("a |& b"),
+        ["a", "|", "b"],
+        "`|&` is a pipe, not `|` then `&`"
+    );
+    assert_eq!(words("a|&b"), ["a", "|", "b"]);
 }
 
 #[test]
