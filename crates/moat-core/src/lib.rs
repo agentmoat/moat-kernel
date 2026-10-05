@@ -11,6 +11,8 @@
 //! need the filesystem reach the engine through [`ProgramResolver`] and
 //! [`PathResolver`].
 
+#![warn(missing_docs)]
+
 mod action;
 mod engine;
 mod host;

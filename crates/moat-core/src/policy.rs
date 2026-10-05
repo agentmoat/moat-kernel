@@ -10,7 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Defaults {
+    /// The same verdict for every kind.
     All(Verdict),
+    /// A verdict per kind name (`net`, `fs.read`, …), with `*` as the fallback.
     PerKind(BTreeMap<String, Verdict>),
 }
 
@@ -43,26 +45,50 @@ use crate::verdict::Verdict;
 pub const SUPPORTED_VERSION: u32 = 1;
 
 #[derive(Debug, Error)]
+/// Why a policy file cannot be used. Any of these keeps `guard` from deciding.
 pub enum PolicyError {
     #[error("policy parse error: {0}")]
+    /// The file is not valid YAML or does not fit the schema.
     Parse(#[from] serde_yaml_ng::Error),
     #[error("unsupported policy version {found}; this build supports {supported}")]
-    Version { found: u32, supported: u32 },
+    /// The `version` key names a schema this build does not know.
+    Version {
+        /// The version in the file.
+        found: u32,
+        /// The version this build supports.
+        supported: u32,
+    },
     #[error("duplicate rule id `{0}`")]
+    /// Two rule groups share an id.
     DuplicateId(String),
     #[error("rule `{0}` has no patterns")]
+    /// A rule group lists no patterns.
     EmptyRule(String),
     #[error("empty pattern")]
+    /// A pattern is empty (or only `!`/`$`).
     EmptyPattern,
     #[error("bad glob `{pattern}`: {source}")]
+    /// A glob does not compile.
     BadGlob {
+        /// The pattern as written.
         pattern: String,
+        /// The glob compiler's explanation.
         source: globset::Error,
     },
     #[error("bad shell pattern `{pattern}` (unbalanced quotes?)")]
-    BadShellPattern { pattern: String },
+    /// A shell pattern does not tokenise (unbalanced quotes, a here-document).
+    BadShellPattern {
+        /// The pattern as written.
+        pattern: String,
+    },
     #[error("rule `{rule}`: {problem}")]
-    Rule { rule: String, problem: String },
+    /// A rule group or `executables` entry is invalid; `problem` says why.
+    Rule {
+        /// Rule id, or `executables.<name>`.
+        rule: String,
+        /// What is wrong.
+        problem: String,
+    },
 }
 
 /// One named group of patterns. A group matches when **any** of its patterns
@@ -70,22 +96,31 @@ pub enum PolicyError {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuleGroup {
+    /// Stable identifier shown in decisions and the audit log.
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Text prepended to the reason when this group decides.
     pub reason: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Shell patterns (token prefixes, `*`, `!`, trailing `$`).
     pub shell: Vec<String>,
     #[serde(default, rename = "fs.read", skip_serializing_if = "Vec::is_empty")]
+    /// Path globs for file reads.
     pub fs_read: Vec<String>,
     #[serde(default, rename = "fs.write", skip_serializing_if = "Vec::is_empty")]
+    /// Path globs for file writes.
     pub fs_write: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Host globs.
     pub net: Vec<String>,
     #[serde(default, rename = "env.read", skip_serializing_if = "Vec::is_empty")]
+    /// Variable-name globs for reads.
     pub env_read: Vec<String>,
     #[serde(default, rename = "env.set", skip_serializing_if = "Vec::is_empty")]
+    /// Variable-name globs for sets.
     pub env_set: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// MCP tool-name globs.
     pub mcp: Vec<String>,
 }
 
@@ -178,18 +213,23 @@ impl Default for Approval {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
+    /// Schema version; only 1 is supported.
     pub version: u32,
     #[serde(default = "default_verdict")]
+    /// Verdict when no rule matches.
     pub defaults: Defaults,
     /// Reserved for multi-root projects; parsed so existing files stay valid,
     /// not yet consulted (`policy lint` warns).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<Scope>,
     #[serde(default)]
+    /// Evaluated first; a match is final.
     pub deny: Vec<RuleGroup>,
     #[serde(default)]
+    /// Evaluated after `deny`.
     pub allow: Vec<RuleGroup>,
     #[serde(default)]
+    /// Evaluated after `allow`.
     pub ask: Vec<RuleGroup>,
     /// Reserved for the kernel's own approval prompt; parsed so existing files
     /// stay valid, not yet consulted (`policy lint` warns).

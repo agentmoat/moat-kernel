@@ -31,6 +31,7 @@ impl PathResolver for NoResolver {
 /// is replaced by its target.
 #[derive(Debug, Default, Clone)]
 pub struct MapPathResolver {
+    /// Symlink path → target.
     pub links: BTreeMap<String, String>,
 }
 
