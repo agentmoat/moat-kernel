@@ -108,3 +108,165 @@
 - id: benign-rg-pretty-is-not-pre
   action: { shell: "rg --pretty TODO ./src" }
   expect: { verdict: allow, rules: [dev-shell] }
+
+# Everyday work across git, cargo, pnpm/npm/yarn, python, go, docker and gh (read-only),
+# search and inspection tools. Each must be allowed without a prompt.
+- id: benign-git-diff-stat
+  action: { shell: "git diff --stat HEAD~1" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-show-name-only
+  action: { shell: "git show HEAD --name-only" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-log-patch-for-file
+  action: { shell: "git log -p -- src/main.rs" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-branch-all
+  action: { shell: "git branch -a" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-switch-create
+  action: { shell: "git switch -c feature/x" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-checkout-new-branch
+  action: { shell: "git checkout -b fix/y" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-fetch-origin
+  action: { shell: "git fetch origin" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-pull-rebase
+  action: { shell: "git pull --rebase" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-stash-list
+  action: { shell: "git stash list" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-add-file
+  action: { shell: "git add src/lib.rs" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-check-all-targets
+  action: { shell: "cargo check --all-targets" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-clippy-deny-warnings
+  action: { shell: "cargo clippy --workspace -- -D warnings" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-fmt-check
+  action: { shell: "cargo fmt --check" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-doc-no-deps
+  action: { shell: "cargo doc --no-deps" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-tree-duplicates
+  action: { shell: "cargo tree -d" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-nextest
+  action: { shell: "cargo nextest run" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-pnpm-run-build
+  action: { shell: "pnpm run build" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-pnpm-lint-fix
+  action: { shell: "pnpm lint --fix" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-pnpm-typecheck
+  action: { shell: "pnpm typecheck" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-npm-test
+  action: { shell: "npm test" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-npm-run-dev
+  action: { shell: "npm run dev" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-yarn-test
+  action: { shell: "yarn test --watch=false" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-pytest-quiet
+  action: { shell: "pytest -q tests/" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-python-m-pytest
+  action: { shell: "python -m pytest -k slow" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-go-test-all
+  action: { shell: "go test ./..." }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-go-build-cmd
+  action: { shell: "go build ./cmd/app" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-go-vet
+  action: { shell: "go vet ./..." }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-docker-ps
+  action: { shell: "docker ps -a" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-docker-images
+  action: { shell: "docker images" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-docker-logs
+  action: { shell: "docker logs web" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-gh-pr-view
+  action: { shell: "gh pr view 12" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-gh-pr-list
+  action: { shell: "gh pr list --state open" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-gh-issue-list
+  action: { shell: "gh issue list" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-gh-run-list
+  action: { shell: "gh run list --limit 5" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-grep-recursive-src
+  action: { shell: "grep -rn fn ./src" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-rg-struct
+  action: { shell: "rg -n struct src" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-find-ts-files
+  action: { shell: "find src -name '*.ts'" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-ls-long
+  action: { shell: "ls -la src" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-head-cargo-toml
+  action: { shell: "head -n 20 Cargo.toml" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-tail-test-log
+  action: { shell: "tail -n 50 ./target/test.log" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-wc-lines
+  action: { shell: "wc -l src/main.rs" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-diff-two-files
+  action: { shell: "diff a.txt b.txt" }
+  expect: { verdict: allow, rules: [dev-readonly] }
+- id: benign-echo-path
+  action: { shell: "echo $PATH" }
+  expect: { verdict: allow, rules: [dev-shell, dev-readonly] }
+- id: benign-pwd
+  action: { shell: "pwd" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-which-cargo
+  action: { shell: "which cargo" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-tsc-project
+  action: { shell: "tsc -p tsconfig.json" }
+  expect: { verdict: allow, rules: [dev-tools] }
+- id: benign-eslint-src
+  action: { shell: "eslint src --ext .ts" }
+  expect: { verdict: allow, rules: [dev-tools, project-fs] }
+- id: benign-prettier-check
+  action: { shell: "prettier --check ." }
+  expect: { verdict: allow, rules: [dev-tools] }
+- id: benign-ruff-check
+  action: { shell: "ruff check ." }
+  expect: { verdict: allow, rules: [dev-tools] }
+- id: benign-mypy-src
+  action: { shell: "mypy src" }
+  expect: { verdict: allow, rules: [dev-tools] }
+- id: benign-vitest-run
+  action: { shell: "vitest run" }
+  expect: { verdict: allow, rules: [dev-tools] }
+- id: benign-swift-build
+  action: { shell: "swift build" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-make-lint
+  action: { shell: "make lint" }
+  expect: { verdict: allow, rules: [dev-shell] }

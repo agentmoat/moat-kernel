@@ -195,6 +195,28 @@ allow:
       - "!go * -toolexec*"
       - "!go * -vettool*"
       - "!cargo * --config*"
+  - id: dev-readonly
+    reason: read-only inspection tools and non-secret variables
+    shell:
+      - "wc *"
+      - "diff *"
+      - "tree*"
+      - "docker ps*"
+      - "docker images*"
+      - "docker logs *"
+      - "docker version*"
+      - "gh pr view*"
+      - "gh pr list*"
+      - "gh pr diff*"
+      - "gh pr checks*"
+      - "gh issue view*"
+      - "gh issue list*"
+      - "gh run list*"
+      - "gh run view*"
+      - "gh repo view*"
+      - "!* --output*"
+      - "!* -o *"
+    env.read: ["PATH", "HOME", "USER", "SHELL", "PWD", "LANG", "TERM", "TMPDIR", "EDITOR"]
   - id: dev-tools
     shell:
       - "tsc*"

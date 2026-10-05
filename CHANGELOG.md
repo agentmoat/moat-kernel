@@ -27,6 +27,7 @@ All notable changes to this project are documented here. The format follows
 - Claude Code and Cursor adapters derive those paths and hosts from MCP `tool_input` by argument name (`path`, `paths`, `file_path`, `source`, `destination`, `url`, …); write-shaped tool names (`write_*`, `edit_*`, `move_*`, `delete_*`) and `destination`/`target` arguments produce `fs.write`.
 
 ### Changed
+- Default policy: new allow group `dev-readonly` (`wc`, `diff`, `tree`, read-only `docker ps/images/logs/version`, `gh pr/issue/run/repo` view and list commands, reads of `PATH`, `HOME`, `USER`, `SHELL`, `PWD`, `LANG`, `TERM`, `TMPDIR`, `EDITOR`); `--output`/`-o` forms are excluded. The benign conformance corpus grows from 34 to 87 fixtures.
 - Shell pattern lists accept `!` exclusions, with the same semantics as glob lists (ADR-012).
 - `moat policy lint` prints warnings (exit 0) for `ask` patterns an `allow` pattern already covers, `allow` patterns a `deny` pattern covers, and unknown `defaults` kinds; `executables` paths in Windows form (`C:/…`) are accepted as absolute.
 - Shell patterns: a trailing bare `$` anchors the end of argv (`env $` matches `env` but not `env FOO=1 cmd`); `$` elsewhere is literal and a pattern of only `$` fails lint (ADR-010).
