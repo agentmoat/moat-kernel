@@ -106,6 +106,13 @@ deny:
       - "*/moat init*"
       - "*/moat doctor*"
       - "*/moat allow*"
+      # pseudo-terminal wrappers that fake the terminal `allow`/`doctor --accept` require
+      - "script * moat {allow,doctor,init,policy}*"
+      - "script * */moat {allow,doctor,init,policy}*"
+      - "script * '*moat {allow,doctor,init,policy}*'"
+      - "expect * '*moat {allow,doctor,init,policy}*'"
+      - "unbuffer * moat {allow,doctor,init,policy}*"
+      - "unbuffer * */moat {allow,doctor,init,policy}*"
   - id: shell-rc
     reason: edits persist into every future shell session
     fs.write: ["~/.zshrc", "~/.bashrc", "~/.bash_profile", "~/.profile", "~/.zprofile", "~/.zshenv"]
