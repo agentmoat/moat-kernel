@@ -107,6 +107,12 @@ jobs:
 
       - name: check body and size
         shell: bash
+        env:
+          TYPE: ${{ steps.derive.outputs.type }}
+          AREAS: ${{ steps.derive.outputs.areas }}
+          SIZE: ${{ steps.derive.outputs.size }}
+          TOTAL: ${{ steps.derive.outputs.total }}
+          RISK: ${{ steps.derive.outputs.risk }}
         run: |
           set -euo pipefail
           body=$(gh pr view "$PR" --repo "$REPO" --json body --jq .body)
@@ -120,17 +126,17 @@ jobs:
           }
           section "Testing"
           section "Security impact"
-          if [[ -z "${{ steps.derive.outputs.type }}" ]]; then
+          if [[ -z "$TYPE" ]]; then
             echo "::error::title must start with a Conventional Commits type (feat, fix, sec, policy, host, docs, test, refactor, perf, build, ci, chore)"; fail=1
           fi
-          if [[ "${{ steps.derive.outputs.size }}" == "size: XL" ]] && ! grep -qx 'size: override' <<<"$labels"; then
-            echo "::error::change is ${{ steps.derive.outputs.total }} lines; split it, or add the 'size: override' label with a justification in the PR"; fail=1
+          if [[ "$SIZE" == "size: XL" ]] && ! grep -qx 'size: override' <<<"$labels"; then
+            echo "::error::change is $TOTAL lines; split it, or add the 'size: override' label with a justification in the PR"; fail=1
           fi
           {
             echo "### pr-standards"
-            echo "- type: \`${{ steps.derive.outputs.type }}\`"
-            echo "- areas: \`${{ steps.derive.outputs.areas }}\`"
-            echo "- size: \`${{ steps.derive.outputs.size }}\` (${{ steps.derive.outputs.total }} lines)"
-            echo "- risk: \`${{ steps.derive.outputs.risk }}\`"
+            echo "- type: \`$TYPE\`"
+            echo "- areas: \`$AREAS\`"
+            echo "- size: \`$SIZE\` ($TOTAL lines)"
+            echo "- risk: \`$RISK\`"
           } >> "$GITHUB_STEP_SUMMARY"
           exit $fail

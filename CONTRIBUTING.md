@@ -90,6 +90,9 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
 - Comments explain *why*. Code says *what*.
 - A new dependency needs a sentence in the PR on why the standard library or an
   existing dependency does not cover it. `cargo-deny` checks licences and advisories.
+- Workflows pin every action to a commit SHA, check out with `persist-credentials: false`,
+  pass expressions to `run:` blocks through `env:`, and give tokens only the permissions
+  they use. CI runs `actionlint` and `zizmor` on `.github/workflows/`.
 
 ## Fuzzing
 
