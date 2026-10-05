@@ -49,8 +49,10 @@ is pushed to `main` directly.
 | `risk: *` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
 | `needs: fixture` | core or policy changed without `tests/conformance/` | add a fixture |
 
-Checks that must pass before merge (enforced by the `main` ruleset): the quality gate on
-macOS, Linux and Windows, wasm purity, `cargo-deny`, `pr-title`, `pr-standards`. The PR body must have
+Checks that must pass before merge (enforced by the `main` ruleset; names as shown on the
+PR): `macos-14`, `macos-15-intel`, `ubuntu-latest`, `windows-latest` (the quality gate),
+`moat-core builds for wasm32 (no I/O)`, `cargo-deny`, `conventional` (title) and
+`labels · size · risk · body` (pr-standards). The PR body must have
 non-empty **Testing** and **Security impact** sections. `risk: high` PRs need
 maintainer review (CODEOWNERS). Squash-merge; the PR title becomes the commit subject
 and the **Release note** line feeds `CHANGELOG.md`.
@@ -78,7 +80,7 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
 ## Conventions
 
 - Commit and PR titles follow Conventional Commits:
-  `feat`, `fix`, `sec`, `policy`, `host(claude-code)`, `docs`, `test`, `refactor`, `ci`, `build`, `chore`.
+  `feat`, `fix`, `sec`, `policy`, `host(claude-code)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`.
   Squash-merge; the PR title becomes the commit.
 - Library crates (`moat-core`, `moat-hosts`, `moat-audit`) use typed `thiserror`
   errors and never print. `anyhow` and terminal output live only in `moat-cli`.
