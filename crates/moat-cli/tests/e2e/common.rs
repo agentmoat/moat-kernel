@@ -39,8 +39,15 @@ impl Sandbox {
         sb
     }
 
+    /// A git project inside the home, created on first use.
+    pub fn project(&self) -> PathBuf {
+        let project = self.home.join("proj");
+        std::fs::create_dir_all(project.join(".git")).unwrap();
+        project
+    }
+
     /// The command with the isolated environment; callers add arguments.
-    fn command(&self) -> Command {
+    pub fn command(&self) -> Command {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_moat"));
         cmd.env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
@@ -65,7 +72,8 @@ impl Sandbox {
     }
 }
 
-fn output(cmd: &mut Command, stdin: Option<&str>) -> Output {
+/// Run a prepared command (see [`Sandbox::command`]) with optional input.
+pub fn output(cmd: &mut Command, stdin: Option<&str>) -> Output {
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -106,4 +114,18 @@ pub fn text(out: &Output) -> String {
 /// Standard output parsed as one JSON document (`Null` when it is not JSON).
 pub fn json(out: &Output) -> Value {
     serde_json::from_str(stdout(out).trim()).unwrap_or(Value::Null)
+}
+
+/// `hookSpecificOutput` of a Claude Code or Codex hook response.
+pub fn hook_output(out: &Output) -> Value {
+    json(out)["hookSpecificOutput"].clone()
+}
+
+/// A Claude Code `PreToolUse` payload for one Bash command.
+pub fn bash_payload(session: &str, cwd: &Path, command: &str) -> String {
+    serde_json::json!({
+        "session_id": session, "cwd": cwd.to_string_lossy(), "hook_event_name": "PreToolUse",
+        "tool_name": "Bash", "tool_input": {"command": command}, "tool_use_id": "t1"
+    })
+    .to_string()
 }
