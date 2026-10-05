@@ -15,15 +15,22 @@ const TOP_RULES: usize = 10;
 /// One host session as seen in a time window.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionSummary {
+    /// Session id as the host reported it.
     pub session_id: String,
+    /// Host id (`claude-code`, `codex`, `cursor`).
     pub host: String,
+    /// Working directory of the first event, if recorded.
     pub cwd: Option<String>,
+    /// Time of the first event (ms since the epoch).
     pub first_ms: i64,
+    /// Time of the last event (ms since the epoch).
     pub last_ms: i64,
+    /// The session's events, oldest first.
     pub events: Vec<Event>,
 }
 
 impl SessionSummary {
+    /// Number of events with `verdict`.
     #[must_use]
     pub fn count(&self, verdict: Verdict) -> usize {
         self.events.iter().filter(|e| e.verdict == verdict).count()
@@ -33,12 +40,19 @@ impl SessionSummary {
 /// Aggregate view of a time window.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Summary {
+    /// Start of the window (ms since the epoch).
     pub since_ms: i64,
+    /// Events in the window.
     pub total: u64,
+    /// Events that were allowed.
     pub allowed: u64,
+    /// Events that asked.
     pub asked: u64,
+    /// Events that were denied.
     pub denied: u64,
+    /// Distinct sessions in the window.
     pub sessions: u64,
+    /// Events per host id.
     pub by_host: BTreeMap<String, u64>,
     /// Rule id → times it decided an `ask` or `deny`, most frequent first.
     pub top_rules: Vec<(String, u64)>,
