@@ -40,6 +40,9 @@ fn literal_word(text: &str) -> String {
         .chars()
         .map(|c| match c {
             '*' | '?' | '[' | ']' | '{' | '}' | '$' => format!("[{c}]"),
+            // A backslash escapes the next character in a shell pattern; as
+            // a one-character class it is literal.
+            '\\' => "[\\\\]".to_owned(),
             c => c.to_string(),
         })
         .collect();
@@ -90,6 +93,23 @@ mod tests {
             bang.is_match(&argv(&["!echo", "hi", "$", "more"])),
             "`$` is not an anchor"
         );
+    }
+
+    #[test]
+    fn backslashes_stay_literal() {
+        // `\` left a dangling
+        // escape in the glob, so the approved rule broke the whole policy.
+        for command in ["++\\\\", "printf 'a\\nb'", "echo C:\\\\temp"] {
+            let pattern = literal_shell_pattern(command).unwrap();
+            let compiled = ShellPattern::compile(&pattern)
+                .unwrap_or_else(|e| panic!("{command:?} -> {pattern:?}: {e}"));
+            let words: Vec<String> = crate::lexer::lex(command)
+                .unwrap()
+                .into_iter()
+                .map(|t| t.to_string())
+                .collect();
+            assert!(compiled.is_match(&words), "{command:?} -> {pattern:?}");
+        }
     }
 
     #[test]

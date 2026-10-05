@@ -358,6 +358,9 @@ fn push_pipelines(tokens: &[Token], sink: &mut Sink) -> Result<(), ClassifyError
     let mut flat: Vec<String> = Vec::new();
     let mut starts: Vec<usize> = Vec::new();
     let mut at_command_start = true;
+    // Separators pushed since the last word. Counted from the tokens, not by
+    // comparing text: an escaped word `\&` has the same text as the operator.
+    let mut trailing_separators = 0;
     for token in tokens {
         match token {
             Token::Word(w) => {
@@ -366,23 +369,23 @@ fn push_pipelines(tokens: &[Token], sink: &mut Sink) -> Result<(), ClassifyError
                     at_command_start = false;
                 }
                 flat.push(w.text.clone());
+                trailing_separators = 0;
             }
             Token::Operator(op) if op.is_separator() => {
                 if !at_command_start {
                     flat.push(op.symbol().to_owned());
+                    trailing_separators += 1;
                 }
                 at_command_start = true;
             }
-            Token::Operator(op) if op.is_redirect() => flat.push(op.symbol().to_owned()),
+            Token::Operator(op) if op.is_redirect() => {
+                flat.push(op.symbol().to_owned());
+                trailing_separators = 0;
+            }
             Token::Operator(_) | Token::HereDoc { .. } => {}
         }
     }
-    while flat
-        .last()
-        .is_some_and(|w| matches!(w.as_str(), ";" | "&" | "|" | "&&" | "||"))
-    {
-        flat.pop();
-    }
+    flat.truncate(flat.len() - trailing_separators);
     if starts.len() < 2 {
         return Ok(());
     }
