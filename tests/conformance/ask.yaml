@@ -96,3 +96,13 @@
 - id: ask-make-file-outside-project
   action: { shell: "make test --file=/tmp/evil.mk" }
   expect: { verdict: ask, rules: [default] }
+# T7: decoding without an interpreter on the receiving end is not pipe-to-shell
+- id: ask-base64-decode-to-file
+  action: { shell: "base64 -d file > out" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-gunzip-into-tar
+  action: { shell: "gunzip -c x.gz | tar x" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-decoded-stdin-to-shell-running-a-script
+  action: { shell: "base64 -d f | bash build.sh" }
+  expect: { verdict: ask, rules: [default] }

@@ -7,6 +7,7 @@
 //! |---|---|
 //! | the command itself | `Shell { argv }` |
 //! | every pipeline / list suffix with ≥ 2 commands | `Pipeline { argv }` |
+//! | a decoder stage piped into an interpreter reading stdin (`decoders.rs`) | canonical `Pipeline { <decoder> -d \| <interpreter> }` |
 //! | leading `VAR=value`, `export`/`declare`/`set` assignments | `EnvSet` |
 //! | `$VAR` / `${VAR}` references, `printenv NAME` | `EnvRead` |
 //! | path-looking arguments, `<` targets, `source`/`.` files | `FsRead` |
@@ -25,6 +26,7 @@
 //! words, `tables` holds the program and extension lists that drive both.
 
 mod commands;
+mod decoders;
 mod make;
 mod tables;
 #[cfg(test)]

@@ -490,7 +490,10 @@ Rules:
   (never the hook's inherited PATH). Mismatch → deny with reason "unpinned executable".
 - Redirections `> file`, `>> file`, `< file`, `tee file` → implied `fs.write`/`fs.read`.
 - URL-like tokens (`https://…`, `host:port`, `user@host`) → implied `net` action.
-- Base64/hex blobs ≥ 64 chars piped to a decoder followed by an interpreter → deny.
+- A decoder (`base64 -d/-D/--decode`, `base32`/`basenc -d`, `openssl … -d`, `xxd -r`,
+  `uudecode`, `gunzip`/`zcat`/`gzip -d` and friends) piped, possibly through filters, into
+  an interpreter reading its program from stdin → canonical pipeline atom
+  `<decoder> -d | <interpreter>`, denied by `pipe-to-shell` (`shell/decoders.rs`).
 - Anything the parser cannot fully parse → verdict `ask` with reason "unparseable",
   never `allow`.
 

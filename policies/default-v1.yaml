@@ -53,14 +53,13 @@ deny:
   - id: pipe-to-shell
     reason: executes remote or decoded content
     shell:
-      - "curl * | sh"
-      - "curl * | bash"
-      - "wget * | sh"
-      - "wget * | bash"
-      - "base64 -d | sh"
-      - "base64 -d | bash"
-      - "base64 --decode | sh"
-      - "base64 --decode | bash"
+      - "curl * | {sh,bash,zsh,dash,ksh,fish}"
+      - "curl * | {python*,node,perl,ruby,php,deno,bun,pwsh}"
+      - "wget * | {sh,bash,zsh,dash,ksh,fish}"
+      - "wget * | {python*,node,perl,ruby,php,deno,bun,pwsh}"
+      # decoder stages are reported as a canonical `<decoder> -d | <interpreter>` pipeline
+      - "* -d | {sh,bash,zsh,dash,ksh,fish}"
+      - "* -d | {python*,node,perl,ruby,php,deno,bun,pwsh}"
       - "eval *"
   - id: destructive
     reason: irreversible damage
