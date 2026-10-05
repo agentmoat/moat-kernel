@@ -23,10 +23,24 @@ pub const WRAPPERS: &[&str] = &[
     "stdbuf",
     "chroot",
     "unbuffer",
+    "npx",
+    "bunx",
 ];
 
 /// Wrappers that take one positional value before the wrapped command.
 pub const WRAPPERS_WITH_VALUE: &[&str] = &["timeout", "chroot"];
+
+/// Package runners whose listed subcommand executes an arbitrary program
+/// (`pnpm exec sh -c …`, `yarn dlx pkg`, `npm exec -- cmd`, `bun x pkg`).
+pub const WRAPPER_SUBCOMMANDS: &[(&str, &[&str])] = &[
+    ("pnpm", &["exec", "dlx"]),
+    ("yarn", &["exec", "dlx"]),
+    ("npm", &["exec", "x"]),
+    ("bun", &["x"]),
+];
+
+/// Package runners that accept a shell string via `-c`/`--call`.
+pub const PACKAGE_RUNNERS: &[&str] = &["npx", "bunx", "npm", "pnpm", "yarn", "bun"];
 
 /// Wrapper options that consume the following argument (`sudo -u root …`).
 pub const WRAPPER_OPTIONS_WITH_VALUE: &[(&str, &[&str])] = &[
@@ -37,6 +51,8 @@ pub const WRAPPER_OPTIONS_WITH_VALUE: &[(&str, &[&str])] = &[
     ("doas", &["-u", "-C"]),
     ("env", &["-u", "-C", "-S", "--unset", "--chdir"]),
     ("nice", &["-n"]),
+    ("npx", &["-p", "--package"]),
+    ("bunx", &["-p", "--package"]),
     ("ionice", &["-c", "-n", "-p"]),
     ("xargs", &["-I", "-L", "-n", "-P", "-s", "-d", "-E", "-a"]),
     ("timeout", &["-s", "-k", "--signal", "--kill-after"]),

@@ -46,3 +46,6 @@
 - id: ask-inline-node-prints-version
   action: { shell: "node -e 'console.log(process.version)'" }
   expect: { verdict: ask, rules: [default] }
+- id: ask-pnpm-exec-unlisted-tool
+  action: { shell: "pnpm exec tsc --noEmit" }
+  expect: { verdict: ask, rules: [default] }
