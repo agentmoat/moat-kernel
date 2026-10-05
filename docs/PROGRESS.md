@@ -101,6 +101,8 @@ P0 (allow where deny is promised):
 
 - Options of allowed programs that run code or write files (`find -exec/-delete`, `rg --pre`, `git fetch --upload-pack`, `git diff --output=~/.zshrc`, `go test -exec`, `cargo --config`) were allowed by `dev-shell` (found 2026-10-05 while building the benign corpus; fixed: shell `!` exclusions, ADR-012, `shell/options.rs`).
 
+- The state and host directories themselves were not protected (`mv ~/.moat …`, `ln -sfn /tmp/evil ~/.moat`, `rm -rf ~/.claude` asked) and the lock reported a pinned file as intact when a parent directory was swapped for a link (found 2026-10-05; fixed: directory patterns in `kernel-self`, `mv` source is a write, lock compares stored keys).
+
 P1 (false denies):
 - `rm -rf /tmp/build` is denied because `rm -rf /*` is a per-token glob matching any absolute path.
 - Dotted identifiers inside interpreter payloads and arguments (`python3 -c "import sys; …"`, `git commit -m fix.bug`) are treated as hosts and denied by `default.net`.

@@ -112,7 +112,15 @@ impl Lock {
     pub fn verify(&self) -> Vec<Drift> {
         self.entries
             .keys()
-            .filter_map(|path| self.verify_one(Path::new(path)))
+            .filter_map(|stored| {
+                // A stored key is canonical as of pinning. If it no longer maps to
+                // itself, a directory on the way was moved or replaced by a link:
+                // the file the kernel will read is not the one that was pinned.
+                if key(Path::new(stored)) != *stored {
+                    return Some(Drift::Modified(PathBuf::from(stored)));
+                }
+                self.verify_one(Path::new(stored))
+            })
             .collect()
     }
 

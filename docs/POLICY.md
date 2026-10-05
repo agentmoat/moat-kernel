@@ -137,7 +137,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | deny | `env-poison` | setting `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `GIT_*`, `BASH_ENV`, `PROMPT_COMMAND` |
 | deny | `pipe-to-shell` | `curl`/`wget` output, or any decoded/decompressed stream (`base64 -d/-D/--decode`, `openssl … -d`, `xxd -r`, `gunzip`, `zcat`, `gzip -d`, …), piped into a shell or interpreter that reads its program from stdin (`sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `python*`, `node`, `perl`, `ruby`, `php`, `deno`, `bun`, `pwsh`); `eval` |
 | deny | `destructive` | `rm -rf /`, `rm -rf /*`, `rm -rf ~`, `rm -rf ~/*`, `rm -rf $HOME` (and `-fr`, `--no-preserve-root`), `git push --force*`/`-f*`, `git reset --hard`, `git clean -fdx`, `git branch -D`, `git stash drop/clear`, `sudo`, `mkfs`, `dd if=`, `shutdown`, `reboot` |
-| deny | `kernel-self` | writes to `~/.moat`, `~/.codex`, host hook/settings files; `moat policy/init/doctor/allow` from an agent, also by absolute path (`*/moat …`) and under the pseudo-terminal wrappers `script`, `expect`, `unbuffer` (ADR-011) |
+| deny | `kernel-self` | writes to `~/.moat`, `~/.codex`, host hook/settings files, and to the directories `~/.moat`, `~/.claude`, `~/.codex`, `~/.cursor` (and `.moat`, `.claude`, `.codex`, `.cursor` anywhere) themselves, so they cannot be renamed, deleted or replaced by a link; `moat policy/init/doctor/allow` from an agent, also by absolute path (`*/moat …`) and under the pseudo-terminal wrappers `script`, `expect`, `unbuffer` (ADR-011) |
 | deny | `shell-rc` | writes to `~/.zshrc`, `~/.bashrc`, `~/.profile` and friends |
 | allow | `project-fs` | read anywhere in `${project}`; write anywhere except `.git/` and `.moat/` |
 | allow | `dev-shell` | `git status/diff/log/show/branch/add/commit/checkout -b/switch/fetch/pull/stash`, `ls`, `cat`, `head`, `tail`, `grep`, `rg`, `find`, `pwd`, `echo`, `which`; `npm test/run`, `pnpm test/run/build/lint/typecheck/exec`, `yarn test/run/build/lint/exec`, `npm exec`, `cargo build/test/check/clippy/fmt/run/doc/bench/nextest/tree/metadata`, `go test/build/vet`, `swift test/build`, `pytest`, `make test/build/check/lint`. `exec` forms are allowed only because the wrapped program is evaluated on its own. Excluded (they ask): `find -exec/-ok/-delete/-fprint/-fls`, `rg --pre`, `git --upload-pack/--receive-pack`, `go -exec/-toolexec/-vettool`, `cargo --config` |
@@ -200,7 +200,7 @@ warning does not prove a rule is reachable.
 installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
 pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
 until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
-by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged.
+by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
 
 ### 8.1 Executable pinning and the environment snapshot
 

@@ -145,3 +145,7 @@
 - id: ask-gh-run-view-writes-output-file
   action: { shell: "gh run view 3 --log -o out.txt" }
   expect: { verdict: ask, rules: [default] }
+# T9: moving ordinary project files is not kernel-self
+- id: ask-move-project-file
+  action: { shell: "mv src/a.rs src/b.rs" }
+  expect: { verdict: ask, rules: [default] }
