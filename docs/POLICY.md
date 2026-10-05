@@ -148,7 +148,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | ask | `push` | `git push`, `npm/pnpm/yarn publish`, `cargo publish`, `gh release` |
 | defaults | `default`, `default.net` | everything else asks; outbound network to unlisted hosts is denied |
 
-MCP calls are judged by name **and** by what their arguments touch: adapters map path-like arguments (`path`, `paths`, `file_path`, `source`, `destination`, …) to `fs.read`/`fs.write` atoms (write for `write_*`, `edit_*`, `move_*`, `delete_*`-shaped tools and for `destination`/`target`) and URL-like arguments (`url`, `uri`, `endpoint`) to `net` atoms, so `mcp__filesystem__read_file {path: ~/.aws/credentials}` is denied by `secrets-paths` even though `safe-mcp` allows the tool name.
+MCP calls are judged by name **and** by what their arguments touch: adapters map path-like arguments (`path`, `paths`, `file_path`, `source`, `destination`, …) to `fs.read`/`fs.write` atoms (write for `write_*`, `edit_*`, `move_*`, `delete_*`-shaped tools and for `destination`/`target`) and URL-like arguments (`url`, `uri`, `endpoint`) to `net` atoms, so `mcp__filesystem__read_file {path: ~/.aws/credentials}` is denied by `secrets-paths` even though `safe-mcp` allows the tool name. Arguments are searched at any depth (`{"options": {"path": …}}`), URL arguments count with or without a scheme, and arguments that cannot be read (a Cursor `tool_input` string that is not JSON, more than 1024 paths and URLs) deny the call instead of letting the name decide alone.
 
 ## 7. Recipes
 

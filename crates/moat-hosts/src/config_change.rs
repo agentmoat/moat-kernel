@@ -38,7 +38,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
     }
     Ok(HookRequest {
         host,
-        session_id: p.session_id.unwrap_or_else(|| "unknown".to_owned()),
+        session_id: crate::session_or_unknown(p.session_id),
         call_id: None,
         cwd: p.cwd,
         tool: EVENT.to_owned(),
