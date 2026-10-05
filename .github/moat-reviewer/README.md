@@ -19,7 +19,7 @@ wrong. Re-run it on the current head by commenting `@moat-reviewer`.
 
 When it runs: same-repository pull requests on open, push, reopen and ready-for-review
 (drafts and Dependabot are skipped). Fork PRs have no access to secrets, so a maintainer
-triggers the review with `@moat-reviewer` after a first look at the change.
+triggers the review with `@moat-reviewer` after a first look at the change. That run has the model credential and the app token while the fork's code is checked out, so it only gets the read-only `gh` tools: building or testing a fork PR would execute its build scripts and tests next to those secrets.
 
 ## Setup (maintainers, once)
 
@@ -53,8 +53,8 @@ triggers the review with `@moat-reviewer` after a first look at the change.
 
 The checklist and output format live in the `prompt:` of `pr-review.yml`; the standards it
 enforces live in `AGENTS.md`. Change the standard first, then the prompt. Tools the reviewer
-may use are the `--allowedTools` list: read-only `gh` commands, the quality gate, tests,
-clippy and `moat policy check`. Keep it that way; the reviewer must never be able to edit the
+may use are the `--allowedTools` list: read-only `gh` commands, plus the quality gate, tests,
+clippy and `moat policy check` on same-repository PRs only. Keep it that way; the reviewer must never be able to edit the
 PR, merge, or reach other repositories.
 
 Actions are pinned by commit SHA like every other workflow here. Bump
