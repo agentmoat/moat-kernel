@@ -99,6 +99,8 @@ P0 (allow where deny is promised):
 - A panic in `guard` exited 101, which Claude Code treats as non-blocking (fail-open) (fixed in #27: `catch_unwind` ⇒ deny, exit 2); clap usage errors still exit 64.
 - Policy-only: bare `env`/`printenv`/`set` ask instead of deny (fixed: `$` end anchor and `env-dump`, ADR-010); `base64 -d file | bash`, `base64 -D`, `openssl enc -d` have no decoder→interpreter rule (fixed: canonical decoder pipeline atom, `shell/decoders.rs`); `kernel-self` matches `moat` by literal argv0 only (fixed in #33; `script`/`expect`/`unbuffer` pty wrappers denied too, ADR-011; other pty helpers remain a known gap); `git branch -D`, `git stash clear` allowed.
 
+- Options of allowed programs that run code or write files (`find -exec/-delete`, `rg --pre`, `git fetch --upload-pack`, `git diff --output=~/.zshrc`, `go test -exec`, `cargo --config`) were allowed by `dev-shell` (found 2026-10-05 while building the benign corpus; fixed: shell `!` exclusions, ADR-012, `shell/options.rs`).
+
 P1 (false denies):
 - `rm -rf /tmp/build` is denied because `rm -rf /*` is a per-token glob matching any absolute path.
 - Dotted identifiers inside interpreter payloads and arguments (`python3 -c "import sys; …"`, `git commit -m fix.bug`) are treated as hosts and denied by `default.net`.

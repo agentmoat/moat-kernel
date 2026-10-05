@@ -110,13 +110,34 @@ enum Token {
 pub struct ShellPattern {
     source: String,
     tokens: Vec<Token>,
+    /// `!pattern` excludes matches from its list, as for globs (ADR-012).
+    pub negated: bool,
+}
+
+/// Evaluate a list of (possibly negated) shell patterns like [`any_match`].
+#[must_use]
+pub fn any_shell_match(patterns: &[ShellPattern], argv: &[String]) -> bool {
+    let mut positive = false;
+    for p in patterns {
+        if p.is_match(argv) {
+            if p.negated {
+                return false;
+            }
+            positive = true;
+        }
+    }
+    positive
 }
 
 impl ShellPattern {
     pub fn compile(raw: &str) -> Result<Self, PolicyError> {
         // Patterns are tokenised with the same lexer as commands so that `a|b`
         // and `a | b` mean the same thing on both sides of the match.
-        let lexed = lexer::lex(raw).map_err(|_| PolicyError::BadShellPattern {
+        let (negated, body) = match raw.strip_prefix('!') {
+            Some(rest) => (true, rest),
+            None => (false, raw),
+        };
+        let lexed = lexer::lex(body).map_err(|_| PolicyError::BadShellPattern {
             pattern: raw.to_owned(),
         })?;
         let mut words = Vec::with_capacity(lexed.len());
@@ -160,6 +181,7 @@ impl ShellPattern {
         Ok(Self {
             source: raw.to_owned(),
             tokens,
+            negated,
         })
     }
 
@@ -172,6 +194,9 @@ impl ShellPattern {
     /// Conservative: `false` when that cannot be shown from the patterns alone.
     #[must_use]
     pub fn covers(&self, other: &Self) -> bool {
+        if self.negated || other.negated {
+            return false;
+        }
         let anchored = |p: &Self| matches!(p.tokens.last(), Some(Token::End));
         let Ok(lexed) = lexer::lex(&other.source) else {
             return false;
@@ -345,6 +370,21 @@ mod tests {
         assert!(!g("/p/*").covers(&g("/p/**")));
         assert!(!g("/p/**").covers(&g("!/p/x")));
         assert!(!g("/p/a/**").covers(&g("/p/**")));
+    }
+
+    #[test]
+    fn shell_negation_excludes_from_its_list() {
+        let list = [
+            ShellPattern::compile("find *").unwrap(),
+            ShellPattern::compile("!find * -exec*").unwrap(),
+        ];
+        assert!(any_shell_match(&list, &argv("find . -name x")));
+        assert!(!any_shell_match(
+            &list,
+            &argv("find . -name x -execdir rm {} ;")
+        ));
+        assert!(!any_shell_match(&list[1..], &argv("find . -exec x")));
+        assert!(!list[0].covers(&list[1]) && !list[1].covers(&list[0]));
     }
 
     #[test]

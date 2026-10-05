@@ -110,3 +110,25 @@
 - id: ask-script-recording-ordinary-command
   action: { shell: "script -q build.log make test" }
   expect: { verdict: ask, rules: [default] }
+# T7: options that run another program or write files are excluded from dev-shell
+- id: ask-find-exec-ordinary-command
+  action: { shell: "find . -name '*.tmp' -exec rm {} \\;" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-find-delete
+  action: { shell: "find . -delete" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-rg-preprocessor
+  action: { shell: "rg --pre=sh TODO" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-fetch-upload-pack
+  action: { shell: "git fetch --upload-pack='touch /tmp/pwn' origin" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-log-output-outside-project
+  action: { shell: "git log --output=/tmp/log.txt" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-go-test-exec-wrapper
+  action: { shell: "go test -exec /tmp/x ./..." }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-cargo-config-override
+  action: { shell: "cargo test --config 'build.rustc-wrapper=\"/tmp/x\"'" }
+  expect: { verdict: ask, rules: [default] }

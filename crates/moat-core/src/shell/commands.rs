@@ -7,7 +7,7 @@ use super::tables::{
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, host_of, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
-use super::{decoders, make};
+use super::{decoders, make, options};
 use crate::action::AtomicAction;
 use crate::lexer::{self, Operator, Token, Word};
 use crate::paths;
@@ -186,11 +186,11 @@ fn classify_simple(
     {
         scan_payload(payload, ctx, &mut sink)?;
     }
-    Ok(())
+    options::classify(&argv, program, ctx, out, depth)
 }
 
 /// Classify a wrapper's inner argv (`sudo rm …` → `rm …`) as its own command.
-fn classify_wrapped(
+pub(super) fn classify_wrapped(
     inner: &[String],
     ctx: &ShellContext<'_>,
     out: &mut Vec<AtomicAction>,

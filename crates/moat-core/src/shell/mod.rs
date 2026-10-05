@@ -15,6 +15,7 @@
 //! | URLs, `host:port`, dotted hosts, IP literals | `Net` |
 //! | `$( … )`, backticks, `sh -c`, `eval`, `xargs`, `sudo`, `env`, … | nested classification |
 //! | `python -c`, `node -e`, `perl -e`, … payloads | URL/path scan of the payload |
+//! | `find -exec/-execdir/-ok/-okdir` commands, `--output=FILE` (`options.rs`) | nested classification, `FsWrite` |
 //! | `make --eval`, `-e`, `SHELL=`, `X!=cmd`, `$(shell …)` (`make.rs`) | `make <arg>` `Shell` atom + nested classification |
 //!
 //! Classification is conservative by design: when the input cannot be parsed
@@ -28,6 +29,7 @@
 mod commands;
 mod decoders;
 mod make;
+mod options;
 mod tables;
 #[cfg(test)]
 mod tests;

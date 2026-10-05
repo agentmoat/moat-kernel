@@ -99,3 +99,12 @@
 - id: benign-grep-for-the-word-bash
   action: { shell: "cat README.md | grep bash" }
   expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-find-by-name
+  action: { shell: "find . -name '*.rs' -type f" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-diff-output-into-project
+  action: { shell: "git diff --output=./patch.diff" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-rg-pretty-is-not-pre
+  action: { shell: "rg --pretty TODO ./src" }
+  expect: { verdict: allow, rules: [dev-shell] }
