@@ -253,7 +253,7 @@ impl Policy {
         Ok(())
     }
 
-    /// Total number of rule groups.
+    /// Number of rule groups in `deny`, `allow` and `ask`.
     #[must_use]
     pub fn rule_count(&self) -> (usize, usize, usize) {
         (self.deny.len(), self.allow.len(), self.ask.len())

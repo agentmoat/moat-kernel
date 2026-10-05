@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 /// A tool call as seen from a host, before classification.
 ///
-/// Host adapters (Claude Code, Codex, Cursor, `OpenClaw`, MCP proxy) translate
-/// their payloads into exactly one of these. Adapters never decide.
+/// Host adapters (`moat-hosts`) translate each payload into exactly one of
+/// these. Adapters never decide.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Action {
@@ -58,11 +58,12 @@ pub enum AtomicAction {
     },
     /// A whole pipeline / list (`a | b && c`) with separators kept as tokens, so
     /// rules such as `curl * | sh` can match across sub-commands. Never carries
-    /// a default verdict (see `engine.rs`).
+    /// a default verdict (see `engine/mod.rs`).
     Pipeline {
         argv: Vec<String>,
     },
-    /// Normalised absolute-ish path (after `~`/`${project}` expansion).
+    /// Absolute path in slash-separated canonical form (`~`, `${project}` and
+    /// `cwd` already applied).
     FsRead {
         path: String,
     },

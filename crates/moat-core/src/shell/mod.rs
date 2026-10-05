@@ -22,9 +22,11 @@
 //! safely the result is [`ParseOutcome::Unparseable`], which the engine maps to
 //! `ask`, never `allow`. Here-document bodies are treated as data.
 //!
-//! Module layout: `commands` groups tokens and classifies each simple command,
-//! `tokens` recognises assignments, variable references and hosts inside single
-//! words, `tables` holds the program and extension lists that drive both.
+//! Module layout: `commands` groups tokens and classifies each simple command;
+//! `tokens` recognises assignments and variable references inside one word;
+//! `decoders`, `make` and `options` handle constructs that hide a command or a
+//! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
+//! `tables` holds the program lists that drive all of them.
 
 mod commands;
 mod decoders;
@@ -34,8 +36,6 @@ pub(crate) mod tables;
 #[cfg(test)]
 mod tests;
 mod tokens;
-
-use std::fmt;
 
 use crate::action::AtomicAction;
 use crate::lexer::LexError;
@@ -75,27 +75,15 @@ pub fn classify(command: &str, ctx: &ShellContext<'_>) -> ParseOutcome {
     }
 }
 
-#[derive(Debug)]
+/// Why a command line could not be classified safely; the engine turns it into `ask`.
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum ClassifyError {
-    Lex(LexError),
+    #[error(transparent)]
+    Lex(#[from] LexError),
+    #[error("command nesting deeper than {MAX_DEPTH}")]
     TooDeep,
+    #[error("command expands to more than {MAX_ATOMS} actions")]
     TooManyActions,
-}
-
-impl fmt::Display for ClassifyError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Lex(e) => write!(f, "{e}"),
-            Self::TooDeep => write!(f, "command nesting deeper than {MAX_DEPTH}"),
-            Self::TooManyActions => write!(f, "command expands to more than {MAX_ATOMS} actions"),
-        }
-    }
-}
-
-impl From<LexError> for ClassifyError {
-    fn from(e: LexError) -> Self {
-        Self::Lex(e)
-    }
 }
 
 /// Accumulates atomic actions with de-duplication and a hard size bound.

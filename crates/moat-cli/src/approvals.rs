@@ -9,8 +9,8 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{Context as _, Result, bail, ensure};
-use moat_core::{RuleGroup, lexer};
+use anyhow::{Context as _, Result, bail};
+use moat_core::RuleGroup;
 use serde::{Deserialize, Serialize};
 
 use crate::home::write_private;
@@ -153,7 +153,8 @@ impl Overlay {
     /// characters in the command are not wildcards in the rule. Shell rules are
     /// prefixes, so extra arguments after the approved command are accepted.
     pub fn allow_command(&mut self, command: &str) -> Result<&RuleGroup> {
-        let pattern = literal_pattern(command)?;
+        let pattern = moat_core::literal_shell_pattern(command)
+            .with_context(|| format!("cannot approve `{command}`"))?;
         // One past the highest existing number: ids stay unique after a person
         // deletes an earlier rule, and a duplicate id would fail the policy lint.
         let n = self
@@ -176,84 +177,9 @@ impl Overlay {
     }
 }
 
-/// A shell pattern that matches `command` token for token and nothing wider.
-///
-/// Glob characters and `$` are put in one-character classes (`*` → `[*]`), so
-/// `cat *` approves `cat *`, not `cat anything`, and a trailing `$` is not an
-/// end anchor. Words that the pattern lexer would split or reinterpret
-/// (whitespace, quotes, operators, a leading `!` exclusion) are single-quoted.
-/// Operators (`|`, `&&`, …) stay operators.
-fn literal_pattern(command: &str) -> Result<String> {
-    let tokens = lexer::lex(command.trim())
-        .with_context(|| format!("cannot approve `{command}`: it does not parse"))?;
-    ensure!(!tokens.is_empty(), "cannot approve an empty command");
-    let mut parts = Vec::with_capacity(tokens.len());
-    for token in tokens {
-        match token {
-            lexer::Token::Word(w) => parts.push(literal_word(&w.text)),
-            lexer::Token::Operator(op) => parts.push(op.symbol().to_owned()),
-            lexer::Token::HereDoc { .. } => bail!("cannot approve a command with a here-document"),
-        }
-    }
-    Ok(parts.join(" "))
-}
-
-fn literal_word(text: &str) -> String {
-    let escaped: String = text
-        .chars()
-        .map(|c| match c {
-            '*' | '?' | '[' | ']' | '{' | '}' | '$' => format!("[{c}]"),
-            c => c.to_string(),
-        })
-        .collect();
-    let needs_quotes = escaped.is_empty()
-        || escaped.starts_with('!')
-        || escaped
-            .chars()
-            .any(|c| c.is_whitespace() || "'\"\\|&;<>()`#".contains(c));
-    if needs_quotes {
-        format!("'{}'", escaped.replace('\'', "'\\''"))
-    } else {
-        escaped
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use moat_core::pattern::ShellPattern;
-
     use super::*;
-
-    fn argv(s: &[&str]) -> Vec<String> {
-        s.iter().map(|w| (*w).to_owned()).collect()
-    }
-
-    #[test]
-    fn approved_commands_match_literally() {
-        let p = |c: &str| ShellPattern::compile(&literal_pattern(c).unwrap()).unwrap();
-        let cat = p("cat *");
-        assert!(cat.is_match(&argv(&["cat", "*"])));
-        assert!(
-            !cat.is_match(&argv(&["cat", "~/.ssh/id_rsa"])),
-            "`*` is not a wildcard"
-        );
-        let q = p("ls file?.[ch] {a,b}");
-        assert!(q.is_match(&argv(&["ls", "file?.[ch]", "{a,b}"])));
-        assert!(!q.is_match(&argv(&["ls", "file1.c", "a"])));
-        let bang = p("!echo hi $");
-        assert!(!bang.negated, "a leading `!` stays literal");
-        assert!(
-            bang.is_match(&argv(&["!echo", "hi", "$", "more"])),
-            "`$` is not an anchor"
-        );
-        let quoted = p("echo \"it's\"");
-        assert!(quoted.is_match(&argv(&["echo", "it's"])));
-        assert_eq!(literal_pattern("cat *").unwrap(), "cat [*]");
-        let piped = p("npm test | tee out.log");
-        assert!(piped.is_match(&argv(&["npm", "test", "|", "tee", "out.log"])));
-        assert!(literal_pattern("echo 'unterminated").is_err());
-        assert!(literal_pattern("   ").is_err());
-    }
 
     #[test]
     fn overlay_ids_stay_unique_after_a_deletion() {

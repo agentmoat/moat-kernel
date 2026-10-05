@@ -299,8 +299,8 @@ fn hosts_are_detected_conservatively() {
 
 #[test]
 fn drive_letter_paths_are_recognised() {
-    // Backslash paths need the PowerShell tokenizer (not yet built); the POSIX
-    // lexer treats `\` as an escape. Forward-slash drive paths work today.
+    // The POSIX lexer treats `\` as an escape, so only forward-slash drive
+    // paths are recognised in shell commands.
     let ctx = ShellContext {
         home: "C:/Users/me",
         project: "C:/p",
