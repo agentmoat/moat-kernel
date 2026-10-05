@@ -287,6 +287,11 @@ impl Lexer {
                 self.bump();
                 Operator::Or
             }
+            // `|&` pipes stderr too; for what reaches the next command it is a pipe.
+            ('|', Some('&')) => {
+                self.bump();
+                Operator::Pipe
+            }
             ('|', _) => Operator::Pipe,
             ('&', Some('&')) => {
                 self.bump();

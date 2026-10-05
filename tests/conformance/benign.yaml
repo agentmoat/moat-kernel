@@ -276,3 +276,6 @@
 - id: benign-grep-only-matching-is-not-an-output-file
   action: { shell: "grep -o TODO ./src/main.rs" }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-pipe-all-build-log-into-grep
+  action: { shell: "cargo build |& grep warning" }
+  expect: { verdict: allow, rules: [dev-shell] }
