@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `moat guard` denies (`kernel-error`, exit 2) when the audit log cannot be opened or written, when the hook response cannot be written to stdout, or when the kernel itself panics; previously an unavailable log printed a warning and the call proceeded unrecorded, and a panic exited 101, which Claude Code treats as non-blocking. `guard` no longer recreates a deleted `audit.db`; only `moat init` creates it.
 - Policy lock: a pinned file replaced by a symlink (or a re-pointed link) is now reported as modified and denies with `kernel-integrity`; previously the swapped file was treated as unpinned and the kernel ran under the attacker's policy.
 
 ### Added

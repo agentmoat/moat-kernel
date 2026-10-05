@@ -271,6 +271,48 @@ fn guard_fails_closed() {
 }
 
 #[test]
+fn deleted_audit_log_denies_instead_of_recreating_it() {
+    let sb = Sandbox::new();
+    sb.moat(&["init"]);
+    let audit = sb.home.join(".moat/audit.db");
+    let before = sb.guard("claude-code", &fixture("claude-code/bash.json"));
+    assert!(
+        !stderr(&before).contains("audit log unavailable"),
+        "{}",
+        stderr(&before)
+    );
+
+    std::fs::remove_file(&audit).unwrap();
+    let out = sb.guard("claude-code", &fixture("claude-code/bash.json"));
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(decision(&out)["permissionDecision"], "deny");
+    let reason = decision(&out)["permissionDecisionReason"].to_string();
+    assert!(reason.contains("kernel-error"), "{reason}");
+    assert!(reason.contains("audit log unavailable"), "{reason}");
+    assert!(!audit.exists(), "guard must not quietly create a fresh log");
+}
+
+#[cfg(unix)]
+#[test]
+fn unwritable_audit_log_denies() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let sb = Sandbox::new();
+    sb.moat(&["init"]);
+    let audit = sb.home.join(".moat/audit.db");
+    std::fs::set_permissions(&audit, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+    let out = sb.guard("claude-code", &fixture("claude-code/bash.json"));
+    std::fs::set_permissions(&audit, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(decision(&out)["permissionDecision"], "deny");
+    assert!(
+        stderr(&out).contains("audit log unavailable"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
 fn codex_payloads_use_the_same_contract() {
     let sb = Sandbox::new();
     std::fs::create_dir_all(sb.home.join(".codex")).unwrap();

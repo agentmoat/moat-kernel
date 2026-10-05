@@ -29,16 +29,31 @@ const CONFIG_CHANGE_RULE: &str = "config-change";
 const SESSION_GRANT_RULE: &str = "approved-session";
 
 pub fn run(args: &GuardArgs) -> Code {
-    let started = Instant::now();
     let host = args.host;
+    // A panic would exit 101, which Claude Code treats as a non-blocking hook
+    // failure, i.e. the call would proceed. Turn it into an explicit deny.
+    if let Ok(code) = std::panic::catch_unwind(|| decide_and_respond(host)) {
+        return code;
+    }
+    let decision = kernel_error(&anyhow::Error::msg("internal error while deciding"));
+    let response = host.render_response(&HookEvent::default(), &decision);
+    println!("{response}");
+    eprintln!("{}", moat_hosts::reason_line(&decision));
+    Code::Deny
+}
 
-    let (request, decision) = match evaluate(host) {
+fn decide_and_respond(host: Host) -> Code {
+    let started = Instant::now();
+
+    let (request, mut decision) = match evaluate(host) {
         Ok(outcome) => outcome,
         Err(error) => (None, kernel_error(&error)),
     };
 
+    // The audit log is part of the decision: a call that cannot be recorded
+    // is not allowed, so a missing or unwritable log cannot hide activity.
     if let Err(error) = record(host, request.as_ref(), &decision, started) {
-        eprintln!("moat: audit unavailable: {error:#}");
+        decision = kernel_error(&error.context("audit log unavailable"));
     }
 
     let event = request
@@ -47,8 +62,13 @@ pub fn run(args: &GuardArgs) -> Code {
         .unwrap_or_default();
     let response = host.render_response(&event, &decision);
     let mut stdout = io::stdout().lock();
-    let _ = writeln!(stdout, "{response}");
-    let _ = stdout.flush();
+    let written = writeln!(stdout, "{response}").and_then(|()| stdout.flush());
+    if let Err(error) = written {
+        // Without a response the host falls back to its own default, which
+        // may be to proceed; exit 2 is the one signal every host honours.
+        eprintln!("moat: could not write the hook response: {error}");
+        return Code::Deny;
+    }
 
     match decision.verdict {
         Verdict::Allow | Verdict::Ask => Code::Ok,
@@ -114,7 +134,7 @@ fn record(
     if !home.exists() {
         bail!("{} does not exist; run `moat init`", home.root().display());
     }
-    let store = Store::open(&home.audit_path())?;
+    let store = Store::open_existing(&home.audit_path())?;
     let latency_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
     let event = NewEvent {
         host: host.id(),
