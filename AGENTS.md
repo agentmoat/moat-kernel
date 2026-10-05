@@ -17,7 +17,7 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 
 | Path | Contents | Rules |
 |---|---|---|
-| `crates/moat-core` | policy model (`policy.rs`), lexer (`lexer/`), classifier (`shell/`), patterns (`pattern.rs`), paths, engine, executable pins (`programs.rs`, `ProgramResolver`), actions, verdict | **pure**: no I/O, no `unsafe`, no internal deps; builds for `wasm32`; architecture tests enforce it |
+| `crates/moat-core` | policy model (`policy.rs`), lexer (`lexer/`), classifier (`shell/`), patterns (`pattern.rs`), paths, engine, executable pins (`programs.rs`, `ProgramResolver`), symlink resolution (`realpath.rs`, `PathResolver`), actions, verdict | **pure**: no I/O, no `unsafe`, no internal deps; builds for `wasm32`; architecture tests enforce it |
 | `crates/moat-hosts` | host adapters: `pre_tool_use.rs` (Claude Code, Codex), `config_change.rs` (Claude Code), `cursor.rs` | translate payload ⇄ `Action`/`Decision`; never decide |
 | `crates/moat-audit` | SQLite store (`store.rs`), time-window and session queries (`query.rs`), redaction (`redact.rs`) | typed `thiserror` errors; redact before persisting; never log secrets |
 | `crates/moat-cli` | the `moat` binary: `cli.rs` grammar, `commands/{init,guard,show,status,doctor,allow,replay,report,policy}.rs`, `install/{mod,hook_file}.rs`, `home.rs`, `context.rs`, `project.rs`, `time.rs`, `environment.rs` (search-path snapshot), `integrity.rs` (policy lock), `approvals.rs` (grants and overlay), `render.rs`, `exit.rs` | the only crate that touches files, env, terminal; `anyhow` allowed; all user output goes through `render.rs` or the command module |
@@ -36,7 +36,7 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 4. **Fail closed.** Every error path in `moat guard` yields a `deny` response and exit 2 (ADR-004).
 5. **Exit codes:** 0 allow/ok, 2 deny, 3 unresolved ask (`policy check`), 64 usage/config. Nothing else may use 2 or 3.
 6. **No secrets in the audit log.** Everything persisted passes `moat_audit::redact`.
-7. **Pure core.** `moat-core` depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Anything that needs the filesystem (program resolution, hashing) is injected from the CLI through a trait (`ProgramResolver`).
+7. **Pure core.** `moat-core` depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Anything that needs the filesystem (program resolution, hashing) is injected from the CLI through a trait (`ProgramResolver`, `PathResolver`).
 8. **Idempotent install.** `moat init` never overwrites a policy, never duplicates a hook, always backs up before editing a host file.
 9. **Lock before decide.** `moat guard` verifies `policy.lock` first; drift ⇒ `deny` (`kernel-integrity`). A Claude Code `ConfigChange` for a pinned file that no longer matches the lock is blocked for the session. Only a person may re-pin: `moat init`, or `moat doctor --accept` from an interactive terminal.
 

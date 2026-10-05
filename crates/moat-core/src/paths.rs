@@ -3,8 +3,8 @@
 //! All paths are handled in a slash-separated canonical form on every platform:
 //! `/Users/me/x` on Unix, `C:/Users/me/x` or `//server/share/x` on Windows.
 //! Callers convert OS paths to this form (`\` → `/`) before passing them in.
-//! Symlink resolution needs I/O and is done by the caller, which may pass both
-//! the literal and the resolved path through the engine.
+//! Symlink resolution needs I/O and is done by the caller through
+//! [`crate::realpath::PathResolver`]; the engine checks both paths.
 
 /// Expand `~`, `$HOME`, `${project}` and make the path absolute against `cwd`,
 /// then collapse `.` and `..` lexically.

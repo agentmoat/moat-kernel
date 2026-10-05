@@ -10,6 +10,7 @@ use crate::paths;
 use crate::pattern::{GlobPattern, ShellPattern, any_match};
 use crate::policy::{Policy, PolicyError, RuleGroup};
 use crate::programs::{self, NoResolver, ProgramResolver};
+use crate::realpath::PathResolver;
 use crate::shell::{ParseOutcome, ShellContext, classify};
 use crate::verdict::{Decision, Verdict};
 
@@ -224,15 +225,21 @@ impl CompiledPolicy<'_> {
     /// Unparseable input yields `ask` with the parser's reason, never `allow`.
     #[must_use]
     pub fn decide(&self, action: &Action) -> Decision {
-        self.decide_with(action, &NoResolver)
+        self.decide_with(action, &NoResolver, &NoResolver)
     }
 
     /// Decide one host action, resolving shell programs through `resolver` so
-    /// that `executables` pins and installation pins are enforced.
+    /// that `executables` pins and installation pins are enforced, and paths
+    /// through `paths` so a symlink cannot move a read or write past a rule.
     #[must_use]
-    pub fn decide_with(&self, action: &Action, resolver: &dyn ProgramResolver) -> Decision {
+    pub fn decide_with(
+        &self,
+        action: &Action,
+        resolver: &dyn ProgramResolver,
+        paths: &dyn PathResolver,
+    ) -> Decision {
         let atoms = match classify_action(action, &self.ctx) {
-            ParseOutcome::Parsed(atoms) => atoms,
+            ParseOutcome::Parsed(atoms) => with_resolved_paths(atoms, paths),
             ParseOutcome::Unparseable { reason } => {
                 return unparseable(format!("could not parse action safely: {reason}"));
             }
@@ -253,6 +260,26 @@ impl CompiledPolicy<'_> {
             })
             .unwrap_or_else(|| unparseable("action has no evaluable parts".to_owned()))
     }
+}
+
+/// Add an atom for the resolved path of every read and write that goes
+/// through a symlink. The literal atom stays: a rule may name either location.
+fn with_resolved_paths(atoms: Vec<AtomicAction>, paths: &dyn PathResolver) -> Vec<AtomicAction> {
+    let resolved: Vec<AtomicAction> = atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            AtomicAction::FsRead { path } => paths
+                .resolve(path)
+                .filter(|real| real != path)
+                .map(|path| AtomicAction::FsRead { path }),
+            AtomicAction::FsWrite { path } => paths
+                .resolve(path)
+                .filter(|real| real != path)
+                .map(|path| AtomicAction::FsWrite { path }),
+            _ => None,
+        })
+        .collect();
+    atoms.into_iter().chain(resolved).collect()
 }
 
 fn unparseable(reason: String) -> Decision {
@@ -377,7 +404,7 @@ mod tests {
             resolved: BTreeMap::from([("git".to_owned(), "/p/.bin/git".to_owned())]),
             pins: BTreeMap::new(),
         };
-        let d = compiled.decide_with(&shell("git status"), &planted);
+        let d = compiled.decide_with(&shell("git status"), &planted, &NoResolver);
         assert_eq!(d.verdict, Verdict::Deny);
         assert_eq!(d.rules, ["executables"]);
         let genuine = MapResolver {
@@ -385,13 +412,56 @@ mod tests {
             pins: BTreeMap::new(),
         };
         assert_eq!(
-            compiled.decide_with(&shell("git status"), &genuine).verdict,
+            compiled
+                .decide_with(&shell("git status"), &genuine, &NoResolver)
+                .verdict,
             Verdict::Allow
         );
         assert_eq!(
             compiled.decide(&shell("git status")).verdict,
             Verdict::Deny,
             "pinned but unresolvable"
+        );
+    }
+
+    #[test]
+    fn symlinked_paths_are_checked_at_both_locations() {
+        use crate::realpath::MapPathResolver;
+        use std::collections::BTreeMap;
+        let p = policy(
+            "version: 1\ndefaults: ask\ndeny:\n  - id: secret\n    \
+             fs.read: ['~/.ssh/**']\n    fs.write: ['~/.ssh/**']\n\
+             allow:\n  - id: proj\n    fs.read: ['${project}/**']\n    \
+             fs.write: ['${project}/**']\n  - id: cat\n    shell: ['cat *', 'echo *']\n",
+        );
+        let compiled = CompiledPolicy::compile(&p, &ctx()).unwrap();
+        let links = MapPathResolver {
+            links: BTreeMap::from([
+                ("/p/s".to_owned(), "/h/.ssh".to_owned()),
+                ("/p/lib".to_owned(), "/p/vendor/lib".to_owned()),
+            ]),
+        };
+        let decide = |a: &Action| compiled.decide_with(a, &NoResolver, &links);
+        let d = decide(&shell("cat ./s/id_rsa"));
+        assert_eq!(d.verdict, Verdict::Deny);
+        assert_eq!(d.rules, ["secret"]);
+        assert!(d.reasons.iter().any(|r| r.contains("/h/.ssh/id_rsa")));
+        assert_eq!(
+            decide(&shell("echo k >> s/authorized_keys")).verdict,
+            Verdict::Deny
+        );
+        assert_eq!(
+            decide(&Action::FsRead {
+                path: "/p/s/config".into()
+            })
+            .verdict,
+            Verdict::Deny
+        );
+        assert_eq!(decide(&shell("cat ./lib/a.rs")).verdict, Verdict::Allow);
+        assert_eq!(
+            compiled.decide(&shell("cat ./s/id_rsa")).verdict,
+            Verdict::Allow,
+            "without a resolver only the literal path is known"
         );
     }
 

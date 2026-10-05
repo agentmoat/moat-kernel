@@ -110,7 +110,11 @@ fn evaluate(host: Host) -> Result<(Option<HookRequest>, Decision)> {
         cwd: context::path_string(&cwd),
     };
     let snapshot = Snapshot::load(&home.environment_path())?;
-    let mut decision = CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot);
+    let mut decision = CompiledPolicy::compile(&policy, &ctx)?.decide_with(
+        action,
+        &snapshot,
+        &moat_core::NoResolver,
+    );
     if decision.verdict == Verdict::Ask
         && let moat_core::Action::Shell { command } = action
         && Grants::load(&home.grants_path())?.matches(host.id(), &request.session_id, command)

@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 
 use std::collections::BTreeMap;
 
-use moat_core::{Action, CompiledPolicy, EvalContext, MapResolver, Policy, Verdict};
+use moat_core::{
+    Action, CompiledPolicy, EvalContext, MapPathResolver, MapResolver, Policy, Verdict,
+};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -28,6 +30,9 @@ struct Fixture {
     /// Program name → path recorded at install time.
     #[serde(default)]
     pins: BTreeMap<String, String>,
+    /// Symlink path → target, as the filesystem would resolve it.
+    #[serde(default)]
+    links: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -152,7 +157,10 @@ fn default_policy_conformance() {
             resolved: fixture.resolve.clone(),
             pins: fixture.pins.clone(),
         };
-        let decision = compiled.decide_with(&action, &resolver);
+        let links = MapPathResolver {
+            links: fixture.links.clone(),
+        };
+        let decision = compiled.decide_with(&action, &resolver, &links);
         let missing: Vec<&String> = fixture
             .expect
             .rules

@@ -86,3 +86,7 @@
 - id: benign-pnpm-exec-listed-tool
   action: { shell: "pnpm exec tsc --noEmit" }
   expect: { verdict: allow, rules: [dev-shell, dev-tools] }
+- id: benign-symlink-inside-project
+  action: { shell: "cat ./lib/main.rs" }
+  links: { /p/lib: /p/vendor/lib }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }

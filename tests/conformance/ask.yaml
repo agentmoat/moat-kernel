@@ -64,3 +64,6 @@
 - id: ask-rm-rf-temp-dir-is-not-destructive
   action: { shell: "rm -rf /tmp/build" }
   expect: { verdict: ask, rules: [default] }
+- id: ask-create-symlink-and-read-through-it
+  action: { shell: "ln -s ~/.ssh ./s && cat ./s/id_rsa" }
+  expect: { verdict: ask, rules: [default] }
