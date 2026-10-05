@@ -28,23 +28,28 @@ moat-kernel/
 ├── Cargo.lock                  # committed (binaries)
 ├── rust-toolchain.toml         # pinned stable channel + components (clippy, rustfmt)
 ├── deny.toml                   # cargo-deny: licences, advisories, bans, sources
-├── rustfmt.toml · clippy.toml  # style
-├── .cargo/config.toml          # target-specific flags (musl static, Windows CRT), aliases (xtask)
-├── dist-workspace.toml         # cargo-dist: targets, installers, Homebrew tap, MSI
+├── rustfmt.toml · clippy.toml  # style; clippy thresholds and disallowed macros/methods
+├── .cargo/config.toml          # rustdoc -D warnings; `cargo gate` alias
+├── dist-workspace.toml         # (planned) cargo-dist: targets, installers, Homebrew tap, MSI
 │
 ├── crates/
-│   ├── moat-core/              # PURE: policy model, lexer/, shell/ classifier, patterns, paths, engine, verdict. No I/O, no OS calls.
+│   ├── moat-core/              # PURE: no I/O, no OS calls, no internal deps
+│   │   ├── src/{lib,policy,engine,pattern,paths,programs,action,verdict}.rs
 │   │   ├── src/lexer/{mod,tests}.rs
 │   │   ├── src/shell/{mod,commands,tokens,tables,tests}.rs
 │   │   └── tests/{conformance,architecture}.rs
-│   ├── moat-hosts/             # adapters: pre_tool_use (Claude Code, Codex); cursor, openclaw, mcp_proxy (planned)
-│   ├── moat-audit/             # SQLite (WAL) store, schema migrations, replay, export, hash chain
-│   ├── moat-approve/           # (planned) TTY prompt, approval cache, Telegram channel (feature-gated)
+│   ├── moat-hosts/             # src/{lib,pre_tool_use,config_change,cursor}.rs; openclaw, mcp_proxy (planned)
+│   ├── moat-audit/             # src/{lib,store,query,redact}.rs: SQLite (WAL) store, time-window and session queries, redaction; export, hash chain (planned)
+│   ├── moat-cli/               # published crate `moat-kernel`, binary `moat`
+│   │   ├── src/{main,cli,home,context,project,time,environment,integrity,approvals,render,exit}.rs
+│   │   ├── src/commands/{mod,init,guard,show,status,doctor,allow,replay,report,policy}.rs
+│   │   ├── src/install/{mod,hook_file}.rs
+│   │   └── tests/{cli,guard,cursor,config_change,lock,approvals,replay_report}.rs
+│   ├── moat-approve/           # (planned) TTY prompt, approval cache, Telegram channel
 │   ├── moat-sandbox/           # (planned) `moat exec`: profile builders (Seatbelt, Landlock+seccomp, bwrap), launcher; Windows stub → Phase 2 AppContainer
 │   ├── moat-proxy/             # (planned) egress proxy: CONNECT/SNI allowlist, connection log, taint feed
 │   ├── moat-mcp/               # (planned) MCP stdio proxy (v0.1) → secure MCP host (Phase 2); uses rmcp
 │   ├── moat-ffi/               # (planned) Phase 3: C ABI (`libmoat`) over moat-core for embedding
-│   ├── moat-cli/               # published crate `moat-kernel`, binary `moat`: cli, commands/{init,guard,show,status,policy}, install/, home, context, render, exit
 │   └── xtask/                  # (planned) dev automation: refresh host fixtures, regenerate coverage matrix, release checks
 │
 ├── hosts/                      # (planned) host-side artefacts that are not Rust
@@ -53,9 +58,7 @@ moat-kernel/
 │   ├── codex/                  # hooks.json templates, requirements.toml example
 │   └── cursor/                 # hooks.json template with failClosed=true
 │
-├── sdks/                       # (planned)
-│   ├── typescript/             # @agentmoat/sdk: policy types, audit reader, embedding helpers
-│   └── python/                 # agentmoat: same surface
+├── sdks/                       # (planned) typescript/ (@agentmoat/sdk), python/ (agentmoat)
 │
 ├── policies/
 │   ├── default-v1.yaml         # shipped defaults (versioned, changelog entry on change)
@@ -63,52 +66,51 @@ moat-kernel/
 │   └── examples/               # (planned) minimal, strict, team examples
 │
 ├── tests/
-│   ├── conformance/            # YAML fixtures T1–T12 + benign; runner (decide-only, runs on all OS)
+│   ├── conformance/{attacks,benign,ask}.yaml   # decide-only fixtures; runner is crates/moat-core/tests/conformance.rs
+│   ├── fixtures/hosts/{claude-code,codex,cursor}/*.json   # golden host payloads
 │   ├── e2e/                    # (planned) executing fixtures under `moat exec` (macOS/Linux CI only)
-│   ├── fixtures/hosts/         # golden host payloads per host and version
-│   └── tamper/                 # (planned) self-protection scenarios (edit policy, remove hook, swap binary, poison PATH)
+│   └── tamper/                 # (planned) self-protection scenarios; today crates/moat-cli/tests/{lock,config_change,guard}.rs
 │
 ├── fuzz/                       # (planned) cargo-fuzz targets: shell tokenizer, path canon, policy loader, host adapters
 ├── benches/                    # (planned) criterion: guard latency, parser throughput
 │
 ├── docs/
-│   ├── OVERVIEW.md · DESIGN.md · STRENGTH.md · TECH_STACK.md · REPO_STRUCTURE.md
+│   ├── OVERVIEW.md · DESIGN.md · STRENGTH.md · TECH_STACK.md · REPO_STRUCTURE.md · PROGRESS.md
 │   ├── POLICY.md               # user-facing policy reference
 │   ├── README.md               # documentation map
 │   ├── THREAT_MODEL.md         # (planned) expanded from DESIGN.md §3
-│   ├── COVERAGE_MATRIX.md      # (planned) generated by xtask from host adapters' capability tables
-│   └── adr/                    # Architecture Decision Records, 0001-…; one per irreversible decision
+│   ├── COVERAGE_MATRIX.md      # (planned) generated by xtask; today STRENGTH.md §2.5, hand-maintained
+│   └── adr/ADR-NNN-<slug>.md   # Architecture Decision Records; one per irreversible decision
 │
-├── installers/
-│   ├── install.sh · install.ps1   # (planned) generated by cargo-dist, committed for review
+├── installers/                 # (planned) install.sh · install.ps1 generated by cargo-dist, committed for review
 │
 ├── scripts/ci/quality-gate.sh  # the one gate: fmt, clippy -D warnings, doc, tests, policy lint (CI and pre-push run it)
 ├── scripts/ci/sync-labels.sh   # source of truth for GitHub labels (`type: …`, `area: …`, `size: …`, `risk: …`)
 ├── .githooks/pre-push          # enable with `git config core.hooksPath .githooks`
 ├── .github/
 │   ├── workflows/
-│   │   ├── ci.yml              # quality gate on macos-14, macos-15-intel, ubuntu, windows + wasm purity + cargo-deny
-│   │   ├── pr-title.yml        # Conventional Commits title check (dependency PRs exempt)
-│   │   ├── pr-standards.yml    # auto labels `type: …` `area: …` `size: …` `risk: …`, `needs: fixture`; fails on missing Testing/Security sections or XL size
-│   │   ├── pr-review.yml       # `moat-reviewer` GitHub App: advisory first-pass review against AGENTS.md (inline 🔴/🟠/🟡/💡 + summary); `@moat-reviewer` re-runs
-│   │   ├── security.yml        # (planned) cargo-deny, cargo-audit, SBOM (cyclonedx), dependency review
+│   │   ├── ci.yml              # jobs `macos-14`, `macos-15-intel`, `ubuntu-latest`, `windows-latest` (quality gate), `moat-core builds for wasm32 (no I/O)`, `cargo-deny`
+│   │   ├── pr-title.yml        # job `conventional`: Conventional Commits title (dependency PRs exempt)
+│   │   ├── pr-standards.yml    # job `labels · size · risk · body`: auto labels, fails on missing Testing/Security sections or XL size
+│   │   ├── pr-review.yml       # `moat-reviewer` GitHub App: advisory first-pass review against AGENTS.md; `@moat-reviewer` re-runs
+│   │   ├── security.yml        # (planned) cargo-audit, SBOM (cyclonedx), dependency review
 │   │   ├── fuzz.yml            # (planned) nightly 30-min fuzz per target; crashes → issues with minimised input
 │   │   ├── mutants.yml         # (planned) weekly cargo-mutants on moat-core; fail if score < 95%
 │   │   ├── release.yml         # (planned) cargo-dist on tag: binaries, installers, Homebrew tap PR, MSI, Sigstore signatures, SBOM attach
 │   │   └── hosts-watch.yml     # (planned) weekly: refresh host fixtures against latest host releases; open issue on schema drift
-│   ├── moat-reviewer/          # reviewer app: setup README, avatar
+│   ├── moat-reviewer/          # reviewer app: README.md, avatar.png
 │   ├── CODEOWNERS              # trusted core, policy, fixtures, workflows routed to maintainers
-│   ├── ISSUE_TEMPLATE/         # bug, bypass report (private route pointer), host-integration request, policy-pack proposal
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   └── dependabot.yml          # cargo + github-actions + npm (sdks)
+│   ├── ISSUE_TEMPLATE/         # bug_report.yml, feature_request.yml, config.yml (private advisory link); bypass, host-integration and policy-pack forms (planned)
+│   ├── pull_request_template.md
+│   └── dependabot.yml          # cargo (weekly, 7-day cooldown, grouped minor/patch) + github-actions; npm (planned with sdks/)
 │
 ├── AGENTS.md · CLAUDE.md       # compact contract for people and coding agents (CLAUDE.md just points at AGENTS.md)
 ├── SECURITY.md                 # private reporting, in/out of scope tables, threat model summary
 ├── CONTRIBUTING.md · CODE_OF_CONDUCT.md · .editorconfig
 ├── crates/*/README.md          # one-paragraph crate purpose and rules
-├── CHANGELOG.md                # Keep a Changelog, generated from Conventional Commits
+├── CHANGELOG.md                # Keep a Changelog, hand-maintained
 ├── LICENSE-APACHE · LICENSE-MIT
-└── README.md                   # pitch, install, coverage matrix, benchmark chart, links
+└── README.md                   # pitch, install, day-to-day workflows, commands, links; coverage matrix and benchmark chart (planned)
 ```
 
 ## 3. Crate dependency rules (enforced)
@@ -117,73 +119,80 @@ moat-kernel/
 moat-cli ──► moat-hosts ──► moat-core
    │             │
    ├──► moat-audit ──► moat-core
-   ├──► moat-approve ──► moat-core
-   ├──► moat-sandbox ──► moat-core
-   ├──► moat-proxy ──► moat-core, moat-audit
-   └──► moat-mcp ──► moat-core, moat-hosts
-moat-ffi ──► moat-core (only)
+   ├──► moat-approve ──► moat-core                 (planned)
+   ├──► moat-sandbox ──► moat-core                 (planned)
+   ├──► moat-proxy ──► moat-core, moat-audit       (planned)
+   └──► moat-mcp ──► moat-core, moat-hosts         (planned)
+moat-ffi ──► moat-core (only)                      (planned)
 ```
 
 - `moat-core` has **no** I/O, no `std::process`, no `std::net`, no filesystem access;
   `#![forbid(unsafe_code)]`; compiles to `wasm32-unknown-unknown` (future policy playground).
   Enforced by a `cargo-deny` ban list on crates (`tokio`, `rusqlite`, `reqwest`, …) for
-  that crate and a CI check building it for wasm.
-- `unsafe` is permitted only in `moat-sandbox` (OS APIs) and `moat-ffi`, each site with a
-  `// SAFETY:` comment; `cargo geiger` report in CI.
+  that crate, a dependency allowlist in `tests/architecture.rs`, and a CI job building it for wasm.
+- `unsafe` is forbidden workspace-wide today. When `moat-sandbox` (OS APIs) and `moat-ffi`
+  exist they may opt in per site with a `// SAFETY:` comment; a `cargo geiger` report in CI
+  is planned with them.
 - No crate depends on `moat-cli`. Everything the CLI does is callable as a library.
 - Host adapters never make decisions; they only translate. Decisions live in `moat-core`.
-- Feature flags: `telegram`, `sandbox-linux`, `sandbox-macos`, `sandbox-windows`, `mcp`.
-  Default build enables what the target OS supports.
+- No feature flags today. Planned: `telegram`, `sandbox-linux`, `sandbox-macos`,
+  `sandbox-windows`, `mcp`; the default build will enable what the target OS supports.
 
 ## 4. Versioning and releases
 
-- **Names**: GitHub `agentmoat/moat-kernel`; published CLI crate `moat-kernel` → binary `moat`
-  (`cargo install moat-kernel`, `brew install agentmoat/tap/moat`); library crates `moat-core`,
-  `moat-hosts`, …; npm/PyPI SDKs `@agentmoat/sdk`, `agentmoat`.
+- **Names**: GitHub `agentmoat/moat-kernel`; CLI crate `moat-kernel` → binary `moat`
+  (today `cargo install --path crates/moat-cli`; `cargo install moat-kernel` and
+  `brew install agentmoat/tap/moat` once published); library crates `moat-core`,
+  `moat-hosts`, `moat-audit`; npm/PyPI SDKs `@agentmoat/sdk`, `agentmoat` (planned).
 - **Lockstep semver** across all crates and the CLI (one version, `workspace.package.version`).
   `0.x` until Phase 2 ships; breaking policy-schema changes bump the schema `version` field
-  and ship a migrator (`moat policy migrate`).
+  and ship a migrator (`moat policy migrate`, planned).
 - **Trunk-based, PR-only**: `main` always releasable; every change via a `<type>/<topic>` branch and a
-  pull request (maintainers included); squash merge; required checks: quality gate on all OS, wasm
-  purity, cargo-deny, pr-title, pr-standards. A branch ruleset on `main` enforces this: pull
-  request required, squash merge only, linear history, all eight checks required and up to date,
-  no force-push, no deletion.
-- **Conventional Commits** (`feat:`, `fix:`, `sec:`, `policy:`, `host(codex):`, `docs:`);
-  changelog generated; `sec:` entries always get a CHANGELOG security section.
-- **Release**: tag `vX.Y.Z` → `release.yml` → `cargo-dist` builds all targets, generates
+  pull request (maintainers included); squash merge. A branch ruleset on `main` enforces this:
+  pull request required, squash merge only, linear history, no force-push, no deletion, and
+  eight required checks, up to date: `macos-14`, `macos-15-intel`, `ubuntu-latest`,
+  `windows-latest`, `moat-core builds for wasm32 (no I/O)`, `cargo-deny`, `conventional`,
+  `labels · size · risk · body`.
+- **Conventional Commits** (`feat:`, `fix:`, `sec:`, `policy:`, `host(codex):`, `docs:`,
+  `test:`, `refactor:`, `perf:`, `build:`, `ci:`, `chore:`); `CHANGELOG.md` is hand-maintained
+  in Keep a Changelog form (generation planned); `sec:` entries always get a CHANGELOG security section.
+- **Release (planned)**: tag `vX.Y.Z` → `release.yml` → `cargo-dist` builds all targets, generates
   `curl | sh` and PowerShell installers, MSI, Homebrew tap PR; artefacts signed with
   Sigstore (keyless, GitHub OIDC); SBOM attached; checksums in the release notes.
   Reproducible-build check compares two independent runners' hashes.
 - **Default policy** changes are release-noted individually with the rule id and the
   fixture that motivated them.
-- **Host compatibility**: `doctor` pins minimum/maximum tested host versions from a table
+- **Host compatibility (planned)**: `doctor` pins minimum/maximum tested host versions from a table
   in `moat-hosts`; `hosts-watch.yml` opens an issue when a host changes its hook schema.
+  Today `doctor` checks hook presence and the binary path only.
 
 ## 5. Testing layers (what runs where)
 
 | Layer | Location | Runs on | Gate |
 |---|---|---|---|
-| Unit + property (`proptest`) | each crate | all OS | PR |
-| Architecture invariants (dependency allowlist, no `unsafe`, file-size budget) | `crates/*/tests/architecture.rs` | all OS | PR |
+| Unit (property tests with `proptest`: planned) | each crate | all OS | PR |
+| Architecture invariants (dependency allowlist, no `unsafe`, file-size budget) | `crates/moat-core/tests/architecture.rs` | all OS | PR |
 | Golden host payloads | `tests/fixtures/hosts` | all OS | PR |
 | Conformance (decide) | `tests/conformance` | all OS | PR |
-| E2E executing under `moat exec` | `tests/e2e` | macOS, Linux | PR |
-| Tamper / self-protection | `tests/tamper` | all OS | PR |
-| Fuzz | `fuzz/` | Linux nightly | issue on crash |
-| Mutation | `moat-core` | weekly | ≥ 95% |
-| Benchmarks (latency) | `benches/` | PR (report), nightly (trend) | p95 budget |
-| MoatBench (security outcomes) | `agentmoat/moatbench` | nightly + release | release gate (STRENGTH.md §3.3) |
+| End-to-end CLI and hooks (real binary, isolated `HOME`/`MOAT_HOME`) | `crates/moat-cli/tests/` | all OS | PR |
+| Tamper / self-protection | today `crates/moat-cli/tests/{lock,config_change,guard}.rs`; `tests/tamper` planned | all OS | PR |
+| E2E executing under `moat exec` (planned) | `tests/e2e` | macOS, Linux | PR |
+| Fuzz (planned) | `fuzz/` | Linux nightly | issue on crash |
+| Mutation (planned) | `moat-core` | weekly | ≥ 95% |
+| Benchmarks (planned; latency measured by hand today) | `benches/` | PR (report), nightly (trend) | p95 budget |
+| MoatBench (planned; security outcomes) | `agentmoat/moatbench` | nightly + release | release gate (STRENGTH.md §3.3) |
 
 ## 6. Documentation conventions
 
-- Docs are code: changed in the same PR as behaviour; `COVERAGE_MATRIX.md` is generated,
-  never hand-edited.
-- One ADR per irreversible or contested decision (`docs/adr/0001-rust.md`,
-  `0002-decide-and-enforce.md`, `0003-monorepo.md`, …). ADRs are immutable; superseding
-  ADRs link back.
-- `THREAT_MODEL.md` and `SECURITY.md` are linked from the README header, not buried.
-- Every CLI command has `--help` text that is also the source of `docs/cli/*.md`
-  (generated by `xtask docs`).
+- Docs are code: changed in the same PR as behaviour. `COVERAGE_MATRIX.md` (planned) will be
+  generated, never hand-edited; until then the matrix is `STRENGTH.md` §2.5.
+- One ADR per irreversible or contested decision, named `docs/adr/ADR-NNN-<slug>.md`
+  (`ADR-001-rust-for-the-kernel.md`, `ADR-002-deny-is-absolute.md`,
+  `ADR-003-decide-and-enforce.md`, `ADR-004-exit-code-contract.md`, …). ADRs are immutable;
+  superseding ADRs link back.
+- `SECURITY.md` is linked from the README; `THREAT_MODEL.md` (planned) will be too. Until
+  then the threat model is `DESIGN.md` §3.
+- Every CLI command has `--help` text; `docs/cli/*.md` generated from it by `xtask docs` is planned.
 
 ## 7. Contribution and governance
 
@@ -195,8 +204,8 @@ moat-ffi ──► moat-core (only)
   never for the trusted core.
 - Licence: dual MIT / Apache-2.0 (Rust ecosystem norm; Apache grants patent protection).
   Contributions under the same terms; no CLA.
-- `GOVERNANCE.md`: BDFL during Phase 1; maintainer team and a public roadmap board from
-  Phase 2; decision log in `DESIGN.md` §12 until then.
+- `GOVERNANCE.md` (planned): BDFL during Phase 1; maintainer team and a public roadmap board
+  from Phase 2. Until it exists, `CONTRIBUTING.md` "Governance" is the statement of record.
 
 ## 8. Satellite repo: `agentmoat/moatbench` layout (summary)
 

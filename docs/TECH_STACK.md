@@ -134,20 +134,29 @@ neighbours.
 
 ## Chosen stack
 
+Status 2026-10-05: rows marked *in use* are in `Cargo.toml` today; the rest is planned.
+
 | Layer | Choice |
 |---|---|
-| Kernel language | Rust (stable toolchain, edition 2024) |
-| Async runtime | tokio |
-| CLI | clap |
-| MCP | `rmcp` (official) |
+| Kernel language | Rust 1.95 (pinned in `rust-toolchain.toml`), edition 2024 — *in use* |
+| Async runtime | none today; `tokio` planned with `moat serve`, the MCP proxy and the egress proxy |
+| CLI | `clap` (derive) — *in use* |
+| MCP | `rmcp` (official) — planned with the MCP proxy; not a dependency today |
 | Sandbox | Phase 2: `skarn-sandbox` and/or crates adapted from Codex (`linux-sandbox`, `bwrap`, `execpolicy`), `rust-landlock`; evaluate `cap-std` for in-kernel file handling |
 | WASM skills | Wasmtime + Component Model (Phase 2/3) |
-| Storage | `rusqlite` (bundled SQLite) for audit; `keyring` crate for OS keychain |
-| Policy format | YAML via `serde_yaml_ng` (maintained fork of `serde_yaml`); JSON Schema for editors planned |
-| Release | `cargo-dist` → `curl \| sh`, Homebrew tap, winget/MSI, GitHub Releases; `cargo install moat` |
-| Lint / CI | clippy (deny warnings), rustfmt, `cargo-deny` (licenses + advisories), GitHub Actions matrix: macOS arm64/x64, Linux x64/arm64 (musl), Windows x64 |
-| Embedding | `moat-core` crate + C ABI (`libmoat`) so Go / TypeScript / Swift hosts can link the policy engine |
-| Userland SDKs | TypeScript first, Python second (skills, channels, providers) |
+| Storage | `rusqlite` (bundled SQLite) for the audit log — *in use*; `keyring` for the OS keychain — planned, not a dependency today |
+| Policy format | YAML via `serde_yaml_ng` (maintained fork of `serde_yaml`) — *in use*; JSON Schema for editors planned |
+| Release | today: `cargo install --path crates/moat-cli` from a checkout (crate `moat-kernel`, binary `moat`; not yet on crates.io). Planned: `cargo-dist` → `curl \| sh`, Homebrew tap, winget/MSI, GitHub Releases, `cargo install moat-kernel` |
+| Lint / CI | clippy pedantic `-D warnings`, rustfmt, rustdoc `-D warnings`, `cargo-deny` (licences + advisories) — *in use*. GitHub Actions matrix: `macos-14` (arm64), `macos-15-intel` (x64), `ubuntu-latest` (x64), `windows-latest` (x64), plus a `wasm32-unknown-unknown` build of `moat-core`. Linux arm64 and musl builds: planned with the release workflow |
+| Embedding | `moat-core` is a library crate today; C ABI (`libmoat`) for Go / TypeScript / Swift hosts — planned |
+| Userland SDKs | planned: TypeScript first, Python second (skills, channels, providers) |
+
+### Crates in use (workspace `Cargo.toml`)
+
+`serde`, `serde_json`, `serde_yaml_ng`, `thiserror`, `globset`, `clap`, `anyhow` (CLI only),
+`regex` (audit redaction), `sha2` (lock digests), `rusqlite` with `bundled` (audit log),
+`tempfile` (dev). `moat-core` is restricted to `serde`, `serde_yaml_ng`, `globset` and
+`thiserror` by `crates/moat-core/tests/architecture.rs`.
 
 ## Repository layout
 
