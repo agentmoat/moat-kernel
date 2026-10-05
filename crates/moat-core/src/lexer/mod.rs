@@ -1,7 +1,7 @@
 //! POSIX-shell lexer sufficient for policy classification.
 //!
 //! The lexer does **not** execute anything and does not expand variables; it
-//! produces words and control operators so that `shell.rs` can decompose a
+//! produces words and control operators so that the classifier (`shell/`) can decompose a
 //! command line into simple commands, redirections and nested commands.
 //!
 //! Supported syntax:
@@ -101,40 +101,30 @@ pub struct Word {
 pub enum Token {
     Word(Word),
     Operator(Operator),
-    /// A here-document: delimiter word plus the raw body lines.
+    /// The raw body lines of a here-document; classified as data, never as commands.
     HereDoc {
         body: String,
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Why a command line could not be tokenised. Any of these makes the action `ask`.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum LexError {
+    #[error("unterminated single quote")]
     UnterminatedSingleQuote,
+    #[error("unterminated double quote")]
     UnterminatedDoubleQuote,
+    #[error("unterminated `$(` command substitution")]
     UnterminatedSubstitution,
+    #[error("unterminated backtick substitution")]
     UnterminatedBacktick,
+    #[error("here-document `{delimiter}` has no terminating line")]
     UnterminatedHereDoc { delimiter: String },
+    #[error("command ends with a backslash")]
     TrailingBackslash,
+    #[error("command exceeds {max} bytes")]
     TooLong { max: usize },
 }
-
-impl fmt::Display for LexError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnterminatedSingleQuote => write!(f, "unterminated single quote"),
-            Self::UnterminatedDoubleQuote => write!(f, "unterminated double quote"),
-            Self::UnterminatedSubstitution => write!(f, "unterminated `$(` command substitution"),
-            Self::UnterminatedBacktick => write!(f, "unterminated backtick substitution"),
-            Self::UnterminatedHereDoc { delimiter } => {
-                write!(f, "here-document `{delimiter}` has no terminating line")
-            }
-            Self::TrailingBackslash => write!(f, "command ends with a backslash"),
-            Self::TooLong { max } => write!(f, "command exceeds {max} bytes"),
-        }
-    }
-}
-
-impl std::error::Error for LexError {}
 
 /// Upper bound on input size; larger commands are refused (and therefore `ask`).
 pub const MAX_COMMAND_BYTES: usize = 64 * 1024;

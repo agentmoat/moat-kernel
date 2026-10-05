@@ -1,6 +1,7 @@
 //! Program and extension tables that drive classification.
 //!
-//! Keep these data-only. Behaviour belongs in `commands` and `tokens`.
+//! Data only; the modules next to this one hold the behaviour. Tables used by
+//! a single module (`decoders`, `make`, `options`) live in that module.
 
 pub const SHELLS: &[&str] = &["sh", "bash", "zsh", "dash", "ksh", "fish"];
 
@@ -98,7 +99,6 @@ pub const SPECIAL_PARAMS: &[char] = &['?', '$', '!', '#', '@', '*', '-', '0'];
 /// Variables that are expanded by the classifier itself or carry no secret.
 pub const IGNORED_VARS: &[&str] = &["HOME", "PWD", "OLDPWD", "USER", "SHELL", "TERM", "project"];
 
-/// Suffixes that make a dotted token a file name rather than a host.
 /// Top-level domains accepted for a bare dotted token (no scheme). Dotted
 /// identifiers in code (`sys.version`, `os.system`, `console.log`) and names
 /// like `fix.bug` are not hosts; a token with a scheme is always one.
@@ -115,6 +115,7 @@ pub const KNOWN_TLDS: &[&str] = &[
     "np", "ir", "iq", "sa", "ae", "qa", "my", "pe", "ve", "uy", "ec",
 ];
 
+/// Suffixes that make a dotted token a file name rather than a host.
 pub const FILE_EXTENSIONS: &[&str] = &[
     "rs", "js", "ts", "tsx", "jsx", "mjs", "cjs", "py", "rb", "php", "go", "java", "kt", "swift",
     "c", "h", "cpp", "hpp", "cs", "md", "txt", "json", "yaml", "yml", "toml", "lock", "sh", "bash",

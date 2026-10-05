@@ -5,24 +5,28 @@
 //! everything in. That keeps the security-relevant logic small, testable and
 //! portable (it also builds for `wasm32`).
 //!
-//! Pipeline (DESIGN.md §7.1): `Action` → [`shell::classify`] → atomic actions →
-//! [`engine::evaluate`] → [`verdict::Decision`].
+//! Pipeline: an [`Action`] is classified into [`AtomicAction`]s, each atomic
+//! action is evaluated `deny → allow → ask → defaults` by a [`CompiledPolicy`],
+//! and the strictest verdict across them becomes the [`Decision`]. Facts that
+//! need the filesystem reach the engine through [`ProgramResolver`] and
+//! [`PathResolver`].
 
-pub mod action;
-pub mod engine;
-pub mod host;
-pub mod lexer;
+mod action;
+mod engine;
+mod host;
+mod lexer;
 pub mod lint;
-pub mod paths;
-pub mod pattern;
-pub mod policy;
-pub mod programs;
-pub mod realpath;
-pub mod shell;
-pub mod verdict;
+mod paths;
+mod pattern;
+mod policy;
+mod programs;
+mod realpath;
+mod shell;
+mod verdict;
 
 pub use action::{Action, AtomicAction};
 pub use engine::{CompiledPolicy, EvalContext, evaluate};
+pub use pattern::literal_shell_pattern;
 pub use policy::{Defaults, Policy, PolicyError, RuleGroup};
 pub use programs::{MapResolver, NoResolver, ProgramResolver};
 pub use realpath::{MapPathResolver, PathResolver};

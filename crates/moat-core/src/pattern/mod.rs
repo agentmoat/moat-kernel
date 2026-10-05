@@ -2,6 +2,9 @@
 
 use globset::{Glob, GlobBuilder, GlobMatcher};
 
+mod literal;
+pub use literal::literal_shell_pattern;
+
 use crate::lexer;
 use crate::policy::PolicyError;
 
@@ -60,11 +63,6 @@ impl GlobPattern {
                 prefix.ends_with('/') && !has_glob_syntax(prefix) && theirs.starts_with(prefix)
             })
     }
-
-    #[must_use]
-    pub fn source(&self) -> &str {
-        &self.source
-    }
 }
 
 /// Evaluate a list of (possibly negated) globs: a candidate matches if at
@@ -105,7 +103,7 @@ enum Token {
 ///   else is an ordinary token.
 ///   `git status` therefore also matches `git status --short`; pipelines and
 ///   `&&` lists are split and matched per sub-command and as whole pipelines
-///   (see `shell.rs`), so `git status | sh` is still caught by `* | sh` rules.
+///   (see `shell/commands.rs`), so `git status | sh` is still caught by `* | sh` rules.
 #[derive(Debug, Clone)]
 pub struct ShellPattern {
     source: String,
@@ -216,11 +214,6 @@ impl ShellPattern {
         }
         let words: Vec<&str> = words.iter().map(String::as_str).collect();
         covers_from(&self.tokens, &words)
-    }
-
-    #[must_use]
-    pub fn source(&self) -> &str {
-        &self.source
     }
 }
 
