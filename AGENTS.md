@@ -24,7 +24,7 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 | `policies/default-v1.yaml` | shipped default policy | every change needs a conformance fixture and a CHANGELOG line |
 | `tests/conformance/{attacks,benign,ask}.yaml` | executable security claims | ids unique, one action each, `rules` must appear in the decision; attacks and asks carry `threat: T1…T12`; `docs/COVERAGE.md` is generated from them (`MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`) and every threat needs an attack |
 | `tests/fixtures/hosts/<host>/*.json` | real host payloads | golden inputs; never include real tokens or personal paths |
-| `crates/*/tests/` | end-to-end (`cli`, `guard`, `cursor`, `config_change`, `lock`, `approvals`, `replay_report`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
+| `crates/*/tests/` | end-to-end tests of the binary in one target, `crates/moat-cli/tests/e2e/` (one module per area: `cli`, `guard`, `cursor`, `config_change`, `lock`, `approvals`, `allow`, `replay_report`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
 | `docs/` | OVERVIEW, DESIGN, STRENGTH, TECH_STACK, REPO_STRUCTURE, PROGRESS, POLICY, `adr/` | design is the spec; ADRs are immutable, superseded by new ADRs |
 | `scripts/ci/quality-gate.sh` | the one gate | CI and the pre-push hook run exactly this |
 
@@ -76,14 +76,14 @@ Claim "done" only after it passes locally. CI runs the same script on macOS (arm
 1. New module in `crates/moat-hosts/src/<host>.rs`; add the variant to `Host` and its `id()`/`display_name()`.
 2. Golden payloads in `tests/fixtures/hosts/<host>/`; tests cover every tool kind the host exposes, a malformed payload, and an ungoverned tool.
 3. Installer config in `crates/moat-cli/src/install/mod.rs` (settings path, matcher, env override). If the host is fail-open by default, the installer must set its fail-closed flag.
-4. End-to-end test in `crates/moat-cli/tests/guard.rs` running the real binary against the fixture.
+4. End-to-end test in `crates/moat-cli/tests/e2e/guard.rs` running the real binary against the fixture.
 5. Document the coverage honestly in `docs/DESIGN.md` §4 and the coverage matrix in `docs/STRENGTH.md` §2.5.
 
 ### Add a CLI command
 1. Grammar in `cli.rs` (clap derive, `///` doc on every arg), dispatch in `commands/mod.rs`, implementation in `commands/<name>.rs`.
 2. Output through `render.rs`; machine-readable `--format json` for anything a script might consume.
 3. Exit codes via `exit::Code` only.
-4. End-to-end test in `crates/moat-cli/tests/cli.rs` using an isolated `HOME`.
+4. End-to-end test in `crates/moat-cli/tests/e2e/cli.rs` using an isolated `HOME`.
 
 ### Change the audit schema
 Bump `SCHEMA_VERSION` in `store.rs`, add a migration step, keep `Event` deserialisation backward compatible, and add a test that opens a database written by the previous version.
