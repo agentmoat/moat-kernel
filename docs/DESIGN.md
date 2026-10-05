@@ -420,7 +420,8 @@ executables:                    # pin basenames to absolute paths (defeats PATH 
   map from kind (`shell`, `fs.read`, `fs.write`, `net`, `env.read`, `env.set`, `mcp`,
   `"*"`) to a verdict; the synthetic rule id is `default` or `default.<kind>`.
 - Shell rules: a bare `*` token matches any number of argv tokens; other tokens are
-  globs against exactly one token; the rule is a prefix unless its last token is a bare
+  globs against exactly one token; a leading `!` makes a pattern an exclusion within its
+  list (ADR-012); the rule is a prefix unless its last token is a bare
   `$`, which matches only the end of argv (`env $`, ADR-010). Pipelines/lists are evaluated
   per sub-command **and** as whole pipelines (every suffix with ≥ 2 sub-commands), so
   `curl * | sh` and `base64 -d | sh` match wherever they occur.
@@ -481,6 +482,9 @@ Rules:
   for other languages, scan payload for `os.system`, `subprocess`, `child_process`,
   `exec`, URLs and secret paths; unknown → `ask`.
 - Command substitution `$(…)` and backticks: evaluate inner command as its own action.
+- Options that run another command or write a file: the command after `find -exec`,
+  `-execdir`, `-ok`, `-okdir` is classified on its own; `--output=FILE` is an `fs.write`
+  (`shell/options.rs`).
 - Build tools whose arguments carry code (`make --eval`, `-e`, `SHELL=`, `.SHELLFLAGS=`,
   `MAKEFLAGS=`, `X!=cmd`, `$(shell …)`): each such argument is a `make <arg>` action of its
   own (so prefix allows like `make test*` do not cover it) and the embedded command is

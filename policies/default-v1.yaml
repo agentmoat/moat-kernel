@@ -181,6 +181,20 @@ allow:
       - "make build*"
       - "make check*"
       - "make lint*"
+      # options that run another program or write outside the command's own output (ADR-012)
+      - "!find * -exec*"
+      - "!find * -ok*"
+      - "!find * -delete*"
+      - "!find * -fprint*"
+      - "!find * -fls*"
+      - "!rg * --pre"
+      - "!rg * --pre=*"
+      - "!git * --upload-pack*"
+      - "!git * --receive-pack*"
+      - "!go * -exec*"
+      - "!go * -toolexec*"
+      - "!go * -vettool*"
+      - "!cargo * --config*"
   - id: dev-tools
     shell:
       - "tsc*"

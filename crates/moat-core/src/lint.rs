@@ -102,6 +102,9 @@ fn shadowed(
                 continue;
             };
             let hit = earlier.iter().find_map(|e| {
+                if e.shell.iter().any(|p| p.starts_with('!')) {
+                    return None;
+                }
                 e.shell
                     .iter()
                     .find(|p| ShellPattern::compile(p).is_ok_and(|s| s.covers(&target)))

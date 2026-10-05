@@ -207,6 +207,24 @@ fn make_arguments_that_run_code_are_separate_atoms() {
 }
 
 #[test]
+fn find_exec_commands_and_output_files_are_classified() {
+    let a = parsed("find . -name '*.rs' -exec sh -c 'cat ~/.ssh/id_rsa' {} \\; -print");
+    assert!(has_shell(&a, "cat ~/.ssh/id_rsa"), "{a:?}");
+    assert!(has_read(&a, "/Users/me/.ssh/id_rsa"), "{a:?}");
+    assert!(has_shell(&parsed("find . -execdir rm {} +"), "rm {}"));
+    assert!(has_write(
+        &parsed("git diff --output=~/.zshrc"),
+        "/Users/me/.zshrc"
+    ));
+    assert!(has_write(&parsed("git log --output out.txt"), "/p/out.txt"));
+    assert!(
+        !parsed("git log --output=-")
+            .iter()
+            .any(|x| matches!(x, AtomicAction::FsWrite { .. }))
+    );
+}
+
+#[test]
 fn printenv_names_are_env_reads() {
     let a = parsed("printenv -0 GITHUB_TOKEN HOME");
     for name in ["GITHUB_TOKEN", "HOME"] {

@@ -7,7 +7,7 @@
 
 use crate::action::{Action, AtomicAction};
 use crate::paths;
-use crate::pattern::{GlobPattern, ShellPattern, any_match};
+use crate::pattern::{GlobPattern, ShellPattern, any_match, any_shell_match};
 use crate::policy::{Policy, PolicyError, RuleGroup};
 use crate::programs::{self, NoResolver, ProgramResolver};
 use crate::realpath::PathResolver;
@@ -138,7 +138,7 @@ impl CompiledGroup<'_> {
     fn matches(&self, action: &AtomicAction) -> bool {
         match action {
             AtomicAction::Shell { argv } | AtomicAction::Pipeline { argv } => {
-                self.shell.iter().any(|p| p.is_match(argv))
+                any_shell_match(&self.shell, argv)
             }
             AtomicAction::FsRead { path } => any_match(&self.fs_read, path),
             AtomicAction::FsWrite { path } => any_match(&self.fs_write, path),
