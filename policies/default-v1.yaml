@@ -49,7 +49,7 @@ deny:
       - "typeset -x $"
   - id: env-poison
     reason: changes how later commands resolve or load code
-    env.set: ["PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_*", "NODE_OPTIONS", "PYTHONPATH", "GIT_*", "BASH_ENV", "ENV", "PROMPT_COMMAND"]
+    env.set: ["PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_*", "NODE_OPTIONS", "PYTHONPATH", "GIT_*", "BASH_ENV", "ENV", "PROMPT_COMMAND", "MOAT_*"]
   - id: pipe-to-shell
     reason: executes remote or decoded content
     shell:

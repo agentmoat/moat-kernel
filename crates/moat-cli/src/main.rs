@@ -16,6 +16,7 @@ mod integrity;
 mod project;
 mod realpath;
 mod render;
+mod terminal;
 mod time;
 
 use std::process::ExitCode;

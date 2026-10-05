@@ -1,7 +1,5 @@
 //! `moat allow`: turn an `ask` into a session grant or a permanent rule.
 
-use std::io::IsTerminal as _;
-
 use anyhow::{Context as _, Result, bail};
 use moat_audit::Store;
 use moat_core::{Action, Verdict};
@@ -13,7 +11,7 @@ use crate::home::Home;
 use crate::integrity;
 
 pub fn run(args: &AllowArgs) -> Result<Code> {
-    if !std::io::stdin().is_terminal() {
+    if !crate::terminal::interactive() {
         bail!("`moat allow` must be run by a person in a terminal, not from a hook or script");
     }
     let home = Home::locate()?;
