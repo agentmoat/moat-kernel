@@ -1,6 +1,7 @@
 //! The kernel's own state directory (`~/.moat`, or `$MOAT_HOME`).
 
 use std::fs;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
@@ -57,11 +58,12 @@ impl Home {
         self.root.is_dir()
     }
 
-    /// Create the directory with owner-only permissions.
+    /// Create the directory with owner-only permissions, tightening an
+    /// existing one.
     pub fn ensure(&self) -> Result<()> {
-        fs::create_dir_all(&self.root)
-            .with_context(|| format!("creating {}", self.root.display()))?;
-        restrict_dir(&self.root);
+        create_private_dir(&self.root)?;
+        #[cfg(unix)]
+        restrict(&self.root, PRIVATE_DIR)?;
         Ok(())
     }
 
@@ -105,9 +107,13 @@ impl Home {
 }
 
 /// Write a file atomically with owner-only permissions.
+///
+/// The temporary file is created owner-only before any byte is written, so the
+/// contents are never readable by others, not even between write and rename.
+/// Missing parent directories are created owner-only too.
 pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path.parent().context("path has no parent")?;
-    fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    create_private_dir(parent)?;
     let tmp = parent.join(format!(
         ".{}.tmp-{}",
         path.file_name()
@@ -115,10 +121,19 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
             .unwrap_or_default(),
         std::process::id()
     ));
-    fs::write(&tmp, bytes).with_context(|| format!("writing {}", tmp.display()))?;
-    restrict_file(&tmp);
-    fs::rename(&tmp, path).with_context(|| format!("replacing {}", path.display()))?;
-    Ok(())
+    let written = (|| {
+        let mut file = private_file_options()
+            .open(&tmp)
+            .with_context(|| format!("creating {}", tmp.display()))?;
+        file.write_all(bytes)
+            .and_then(|()| file.sync_all())
+            .with_context(|| format!("writing {}", tmp.display()))?;
+        fs::rename(&tmp, path).with_context(|| format!("replacing {}", path.display()))
+    })();
+    if written.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    written
 }
 
 pub fn user_home() -> Result<PathBuf> {
@@ -130,19 +145,71 @@ pub fn user_home() -> Result<PathBuf> {
 }
 
 #[cfg(unix)]
-fn restrict_dir(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o700));
+const PRIVATE_DIR: u32 = 0o700;
+
+/// `create_dir_all` whose new directories are owner-only (Unix).
+fn create_private_dir(path: &Path) -> Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, PRIVATE_DIR);
+    builder
+        .create(path)
+        .with_context(|| format!("creating {}", path.display()))
 }
 
+/// Options for a new file that is owner-only from the moment it exists (Unix).
+fn private_file_options() -> fs::OpenOptions {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options
+}
+
+/// Set Unix permission bits. Unix only: elsewhere the profile directory's ACL
+/// already limits access to the user.
 #[cfg(unix)]
-fn restrict_file(path: &Path) {
+fn restrict(path: &Path, mode: u32) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))
+        .with_context(|| format!("restricting permissions of {}", path.display()))
 }
 
-#[cfg(not(unix))]
-fn restrict_dir(_path: &Path) {}
+#[cfg(all(test, unix))]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
 
-#[cfg(not(unix))]
-fn restrict_file(_path: &Path) {}
+    use super::*;
+
+    fn mode(path: &Path) -> u32 {
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn private_files_and_their_new_parents_are_owner_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("policy.d/approved.yaml");
+        write_private(&file, b"x").unwrap();
+        assert_eq!(fs::read(&file).unwrap(), b"x");
+        assert_eq!(mode(&file), 0o600);
+        assert_eq!(mode(file.parent().unwrap()), 0o700);
+        write_private(&file, b"y").unwrap();
+        assert_eq!(
+            (fs::read(&file).unwrap(), mode(&file)),
+            (b"y".to_vec(), 0o600)
+        );
+        let leftovers = fs::read_dir(file.parent().unwrap()).unwrap().count();
+        assert_eq!(leftovers, 1, "no temporary file is left behind");
+    }
+
+    #[test]
+    fn ensure_tightens_an_existing_state_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join(".moat");
+        fs::create_dir(&root).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
+        Home { root: root.clone() }.ensure().unwrap();
+        assert_eq!(mode(&root), 0o700);
+    }
+}
