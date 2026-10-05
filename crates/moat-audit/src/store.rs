@@ -44,6 +44,8 @@ pub enum StoreError {
     InvalidId(String),
     #[error("encoding event: {0}")]
     Encode(#[from] serde_json::Error),
+    #[error("audit database file: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 /// Row id, shown and parsed as lowercase hex (`moat show 1f`).
@@ -111,8 +113,8 @@ impl Store {
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
             | OpenFlags::SQLITE_OPEN_CREATE
             | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+        create_owner_only(path)?;
         let conn = Connection::open_with_flags(path, flags)?;
-        restrict_permissions(path);
         Self::initialise(conn)
     }
 
@@ -275,18 +277,49 @@ fn now_ms() -> i64 {
         .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
-#[cfg(unix)]
-fn restrict_permissions(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+/// Create the database file owner-only before `SQLite` opens it. `SQLite` gives the
+/// `-wal` and `-shm` files the main file's permissions, so the whole log stays
+/// unreadable to other users; an existing file is tightened.
+fn create_owner_only(path: &Path) -> Result<(), StoreError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        options.mode(0o600);
+        options.open(path)?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    #[cfg(not(unix))]
+    options.open(path)?;
+    Ok(())
 }
-
-#[cfg(not(unix))]
-fn restrict_permissions(_path: &Path) {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn database_and_wal_files_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.db");
+        let store = Store::open(&path).unwrap();
+        let d = decision(Verdict::Allow, "dev-shell", "ok");
+        let a = Action::Shell {
+            command: "git status".into(),
+        };
+        store.record(&sample(&d, &a)).unwrap();
+        for name in ["audit.db", "audit.db-wal", "audit.db-shm"] {
+            let mode = std::fs::metadata(dir.path().join(name))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600, "{name}");
+        }
+    }
 
     fn decision(verdict: Verdict, rule: &str, reason: &str) -> Decision {
         let mut d = Decision::new(verdict);
