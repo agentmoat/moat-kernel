@@ -3,12 +3,14 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use moat_core::{Action, CompiledPolicy, Policy};
+use moat_core::{Action, CompiledPolicy, NoResolver, Policy, ProgramResolver};
 
 use crate::cli::{ActionKind, CheckArgs, Format, LintArgs};
 use crate::context;
+use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
+use crate::realpath::FsPathResolver;
 use crate::render;
 
 pub fn lint(args: &LintArgs) -> Result<Code> {
@@ -33,8 +35,21 @@ pub fn lint(args: &LintArgs) -> Result<Code> {
 pub fn check(args: &CheckArgs) -> Result<Code> {
     let (policy, _) = load(args.policy.clone())?;
     let ctx = context::eval_context(args.cwd.as_deref(), args.project.as_deref())?;
-    let decision =
-        CompiledPolicy::compile(&policy, &ctx)?.decide(&to_action(args.kind, &args.action));
+    // Decide the way `guard` would: symlinks resolved on this machine, and
+    // programs resolved through the installation snapshot when one exists.
+    let paths = FsPathResolver::new(&ctx);
+    let snapshot = Home::locate()
+        .ok()
+        .and_then(|home| Snapshot::load(&home.environment_path()).ok());
+    let programs: &dyn ProgramResolver = match &snapshot {
+        Some(snapshot) => snapshot,
+        None => &NoResolver,
+    };
+    let decision = CompiledPolicy::compile(&policy, &ctx)?.decide_with(
+        &to_action(args.kind, &args.action),
+        programs,
+        &paths,
+    );
     match args.format {
         Format::Text => render::decision_text(&decision)?,
         Format::Json => render::decision_json(&decision)?,

@@ -515,8 +515,8 @@ deepest existing ancestor, a dangling link through its target (at most 8 hops). 
 under the canonical project or home is rewritten onto the `${project}`/`~` prefix the
 policy uses, so a project under macOS `/tmp` → `/private/tmp` stays inside `${project}`.
 Both the literal and the resolved path are evaluated and the strictest verdict wins (a
-symlink from the project to `~/.ssh` hits the deny rule). `moat policy check` matches
-the literal path only. Case-insensitive comparison on macOS/Windows volumes that are
+symlink from the project to `~/.ssh` hits the deny rule). `moat policy check` resolves
+the same way. Case-insensitive comparison on macOS/Windows volumes that are
 case-insensitive.
 
 ### 7.4 Performance budget

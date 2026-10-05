@@ -158,6 +158,22 @@ fn doctor_accept_repins_after_a_person_edits_the_policy() {
 }
 
 #[test]
+fn doctor_accept_refuses_to_pin_a_policy_that_does_not_lint() {
+    let sb = Sandbox::new();
+    let policy = sb.home.join(".moat/policy.yaml");
+    std::fs::write(&policy, "version: 1\ndeny:\n  - id: broken\n").unwrap();
+    let out = sb.person(&["doctor", "--accept"]);
+    assert_ne!(out.status.code(), Some(0));
+    assert!(
+        text(&out).contains("refusing to pin a policy that does not lint"),
+        "{}",
+        text(&out)
+    );
+    let (verdict, reason) = sb.guard("s1", "git status");
+    assert_eq!(verdict, "deny", "the broken edit is still drift: {reason}");
+}
+
+#[test]
 fn hooks_without_a_terminal_are_still_refused() {
     let sb = Sandbox::new();
     let out = sb.run(&["allow", INSTALL, "--always"], "", false);
