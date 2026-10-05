@@ -45,6 +45,15 @@
 - id: T2-relative-traversal-to-ssh
   action: { fs_read: "../../Users/me/.ssh/id_rsa" }
   expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-shell-dotenv-without-prefix
+  action: { shell: "cat .env" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-shell-nested-dotenv-relative
+  action: { shell: "cat config/.env.production" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-shell-traversal-without-prefix
+  action: { shell: "cat src/../../Users/me/.ssh/id_rsa" }
+  expect: { verdict: deny, rules: [secrets-paths] }
 
 # T3 secret exfiltration via environment
 - id: T3-echo-api-key

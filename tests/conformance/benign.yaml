@@ -58,3 +58,9 @@
   action: { shell: "rg TODO ./src" }
   resolve: { rg: /opt/homebrew/bin/rg }
   expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-log-remote-ref
+  action: { shell: "git log origin/main --oneline" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-hidden-project-file
+  action: { shell: "cat .gitignore" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
