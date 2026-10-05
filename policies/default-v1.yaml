@@ -268,9 +268,4 @@ ask:
     reason: local service; may expose a control API (Docker, databases, cloud agents)
     net: ["localhost", "127.0.0.1", "::1"]
 
-approval:
-  channel: terminal
-  remember: session
-  timeout_s: 300
-
 executables: {}

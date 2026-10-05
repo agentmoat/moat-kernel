@@ -181,16 +181,20 @@ pub struct Policy {
     pub version: u32,
     #[serde(default = "default_verdict")]
     pub defaults: Defaults,
-    #[serde(default)]
-    pub scope: Scope,
+    /// Reserved for multi-root projects; parsed so existing files stay valid,
+    /// not yet consulted (`policy lint` warns).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<Scope>,
     #[serde(default)]
     pub deny: Vec<RuleGroup>,
     #[serde(default)]
     pub allow: Vec<RuleGroup>,
     #[serde(default)]
     pub ask: Vec<RuleGroup>,
-    #[serde(default)]
-    pub approval: Approval,
+    /// Reserved for the kernel's own approval prompt; parsed so existing files
+    /// stay valid, not yet consulted (`policy lint` warns).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval: Option<Approval>,
     /// Basename → allowed absolute paths (defeats PATH poisoning).
     #[serde(default)]
     pub executables: BTreeMap<String, Vec<String>>,

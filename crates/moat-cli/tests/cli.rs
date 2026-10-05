@@ -110,6 +110,24 @@ fn project_flag_matches_paths_written_the_same_way() {
     assert!(stdout(&out).contains("project-fs"), "{}", stdout(&out));
 }
 
+/// Policies written by earlier `moat init` runs carry an `approval:` block;
+/// they must stay valid, with a warning that the block does nothing yet.
+#[test]
+fn reserved_blocks_from_older_policies_still_lint() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("policy.yaml");
+    let old = std::fs::read_to_string(default_policy()).unwrap()
+        + "\napproval:\n  channel: terminal\n  remember: session\n  timeout_s: 300\n";
+    std::fs::write(&file, old).unwrap();
+    let out = moat(&["policy", "lint", file.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("`approval` is reserved"),
+        "{}",
+        stdout(&out)
+    );
+}
+
 #[test]
 fn lint_rejects_missing_and_invalid_files() {
     let out = moat(&["policy", "lint", "/definitely/not/here.yaml"]);

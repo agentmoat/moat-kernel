@@ -35,6 +35,20 @@ impl fmt::Display for Warning {
 #[must_use]
 pub fn warnings(policy: &Policy) -> Vec<Warning> {
     let mut out = unknown_default_kinds(&policy.defaults);
+    for (key, present) in [
+        ("approval", policy.approval.is_some()),
+        ("scope", policy.scope.is_some()),
+    ] {
+        if present {
+            out.push(Warning {
+                rule: key.to_owned(),
+                message: format!(
+                    "`{key}` is reserved and has no effect yet; approvals are made with `moat allow` \
+                     and the project root is the git root of the call's working directory"
+                ),
+            });
+        }
+    }
     shadowed(&policy.ask, &policy.allow, "ask", "allow", &mut out);
     shadowed(&policy.allow, &policy.deny, "allow", "deny", &mut out);
     out
@@ -151,6 +165,15 @@ mod tests {
              ask:\n  - id: git\n    fs.write: ['${project}/.git/**']\n",
         );
         assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn reserved_blocks_are_reported() {
+        let w =
+            warn("version: 1\napproval:\n  channel: telegram\nscope:\n  project_roots: ['.']\n");
+        assert_eq!(w.len(), 2, "{w:?}");
+        assert!(w[0].contains("`approval` is reserved") && w[1].contains("`scope` is reserved"));
+        assert!(warn("version: 1\n").is_empty());
     }
 
     #[test]

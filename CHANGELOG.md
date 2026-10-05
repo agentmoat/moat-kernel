@@ -36,6 +36,7 @@ All notable changes to this project are documented here. The format follows
 - Claude Code and Cursor adapters derive those paths and hosts from MCP `tool_input` by argument name (`path`, `paths`, `file_path`, `source`, `destination`, `url`, …); write-shaped tool names (`write_*`, `edit_*`, `move_*`, `delete_*`) and `destination`/`target` arguments produce `fs.write`.
 
 ### Changed
+- Policy: `approval:` and `scope:` are reserved. They were parsed but never consulted; they remain accepted so existing files stay valid, `moat policy lint` now warns that they have no effect, and the default policy no longer writes an `approval:` block.
 - `moat-core` API: typed `Kind` (with `FromStr`) replaces kind strings in `AtomicAction::kind`, `Action::kind`, `Defaults::for_kind` and the new `RuleGroup::patterns`; `EvalContext::case_insensitive_paths` replaces a compile-time platform switch inside the core (the CLI sets it for macOS and Windows).
 - `moat-core` API: `Verdict` implements `FromStr` (`UnknownVerdict`); `Decision::single` builds a one-rule decision. Internally one generic matcher replaces the duplicated glob and shell list matching, and one helper splits `!` exclusions.
 - `moat-core` exposes only its API (`Action`, `CompiledPolicy`, `EvalContext`, `Policy`, `RuleGroup`, `Decision`, `Verdict`, the resolver traits, `lint`, `literal_shell_pattern`); the lexer, classifier, pattern, path and host modules are internal. `moat allow --always` uses `literal_shell_pattern` from the core.
