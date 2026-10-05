@@ -9,8 +9,13 @@ run() {
 }
 
 run cargo fmt --all --check
-run cargo clippy --workspace --all-targets --all-features -- -D warnings
-run cargo doc --workspace --no-deps --document-private-items
-run cargo test --workspace --all-features
-run cargo run -q -p moat-kernel -- policy lint policies/default-v1.yaml
+run cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+run cargo doc --locked --workspace --no-deps --document-private-items
+run cargo test --locked --workspace --all-features
+run cargo run -q --locked -p moat-kernel -- policy lint policies/default-v1.yaml
+if rustup target list --installed 2>/dev/null | grep -q wasm32-unknown-unknown; then
+    run cargo build -q --locked -p moat-core --target wasm32-unknown-unknown
+else
+    echo "▷ wasm32-unknown-unknown target not installed; purity build skipped (CI runs it)"
+fi
 echo "✔ quality gate passed"
