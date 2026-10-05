@@ -81,7 +81,7 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 - No session taint yet; approvals exist as `moat allow` (session grants and a permanent overlay) but there is no prompt of our own: hosts prompt, `moat allow` makes the answer stick.
 - OpenClaw adapter and MCP proxy not written.
 - Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` not implemented; only the user policy is loaded.
-- Windows: builds in CI, PowerShell is not tokenised (a PowerShell command line falls through to the `ask` default).
+- Windows: builds in CI, PowerShell is not tokenised (a PowerShell command line falls through to the `ask` default). Canonical paths drop the `\\?\` verbatim prefix (`policy check --project`, lock keys, symlink resolution) and program resolution follows the `PATHEXT` recorded at `moat init`; Windows-only e2e tests push `C:/…` payloads through `guard` and `policy check`.
 
 ### 3.1 Known gaps (audit 2026-10-05)
 From `moat-notes/docs/05-audit-2026-10-05.md`, verified against the binary. Fixes land as

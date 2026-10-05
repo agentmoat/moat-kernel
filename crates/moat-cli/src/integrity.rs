@@ -147,7 +147,12 @@ fn key(path: &Path) -> String {
         }
         _ => path.to_path_buf(),
     };
-    located.to_string_lossy().into_owned()
+    let text = located.to_string_lossy();
+    if cfg!(windows) {
+        crate::context::strip_verbatim(&text)
+    } else {
+        text.into_owned()
+    }
 }
 
 /// SHA-256 of the file. A symlink hashes its target path together with the

@@ -83,6 +83,32 @@ fn lint_warns_about_unreachable_rules_without_failing() {
     assert!(text.contains("2 warnings)"), "{text}");
 }
 
+/// `--project` is canonicalised; on Windows that adds a `\\?\` prefix which used
+/// to make `${project}` match nothing.
+#[cfg(windows)]
+#[test]
+fn project_flag_matches_drive_letter_paths_on_windows() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().to_string_lossy().replace('\\', "/");
+    let file = format!("{project}/src/main.rs");
+    let policy = default_policy();
+    let out = moat(&[
+        "policy",
+        "check",
+        &file,
+        "--kind",
+        "fs-write",
+        "--policy",
+        policy.to_str().unwrap(),
+        "--project",
+        &project,
+        "--cwd",
+        &project,
+    ]);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert!(stdout(&out).contains("project-fs"), "{}", stdout(&out));
+}
+
 #[test]
 fn lint_rejects_missing_and_invalid_files() {
     let out = moat(&["policy", "lint", "/definitely/not/here.yaml"]);

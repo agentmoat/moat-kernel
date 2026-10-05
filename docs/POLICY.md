@@ -78,7 +78,7 @@ Tokenised with the same lexer as commands, so `a|b` and `a | b` are equal.
 - `*` matches within one path segment; `**` matches across segments: `~/.ssh/**`, `**/.env.*`.
 - `~` and `${project}` are expanded in patterns before matching; `${project}` is the git root above the call's working directory (or the directory itself when there is no repository). `$HOME` and `${HOME}` are expanded in the *action's* path (so `cat $HOME/.ssh/id_rsa` is seen as `~/.ssh/id_rsa`) but not in patterns: write `~` in rules.
 - A leading `!` excludes matches within the same list of the same group, in `deny`, `allow` and `ask` alike: a candidate matches when at least one positive pattern matches and no negated pattern does. Example: `fs.write: ["${project}/**", "!${project}/.git/**"]`.
-- Paths are compared in slash-separated canonical form on every platform (`C:/Users/me/x` on Windows), case-insensitively on macOS and Windows.
+- Paths are compared in slash-separated canonical form on every platform (`C:/Users/me/x` on Windows, never the `\\?\C:\…` verbatim form), case-insensitively on macOS and Windows.
 
 ## 4. How a decision is made
 
@@ -212,6 +212,8 @@ program is pinned, either by `executables:` in the policy or by the snapshot, an
 resolves somewhere else (a `git` planted in `node_modules/.bin`, an absolute path to a copy
 in `/tmp`), the command is denied with rule `executables`. Unpinned programs are not checked.
 After installing a tool in a new location, re-run `moat init` or `moat doctor --accept`.
+
+On Windows the snapshot also records `PATHEXT`; a bare program name resolves as written, then with each recorded extension in order (default `.com`, `.exe`, `.bat`, `.cmd`).
 
 `moat policy check` evaluates without the snapshot: installation pins are not consulted,
 and a program pinned under `executables:` in the policy is denied as "not found on the

@@ -62,11 +62,40 @@ fn absolute(path: &Path) -> Result<PathBuf> {
     std::path::absolute(path).with_context(|| format!("resolving {}", path.display()))
 }
 
+/// The slash-separated canonical form the core works in (`DESIGN.md` §7.3).
 pub fn path_string(path: &Path) -> String {
-    let text = path.to_string_lossy();
-    if cfg!(windows) {
-        text.replace('\\', "/")
+    slash_form(&path.to_string_lossy(), cfg!(windows))
+}
+
+/// On Windows: drop the verbatim prefix `canonicalize` adds (`\\?\C:\x`,
+/// `\\?\UNC\srv\share`), which the core would read as a UNC path named `?`,
+/// then use `/` as the separator.
+fn slash_form(text: &str, windows: bool) -> String {
+    if windows {
+        strip_verbatim(text).replace('\\', "/")
     } else {
-        text.into_owned()
+        text.to_owned()
+    }
+}
+
+pub fn strip_verbatim(text: &str) -> String {
+    if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        text.strip_prefix(r"\\?\").unwrap_or(text).to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_verbatim_paths_become_canonical_slash_form() {
+        assert_eq!(slash_form(r"\\?\C:\p\src", true), "C:/p/src");
+        assert_eq!(slash_form(r"\\?\UNC\srv\share\x", true), "//srv/share/x");
+        assert_eq!(slash_form(r"C:\p", true), "C:/p");
+        assert_eq!(slash_form("/Users/me/p", false), "/Users/me/p");
+        assert_eq!(strip_verbatim(r"\\?\C:\p"), r"C:\p");
     }
 }
