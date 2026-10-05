@@ -30,4 +30,4 @@ pub use pattern::literal_shell_pattern;
 pub use policy::{Defaults, Policy, PolicyError, RuleGroup};
 pub use programs::{MapResolver, NoResolver, ProgramResolver};
 pub use realpath::{MapPathResolver, PathResolver};
-pub use verdict::{Decision, Verdict};
+pub use verdict::{Decision, UnknownVerdict, Verdict};

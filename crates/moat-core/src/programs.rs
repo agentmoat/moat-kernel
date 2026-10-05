@@ -76,25 +76,18 @@ pub fn check(
     } else {
         resolver.resolve(name)
     };
-    let mut decision = Decision::new(Verdict::Deny);
-    decision.rules.push(RULE.to_owned());
-    match actual {
-        Some(path) if expected.iter().any(|e| e == &path) => None,
-        Some(path) => {
-            decision.reasons.push(format!(
-                "`{name}` resolves to {path}, not a pinned path ({})",
-                expected.join(", ")
-            ));
-            Some(decision)
-        }
-        None => {
-            decision.reasons.push(format!(
-                "`{name}` is pinned ({}) but was not found on the kernel search path",
-                expected.join(", ")
-            ));
-            Some(decision)
-        }
-    }
+    let reason = match actual {
+        Some(path) if expected.iter().any(|e| e == &path) => return None,
+        Some(path) => format!(
+            "`{name}` resolves to {path}, not a pinned path ({})",
+            expected.join(", ")
+        ),
+        None => format!(
+            "`{name}` is pinned ({}) but was not found on the kernel search path",
+            expected.join(", ")
+        ),
+    };
+    Some(Decision::single(Verdict::Deny, RULE, reason))
 }
 
 fn basename(program: &str) -> &str {
