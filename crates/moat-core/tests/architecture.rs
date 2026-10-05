@@ -33,17 +33,27 @@ fn core_forbids_unsafe() {
     );
 }
 
+/// AGENTS §4: no file in any crate, sources or tests, exceeds 500 lines.
 #[test]
-fn no_source_file_exceeds_the_size_budget() {
+fn no_file_in_any_crate_exceeds_the_size_budget() {
     const MAX_LINES: usize = 500;
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut offenders = Vec::new();
-    visit(&src, &mut |path| {
-        let lines = fs::read_to_string(path).unwrap().lines().count();
-        if lines > MAX_LINES {
-            offenders.push(format!("{} ({lines} lines)", path.display()));
+    for entry in fs::read_dir(&crates).unwrap() {
+        let krate = entry.unwrap().path();
+        for dir in ["src", "tests"] {
+            let root = krate.join(dir);
+            if !root.is_dir() {
+                continue;
+            }
+            visit(&root, &mut |path| {
+                let lines = fs::read_to_string(path).unwrap().lines().count();
+                if lines > MAX_LINES {
+                    offenders.push(format!("{} ({lines} lines)", path.display()));
+                }
+            });
         }
-    });
+    }
     assert!(
         offenders.is_empty(),
         "split these files:\n{}",

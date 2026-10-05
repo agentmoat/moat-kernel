@@ -62,15 +62,16 @@ fn negated_allow_patterns_fall_through_to_default() {
     let write = |path: &str| Action::FsWrite {
         path: path.to_owned(),
     };
+    let allowed = evaluate(&p, &ctx(), &write("/p/src/a.rs")).unwrap();
     assert_eq!(
-        evaluate(&p, &ctx(), &write("/p/src/a.rs")).unwrap().verdict,
-        Verdict::Allow
+        (allowed.verdict, allowed.rules),
+        (Verdict::Allow, vec!["proj".to_owned()])
     );
+    let excluded = evaluate(&p, &ctx(), &write("/p/.git/HEAD")).unwrap();
     assert_eq!(
-        evaluate(&p, &ctx(), &write("/p/.git/HEAD"))
-            .unwrap()
-            .verdict,
-        Verdict::Ask
+        (excluded.verdict, excluded.rules),
+        (Verdict::Ask, vec!["default".to_owned()]),
+        "the exclusion falls through to the default, not to another rule"
     );
 }
 

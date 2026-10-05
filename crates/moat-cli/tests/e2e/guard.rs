@@ -115,24 +115,32 @@ fn guard_allows_ordinary_work_and_asks_for_installs() {
         .to_string()
     };
 
-    let out = sb.guard("claude-code", &payload("git status --short"));
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert_eq!(decision(&out)["permissionDecision"], "allow");
-
-    let out = sb.guard("claude-code", &payload("npm install left-pad-pro"));
-    assert_eq!(out.status.code(), Some(0));
-    assert_eq!(decision(&out)["permissionDecision"], "ask");
+    for (command, verdict, rule) in [
+        ("git status --short", "allow", "dev-shell"),
+        ("npm install left-pad-pro", "ask", "installs"),
+    ] {
+        let out = sb.guard("claude-code", &payload(command));
+        assert_eq!(out.status.code(), Some(0), "{command}: {}", stderr(&out));
+        let d = decision(&out);
+        assert_eq!(d["permissionDecision"], verdict, "{command}");
+        assert!(
+            d["permissionDecisionReason"].to_string().contains(rule),
+            "{command}: {d}"
+        );
+    }
 
     let edit = serde_json::json!({
         "session_id": "s-allow", "cwd": cwd, "tool_name": "Write",
         "tool_input": {"file_path": project.join("src/main.rs").to_string_lossy(), "content": "fn main(){}"}
     });
     let out = sb.guard("claude-code", &edit.to_string());
-    assert_eq!(
-        decision(&out)["permissionDecision"],
-        "allow",
-        "{}",
-        stderr(&out)
+    let d = decision(&out);
+    assert_eq!(d["permissionDecision"], "allow", "{}", stderr(&out));
+    assert!(
+        d["permissionDecisionReason"]
+            .to_string()
+            .contains("project-fs"),
+        "{d}"
     );
 
     let since = sb.moat(&["show", "--since", "1h"]);

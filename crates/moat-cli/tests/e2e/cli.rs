@@ -158,12 +158,15 @@ fn lint_rejects_missing_and_invalid_files() {
 #[test]
 fn exit_codes_follow_verdicts() {
     let sb = Sandbox::bare(&[]);
-    assert_eq!(check(&sb, "cat ~/.ssh/id_rsa", &[]).status.code(), Some(2));
-    assert_eq!(check(&sb, "git status --short", &[]).status.code(), Some(0));
-    assert_eq!(
-        check(&sb, "npm install left-pad-pro", &[]).status.code(),
-        Some(3)
-    );
+    for (command, code, rule) in [
+        ("cat ~/.ssh/id_rsa", 2, "secrets-paths"),
+        ("git status --short", 0, "dev-shell"),
+        ("npm install left-pad-pro", 3, "installs"),
+    ] {
+        let out = check(&sb, command, &[]);
+        assert_eq!(out.status.code(), Some(code), "{command}: {}", stdout(&out));
+        assert!(stdout(&out).contains(rule), "{command}: {}", stdout(&out));
+    }
 }
 
 #[test]
