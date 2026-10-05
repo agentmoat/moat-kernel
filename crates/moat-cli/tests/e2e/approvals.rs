@@ -1,84 +1,27 @@
 //! Session grants and the permanent allow overlay as seen by `guard`.
 
-use std::io::Write as _;
-use std::path::PathBuf;
-use std::process::{Command, Output, Stdio};
-
 use serde_json::Value;
-use tempfile::TempDir;
 
-struct Sandbox {
-    _dir: TempDir,
-    home: PathBuf,
-    project: PathBuf,
+use crate::common::{Sandbox, bash_payload, hook_output, text};
+
+/// The hook decision for one Bash call in the sandbox's project.
+fn decide(sb: &Sandbox, session: &str, command: &str) -> Value {
+    hook_output(&sb.guard(
+        "claude-code",
+        &bash_payload(session, &sb.project(), command),
+    ))
 }
 
-impl Sandbox {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let home = dir.path().join("home");
-        let project = home.join("proj");
-        std::fs::create_dir_all(home.join(".claude")).unwrap();
-        std::fs::create_dir_all(project.join(".git")).unwrap();
-        let sb = Self {
-            _dir: dir,
-            home,
-            project,
-        };
-        assert_eq!(sb.moat(&["init"], "").status.code(), Some(0));
-        sb
-    }
-
-    fn moat(&self, args: &[&str], stdin: &str) -> Output {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_moat"))
-            .args(args)
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .env("HOME", &self.home)
-            .env("USERPROFILE", &self.home)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(stdin.as_bytes())
-            .unwrap();
-        child.wait_with_output().unwrap()
-    }
-
-    fn decide(&self, session: &str, command: &str) -> Value {
-        let payload = serde_json::json!({
-            "session_id": session, "cwd": self.project.to_string_lossy(),
-            "tool_name": "Bash", "tool_input": {"command": command}, "tool_use_id": "t"
-        })
-        .to_string();
-        let out = self.moat(&["guard", "--host", "claude-code"], &payload);
-        let doc: Value = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
-        doc["hookSpecificOutput"].clone()
-    }
-
-    fn write_private(&self, rel: &str, contents: &str) {
-        let path = self.home.join(".moat").join(rel);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, contents).unwrap();
-    }
-}
-
-fn text(out: &Output) -> String {
-    format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    )
+/// Write a state file directly, as a person (or an attacker) editing it would.
+fn write_state(sb: &Sandbox, relative: &str, contents: &str) {
+    let path = sb.home.join(".moat").join(relative);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, contents).unwrap();
 }
 
 #[test]
 fn init_pins_grants_and_overlay() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::installed(&[".claude"]);
     let lock: Value =
         serde_json::from_str(&std::fs::read_to_string(sb.home.join(".moat/policy.lock")).unwrap())
             .unwrap();
@@ -100,17 +43,18 @@ fn init_pins_grants_and_overlay() {
 
 #[test]
 fn session_grant_turns_ask_into_allow_for_that_session_only() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::installed(&[".claude"]);
     assert_eq!(
-        sb.decide("s1", "npm install left-pad-pro")["permissionDecision"],
+        decide(&sb, "s1", "npm install left-pad-pro")["permissionDecision"],
         "ask"
     );
 
-    sb.write_private(
+    write_state(
+        &sb,
         "approvals.json",
         r#"{"version":1,"entries":[{"host":"claude-code","session_id":"s1","command":"npm install left-pad-pro","granted_at_ms":0}]}"#,
     );
-    let tampered = sb.decide("s1", "npm install left-pad-pro");
+    let tampered = decide(&sb, "s1", "npm install left-pad-pro");
     assert_eq!(
         tampered["permissionDecision"], "deny",
         "edited grants break the lock"
@@ -122,12 +66,8 @@ fn session_grant_turns_ask_into_allow_for_that_session_only() {
             .contains("kernel-integrity")
     );
 
-    assert_eq!(
-        sb.moat(&["init"], "").status.code(),
-        Some(0),
-        "init re-pins"
-    );
-    let granted = sb.decide("s1", "npm install left-pad-pro");
+    assert_eq!(sb.moat(&["init"]).status.code(), Some(0), "init re-pins");
+    let granted = decide(&sb, "s1", "npm install left-pad-pro");
     assert_eq!(granted["permissionDecision"], "allow", "{granted}");
     assert!(
         granted["permissionDecisionReason"]
@@ -136,15 +76,15 @@ fn session_grant_turns_ask_into_allow_for_that_session_only() {
             .contains("approved-session")
     );
     assert_eq!(
-        sb.decide("s2", "npm install left-pad-pro")["permissionDecision"],
+        decide(&sb, "s2", "npm install left-pad-pro")["permissionDecision"],
         "ask"
     );
     assert_eq!(
-        sb.decide("s1", "npm install left-pad-pro --save-dev")["permissionDecision"],
+        decide(&sb, "s1", "npm install left-pad-pro --save-dev")["permissionDecision"],
         "ask"
     );
     assert_eq!(
-        sb.decide("s1", "cat ~/.ssh/id_rsa")["permissionDecision"],
+        decide(&sb, "s1", "cat ~/.ssh/id_rsa")["permissionDecision"],
         "deny",
         "grants never beat deny"
     );
@@ -152,13 +92,14 @@ fn session_grant_turns_ask_into_allow_for_that_session_only() {
 
 #[test]
 fn permanent_overlay_rules_merge_into_the_policy() {
-    let sb = Sandbox::new();
-    sb.write_private(
+    let sb = Sandbox::installed(&[".claude"]);
+    write_state(
+        &sb,
         "policy.d/approved.yaml",
         "version: 1\nallow:\n  - id: approved-1\n    reason: test\n    shell: ['pip install requests']\n",
     );
-    assert_eq!(sb.moat(&["init"], "").status.code(), Some(0));
-    let d = sb.decide("any", "pip install requests");
+    assert_eq!(sb.moat(&["init"]).status.code(), Some(0));
+    let d = decide(&sb, "any", "pip install requests");
     assert_eq!(d["permissionDecision"], "allow", "{d}");
     assert!(
         d["permissionDecisionReason"]
@@ -167,12 +108,13 @@ fn permanent_overlay_rules_merge_into_the_policy() {
             .contains("approved-1")
     );
 
-    sb.write_private(
+    write_state(
+        &sb,
         "policy.d/approved.yaml",
         "version: 1\nallow:\n  - id: evil\n    shell: ['*']\n",
     );
-    assert_eq!(sb.moat(&["init"], "").status.code(), Some(0));
-    let d = sb.decide("any", "terraform apply");
+    assert_eq!(sb.moat(&["init"]).status.code(), Some(0));
+    let d = decide(&sb, "any", "terraform apply");
     assert_eq!(
         d["permissionDecision"], "deny",
         "a malformed overlay fails closed: {d}"
@@ -181,8 +123,8 @@ fn permanent_overlay_rules_merge_into_the_policy() {
 
 #[test]
 fn allow_requires_a_terminal() {
-    let sb = Sandbox::new();
-    let out = sb.moat(&["allow", "npm install x", "--always"], "");
+    let sb = Sandbox::installed(&[".claude"]);
+    let out = sb.moat(&["allow", "npm install x", "--always"]);
     assert_eq!(out.status.code(), Some(64));
     assert!(text(&out).contains("must be run by a person in a terminal"));
     assert!(

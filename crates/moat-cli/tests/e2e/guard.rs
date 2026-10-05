@@ -1,93 +1,25 @@
 //! End-to-end tests of `moat init`, `moat guard`, `moat show` and `moat status`
 //! inside an isolated HOME.
 
-use std::io::Write as _;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
-
 use serde_json::Value;
-use tempfile::TempDir;
 
-struct Sandbox {
-    _dir: TempDir,
-    home: PathBuf,
-}
+use crate::common::{Sandbox, fixture, hook_output as decision, stderr, stdout};
 
-impl Sandbox {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let home = dir.path().join("home");
-        std::fs::create_dir_all(home.join(".claude")).unwrap();
-        Self { _dir: dir, home }
-    }
-
-    fn moat(&self, args: &[&str]) -> Output {
-        self.moat_with_stdin(args, None)
-    }
-
-    fn moat_with_stdin(&self, args: &[&str], stdin: Option<&str>) -> Output {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_moat"));
-        cmd.args(args)
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .env("HOME", &self.home)
-            .env("USERPROFILE", &self.home)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let mut child = cmd.spawn().expect("spawning moat");
-        if let Some(payload) = stdin {
-            child
-                .stdin
-                .take()
-                .unwrap()
-                .write_all(payload.as_bytes())
-                .unwrap();
-        } else {
-            drop(child.stdin.take());
-        }
-        child.wait_with_output().unwrap()
-    }
-
-    fn guard(&self, host: &str, payload: &str) -> Output {
-        self.moat_with_stdin(&["guard", "--host", host], Some(payload))
-    }
-
-    fn settings(&self) -> Value {
-        let text = std::fs::read_to_string(self.home.join(".claude/settings.json")).unwrap();
-        serde_json::from_str(&text).unwrap()
-    }
-}
-
-fn fixture(name: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/hosts")
-        .join(name);
-    std::fs::read_to_string(path).unwrap()
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-fn decision(out: &Output) -> Value {
-    let doc: Value = serde_json::from_str(stdout(out).trim()).expect("hook response is JSON");
-    doc["hookSpecificOutput"].clone()
+/// The parsed `~/.claude/settings.json`.
+fn settings(sb: &Sandbox) -> Value {
+    let text = std::fs::read_to_string(sb.home.join(".claude/settings.json")).unwrap();
+    serde_json::from_str(&text).unwrap()
 }
 
 #[test]
 fn init_creates_state_and_installs_claude_code_hook() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     let out = sb.moat(&["init"]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     assert!(sb.home.join(".moat/policy.yaml").is_file());
     assert!(sb.home.join(".moat/audit.db").is_file());
 
-    let hooks = &sb.settings()["hooks"]["PreToolUse"];
+    let hooks = &settings(&sb)["hooks"]["PreToolUse"];
     assert_eq!(hooks.as_array().unwrap().len(), 1);
     assert_eq!(
         hooks[0]["hooks"][0]["args"],
@@ -104,7 +36,7 @@ fn init_creates_state_and_installs_claude_code_hook() {
     assert!(stdout(&again).contains("unchanged"));
     assert!(stdout(&again).contains("(kept)"));
     assert_eq!(
-        sb.settings()["hooks"]["PreToolUse"]
+        settings(&sb)["hooks"]["PreToolUse"]
             .as_array()
             .unwrap()
             .len(),
@@ -118,7 +50,7 @@ fn init_creates_state_and_installs_claude_code_hook() {
 
 #[test]
 fn init_dry_run_touches_nothing() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     let out = sb.moat(&["init", "--dry-run"]);
     assert_eq!(out.status.code(), Some(0));
     assert!(stdout(&out).contains("would"));
@@ -128,7 +60,7 @@ fn init_dry_run_touches_nothing() {
 
 #[test]
 fn guard_denies_secret_exfiltration_and_records_it() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);
 
     let out = sb.guard("claude-code", &fixture("claude-code/bash.json"));
@@ -169,7 +101,7 @@ fn guard_denies_secret_exfiltration_and_records_it() {
 
 #[test]
 fn guard_allows_ordinary_work_and_asks_for_installs() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);
     let project = sb.home.join("proj");
     std::fs::create_dir_all(project.join(".git")).unwrap();
@@ -226,7 +158,7 @@ fn guard_allows_ordinary_work_and_asks_for_installs() {
 
 #[test]
 fn guard_passes_ungoverned_tools_through() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);
     let out = sb.guard("claude-code", &fixture("claude-code/ungoverned.json"));
     assert_eq!(out.status.code(), Some(0));
@@ -241,7 +173,7 @@ fn guard_passes_ungoverned_tools_through() {
 
 #[test]
 fn guard_fails_closed() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
 
     let out = sb.guard("claude-code", &fixture("claude-code/read.json"));
     assert_eq!(out.status.code(), Some(2), "no policy installed must deny");
@@ -266,13 +198,13 @@ fn guard_fails_closed() {
         );
     }
 
-    let out = sb.moat_with_stdin(&["guard", "--host", "windsurf"], Some("{}"));
+    let out = sb.moat_stdin(&["guard", "--host", "windsurf"], "{}");
     assert_eq!(out.status.code(), Some(64));
 }
 
 #[test]
 fn deleted_audit_log_denies_instead_of_recreating_it() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);
     let audit = sb.home.join(".moat/audit.db");
     let before = sb.guard("claude-code", &fixture("claude-code/bash.json"));
@@ -296,7 +228,7 @@ fn deleted_audit_log_denies_instead_of_recreating_it() {
 #[test]
 fn unwritable_audit_log_denies() {
     use std::os::unix::fs::PermissionsExt as _;
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);
     let audit = sb.home.join(".moat/audit.db");
     std::fs::set_permissions(&audit, std::fs::Permissions::from_mode(0o000)).unwrap();
@@ -314,7 +246,7 @@ fn unwritable_audit_log_denies() {
 
 #[test]
 fn mcp_arguments_are_checked_as_paths() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);
     let out = sb.guard(
         "claude-code",
@@ -331,7 +263,7 @@ fn mcp_arguments_are_checked_as_paths() {
 #[cfg(unix)]
 #[test]
 fn reads_and_writes_through_symlinks_are_checked_at_the_target() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);
     let project = sb.home.join("proj");
     std::fs::create_dir_all(project.join(".git")).unwrap();
@@ -375,11 +307,11 @@ fn reads_and_writes_through_symlinks_are_checked_at_the_target() {
 #[cfg(windows)]
 #[test]
 fn windows_drive_letter_payloads_are_canonical() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);
     let project = sb.home.join("proj");
     std::fs::create_dir_all(project.join(".git")).unwrap();
-    let slash = |p: &Path| p.to_string_lossy().replace('\\', "/");
+    let slash = |p: &std::path::Path| p.to_string_lossy().replace('\\', "/");
     let cwd = slash(&project);
     let tool = |name: &str, input: serde_json::Value| {
         serde_json::json!({
@@ -413,7 +345,7 @@ fn windows_drive_letter_payloads_are_canonical() {
 
 #[test]
 fn codex_payloads_use_the_same_contract() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     std::fs::create_dir_all(sb.home.join(".codex")).unwrap();
     let out = sb.moat(&["init"]);
     assert!(stdout(&out).contains("Codex"), "{}", stdout(&out));
@@ -436,7 +368,7 @@ fn codex_payloads_use_the_same_contract() {
 
 #[test]
 fn status_reports_missing_installation() {
-    let sb = Sandbox::new();
+    let sb = Sandbox::bare(&[".claude"]);
     let out = sb.moat(&["status"]);
     assert_eq!(out.status.code(), Some(64));
     assert!(stdout(&out).contains("run `moat init`"));

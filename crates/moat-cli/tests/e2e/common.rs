@@ -66,6 +66,12 @@ impl Sandbox {
         output(self.command().args(args), Some(stdin))
     }
 
+    /// Run `moat` as a person at a terminal would (`MOAT_ASSUME_TTY`, honoured
+    /// by debug builds only).
+    pub fn moat_as_person(&self, args: &[&str]) -> Output {
+        output(self.command().args(args).env("MOAT_ASSUME_TTY", "1"), None)
+    }
+
     /// Run the hook for `host` with `payload`.
     pub fn guard(&self, host: &str, payload: &str) -> Output {
         self.moat_stdin(&["guard", "--host", host], payload)
