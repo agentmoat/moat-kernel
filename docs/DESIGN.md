@@ -491,10 +491,16 @@ Rules:
 
 ### 7.3 Path canonicalisation
 
-`~` → home; relative → joined with hook `cwd`; `..` collapsed; symlinks resolved
-(`realpath`) when the path exists; both the literal and the resolved path are matched
-(a symlink from the project to `~/.ssh` must still hit the deny rule). Case-insensitive
-comparison on macOS/Windows volumes that are case-insensitive.
+`~` → home; relative → joined with hook `cwd`; `..` collapsed lexically in the core.
+`moat guard` then resolves symlinks through a caller-supplied `PathResolver` (ADR-009):
+an existing path is canonicalised, a path that does not exist yet resolves through its
+deepest existing ancestor, a dangling link through its target (at most 8 hops). A result
+under the canonical project or home is rewritten onto the `${project}`/`~` prefix the
+policy uses, so a project under macOS `/tmp` → `/private/tmp` stays inside `${project}`.
+Both the literal and the resolved path are evaluated and the strictest verdict wins (a
+symlink from the project to `~/.ssh` hits the deny rule). `moat policy check` matches
+the literal path only. Case-insensitive comparison on macOS/Windows volumes that are
+case-insensitive.
 
 ### 7.4 Performance budget
 
@@ -633,7 +639,7 @@ Each item: why it is hard → Phase 1 answer → Phase 2 answer → open questio
 
 ### G5 Path semantics and TOCTOU
 - Why hard: symlinks, case-insensitivity, bind mounts, files replaced between check and use.
-- Phase 1: match literal and resolved paths; follow symlinks in deny evaluation; accept residual TOCTOU.
+- Phase 1 (built, ADR-009): match literal and resolved paths for every rule list; accept residual TOCTOU and hard links.
 - Phase 2: sandbox path rules apply at syscall time.
 - Open: Windows junctions and reparse points need their own tests.
 

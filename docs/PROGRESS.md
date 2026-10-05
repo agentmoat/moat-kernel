@@ -93,7 +93,7 @@ P0 (allow where deny is promised):
 - Relative paths without `./` (`cat .env`, `cat src/../../../.ssh/id_rsa`) produced no `fs` atom (fixed in #29).
 - MCP tool arguments are dropped: `mcp__filesystem__read_file {path: ~/.aws/credentials}` matches `safe-mcp`.
 - Dead `ask` rules: `installs` for `pnpm add`/`yarn add`/`cargo add`/`cargo install` and `push` for `cargo publish` are unreachable behind the `dev-shell` allows.
-- No symlink/realpath resolution of action paths (`ln -s ~/.ssh ./s` then `cat ./s/id_rsa`).
+- No symlink/realpath resolution of action paths (`ln -s ~/.ssh ./s` then `cat ./s/id_rsa`) (fixed: `PathResolver`, ADR-009; residual TOCTOU and hard links).
 - Audit failure was non-fatal: an unopenable `audit.db` printed a warning and the verdict proceeded; `guard` recreated a deleted database (fixed in #27).
 - Redaction runs on the JSON-encoded action: escaped quotes can break patterns, corrupt stored rows and make `show`/`replay`/`report` failed for the whole query (fixed in #28).
 - A panic in `guard` exited 101, which Claude Code treats as non-blocking (fail-open) (fixed in #27: `catch_unwind` ⇒ deny, exit 2); clap usage errors still exit 64.
