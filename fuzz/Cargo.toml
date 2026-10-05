@@ -1,0 +1,46 @@
+[package]
+name = "moat-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Fuzz targets for moat's untrusted-input surfaces"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Not part of the main workspace: built with nightly by `cargo fuzz`.
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+moat-core = { path = "../crates/moat-core" }
+moat-hosts = { path = "../crates/moat-hosts" }
+
+[[bin]]
+name = "decide_shell"
+path = "fuzz_targets/decide_shell.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "policy_parse"
+path = "fuzz_targets/policy_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "host_payload"
+path = "fuzz_targets/host_payload.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "literal_pattern"
+path = "fuzz_targets/literal_pattern.rs"
+test = false
+doc = false
+bench = false

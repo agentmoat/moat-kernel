@@ -1,0 +1,68 @@
+//! `moat allow --always` turns a command into a literal pattern. For any
+//! command it accepts, the pattern must be a valid rule, and a policy that
+//! allows only that pattern must allow the command itself.
+
+#![no_main]
+
+use std::collections::BTreeMap;
+
+use libfuzzer_sys::fuzz_target;
+use moat_core::{
+    Action, CompiledPolicy, Defaults, EvalContext, Policy, RuleGroup, Verdict, literal_shell_pattern,
+};
+
+fuzz_target!(|data: &[u8]| {
+    let Ok(command) = std::str::from_utf8(data) else {
+        return;
+    };
+    let Ok(pattern) = literal_shell_pattern(command) else {
+        return;
+    };
+    // Built as values, the way the overlay is (`serde_yaml_ng` escapes what
+    // YAML cannot hold raw), so only the pattern itself is under test.
+    let policy = Policy {
+        version: 1,
+        defaults: Defaults::All(Verdict::Deny),
+        scope: None,
+        deny: Vec::new(),
+        allow: vec![RuleGroup {
+            id: "approved".into(),
+            // Weaker matches are kept as reason text, so the reason marks them.
+            reason: Some("approved".into()),
+            shell: vec![pattern.clone()],
+            ..RuleGroup::default()
+        }],
+        ask: Vec::new(),
+        approval: None,
+        executables: BTreeMap::new(),
+    };
+    if let Err(e) = policy.lint() {
+        panic!("pattern {pattern:?} for {command:?} does not lint: {e}");
+    }
+    let ctx = EvalContext {
+        home: "/home/me".into(),
+        project: "/home/me/p".into(),
+        cwd: "/home/me/p".into(),
+        case_insensitive_paths: false,
+    };
+    let compiled = CompiledPolicy::compile(&policy, &ctx).expect("linted policy compiles");
+    let decision = compiled.decide(&Action::Shell {
+        command: command.to_owned(),
+    });
+    // For a command of plain words, the full-argv shell atom is exactly the
+    // approved pattern, so the rule must take part in the decision (as the
+    // verdict or as context when another atom is stricter). Other shapes
+    // (assignments, operators, substitutions) produce atoms the literal
+    // pattern does not describe and are only checked for panics above.
+    let plain = command.chars().all(|c| {
+        c.is_ascii_alphanumeric() || " -_./:,+@%*?[]{}!".contains(c)
+    }) && command.split_whitespace().next().is_some_and(|w| !w.contains('='));
+    if plain {
+        let mentioned = decision
+            .reasons
+            .iter()
+            .chain(&decision.context)
+            .any(|r| r.starts_with("approved: shell"));
+        assert!(mentioned, "pattern {pattern:?} did not match {command:?}: {decision:?}");
+    }
+});

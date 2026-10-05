@@ -1,0 +1,37 @@
+//! Any command line an agent can send: the lexer, classifier and engine must
+//! decide without panicking, and every decision names the rule behind it.
+
+#![no_main]
+
+use std::sync::OnceLock;
+
+use libfuzzer_sys::fuzz_target;
+use moat_core::{Action, CompiledPolicy, EvalContext, Policy};
+
+/// The default policy, compiled once: compilation dominates a single decision.
+fn compiled() -> &'static CompiledPolicy<'static> {
+    static POLICY: OnceLock<Policy> = OnceLock::new();
+    static COMPILED: OnceLock<CompiledPolicy<'static>> = OnceLock::new();
+    COMPILED.get_or_init(|| {
+        let policy = POLICY.get_or_init(|| {
+            Policy::parse(include_str!("../../policies/default-v1.yaml")).expect("default policy")
+        });
+        let ctx = EvalContext {
+            home: "/home/me".into(),
+            project: "/home/me/p".into(),
+            cwd: "/home/me/p".into(),
+            case_insensitive_paths: false,
+        };
+        CompiledPolicy::compile(policy, &ctx).expect("default policy compiles")
+    })
+}
+
+fuzz_target!(|data: &[u8]| {
+    let Ok(command) = std::str::from_utf8(data) else {
+        return;
+    };
+    let decision = compiled().decide(&Action::Shell {
+        command: command.to_owned(),
+    });
+    assert!(!decision.rules.is_empty(), "a decision without a rule: {decision:?}");
+});

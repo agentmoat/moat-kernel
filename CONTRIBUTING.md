@@ -91,6 +91,23 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
 - A new dependency needs a sentence in the PR on why the standard library or an
   existing dependency does not cover it. `cargo-deny` checks licences and advisories.
 
+## Fuzzing
+
+`fuzz/` holds `cargo fuzz` targets for every surface that takes untrusted input:
+`decide_shell` (any command line through the lexer, classifier and engine),
+`policy_parse` (any policy file), `host_payload` (any hook payload, every host) and
+`literal_pattern` (`moat allow --always` must produce a rule that lints and matches its
+command). It is a separate workspace built with nightly:
+
+```bash
+cargo install cargo-fuzz --version 0.13.1 --locked
+python3 fuzz/seed_corpus.py          # seeds from the conformance fixtures and host payloads
+cd fuzz && cargo +nightly fuzz run -O decide_shell corpus/decide_shell
+```
+
+CI runs each target for a minute on pull requests and ten minutes in the weekly run. A
+crash becomes a unit test or fixture next to the fix.
+
 ## Decisions
 
 Non-obvious decisions are recorded as ADRs in `docs/adr/`. Propose one in the PR
