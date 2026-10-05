@@ -28,12 +28,12 @@ const PATH_OPTIONS: &[&str] = &["--file=", "--makefile=", "--directory=", "--inc
 pub(super) fn classify(
     argv: &[String],
     ctx: &ShellContext<'_>,
-    out: &mut Vec<AtomicAction>,
+    sink: &mut Sink,
     depth: u8,
 ) -> Result<(), ClassifyError> {
     let program = &argv[0];
-    let flag = |out: &mut Vec<AtomicAction>, arg: &str| {
-        Sink::new(out).push(AtomicAction::Shell {
+    let flag = |sink: &mut Sink, arg: &str| {
+        sink.push(AtomicAction::Shell {
             argv: vec![program.clone(), arg.to_owned()],
         })
     };
@@ -47,26 +47,26 @@ pub(super) fn classify(
             arg.strip_prefix("-E").filter(|t| !t.is_empty())
         };
         if let Some(text) = eval {
-            flag(out, "--eval")?;
-            classify_into(text, ctx, out, depth + 1)?;
+            flag(sink, "--eval")?;
+            classify_into(text, ctx, sink, depth + 1)?;
         } else if arg == "--environment-overrides" || is_env_override_cluster(arg) {
-            flag(out, arg)?;
+            flag(sink, arg)?;
         } else if let Some((name, op, value)) = assignment(arg) {
             if RECIPE_VARS.contains(&name) {
-                flag(out, arg)?;
+                flag(sink, arg)?;
             }
             if SHELL_VARS.contains(&name) && !value.is_empty() {
-                classify_into(value, ctx, out, depth + 1)?;
+                classify_into(value, ctx, sink, depth + 1)?;
             }
             if op == "!" {
-                flag(out, arg)?;
-                classify_into(value, ctx, out, depth + 1)?;
+                flag(sink, arg)?;
+                classify_into(value, ctx, sink, depth + 1)?;
             }
             for call in shell_calls(value) {
-                classify_into(call, ctx, out, depth + 1)?;
+                classify_into(call, ctx, sink, depth + 1)?;
             }
         } else if let Some(path) = PATH_OPTIONS.iter().find_map(|p| arg.strip_prefix(p)) {
-            Sink::new(out).push(AtomicAction::FsRead {
+            sink.push(AtomicAction::FsRead {
                 path: paths::normalise(path, ctx.home, ctx.project, ctx.cwd),
             })?;
         }

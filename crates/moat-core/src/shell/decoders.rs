@@ -41,7 +41,7 @@ const DECODE_FLAGS: &[(&str, &str, &str)] = &[
 
 /// Push a canonical pipeline atom for every decoder stage that feeds a later
 /// interpreter stage of the same pipe chain.
-pub(super) fn push(tokens: &[Token], sink: &mut Sink<'_>) -> Result<(), ClassifyError> {
+pub(super) fn push(tokens: &[Token], sink: &mut Sink) -> Result<(), ClassifyError> {
     for chain in pipe_chains(tokens) {
         for (i, stage) in chain.iter().enumerate() {
             let Some(decoder) = decoder(stage) else {
