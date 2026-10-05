@@ -2,14 +2,45 @@
 
 moat is a security control. Reports about it are handled as such.
 
+## Supported versions
+
+moat has not had a release yet. Until 1.0, only the latest release (and `main`) receives
+security fixes; there are no backports.
+
 ## Reporting
 
 Use GitHub's private advisory form:
 https://github.com/agentmoat/moat-kernel/security/advisories/new
 
-Do not open public issues for bypasses. We acknowledge within 72 hours, keep you
-informed, and credit you in the advisory unless you prefer otherwise. Every valid
-bypass becomes a conformance fixture before the fix is published.
+Do not open public issues or pull requests for bypasses. A useful report contains:
+
+- the `moat --version` or commit, the host and the operating system;
+- the exact tool call: the hook payload, or the command line for `moat policy check`;
+- the policy in use (default, or the file) and the verdict and rule ids you got;
+- what actually executes and why that crosses a boundary the policy promises.
+
+A report is accepted when it shows a concrete crossing of the boundaries in the table
+below. Scanner or model output without a reproduction is read, but it is not triaged
+ahead of reports that have one.
+
+## What happens next
+
+| Step | Target |
+|---|---|
+| Acknowledgement | 72 hours |
+| Triage: confirmed or not, severity | 7 days |
+| Fix for a confirmed critical or high issue | 30 days |
+| Public disclosure | when the fix ships, and at most 90 days after the report unless we agree otherwise |
+
+Every valid bypass becomes a conformance fixture before the fix is published. Confirmed
+issues in a released version get a GitHub Security Advisory, with a CVE requested
+through GitHub, and you are credited unless you prefer otherwise.
+
+## Safe harbour
+
+Research on your own machine and your own accounts, against your own copy of moat, is
+welcome and will not be pursued. Do not test against systems or data that are not
+yours.
 
 ## What counts as a vulnerability
 
@@ -20,7 +51,7 @@ bypass becomes a conformance fixture before the fix is published.
 | Fail-open | any error path in `moat guard` that results in `allow` |
 | Self-protection gap | an agent tool call that can modify `~/.moat`, host hook configuration or the `moat` binary without a `deny` |
 | Audit integrity | decisions missing from the log, or secrets persisted un-redacted |
-| Supply chain | malicious or vulnerable dependencies, unsigned release artefacts |
+| Supply chain | malicious or vulnerable dependencies; from the first release, artefacts whose checksum or attestation does not verify |
 
 ## Out of scope (today)
 
@@ -43,6 +74,12 @@ does not have root on the machine. The kernel's job is to keep such an attacker
 from reading secrets, exfiltrating data, poisoning the environment, running remote
 code, destroying work, or disabling the kernel, and to leave a trustworthy record of
 every attempt. Full version: `docs/DESIGN.md` §3.
+
+## Verifying a release
+
+Releases will carry SHA-256 checksums and GitHub build provenance attestations. Verify a
+downloaded artefact with `gh attestation verify <file> --repo agentmoat/moat-kernel`
+before installing it by hand.
 
 ## Hardening already in place
 

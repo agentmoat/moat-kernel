@@ -57,3 +57,10 @@ label "needs: adr"          e4e669 "Changes an invariant; add docs/adr entry"
 label security           b60205 "Security-relevant; maintainer review required"
 label "good first issue"   7057ff "Adapters, docs, examples; never the trusted core"
 label breaking           b60205 "Breaking change to policy schema, CLI or exit codes"
+label "help wanted"        008672 "Open for contributors"
+
+# issues: applied by the issue forms
+label bug                d73a4a "Behaves differently from the docs or policy"
+label "false positive"     fbca04 "A safe action denied or asked by the default policy"
+label enhancement        a2eeef "Feature request"
+label design             c5def5 "Design proposal; may become an ADR"

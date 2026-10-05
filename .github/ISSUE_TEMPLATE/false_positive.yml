@@ -1,0 +1,60 @@
+name: False positive (safe action denied or asked)
+description: The default policy denies or asks for something that is safe and ordinary.
+labels: ["false positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The opposite case, something dangerous that is **allowed**, is a vulnerability:
+        report it privately through the advisory link, not here.
+  - type: input
+    id: version
+    attributes:
+      label: moat version
+      placeholder: output of `moat --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      options: [Claude Code, Codex, Cursor, policy check only, other]
+    validations:
+      required: true
+  - type: textarea
+    id: action
+    attributes:
+      label: The action
+      description: The command line, or the tool and its input, exactly as the agent sent it.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: "`moat policy check` output"
+      description: Run `moat policy check "<command>"` (add `--kind fs-read|fs-write|net|mcp` for other tools) and paste the verdict, rules and reasons.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: expected
+    attributes:
+      label: Expected verdict
+      options: [allow, ask]
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is safe
+      description: What the command does, and why no secret, network, write outside the project or kernel file is involved.
+    validations:
+      required: true
+  - type: dropdown
+    id: policy
+    attributes:
+      label: Policy
+      options: [default policy, default policy with my own edits]
+    validations:
+      required: true
