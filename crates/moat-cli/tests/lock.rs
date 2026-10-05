@@ -153,6 +153,29 @@ fn policy_swapped_for_a_symlink_is_denied_even_with_identical_bytes() {
     assert!(text(&status).contains("policy.yaml"), "{}", text(&status));
 }
 
+/// Replacing the directory that holds a pinned file with a link to a copy keeps
+/// every leaf name and every byte; the location changed, so it is drift.
+#[cfg(unix)]
+#[test]
+fn directory_of_a_pinned_file_swapped_for_a_symlink_is_denied() {
+    let sb = Sandbox::new();
+    assert_eq!(sb.guard_read_src()["permissionDecision"], "allow");
+
+    let claude = sb.home.join(".claude");
+    let moved = sb.home.join("claude-original");
+    std::fs::rename(&claude, &moved).unwrap();
+    let copy = sb.home.join("attacker-claude");
+    std::fs::create_dir(&copy).unwrap();
+    std::fs::copy(moved.join("settings.json"), copy.join("settings.json")).unwrap();
+    std::os::unix::fs::symlink(&copy, &claude).unwrap();
+
+    let d = sb.guard_read_src();
+    assert_eq!(d["permissionDecision"], "deny", "{d}");
+    let reason = d["permissionDecisionReason"].as_str().unwrap();
+    assert!(reason.contains("kernel-integrity"), "{reason}");
+    assert!(reason.contains("settings.json"), "{reason}");
+}
+
 #[test]
 fn removed_hook_file_is_detected() {
     let sb = Sandbox::new();

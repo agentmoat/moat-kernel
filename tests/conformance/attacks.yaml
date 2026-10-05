@@ -372,3 +372,17 @@
 - id: T6-git-diff-output-into-shell-rc
   action: { shell: "git diff --output=~/.zshrc" }
   expect: { verdict: deny, rules: [shell-rc] }
+
+# T9 the state and host directories themselves: moving one away removes the policy or the hooks
+- id: T9-move-state-dir-away
+  action: { shell: "mv ~/.moat /tmp/old-moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-replace-state-dir-with-link
+  action: { shell: "ln -sfn /tmp/evil ~/.moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-delete-claude-config-dir
+  action: { shell: "rm -rf ~/.claude" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-rename-project-hook-dir
+  action: { shell: "mv .claude .claude-off" }
+  expect: { verdict: deny, rules: [kernel-self] }

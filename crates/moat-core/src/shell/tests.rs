@@ -167,6 +167,12 @@ fn redirects_and_write_programs() {
     assert!(has_read(&a, "/Users/me/.ssh/id_rsa"));
     assert!(has_write(&a, "/p/key"));
     assert!(has_write(&parsed("rm -rf ./build"), "/p/build"));
+    let a = parsed("mv ~/.moat /tmp/old");
+    assert!(
+        has_write(&a, "/Users/me/.moat"),
+        "mv removes its source: {a:?}"
+    );
+    assert!(has_write(&a, "/tmp/old"));
     assert!(has_read(&parsed("sort < ./in.txt"), "/p/in.txt"));
     assert!(has_write(&parsed("sed -i '' s/a/b/ ./f.txt"), "/p/f.txt"));
     let a = parsed("dd if=/dev/zero of=/dev/disk2");

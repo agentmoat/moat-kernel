@@ -87,6 +87,16 @@ deny:
   - id: kernel-self
     reason: agentmoat protects its own policy, hooks and binary
     fs.write:
+      # the state and host directories themselves: renaming, deleting or replacing
+      # one with a link removes every pinned file and hook inside it at once
+      - "~/.moat"
+      - "~/.claude"
+      - "~/.codex"
+      - "~/.cursor"
+      - "**/.moat"
+      - "**/.claude"
+      - "**/.codex"
+      - "**/.cursor"
       - "~/.moat/**"
       - "~/.claude/settings.json"
       - "~/.claude/settings.local.json"

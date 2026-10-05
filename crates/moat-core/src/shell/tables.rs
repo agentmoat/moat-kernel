@@ -86,11 +86,11 @@ pub const INLINE_INTERPRETERS: &[(&str, &[&str])] = &[
 /// Programs for which every path argument is a write.
 pub const WRITE_ALL_PATHS: &[&str] = &[
     "rm", "rmdir", "touch", "mkdir", "chmod", "chown", "chgrp", "truncate", "unlink", "shred",
-    "tee", "install", "mkfifo", "mknod",
+    "tee", "install", "mkfifo", "mknod", "mv",
 ];
 
 /// Programs for which the last operand is a write and the others are reads.
-pub const WRITE_LAST_PATH: &[&str] = &["cp", "mv", "ln", "rsync", "scp"];
+pub const WRITE_LAST_PATH: &[&str] = &["cp", "ln", "rsync", "scp"];
 
 /// Special parameters that are not environment variables.
 pub const SPECIAL_PARAMS: &[char] = &['?', '$', '!', '#', '@', '*', '-', '0'];
