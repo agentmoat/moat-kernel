@@ -49,7 +49,7 @@ never duplicates a hook, so it is safe to run again.
 | Agent | What is hooked | Where |
 |---|---|---|
 | Claude Code | every tool call (`PreToolUse`), settings changes (`ConfigChange`) | `~/.claude/settings.json` |
-| Codex | every tool call (`PreToolUse`) | `~/.codex/hooks.json` |
+| Codex | shell commands only (`PreToolUse`, matcher `Bash`); file edits are not hooked | `~/.codex/hooks.json` |
 | Cursor | shell, MCP, file reads, tool calls; fail-closed | `~/.cursor/hooks.json` |
 
 ## Day to day
@@ -75,9 +75,12 @@ Nothing to do. That is the kernel working.
 
 ### 2 · The agent needs something the policy does not cover
 
-The agent runs `npm install left-pad`. Installs are `ask` by default, so your agent's
-normal permission prompt appears, tagged `moat: ask [installs]`. Approve it there as
-usual. If you will keep saying yes to this command, make it stick:
+The agent runs `npm install left-pad`. `npm`, `pip`, `brew` and `gem` installs are `ask`
+by default, so your agent's normal permission prompt appears, tagged `moat: ask [installs]`.
+(`pnpm`, `yarn` and `cargo` installs are currently allowed by the broad `dev-shell` rule;
+the `installs` entries for them take effect once that rule is split into explicit
+subcommands.) Approve it there as usual. If you will keep saying yes to this command,
+make it stick:
 
 ```bash
 moat allow --last            # the last "ask": allowed for the rest of that agent session
@@ -101,7 +104,7 @@ Credentials are redacted before anything is stored. The log is a SQLite file und
 
 ```bash
 $EDITOR ~/.moat/policy.yaml
-moat policy lint             # schema, unknown kinds, unreachable rules
+moat policy lint             # schema version, unknown keys, duplicate or missing ids, bad globs
 moat doctor --accept         # you edited it, so re-pin the lock (terminal only)
 ```
 
@@ -118,8 +121,9 @@ moat policy check "npm install left-pad"                         # ❓ ask
 
 ### 5 · Something was tampered with
 
-If an agent, a script or a sync tool edits the policy, a hook file or a pinned
-executable, `moat` stops allowing anything:
+If an agent, a script or a sync tool edits the policy, a hook file or any other file
+the lock pins (`environment.json`, `approvals.json`, `policy.d/approved.yaml`), `moat`
+stops allowing anything:
 
 ```
 moat: deny [kernel-integrity] — /Users/you/.moat/policy.yaml was modified;
@@ -128,6 +132,10 @@ moat: deny [kernel-integrity] — /Users/you/.moat/policy.yaml was modified;
 
 `moat doctor` lists exactly what drifted. Look at the diff. If it was you,
 `moat doctor --accept`; if it was not, you just caught what this tool exists for.
+
+Pinned executables are narrower: when a program recorded at `moat init` (or listed under
+`executables:` in the policy) now resolves somewhere else, only commands running that
+program are denied, with rule `executables`. Other commands are unaffected.
 
 ## Policy in one minute
 
@@ -158,8 +166,10 @@ Three rules to remember:
 
 - Evaluation order is `deny → allow → ask → defaults`; **deny always wins**, and the
   strictest outcome wins across everything one command touches.
-- Shell rules see through pipelines, `&&`, `sh -c`, `eval`, `$(…)`, `sudo`/`env`/`xargs`
-  and inline `python -c` / `node -e`, so `echo … | base64 -d | sh` is caught wherever it hides.
+- Shell rules see through pipelines, `&&`, `sh -c`, `eval`, `$(…)`, `sudo`/`env`/`xargs`,
+  so `echo … | base64 -d | sh` is caught wherever it hides. Inline `python -c` / `node -e`
+  payloads are not parsed as shell; they are scanned for paths, hosts and environment
+  variables, which the `fs.*`, `net` and `env.*` rules then see.
 - Anything the parser cannot understand is `ask`, never `allow`.
 
 Full reference, default policy table and recipes: [docs/POLICY.md](docs/POLICY.md).
@@ -183,7 +193,9 @@ Full reference, default policy table and recipes: [docs/POLICY.md](docs/POLICY.m
   pattern-based.
 - Proxy network traffic, or taint a session after it read a secret.
 - Cover MCP servers that your agent does not expose through its hooks.
-- Tokenise PowerShell: on Windows every PowerShell command is `ask`.
+- Tokenise PowerShell. A PowerShell command line is lexed as if it were POSIX shell and
+  no default rule names its cmdlets, so it falls through to `defaults` and is `ask`;
+  `pwsh -c` / `powershell -Command` payloads are only scanned for paths and hosts.
 
 Roadmap and the honest state of each piece: [docs/PROGRESS.md](docs/PROGRESS.md).
 

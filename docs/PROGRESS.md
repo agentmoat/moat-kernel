@@ -1,12 +1,12 @@
 # agentmoat — Progress and Next Steps
 
-Updated: 2026-10-03. Plan of record: `DESIGN.md` §10 (v0.1 spec),
+Updated: 2026-10-05 (main after #28). Plan of record: `DESIGN.md` §10 (v0.1 spec),
 `STRENGTH.md` §3 (benchmark gate), `REPO_STRUCTURE.md` (layout and conventions).
 
 ## 1. Where we are in one line
 
-The kernel decides and records: Claude Code and Codex tool calls pass through
-`moat guard`, are evaluated against a committed policy, blocked with a rule id and
+The kernel decides and records: Claude Code, Codex and Cursor tool calls pass through
+`moat guard`, are evaluated against a locked policy, blocked with a rule id and
 reason when dangerous, and written to a redacted local audit log. OS enforcement
 (`moat exec`), OpenClaw, the MCP proxy and the public benchmark are not
 built yet.
@@ -26,15 +26,16 @@ built yet.
 ### 2.2 Code (`crates/`)
 | Crate | Delivered | Evidence |
 |---|---|---|
-| `moat-core` | Policy schema v1 + loader + lint (duplicate ids, empty rules, bad globs, unknown keys, version). Own POSIX shell lexer: quotes, escapes, line continuation, comments, unspaced operators, redirects with descriptors, `$( … )`/backticks, here-documents as data, 64 KB limit. Classifier: sub-commands, subshells, `eval`, `sh -c` nesting, wrappers (`sudo`, `env`, `xargs`, `timeout`, `nohup`, …), inline interpreters (`python -c`, `node -e`, …), env set/read, path read/write detection (`cp`/`scp` destination, `sed -i`, `dd of=`, `tee`, redirects), host/IP detection, depth and size limits. Engine with `CompiledPolicy::decide` (compile once), pipeline-aware shell rules (`curl * \| sh`), per-kind defaults, negated allow globs, unparseable ⇒ `ask`. | 32 unit tests, 83 conformance fixtures, builds for `wasm32` (no I/O), `#![forbid(unsafe_code)]` |
-| `moat-hosts` | `PreToolUse` adapter for Claude Code and Codex: tool → action mapping, ungoverned tools, malformed payload errors, response document, `reason_line`. | 8 tests on golden payloads in `tests/fixtures/hosts/` |
-| `moat-audit` | SQLite WAL store (busy timeout, schema version, 0600), `record`/`get`/`recent`/`session`/`count`, hex event ids. Redaction before storage: bearer/basic auth, `key=value` credentials, GitHub/OpenAI/AWS/Slack/Google/npm/GitLab/JWT token shapes, URL passwords; idempotent. | 10 tests |
-| `moat-cli` (`moat`) | `init` (state dir 0700, default policy never overwritten, audit db, hook install for present hosts; idempotent, backup, atomic write, `--dry-run`, `--hosts`), `guard --host` (stdin → decision → host JSON; fail-closed `deny` on any error; git-root project detection; trace id on stderr), `show` (id / `--session` / `--recent`, text or JSON), `status` (policy sha256 + counts, hook health per host, recent events; exit 64 when unhealthy), `policy lint`, `policy check` (`--kind`, `--format json`). Exit-code contract 0/2/3/64 (usage errors mapped away from 2). Env: `MOAT_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`. | 7 unit + 16 end-to-end tests in isolated HOMEs |
-| Default policy `policies/default-v1.yaml` | 7 deny groups (secrets read+write, env secrets, env poison, pipe-to-shell, destructive, kernel-self, shell rc), 4 allow (project fs, dev shell, registries, safe MCP), 2 ask (installs, push); `defaults: {"*": ask, net: deny}` | linted in CI, exercised by every fixture |
-| Tooling | Workspace lints (clippy pedantic, `unsafe` forbidden), rustfmt, `deny.toml` (licences, advisories, I/O crates banned from core), CI matrix macOS/Linux/Windows + wasm purity + cargo-deny, dual MIT/Apache-2.0 | `cargo clippy` 0 warnings |
+| `moat-core` | Policy schema v1 + loader + lint (version, missing/duplicate ids, empty rules, bad globs and shell patterns, unknown keys, `executables` paths). Own POSIX shell lexer: quotes, escapes, line continuation, comments, unspaced operators, redirects with descriptors, `$( … )`/backticks, here-documents as data, 64 KB limit. Classifier: sub-commands, subshells, `eval`, `sh -c` nesting, wrappers (`sudo`, `env`, `xargs`, `timeout`, `nohup`, …), inline interpreter payloads scanned for paths/hosts/env (`python -c`, `node -e`, …), env set/read, path read/write detection (`cp`/`scp` destination, `sed -i`, `dd of=`, `tee`, redirects), host/IP detection, depth, size and `MAX_ATOMS` (2048) limits. Engine with `CompiledPolicy::decide`/`decide_with` (compile once), pipeline-aware shell rules (`curl * \| sh`), per-kind defaults, negated globs, unparseable ⇒ `ask`, `executables` pins checked through a caller-supplied `ProgramResolver`. | 41 unit tests, 3 architecture tests (dependency allowlist, no `unsafe`, 500-line budget), conformance runner over 95 fixtures (63 attacks / 20 benign / 12 ask), builds for `wasm32` (no I/O), `#![forbid(unsafe_code)]` |
+| `moat-hosts` | `PreToolUse` adapter for Claude Code and Codex (tool → action mapping, ungoverned tools, malformed payload errors, `hookSpecificOutput` response, `reason_line`); Claude Code `ConfigChange` adapter (`{}` or `{"decision":"block"}`); Cursor adapter for `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` (`{"permission": …}` response; `Shell` under `preToolUse` deliberately ungoverned). | 15 tests on golden payloads in `tests/fixtures/hosts/` |
+| `moat-audit` | SQLite WAL store (busy timeout, schema version, 0600), `record`/`get`/`recent`/`session`/`count`, hex event ids; time-window queries (`since`, `sessions_since`, `summary` with verdict totals, hosts, top rules, asks per active hour). Redaction before storage: bearer/basic auth, `key=value` credentials, GitHub/OpenAI/AWS/Slack/Google/npm/GitLab/JWT token shapes, URL passwords; redaction is applied to the command, path and URL fields before encoding and corrupt rows are skipped, not fatal. | 16 tests |
+| `moat-cli` (`moat`) | `init` (state dir 0700, default policy never overwritten, audit db, `environment.json` snapshot of `PATH` and common program locations, `policy.lock`, hook install for present hosts incl. Cursor's fail-closed `hooks.json`; idempotent, backup, atomic write, `--dry-run`, `--hosts`), `guard --host` (stdin → lock check → policy + `policy.d/approved.yaml` overlay → decision with executable pins and session grants → host JSON; fail-closed `deny` on any error; git-root project detection; trace id on stderr; Claude Code `ConfigChange` veto), `show` (id / `--session` / `--since` / `--recent`, text or JSON), `replay --since|--session` (per-session timeline), `report --since` (totals, hosts, top rules, asks per hour), `status` (policy sha256 + counts, lock state, hook health per host, recent events; exit 64 when unhealthy), `doctor [--accept]` (state dir, policy, lock, hooks, binary path, audit; `--accept` re-pins, terminal only), `allow --last [--always]` / `allow <cmd> --host --session` (session grant in `approvals.json` or permanent rule in `policy.d/approved.yaml`; terminal only), `policy lint`, `policy check` (`--kind`, `--format json`; no environment snapshot, see POLICY.md §8.1). Exit-code contract 0/2/3/64 (usage errors mapped away from 2). Env: `MOAT_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CURSOR_CONFIG_DIR`. | 18 unit + 42 end-to-end tests (`cli`, `guard`, `cursor`, `config_change`, `lock`, `approvals`, `replay_report`) in isolated HOMEs |
+| Default policy `policies/default-v1.yaml` | 7 deny groups (secrets read+write, env secrets, env poison, pipe-to-shell, destructive, kernel-self incl. `moat policy/init/doctor/allow`, shell rc), 4 allow (project fs, dev shell, registries, safe MCP), 2 ask (installs, push); `defaults: {"*": ask, net: deny}`; `executables: {}` | linted in CI, exercised by every fixture |
+| Tooling | Workspace lints (clippy pedantic, `unsafe` forbidden), rustfmt, `deny.toml` (licences, advisories, I/O crates banned from core), CI matrix macOS (arm64, x64)/Linux/Windows + wasm purity + cargo-deny, `pr-title`, `pr-standards` (auto labels, size and body checks), `moat-reviewer` first-pass review, dual MIT/Apache-2.0 | `cargo clippy` 0 warnings |
 
-Totals: ~5,400 lines including tests; guard latency ≈ 11 ms including SQLite open
-(budget 15 ms).
+Totals: 136 tests (`cargo test --workspace`), 95 conformance fixtures, 9,312 lines of Rust
+including tests; guard latency ≈ 11 ms including SQLite open (budget 15 ms, measured by
+hand, no benchmark in CI yet).
 
 ### 2.3 Live test (2026-10-03)
 Real Claude Code 2.1.288 session, project-scoped `PreToolUse` hook, isolated `MOAT_HOME`:
@@ -80,8 +81,29 @@ architecture tests (dependency allowlist, no `unsafe`, 500-line file budget); `d
 - No session taint yet; approvals exist as `moat allow` (session grants and a permanent overlay) but there is no prompt of our own: hosts prompt, `moat allow` makes the answer stick.
 - OpenClaw adapter and MCP proxy not written.
 - Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` not implemented; only the user policy is loaded.
-- Windows: builds in CI, PowerShell is not tokenised (any PowerShell command is `ask`).
-- Nothing committed or pushed; `agentmoat/moat-kernel` repository not created.
+- Windows: builds in CI, PowerShell is not tokenised (a PowerShell command line falls through to the `ask` default).
+
+### 3.1 Known gaps (audit 2026-10-05)
+From `moat-notes/docs/05-audit-2026-10-05.md`, verified against the binary. Fixes land as
+`sec:`/`fix:` PRs in the order listed there; status as of this update is given per item.
+
+P0 (allow where deny is promised):
+- Policy lock did not detect a pinned file swapped for a symlink (fixed in #26).
+- Package-manager wrappers hide arbitrary shell: `pnpm exec sh -c …`, `yarn exec …`, `npx`, `npm exec`, `make SHELL=…` are not in the wrapper table and `pnpm *`/`yarn *`/`cargo *`/`make *` are allowed by `dev-shell` (wrapper table: PR #30 open; `dev-shell` split: policy PR in progress).
+- Relative paths without `./` (`cat .env`, `cat src/../../../.ssh/id_rsa`) produced no `fs` atom (fixed in #29).
+- MCP tool arguments are dropped: `mcp__filesystem__read_file {path: ~/.aws/credentials}` matches `safe-mcp`.
+- Dead `ask` rules: `installs` for `pnpm add`/`yarn add`/`cargo add`/`cargo install` and `push` for `cargo publish` are unreachable behind the `dev-shell` allows.
+- No symlink/realpath resolution of action paths (`ln -s ~/.ssh ./s` then `cat ./s/id_rsa`).
+- Audit failure was non-fatal: an unopenable `audit.db` printed a warning and the verdict proceeded; `guard` recreated a deleted database (fixed in #27).
+- Redaction runs on the JSON-encoded action: escaped quotes can break patterns, corrupt stored rows and make `show`/`replay`/`report` failed for the whole query (fixed in #28).
+- A panic in `guard` exited 101, which Claude Code treats as non-blocking (fail-open) (fixed in #27: `catch_unwind` ⇒ deny, exit 2); clap usage errors still exit 64.
+- Policy-only: bare `env`/`printenv`/`set` ask instead of deny; `base64 -d file | bash`, `base64 -D`, `openssl enc -d` have no decoder→interpreter rule; `kernel-self` matches `moat` by literal argv0 only; `git branch -D`, `git stash clear` allowed.
+
+P1 (false denies):
+- `rm -rf /tmp/build` is denied because `rm -rf /*` is a per-token glob matching any absolute path.
+- Dotted identifiers inside interpreter payloads and arguments (`python3 -c "import sys; …"`, `git commit -m fix.bug`) are treated as hosts and denied by `default.net`.
+- `cd src && cargo build`, `echo $PATH` and `curl https://api.github.com/x` ask; the benign corpus is 18 fixtures against ≥ 60 planned.
+- Codex hook matcher is `Bash` only, so Codex file edits are never seen; the Claude Code matcher omits `WebSearch`.
 
 ## 4. Next, in order (DESIGN.md §10.9, weeks 2–6)
 
@@ -101,7 +123,7 @@ auto-labels every PR (type/area/size/risk). Remaining: a release workflow.
 
 ## 5. How to verify the current state yourself
 ```bash
-cargo test --workspace                                  # 82 unit/e2e + 83 fixtures
+cargo test --workspace                                  # 136 unit/e2e tests incl. the 95-fixture conformance runner
 cargo clippy --workspace --all-targets                  # 0 warnings
 cargo build -p moat-core --target wasm32-unknown-unknown
 HOME=$(mktemp -d) sh -c 'mkdir -p $HOME/.claude && moat init && moat guard --host claude-code < tests/fixtures/hosts/claude-code/bash.json; moat show; moat status'
