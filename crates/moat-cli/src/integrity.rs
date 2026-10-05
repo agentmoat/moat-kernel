@@ -120,7 +120,7 @@ impl Lock {
     pub fn verify_one(&self, path: &Path) -> Option<Drift> {
         let expected = self.entries.get(&key(path))?;
         let path = PathBuf::from(key(path));
-        if !path.exists() {
+        if fs::symlink_metadata(&path).is_err() {
             return Some(Drift::Missing(path));
         }
         match digest(&path) {
@@ -135,23 +135,35 @@ impl Lock {
     }
 }
 
-/// Canonical identity for a pinned file. A deleted file still resolves through
-/// its parent directory, so `/var/...` and `/private/var/...` agree on macOS.
+/// Identity of a pinned file: its canonical directory plus its own name. The
+/// leaf is deliberately not resolved, so a file that is later replaced by a
+/// symlink keeps the same key and is compared, not forgotten. The parent is
+/// canonicalised so `/var/...` and `/private/var/...` agree on macOS and a
+/// deleted file still has a key.
 fn key(path: &Path) -> String {
-    let fallback = || match (path.parent(), path.file_name()) {
+    let located = match (path.parent(), path.file_name()) {
         (Some(parent), Some(name)) => {
             fs::canonicalize(parent).map_or_else(|_| path.to_path_buf(), |p| p.join(name))
         }
         _ => path.to_path_buf(),
     };
-    fs::canonicalize(path)
-        .unwrap_or_else(|_| fallback())
-        .to_string_lossy()
-        .into_owned()
+    located.to_string_lossy().into_owned()
 }
 
+/// SHA-256 of the file. A symlink hashes its target path together with the
+/// contents, so swapping a regular file for a link (or re-pointing a link)
+/// changes the digest even when the bytes read through it are identical.
 fn digest(path: &Path) -> Result<String> {
-    let bytes = fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let meta = fs::symlink_metadata(path).with_context(|| format!("reading {}", path.display()))?;
+    let mut bytes = Vec::new();
+    if meta.file_type().is_symlink() {
+        let target =
+            fs::read_link(path).with_context(|| format!("reading link {}", path.display()))?;
+        bytes.extend_from_slice(b"symlink:");
+        bytes.extend_from_slice(target.to_string_lossy().as_bytes());
+        bytes.push(b'\n');
+    }
+    bytes.extend(fs::read(path).with_context(|| format!("reading {}", path.display()))?);
     Ok(Sha256::digest(&bytes)
         .iter()
         .fold(String::with_capacity(64), |mut hex, b| {
@@ -207,6 +219,26 @@ mod tests {
                 .iter()
                 .any(|d| matches!(d, Drift::Missing(p) if p.ends_with("settings.json")))
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replacing_a_pinned_file_with_a_symlink_is_drift() {
+        let dir = tempfile::tempdir().unwrap();
+        let policy = write(dir.path(), "policy.yaml", "version: 1\n");
+        let other = write(dir.path(), "other.yaml", "version: 1\n");
+        let lock = Lock::pin(Path::new("/x/moat"), std::slice::from_ref(&policy)).unwrap();
+
+        fs::remove_file(&policy).unwrap();
+        std::os::unix::fs::symlink(&other, &policy).unwrap();
+        assert!(lock.pins(&policy), "a symlinked leaf keeps its identity");
+        assert!(
+            matches!(lock.verify_one(&policy), Some(Drift::Modified(p)) if p.ends_with("policy.yaml")),
+            "same bytes through a link must still count as modified"
+        );
+
+        fs::remove_file(&policy).unwrap();
+        assert!(matches!(lock.verify_one(&policy), Some(Drift::Missing(_))));
     }
 
     #[test]
