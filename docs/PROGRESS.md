@@ -89,7 +89,7 @@ From `moat-notes/docs/05-audit-2026-10-05.md`, verified against the binary. Fixe
 
 P0 (allow where deny is promised):
 - Policy lock did not detect a pinned file swapped for a symlink (fixed in #26).
-- Package-manager wrappers hide arbitrary shell: `pnpm exec sh -c …`, `yarn exec …`, `npx`, `npm exec`, `make SHELL=…` are not in the wrapper table and `pnpm *`/`yarn *`/`cargo *`/`make *` are allowed by `dev-shell` (wrapper table: PR #30 open; `dev-shell` split: policy PR in progress).
+- Package-manager wrappers hide arbitrary shell: `pnpm exec sh -c …`, `yarn exec …`, `npx`, `npm exec`, `make SHELL=…` are not in the wrapper table and `pnpm *`/`yarn *`/`cargo *`/`make *` are allowed by `dev-shell` (fixed: wrapper table #30, `dev-shell` split #33, `make` arguments `shell/make.rs`).
 - Relative paths without `./` (`cat .env`, `cat src/../../../.ssh/id_rsa`) produced no `fs` atom (fixed in #29).
 - MCP tool arguments are dropped: `mcp__filesystem__read_file {path: ~/.aws/credentials}` matches `safe-mcp`.
 - Dead `ask` rules: `installs` for `pnpm add`/`yarn add`/`cargo add`/`cargo install` and `push` for `cargo publish` are unreachable behind the `dev-shell` allows.

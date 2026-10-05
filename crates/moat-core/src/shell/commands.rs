@@ -1,7 +1,8 @@
 //! From tokens to simple commands to atomic actions.
 
+use super::make;
 use super::tables::{
-    ENV_BUILTINS, INLINE_INTERPRETERS, PACKAGE_RUNNERS, SHELLS, SOURCE_BUILTINS,
+    ENV_BUILTINS, INLINE_INTERPRETERS, MAKES, PACKAGE_RUNNERS, SHELLS, SOURCE_BUILTINS,
     WRAPPER_OPTIONS_WITH_VALUE, WRAPPER_SUBCOMMANDS, WRAPPERS, WRAPPERS_WITH_VALUE,
     WRITE_ALL_PATHS, WRITE_LAST_PATH,
 };
@@ -149,6 +150,10 @@ fn classify_simple(
         })?;
     }
     classify_arguments(&argv, program, words, ctx, &mut sink)?;
+
+    if MAKES.contains(&program) {
+        return make::classify(&argv, ctx, out, depth);
+    }
 
     if program == "eval" && argv.len() > 1 {
         return classify_into(&argv[1..].join(" "), ctx, out, depth + 1);

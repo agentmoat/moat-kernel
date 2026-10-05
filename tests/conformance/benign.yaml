@@ -93,3 +93,6 @@
 - id: benign-env-named-file-is-not-a-dump
   action: { shell: "git diff -- env" }
   expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-make-build-parallel-with-variable
+  action: { shell: "make build -j4 CC=clang" }
+  expect: { verdict: allow, rules: [dev-shell] }

@@ -63,6 +63,9 @@ pub const WRAPPER_OPTIONS_WITH_VALUE: &[(&str, &[&str])] = &[
 
 pub const ENV_BUILTINS: &[&str] = &["export", "declare", "typeset", "local", "readonly", "set"];
 
+/// Build tools whose command line can carry shell code (`shell/make.rs`).
+pub const MAKES: &[&str] = &["make", "gmake"];
+
 pub const SOURCE_BUILTINS: &[&str] = &["source", "."];
 
 /// Interpreters with an inline-code flag whose payload is scanned, not parsed as shell.

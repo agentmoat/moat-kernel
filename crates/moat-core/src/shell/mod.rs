@@ -14,6 +14,7 @@
 //! | URLs, `host:port`, dotted hosts, IP literals | `Net` |
 //! | `$( … )`, backticks, `sh -c`, `eval`, `xargs`, `sudo`, `env`, … | nested classification |
 //! | `python -c`, `node -e`, `perl -e`, … payloads | URL/path scan of the payload |
+//! | `make --eval`, `-e`, `SHELL=`, `X!=cmd`, `$(shell …)` (`make.rs`) | `make <arg>` `Shell` atom + nested classification |
 //!
 //! Classification is conservative by design: when the input cannot be parsed
 //! safely the result is [`ParseOutcome::Unparseable`], which the engine maps to
@@ -24,6 +25,7 @@
 //! words, `tables` holds the program and extension lists that drive both.
 
 mod commands;
+mod make;
 mod tables;
 #[cfg(test)]
 mod tests;

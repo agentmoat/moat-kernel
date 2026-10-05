@@ -481,6 +481,10 @@ Rules:
   for other languages, scan payload for `os.system`, `subprocess`, `child_process`,
   `exec`, URLs and secret paths; unknown → `ask`.
 - Command substitution `$(…)` and backticks: evaluate inner command as its own action.
+- Build tools whose arguments carry code (`make --eval`, `-e`, `SHELL=`, `.SHELLFLAGS=`,
+  `MAKEFLAGS=`, `X!=cmd`, `$(shell …)`): each such argument is a `make <arg>` action of its
+  own (so prefix allows like `make test*` do not cover it) and the embedded command is
+  classified recursively (`shell/make.rs`).
 - Program resolution: first token resolved against `executables` pins when present;
   otherwise against a *kernel-controlled* PATH snapshot taken at `moat init`
   (never the hook's inherited PATH). Mismatch → deny with reason "unpinned executable".
