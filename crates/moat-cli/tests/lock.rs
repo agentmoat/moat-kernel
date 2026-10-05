@@ -168,6 +168,42 @@ fn removed_hook_file_is_detected() {
 }
 
 #[test]
+fn doctor_reports_health_drift_and_refuses_to_accept_outside_a_terminal() {
+    let sb = Sandbox::new();
+    let out = sb.moat(&["doctor"], None);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(text(&out).contains("healthy"), "{}", text(&out));
+
+    let mut policy = std::fs::read_to_string(sb.policy()).unwrap();
+    policy.push_str("\n# edited by hand\n");
+    std::fs::write(sb.policy(), policy).unwrap();
+    let out = sb.moat(&["doctor"], None);
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    let report = text(&out);
+    assert!(report.contains("✗"), "{report}");
+    assert!(report.contains("policy.yaml"), "{report}");
+    assert!(report.contains("problem(s)"), "{report}");
+
+    let out = sb.moat(&["doctor", "--accept"], None);
+    assert_eq!(
+        out.status.code(),
+        Some(64),
+        "stdin is a pipe, so --accept must refuse"
+    );
+    assert!(text(&out).contains("terminal"), "{}", text(&out));
+    assert_eq!(
+        sb.guard_read_src()["permissionDecision"],
+        "deny",
+        "still denied after the refused accept"
+    );
+
+    std::fs::remove_file(sb.home.join(".claude/settings.json")).unwrap();
+    let out = sb.moat(&["doctor"], None);
+    assert_eq!(out.status.code(), Some(64));
+    assert!(text(&out).contains("settings.json"), "{}", text(&out));
+}
+
+#[test]
 fn missing_lock_denies_and_points_to_init() {
     let sb = Sandbox::new();
     std::fs::remove_file(sb.lock()).unwrap();

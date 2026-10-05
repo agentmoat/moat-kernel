@@ -11,11 +11,20 @@ fn default_policy() -> PathBuf {
     repo_root().join("policies/default-v1.yaml")
 }
 
+/// One throwaway home per test binary; nothing here touches the developer's `~`.
+fn home() -> &'static std::path::Path {
+    static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    HOME.get_or_init(|| tempfile::tempdir().expect("temp home"))
+        .path()
+}
+
 fn moat(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_moat"))
         .args(args)
-        .env("HOME", "/Users/me")
-        .env("USERPROFILE", "/Users/me")
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("HOME", home())
+        .env("USERPROFILE", home())
         .output()
         .expect("spawning moat")
 }
@@ -55,14 +64,12 @@ fn lint_rejects_missing_and_invalid_files() {
     assert_eq!(out.status.code(), Some(64));
     assert!(String::from_utf8_lossy(&out.stderr).contains("opening policy"));
 
-    let dir = std::env::temp_dir().join(format!("moat-cli-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let bad = dir.join("bad.yaml");
+    let dir = tempfile::tempdir().unwrap();
+    let bad = dir.path().join("bad.yaml");
     std::fs::write(&bad, "version: 9\n").unwrap();
     let out = moat(&["policy", "lint", bad.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(64));
     assert!(String::from_utf8_lossy(&out.stderr).contains("unsupported policy version"));
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -81,7 +88,8 @@ fn text_output_names_rule_and_reason() {
     let text = stdout(&out);
     assert!(text.contains("⛔ deny"));
     assert!(text.contains("secrets-paths"));
-    assert!(text.contains("/Users/me/.ssh/id_rsa"));
+    let expanded = format!("{}/.ssh/id_rsa", home().display()).replace('\\', "/");
+    assert!(text.contains(&expanded), "{text}");
 }
 
 #[test]

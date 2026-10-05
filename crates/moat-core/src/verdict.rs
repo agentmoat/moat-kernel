@@ -80,3 +80,48 @@ impl Decision {
         self.context.extend(other.context);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Decision, Verdict};
+
+    fn decided(verdict: Verdict, rule: &str) -> Decision {
+        let mut d = Decision::new(verdict);
+        d.push(rule, format!("because {rule}"));
+        d
+    }
+
+    #[test]
+    fn stricter_verdict_replaces_and_demotes_the_weaker_match() {
+        let mut d = decided(Verdict::Allow, "project-fs");
+        d.merge(decided(Verdict::Deny, "secrets-paths"));
+        assert_eq!(d.verdict, Verdict::Deny);
+        assert_eq!(d.rules, ["secrets-paths"]);
+        assert_eq!(d.reasons, ["because secrets-paths"]);
+        assert_eq!(d.context, ["because project-fs"]);
+    }
+
+    #[test]
+    fn weaker_verdict_only_adds_context() {
+        let mut d = decided(Verdict::Deny, "secrets-paths");
+        d.merge(decided(Verdict::Allow, "dev-shell"));
+        assert_eq!(d.verdict, Verdict::Deny);
+        assert_eq!(d.rules, ["secrets-paths"]);
+        assert_eq!(d.context, ["because dev-shell"]);
+    }
+
+    #[test]
+    fn equal_verdicts_union_rules_without_duplicates() {
+        let mut d = decided(Verdict::Ask, "installs");
+        d.merge(decided(Verdict::Ask, "installs"));
+        d.merge(decided(Verdict::Ask, "push"));
+        assert_eq!(d.rules, ["installs", "push"]);
+        assert_eq!(d.reasons.len(), 2);
+        assert!(d.context.is_empty());
+    }
+
+    #[test]
+    fn verdict_order_is_allow_ask_deny() {
+        assert!(Verdict::Allow < Verdict::Ask && Verdict::Ask < Verdict::Deny);
+    }
+}
