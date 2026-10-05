@@ -15,8 +15,31 @@ pub enum Action {
     FsWrite { path: String },
     /// A direct network request through a host tool (e.g. `WebFetch`).
     Net { url: String },
-    /// An MCP tool call, `mcp__<server>__<tool>`.
-    McpTool { name: String },
+    /// An MCP tool call, `mcp__<server>__<tool>`. Adapters that understand a
+    /// server's arguments add the paths and hosts the call touches so the
+    /// usual `fs.*` and `net` rules apply to it as well.
+    McpTool {
+        name: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        reads: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        writes: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        hosts: Vec<String>,
+    },
+}
+
+impl Action {
+    /// An MCP call whose arguments are not interpreted.
+    #[must_use]
+    pub fn mcp(name: impl Into<String>) -> Self {
+        Self::McpTool {
+            name: name.into(),
+            reads: Vec::new(),
+            writes: Vec::new(),
+            hosts: Vec::new(),
+        }
+    }
 }
 
 /// The primitive operations an [`Action`] decomposes into.

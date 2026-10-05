@@ -64,3 +64,6 @@
 - id: benign-hidden-project-file
   action: { shell: "cat .gitignore" }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-mcp-filesystem-reads-project-file
+  action: { mcp_tool: { name: mcp__filesystem__read_file, reads: ["/p/README.md"] } }
+  expect: { verdict: allow, rules: [safe-mcp, project-fs] }

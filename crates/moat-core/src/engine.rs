@@ -173,8 +173,31 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
                 reason: format!("no host in url `{url}`"),
             },
         },
-        Action::McpTool { name } => {
-            ParseOutcome::Parsed(vec![AtomicAction::McpTool { name: name.clone() }])
+        Action::McpTool {
+            name,
+            reads,
+            writes,
+            hosts,
+        } => {
+            let norm = |p: &String| paths::normalise(p, &ctx.home, &ctx.project, &ctx.cwd);
+            let mut atoms = vec![AtomicAction::McpTool { name: name.clone() }];
+            atoms.extend(reads.iter().map(|p| AtomicAction::FsRead { path: norm(p) }));
+            atoms.extend(
+                writes
+                    .iter()
+                    .map(|p| AtomicAction::FsWrite { path: norm(p) }),
+            );
+            for host in hosts {
+                match host_of_url(host).or_else(|| host_of_url(&format!("https://{host}"))) {
+                    Some(host) => atoms.push(AtomicAction::Net { host }),
+                    None => {
+                        return ParseOutcome::Unparseable {
+                            reason: format!("no host in mcp argument `{host}`"),
+                        };
+                    }
+                }
+            }
+            ParseOutcome::Parsed(atoms)
         }
     }
 }
