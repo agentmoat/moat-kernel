@@ -105,6 +105,8 @@ P0 (allow where deny is promised):
 
 - `moat allow` success paths were untestable behind the terminal check (fixed: debug-only `MOAT_ASSUME_TTY`, `tests/allow.rs`).
 
+- The `moat` binary that every hook runs was not protected (`cp /tmp/evil ~/.cargo/bin/moat` asked) and T10 had no attack fixture (fixed: `**/bin/moat` in `kernel-self`, `curl -o`/`wget -O` are writes).
+
 P1 (false denies):
 - `rm -rf /tmp/build` is denied because `rm -rf /*` is a per-token glob matching any absolute path.
 - Dotted identifiers inside interpreter payloads and arguments (`python3 -c "import sys; …"`, `git commit -m fix.bug`) are treated as hosts and denied by `default.net`.

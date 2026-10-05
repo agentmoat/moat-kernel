@@ -13,6 +13,10 @@ use crate::paths;
 /// `find` actions whose arguments, up to `;` or `+`, are a command to run.
 const FIND_EXEC: &[&str] = &["-exec", "-execdir", "-ok", "-okdir"];
 
+/// Short output-file options whose meaning is specific to one program
+/// (`grep -o` is a flag, `curl -o` takes a file).
+const OUTPUT_SHORT: &[(&str, &str)] = &[("curl", "-o"), ("wget", "-O")];
+
 pub(super) fn classify(
     argv: &[String],
     program: &str,
@@ -35,9 +39,17 @@ pub(super) fn classify(
             i += end + 1;
             continue;
         }
-        let target = match arg.strip_prefix("--output=") {
+        let short = OUTPUT_SHORT
+            .iter()
+            .any(|(p, flag)| *p == program && arg == flag);
+        let target = match arg
+            .strip_prefix("--output=")
+            .or_else(|| arg.strip_prefix("--output-document="))
+        {
             Some(value) => Some(value),
-            None if arg == "--output" => argv.get(i).map(String::as_str),
+            None if arg == "--output" || arg == "--output-document" || short => {
+                argv.get(i).map(String::as_str)
+            }
             None => None,
         };
         if let Some(path) = target.filter(|p| !p.is_empty() && *p != "-") {

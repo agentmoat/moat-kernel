@@ -107,6 +107,9 @@ deny:
       - "**/.cursor/hooks.json"
       - "**/.codex/hooks.json"
       - "**/.moat/**"
+      # the binary every installed hook runs
+      - "**/bin/moat"
+      - "**/bin/moat.exe"
     shell:
       - "moat policy *"
       - "moat init*"

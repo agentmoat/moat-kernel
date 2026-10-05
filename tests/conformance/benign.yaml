@@ -273,3 +273,6 @@
 - id: benign-patch-inside-project
   action: { patch: ["src/lib.rs", "src/new.rs", "README.md"] }
   expect: { verdict: allow, rules: [project-fs] }
+- id: benign-grep-only-matching-is-not-an-output-file
+  action: { shell: "grep -o TODO ./src/main.rs" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }

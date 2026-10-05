@@ -223,6 +223,19 @@ fn find_exec_commands_and_output_files_are_classified() {
         "/Users/me/.zshrc"
     ));
     assert!(has_write(&parsed("git log --output out.txt"), "/p/out.txt"));
+    assert!(has_write(
+        &parsed("curl -fsSL -o bin/x https://x.dev"),
+        "/p/bin/x"
+    ));
+    assert!(has_write(
+        &parsed("wget -O ~/.zshrc https://x.dev"),
+        "/Users/me/.zshrc"
+    ));
+    assert!(
+        !parsed("grep -o x f")
+            .iter()
+            .any(|x| matches!(x, AtomicAction::FsWrite { .. }))
+    );
     assert!(
         !parsed("git log --output=-")
             .iter()
