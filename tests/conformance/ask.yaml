@@ -2,154 +2,201 @@
 # Evaluation context: home=/Users/me, project=/p, cwd=/p.
 
 - id: ask-npm-install
+  threat: T5
   action: { shell: "npm install left-pad-pro" }
   expect: { verdict: ask, rules: [installs] }
 - id: ask-pip-install
+  threat: T5
   action: { shell: "pip install requests==2.32.0" }
   expect: { verdict: ask, rules: [installs] }
 - id: ask-git-push
+  threat: T4
   action: { shell: "git push origin HEAD" }
   expect: { verdict: ask, rules: [push] }
 - id: ask-npm-publish
+  threat: T5
   action: { shell: "npm publish --access public" }
   expect: { verdict: ask, rules: [push] }
 - id: ask-unknown-command
+  threat: T7
   action: { shell: "terraform apply -auto-approve" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-write-git-internals
+  threat: T9
   action: { fs_write: "/p/.git/config" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-write-outside-project
+  threat: T4
   action: { fs_write: "/tmp/output.txt" }
   expect: { verdict: ask, rules: [default] }
 
 # Unparseable input is never allowed.
 - id: ask-unbalanced-quote
+  threat: T7
   action: { shell: "echo 'oops" }
   expect: { verdict: ask, rules: [unparseable] }
 - id: ask-unterminated-substitution
+  threat: T7
   action: { shell: "echo $(whoami" }
   expect: { verdict: ask, rules: [unparseable] }
 - id: ask-unterminated-heredoc
+  threat: T7
   action: { shell: "cat <<EOF\nno terminator" }
   expect: { verdict: ask, rules: [unparseable] }
 - id: ask-nesting-too-deep
+  threat: T7
   action: { shell: "bash -c \"eval eval eval eval eval eval true\"" }
   expect: { verdict: ask, rules: [unparseable] }
 - id: ask-empty-command
+  threat: T7
   action: { shell: "   " }
   expect: { verdict: ask, rules: [unparseable] }
 
 - id: ask-inline-python-prints-version
+  threat: T12
   action: { shell: "python3 -c 'import sys; print(sys.version)'" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-inline-node-prints-version
+  threat: T12
   action: { shell: "node -e 'console.log(process.version)'" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-pnpm-exec-unlisted-tool
+  threat: T5
   action: { shell: "pnpm exec some-unlisted-tool --flag" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-cargo-add
+  threat: T5
   action: { shell: "cargo add serde" }
   expect: { verdict: ask, rules: [installs] }
 - id: ask-cargo-publish
+  threat: T5
   action: { shell: "cargo publish" }
   expect: { verdict: ask, rules: [push] }
 - id: ask-pnpm-install
+  threat: T5
   action: { shell: "pnpm install" }
   expect: { verdict: ask, rules: [installs] }
 - id: ask-npx-downloads-a-tool
+  threat: T5
   action: { shell: "npx prettier --check ." }
   expect: { verdict: ask, rules: [installs] }
 - id: ask-rm-rf-temp-dir-is-not-destructive
+  threat: T4
   action: { shell: "rm -rf /tmp/build" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-create-symlink-and-read-through-it
+  threat: T11
   action: { shell: "ln -s ~/.ssh ./s && cat ./s/id_rsa" }
   expect: { verdict: ask, rules: [default] }
 # T3: env with arguments sets variables for one command; it is not a dump
 - id: ask-env-assignment-wrapper-is-not-a-dump
+  threat: T3
   action: { shell: "env FOO=1 git status" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-printenv-one-ordinary-variable
+  threat: T3
   action: { shell: "printenv HOME" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-set-shell-options-is-not-a-dump
+  threat: T3
   action: { shell: "set -euo pipefail" }
   expect: { verdict: ask, rules: [default] }
 # T7: make arguments that replace the recipe shell or inject makefile text ask
 - id: ask-make-shell-override-after-target
+  threat: T7
   action: { shell: "make test SHELL=/tmp/evil" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-make-shell-override-before-target
+  threat: T7
   action: { shell: "make SHELL=/tmp/evil test" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-make-shellflags-override
+  threat: T7
   action: { shell: "make test .SHELLFLAGS=-ec" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-make-environment-overrides
+  threat: T7
   action: { shell: "make test -e" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-make-eval-harmless-text
+  threat: T7
   action: { shell: "make test -E 'x:;id'" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-make-file-outside-project
+  threat: T7
   action: { shell: "make test --file=/tmp/evil.mk" }
   expect: { verdict: ask, rules: [default] }
 # T7: decoding without an interpreter on the receiving end is not pipe-to-shell
 - id: ask-base64-decode-to-file
+  threat: T7
   action: { shell: "base64 -d file > out" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-gunzip-into-tar
+  threat: T7
   action: { shell: "gunzip -c x.gz | tar x" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-decoded-stdin-to-shell-running-a-script
+  threat: T7
   action: { shell: "base64 -d f | bash build.sh" }
   expect: { verdict: ask, rules: [default] }
 # T9: recording an ordinary command with script is not kernel-self
 - id: ask-script-recording-ordinary-command
+  threat: T9
   action: { shell: "script -q build.log make test" }
   expect: { verdict: ask, rules: [default] }
 # T7: options that run another program or write files are excluded from dev-shell
 - id: ask-find-exec-ordinary-command
+  threat: T7
   action: { shell: "find . -name '*.tmp' -exec rm {} \\;" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-find-delete
+  threat: T7
   action: { shell: "find . -delete" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-rg-preprocessor
+  threat: T7
   action: { shell: "rg --pre=sh TODO" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-git-fetch-upload-pack
+  threat: T7
   action: { shell: "git fetch --upload-pack='touch /tmp/pwn' origin" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-git-log-output-outside-project
+  threat: T7
   action: { shell: "git log --output=/tmp/log.txt" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-go-test-exec-wrapper
+  threat: T7
   action: { shell: "go test -exec /tmp/x ./..." }
   expect: { verdict: ask, rules: [default] }
 - id: ask-cargo-config-override
+  threat: T7
   action: { shell: "cargo test --config 'build.rustc-wrapper=\"/tmp/x\"'" }
   expect: { verdict: ask, rules: [default] }
 # Inspection that can run code, write, or mutate stays outside dev-readonly
 - id: ask-sed-script-can-execute
+  threat: T7
   action: { shell: "sed -n '1e id' src/main.rs" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-gh-api-can-write
+  threat: T12
   action: { shell: "gh api repos/x/y -X DELETE" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-docker-run
+  threat: T5
   action: { shell: "docker run --rm alpine" }
   expect: { verdict: ask, rules: [default] }
 - id: ask-gh-run-view-writes-output-file
+  threat: T4
   action: { shell: "gh run view 3 --log -o out.txt" }
   expect: { verdict: ask, rules: [default] }
 # T9: moving ordinary project files is not kernel-self
 - id: ask-move-project-file
+  threat: T9
   action: { shell: "mv src/a.rs src/b.rs" }
   expect: { verdict: ask, rules: [default] }
 # A patch that names no file cannot be checked
 - id: ask-patch-without-files
+  threat: T7
   action: { patch: [] }
   expect: { verdict: ask, rules: [unparseable] }

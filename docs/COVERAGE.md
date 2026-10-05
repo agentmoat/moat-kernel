@@ -1,0 +1,225 @@
+# Threat coverage
+
+Generated from `tests/conformance/*.yaml` by the conformance suite; do not edit.
+Regenerate with `MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`.
+Threat classes are defined in `docs/DESIGN.md` §3.3. A fixture is one tool call and
+the verdict and rule ids the default policy must produce for it.
+
+| Threat | Class | Attacks | Asks | Benign |
+|---|---|---|---|---|
+| T1 | Secret exfiltration via shell | 9 | 0 | 0 |
+| T2 | Secret exfiltration via file tools | 8 | 0 | 0 |
+| T3 | Secret exfiltration via environment | 12 | 3 | 0 |
+| T4 | Destructive git / filesystem operations | 9 | 4 | 0 |
+| T5 | Supply-chain execution | 3 | 9 | 0 |
+| T6 | Environment poisoning | 11 | 0 | 0 |
+| T7 | Obfuscation and nested execution | 28 | 24 | 0 |
+| T8 | MCP tool poisoning / over-privileged tools | 4 | 0 | 0 |
+| T9 | Hook / policy tampering by the agent | 23 | 3 | 0 |
+| T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
+| T11 | Time-of-check / time-of-use, symlinks | 5 | 1 | 0 |
+| T12 | Network to unknown hosts | 5 | 3 | 0 |
+
+## T1: Secret exfiltration via shell
+
+- `T1-cat-ssh-key` (attacks): Deny [secrets-paths]
+- `T1-curl-upload-ssh-key` (attacks): Deny [secrets-paths]
+- `T1-substitution-exfil` (attacks): Deny [secrets-paths]
+- `T1-backtick-exfil` (attacks): Deny [secrets-paths]
+- `T1-copy-key-into-project` (attacks): Deny [secrets-paths]
+- `T1-scp-key-out` (attacks): Deny [secrets-paths]
+- `T1-kube-config` (attacks): Deny [secrets-paths]
+- `T1-gh-token-file` (attacks): Deny [secrets-paths]
+- `T1-plant-authorized-key` (attacks): Deny [secrets-paths]
+
+## T2: Secret exfiltration via file tools
+
+- `T2-read-aws-credentials` (attacks): Deny [secrets-paths]
+- `T2-read-dotenv-in-project` (attacks): Deny [secrets-paths]
+- `T2-read-dotenv-variant` (attacks): Deny [secrets-paths]
+- `T2-relative-traversal-to-ssh` (attacks): Deny [secrets-paths]
+- `T2-shell-dotenv-without-prefix` (attacks): Deny [secrets-paths]
+- `T2-shell-nested-dotenv-relative` (attacks): Deny [secrets-paths]
+- `T2-shell-traversal-without-prefix` (attacks): Deny [secrets-paths]
+- `T2-read-envrc` (attacks): Deny [secrets-paths]
+
+## T3: Secret exfiltration via environment
+
+- `ask-env-assignment-wrapper-is-not-a-dump` (ask): Ask [default]
+- `ask-printenv-one-ordinary-variable` (ask): Ask [default]
+- `ask-set-shell-options-is-not-a-dump` (ask): Ask [default]
+- `T3-echo-api-key` (attacks): Deny [env-secrets]
+- `T3-braced-default-expansion` (attacks): Deny [env-secrets]
+- `T3-quoted-expansion` (attacks): Deny [env-secrets]
+- `T3-bare-env` (attacks): Deny [env-dump]
+- `T3-bare-printenv` (attacks): Deny [env-dump]
+- `T3-bare-set` (attacks): Deny [env-dump]
+- `T3-export-p` (attacks): Deny [env-dump]
+- `T3-declare-x` (attacks): Deny [env-dump]
+- `T3-env-piped-to-grep` (attacks): Deny [env-dump]
+- `T3-absolute-env` (attacks): Deny [env-dump]
+- `T3-env-dump-into-file` (attacks): Deny [env-dump]
+- `T3-printenv-secret-name` (attacks): Deny [env-secrets]
+
+## T4: Destructive git / filesystem operations
+
+- `ask-git-push` (ask): Ask [push]
+- `ask-write-outside-project` (ask): Ask [default]
+- `ask-rm-rf-temp-dir-is-not-destructive` (ask): Ask [default]
+- `ask-gh-run-view-writes-output-file` (ask): Ask [default]
+- `T4-force-push` (attacks): Deny [destructive]
+- `T4-force-with-lease` (attacks): Deny [destructive]
+- `T4-rm-home` (attacks): Deny [destructive]
+- `T4-hard-reset` (attacks): Deny [destructive]
+- `T4-sudo-wrapped` (attacks): Deny [destructive]
+- `T4-destructive-after-benign` (attacks): Deny [destructive]
+- `T4-dd-disk` (attacks): Deny [destructive]
+- `T4-git-branch-force-delete` (attacks): Deny [destructive]
+- `T4-rm-fr-home` (attacks): Deny [destructive]
+
+## T5: Supply-chain execution
+
+- `ask-npm-install` (ask): Ask [installs]
+- `ask-pip-install` (ask): Ask [installs]
+- `ask-npm-publish` (ask): Ask [push]
+- `ask-pnpm-exec-unlisted-tool` (ask): Ask [default]
+- `ask-cargo-add` (ask): Ask [installs]
+- `ask-cargo-publish` (ask): Ask [push]
+- `ask-pnpm-install` (ask): Ask [installs]
+- `ask-npx-downloads-a-tool` (ask): Ask [installs]
+- `ask-docker-run` (ask): Ask [default]
+- `T5-curl-pipe-sh` (attacks): Deny [pipe-to-shell]
+- `T5-curl-pipe-bash-unspaced` (attacks): Deny [pipe-to-shell]
+- `T5-wget-pipe-sh-with-args` (attacks): Deny [pipe-to-shell]
+
+## T6: Environment poisoning
+
+- `T6-export-path` (attacks): Deny [env-poison]
+- `T6-export-path-unspaced` (attacks): Deny [env-poison]
+- `T6-inline-ld-preload` (attacks): Deny [env-poison]
+- `T6-env-wrapper` (attacks): Deny [env-poison]
+- `T6-dyld-insert` (attacks): Deny [env-poison]
+- `T6-node-options` (attacks): Deny [env-poison]
+- `T6-planted-git-in-project-bin` (attacks): Deny [executables]
+- `T6-absolute-path-to-planted-npm` (attacks): Deny [executables]
+- `T6-pinned-program-vanished` (attacks): Deny [executables]
+- `T6-git-diff-output-into-shell-rc` (attacks): Deny [shell-rc]
+- `T6-patch-plants-shell-rc` (attacks): Deny [shell-rc]
+
+## T7: Obfuscation and nested execution
+
+- `ask-unknown-command` (ask): Ask [default]
+- `ask-unbalanced-quote` (ask): Ask [unparseable]
+- `ask-unterminated-substitution` (ask): Ask [unparseable]
+- `ask-unterminated-heredoc` (ask): Ask [unparseable]
+- `ask-nesting-too-deep` (ask): Ask [unparseable]
+- `ask-empty-command` (ask): Ask [unparseable]
+- `ask-make-shell-override-after-target` (ask): Ask [default]
+- `ask-make-shell-override-before-target` (ask): Ask [default]
+- `ask-make-shellflags-override` (ask): Ask [default]
+- `ask-make-environment-overrides` (ask): Ask [default]
+- `ask-make-eval-harmless-text` (ask): Ask [default]
+- `ask-make-file-outside-project` (ask): Ask [default]
+- `ask-base64-decode-to-file` (ask): Ask [default]
+- `ask-gunzip-into-tar` (ask): Ask [default]
+- `ask-decoded-stdin-to-shell-running-a-script` (ask): Ask [default]
+- `ask-find-exec-ordinary-command` (ask): Ask [default]
+- `ask-find-delete` (ask): Ask [default]
+- `ask-rg-preprocessor` (ask): Ask [default]
+- `ask-git-fetch-upload-pack` (ask): Ask [default]
+- `ask-git-log-output-outside-project` (ask): Ask [default]
+- `ask-go-test-exec-wrapper` (ask): Ask [default]
+- `ask-cargo-config-override` (ask): Ask [default]
+- `ask-sed-script-can-execute` (ask): Ask [default]
+- `ask-patch-without-files` (ask): Ask [unparseable]
+- `T7-bash-c` (attacks): Deny [secrets-paths]
+- `T7-sh-c-nested-twice` (attacks): Deny [secrets-paths]
+- `T7-eval` (attacks): Deny [pipe-to-shell]
+- `T7-base64-to-sh` (attacks): Deny [pipe-to-shell]
+- `T7-base64-long-flag` (attacks): Deny [pipe-to-shell]
+- `T7-subshell` (attacks): Deny [secrets-paths]
+- `T7-xargs-wrapper` (attacks): Deny [secrets-paths]
+- `T7-python-inline-read` (attacks): Deny [secrets-paths]
+- `T7-node-inline-env` (attacks): Deny [default.net]
+- `T7-line-continuation` (attacks): Deny [secrets-paths]
+- `T7-pnpm-exec-shell-string` (attacks): Deny [secrets-paths, default.net]
+- `T7-yarn-exec-pipe-to-shell` (attacks): Deny [pipe-to-shell, default.net]
+- `T7-npm-exec-env-secret` (attacks): Deny [env-secrets]
+- `T7-npx-call-reads-key` (attacks): Deny [secrets-paths]
+- `T7-make-eval-recipe-reads-key` (attacks): Deny [secrets-paths]
+- `T7-make-eval-equals-pipe-to-shell` (attacks): Deny [pipe-to-shell]
+- `T7-make-shell-function-in-variable` (attacks): Deny [secrets-paths]
+- `T7-make-bang-assignment-runs-command` (attacks): Deny [secrets-paths]
+- `T7-base64-file-decoded-into-bash` (attacks): Deny [pipe-to-shell]
+- `T7-base64-macos-flag-into-sh` (attacks): Deny [pipe-to-shell]
+- `T7-openssl-decode-into-sh` (attacks): Deny [pipe-to-shell]
+- `T7-xxd-revert-into-bash` (attacks): Deny [pipe-to-shell]
+- `T7-gunzip-into-sh-through-filter` (attacks): Deny [pipe-to-shell]
+- `T7-base64-decode-into-python-stdin` (attacks): Deny [pipe-to-shell]
+- `T7-curl-allowed-host-into-python` (attacks): Deny [pipe-to-shell]
+- `T7-wget-allowed-host-into-zsh` (attacks): Deny [pipe-to-shell]
+- `T7-find-exec-shell-exfil` (attacks): Deny [default.net]
+- `T7-find-exec-reads-key` (attacks): Deny [secrets-paths]
+
+## T8: MCP tool poisoning / over-privileged tools
+
+- `T8-unknown-mcp-tool` (attacks): Ask [default]
+- `T8-mcp-filesystem-reads-aws-credentials` (attacks): Deny [secrets-paths]
+- `T8-mcp-filesystem-writes-shell-rc` (attacks): Deny [shell-rc]
+- `T8-mcp-fetch-unknown-host` (attacks): Deny [default.net]
+
+## T9: Hook / policy tampering by the agent
+
+- `ask-write-git-internals` (ask): Ask [default]
+- `ask-script-recording-ordinary-command` (ask): Ask [default]
+- `ask-move-project-file` (ask): Ask [default]
+- `T9-edit-claude-settings` (attacks): Deny [kernel-self]
+- `T9-edit-project-claude-settings` (attacks): Deny [kernel-self]
+- `T9-edit-moat-policy` (attacks): Deny [kernel-self]
+- `T9-redirect-into-moat` (attacks): Deny [kernel-self]
+- `T9-sed-in-place-cursor-hooks` (attacks): Deny [kernel-self]
+- `T9-append-zshrc` (attacks): Deny [shell-rc]
+- `T9-tee-bashrc` (attacks): Deny [shell-rc]
+- `T9-moat-policy-command` (attacks): Deny [kernel-self]
+- `T9-agent-runs-moat-allow` (attacks): Deny [kernel-self]
+- `T9-agent-runs-moat-allow-via-env` (attacks): Deny [kernel-self]
+- `T9-moat-allow-by-absolute-path` (attacks): Deny [kernel-self]
+- `T9-script-bsd-form-moat-allow` (attacks): Deny [kernel-self]
+- `T9-script-linux-command-form` (attacks): Deny [kernel-self]
+- `T9-script-absolute-moat-doctor-accept` (attacks): Deny [kernel-self]
+- `T9-expect-spawn-moat-allow` (attacks): Deny [kernel-self]
+- `T9-unbuffer-moat-allow` (attacks): Deny [kernel-self]
+- `T9-move-state-dir-away` (attacks): Deny [kernel-self]
+- `T9-replace-state-dir-with-link` (attacks): Deny [kernel-self]
+- `T9-delete-claude-config-dir` (attacks): Deny [kernel-self]
+- `T9-rename-project-hook-dir` (attacks): Deny [kernel-self]
+- `T9-export-moat-home` (attacks): Deny [env-poison]
+- `T9-assume-tty-prefix-on-allow` (attacks): Deny [env-poison, kernel-self]
+- `T9-patch-edits-codex-hooks` (attacks): Deny [kernel-self]
+
+## T10: Hook supply chain (trojaned hook binary)
+
+- `T10-copy-over-installed-binary` (attacks): Deny [kernel-self]
+- `T10-download-over-installed-binary` (attacks): Deny [kernel-self]
+- `T10-link-over-installed-binary` (attacks): Deny [kernel-self]
+- `T10-file-tool-writes-windows-binary` (attacks): Deny [kernel-self]
+
+## T11: Time-of-check / time-of-use, symlinks
+
+- `ask-create-symlink-and-read-through-it` (ask): Ask [default]
+- `T11-read-key-through-symlinked-dir` (attacks): Deny [secrets-paths]
+- `T11-plant-authorized-key-through-symlink` (attacks): Deny [secrets-paths]
+- `T11-file-tool-read-through-symlink` (attacks): Deny [secrets-paths]
+- `T11-mcp-read-through-symlink` (attacks): Deny [secrets-paths]
+- `T11-write-shell-rc-through-symlink` (attacks): Deny [shell-rc]
+
+## T12: Network to unknown hosts
+
+- `ask-inline-python-prints-version` (ask): Ask [default]
+- `ask-inline-node-prints-version` (ask): Ask [default]
+- `ask-gh-api-can-write` (ask): Ask [default]
+- `T12-webfetch-unknown-host` (attacks): Deny [default.net]
+- `T12-curl-unknown-host` (attacks): Deny [default.net]
+- `T12-netcat-ip` (attacks): Deny [default.net]
+- `T12-ssh-unknown` (attacks): Deny [default.net]
+- `T12-curl-bare-host` (attacks): Deny [default.net]
