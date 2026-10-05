@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Security
 - `moat guard` resolves symlinks in every path a tool call reads or writes and checks the resolved path as well as the literal one, strictest wins: after `ln -s ~/.ssh ./s`, `cat ./s/id_rsa`, `echo … >> s/authorized_keys` and a `Read` of `proj/s/id_rsa` are denied by `secrets-paths`; previously they were allowed by `project-fs`. New files resolve through their directory, dangling links through their target. Conformance fixtures accept `links:` (ADR-009).
+- Default policy: new deny group `env-dump` for `env`, `printenv`, `set`, `export`, `declare` and `typeset` run with no arguments (or only `-0`/`-p`/`-x`), including `/usr/bin/env`; they printed every secret in the environment and only asked. `printenv NAME` is now an `env.read` of `NAME`, so `printenv GITHUB_TOKEN` is denied by `env-secrets`.
 
 ### Fixed
 - `moat guard` denies (`kernel-error`, exit 2) when the audit log cannot be opened or written, when the hook response cannot be written to stdout, or when the kernel itself panics; previously an unavailable log printed a warning and the call proceeded unrecorded, and a panic exited 101, which Claude Code treats as non-blocking. `guard` no longer recreates a deleted `audit.db`; only `moat init` creates it.
@@ -22,6 +23,7 @@ All notable changes to this project are documented here. The format follows
 - Claude Code and Cursor adapters derive those paths and hosts from MCP `tool_input` by argument name (`path`, `paths`, `file_path`, `source`, `destination`, `url`, …); write-shaped tool names (`write_*`, `edit_*`, `move_*`, `delete_*`) and `destination`/`target` arguments produce `fs.write`.
 
 ### Changed
+- Shell patterns: a trailing bare `$` anchors the end of argv (`env $` matches `env` but not `env FOO=1 cmd`); `$` elsewhere is literal and a pattern of only `$` fails lint (ADR-010).
 - Default policy: `dev-shell` lists explicit subcommands instead of `pnpm *`, `yarn *`, `cargo *`, `make *`, so the `installs` and `push` ask rules are reachable again (`cargo add/install/publish`, `pnpm add/install`, `yarn add/install` now ask; `npx`/`dlx` ask). New `dev-tools` allow group (`tsc`, `eslint`, `prettier`, `vitest`, `jest`, `ruff`, `mypy`, …). `destructive` matches `rm -rf /*` literally (no longer every absolute path), adds `-fr` variants, `--no-preserve-root`, `git branch -D`, `git stash drop/clear`. `kernel-self` also matches `moat` run by absolute path. `secrets-paths` adds `.envrc`.
 
 ### Added

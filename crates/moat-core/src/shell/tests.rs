@@ -185,6 +185,21 @@ fn source_builtin_reads_file() {
 }
 
 #[test]
+fn printenv_names_are_env_reads() {
+    let a = parsed("printenv -0 GITHUB_TOKEN HOME");
+    for name in ["GITHUB_TOKEN", "HOME"] {
+        assert!(
+            a.contains(&AtomicAction::EnvRead { name: name.into() }),
+            "{name}"
+        );
+    }
+    assert!(
+        !a.iter()
+            .any(|x| matches!(x, AtomicAction::EnvRead { name } if name == "-0"))
+    );
+}
+
+#[test]
 fn pipelines_are_emitted_for_every_suffix() {
     let a = parsed("echo x | base64 -d | sh");
     let count = a

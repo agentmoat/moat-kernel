@@ -8,7 +8,7 @@
 //! | the command itself | `Shell { argv }` |
 //! | every pipeline / list suffix with ≥ 2 commands | `Pipeline { argv }` |
 //! | leading `VAR=value`, `export`/`declare`/`set` assignments | `EnvSet` |
-//! | `$VAR` / `${VAR}` references | `EnvRead` |
+//! | `$VAR` / `${VAR}` references, `printenv NAME` | `EnvRead` |
 //! | path-looking arguments, `<` targets, `source`/`.` files | `FsRead` |
 //! | `>`/`>>`/`&>` targets, `tee`, destructive/destination args | `FsWrite` |
 //! | URLs, `host:port`, dotted hosts, IP literals | `Net` |

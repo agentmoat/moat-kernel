@@ -67,3 +67,13 @@
 - id: ask-create-symlink-and-read-through-it
   action: { shell: "ln -s ~/.ssh ./s && cat ./s/id_rsa" }
   expect: { verdict: ask, rules: [default] }
+# T3: env with arguments sets variables for one command; it is not a dump
+- id: ask-env-assignment-wrapper-is-not-a-dump
+  action: { shell: "env FOO=1 git status" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-printenv-one-ordinary-variable
+  action: { shell: "printenv HOME" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-set-shell-options-is-not-a-dump
+  action: { shell: "set -euo pipefail" }
+  expect: { verdict: ask, rules: [default] }
