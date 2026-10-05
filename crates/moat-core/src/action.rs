@@ -15,6 +15,9 @@ pub enum Action {
     FsWrite { path: String },
     /// A direct network request through a host tool (e.g. `WebFetch`).
     Net { url: String },
+    /// A patch that edits several files in one call (Codex `apply_patch`):
+    /// every path it adds, updates, deletes or moves to is written.
+    Patch { writes: Vec<String> },
     /// An MCP tool call, `mcp__<server>__<tool>`. Adapters that understand a
     /// server's arguments add the paths and hosts the call touches so the
     /// usual `fs.*` and `net` rules apply to it as well.

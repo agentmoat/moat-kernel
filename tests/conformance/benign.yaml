@@ -270,3 +270,6 @@
 - id: benign-make-lint
   action: { shell: "make lint" }
   expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-patch-inside-project
+  action: { patch: ["src/lib.rs", "src/new.rs", "README.md"] }
+  expect: { verdict: allow, rules: [project-fs] }

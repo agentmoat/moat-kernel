@@ -109,7 +109,7 @@ P1 (false denies):
 - `rm -rf /tmp/build` is denied because `rm -rf /*` is a per-token glob matching any absolute path.
 - Dotted identifiers inside interpreter payloads and arguments (`python3 -c "import sys; …"`, `git commit -m fix.bug`) are treated as hosts and denied by `default.net`.
 - `cd src && cargo build`, `echo $PATH` and `curl https://api.github.com/x` ask; the benign corpus is 18 fixtures against ≥ 60 planned (now 87, with a `dev-readonly` allow group for read-only docker/gh/inspection).
-- Codex hook matcher is `Bash` only, so Codex file edits are never seen; the Claude Code matcher omits `WebSearch`.
+- Codex hook matcher is `Bash` only, so Codex file edits are never seen (fixed: matcher `Bash|apply_patch|mcp__.*`, `Action::Patch`); the Claude Code matcher omits `WebSearch`.
 
 ## 4. Next, in order (DESIGN.md §10.9, weeks 2–6)
 

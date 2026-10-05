@@ -177,7 +177,7 @@ fn kind_of(action: &Action) -> &'static str {
     match action {
         Action::Shell { .. } => "shell",
         Action::FsRead { .. } => "fs.read",
-        Action::FsWrite { .. } => "fs.write",
+        Action::FsWrite { .. } | Action::Patch { .. } => "fs.write",
         Action::Net { .. } => "net",
         Action::McpTool { .. } => "mcp",
     }
@@ -226,6 +226,7 @@ fn describe(action: Option<&Action>, tool: &str) -> String {
         Some(Action::FsRead { path }) => format!("read {path}"),
         Some(Action::FsWrite { path }) => format!("write {path}"),
         Some(Action::Net { url }) => format!("fetch {url}"),
+        Some(Action::Patch { writes }) => format!("patch {}", writes.join(", ")),
         Some(Action::McpTool { name, .. }) => name.clone(),
         None => format!("{tool} (ungoverned)"),
     }

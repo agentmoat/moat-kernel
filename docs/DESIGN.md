@@ -194,7 +194,12 @@ its JSON to the kernel's internal `ToolCall`.
 
 - Config: `~/.codex/hooks.json`, `~/.codex/config.toml` `[hooks]`, `<repo>/.codex/hooks.json`.
 - Events: `PreToolUse`, `PostToolUse`, `PermissionRequest`, `UserPromptSubmit`, `Stop`, …
-- Input: `session_id`, `turn_id`, `tool_name`, `tool_use_id`, `tool_input.command`.
+- Input: `session_id`, `turn_id`, `tool_name`, `tool_use_id`, `tool_input`. `PreToolUse` fires for
+  `Bash` (`tool_input.command`), `apply_patch` (`tool_input.command` is the patch envelope;
+  every `*** Add/Update/Delete File:` and `*** Move to:` path is an `fs.write`, an envelope
+  naming no file is `ask`), `mcp__server__tool` (arguments) and local functions such as
+  `update_plan` (ungoverned). Web search and hosted tools have no hook. Matchers are regexes;
+  `moat init` installs `Bash|apply_patch|mcp__.*`.
 - Output: same `hookSpecificOutput.permissionDecision` schema as Claude Code
   (legacy `{"decision":"block","reason":…}` also accepted). Exit 2 = deny.
 - Timeout: 600 s default.

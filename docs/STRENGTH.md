@@ -107,9 +107,9 @@ not pinned. Planned: signed policy bundles (Phase 2). Details: ADR-006.
 
 | Host | Shell | File read/write | Web fetch | MCP tools | Enforce (L2) | Fail-closed if moat missing |
 |---|---|---|---|---|---|---|
-| Claude Code | `PreToolUse` (`Bash`) | `PreToolUse` (`Read`, `Glob`, `Grep`; `Edit`, `Write`, `MultiEdit`, `NotebookEdit`) | `PreToolUse` (`WebFetch`; `WebSearch` is not in the matcher) | `PreToolUse` (`mcp__*`, tool name only; arguments are not mapped yet) | planned | no (host limitation) |
-| Codex | `PreToolUse` (`Bash`) | **not hooked** (the matcher is `Bash` only, so `apply_patch` edits are not seen) | via shell | not hooked | planned | no |
-| Cursor | `beforeShellExecution` | `beforeReadFile`; writes via `preToolUse` | via shell | `beforeMCPExecution` (name only) | planned | **yes** (`failClosed`, set by `init`) |
+| Claude Code | `PreToolUse` (`Bash`) | `PreToolUse` (`Read`, `Glob`, `Grep`; `Edit`, `Write`, `MultiEdit`, `NotebookEdit`) | `PreToolUse` (`WebFetch`; `WebSearch` is not in the matcher) | `PreToolUse` (`mcp__*`, arguments mapped to paths/hosts since #36) | planned | no (host limitation) |
+| Codex | `PreToolUse` (`Bash`) | `PreToolUse` (`apply_patch`: every added, updated, deleted or moved-to file) | via shell | `PreToolUse` (`mcp__*`, arguments mapped to paths/hosts) | planned | no |
+| Cursor | `beforeShellExecution` | `beforeReadFile`; writes via `preToolUse` | via shell | `beforeMCPExecution` (arguments mapped to paths/hosts since #36) | planned | **yes** (`failClosed`, set by `init`) |
 | OpenClaw | planned (plugin) | planned (`derivedPaths`) | planned | planned (MCP proxy) | planned | no |
 | Any MCP host | — | planned (proxy mapping) | planned | planned (proxy) | n/a | n/a |
 

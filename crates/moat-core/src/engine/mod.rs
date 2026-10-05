@@ -168,6 +168,17 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
         Action::FsWrite { path } => ParseOutcome::Parsed(vec![AtomicAction::FsWrite {
             path: paths::normalise(path, &ctx.home, &ctx.project, &ctx.cwd),
         }]),
+        Action::Patch { writes } if writes.is_empty() => ParseOutcome::Unparseable {
+            reason: "patch names no files".to_owned(),
+        },
+        Action::Patch { writes } => ParseOutcome::Parsed(
+            writes
+                .iter()
+                .map(|p| AtomicAction::FsWrite {
+                    path: paths::normalise(p, &ctx.home, &ctx.project, &ctx.cwd),
+                })
+                .collect(),
+        ),
         Action::Net { url } => match host_of_url(url) {
             Some(host) => ParseOutcome::Parsed(vec![AtomicAction::Net { host }]),
             None => ParseOutcome::Unparseable {

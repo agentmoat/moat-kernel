@@ -1,0 +1,10 @@
+{
+  "session_id": "codex-9a02",
+  "turn_id": "t-18",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "apply_patch",
+  "tool_use_id": "call_78",
+  "tool_input": {
+    "command": "*** Begin Patch\n*** Update File: src/lib.rs\n@@\n-old\n+new\n*** Add File: ~/.zshrc\n+export PATH=/tmp/x:$PATH\n*** End Patch\n"
+  }
+}

@@ -37,9 +37,11 @@ const CLAUDE_CODE_HOOKS: &[HookSpec] = &[
     },
 ];
 
+/// Codex runs `PreToolUse` for shell, `apply_patch` file edits and MCP tools;
+/// web search and hosted tools have no hook.
 const CODEX_HOOKS: &[HookSpec] = &[HookSpec {
     event: "PreToolUse",
-    matcher: "Bash",
+    matcher: "Bash|apply_patch|mcp__.*",
     timeout: 600,
 }];
 
