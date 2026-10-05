@@ -15,6 +15,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added (MCP arguments)
 - `Action::McpTool` carries the paths and hosts an adapter derived from the call's arguments (`reads`, `writes`, `hosts`); the engine turns them into `fs.read`, `fs.write` and `net` atoms, so an allowed MCP tool name can no longer read `~/.aws/credentials` or fetch an unlisted host. Conformance fixtures accept `mcp_tool: { name, reads, writes, hosts }`.
+- Claude Code and Cursor adapters derive those paths and hosts from MCP `tool_input` by argument name (`path`, `paths`, `file_path`, `source`, `destination`, `url`, …); write-shaped tool names (`write_*`, `edit_*`, `move_*`, `delete_*`) and `destination`/`target` arguments produce `fs.write`.
 
 ### Added
 - Policy engine: schema v1 with `deny → allow → ask → defaults` evaluation, per-kind defaults, absolute deny, strictest-wins across atomic actions.

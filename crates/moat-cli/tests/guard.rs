@@ -313,6 +313,21 @@ fn unwritable_audit_log_denies() {
 }
 
 #[test]
+fn mcp_arguments_are_checked_as_paths() {
+    let sb = Sandbox::new();
+    sb.moat(&["init"]);
+    let out = sb.guard(
+        "claude-code",
+        &fixture("claude-code/mcp_filesystem_read_secret.json"),
+    );
+    assert_eq!(out.status.code(), Some(2));
+    let d = decision(&out);
+    assert_eq!(d["permissionDecision"], "deny");
+    let reason = d["permissionDecisionReason"].to_string();
+    assert!(reason.contains("secrets-paths"), "{reason}");
+}
+
+#[test]
 fn codex_payloads_use_the_same_contract() {
     let sb = Sandbox::new();
     std::fs::create_dir_all(sb.home.join(".codex")).unwrap();

@@ -6,6 +6,7 @@
 
 mod config_change;
 mod cursor;
+mod mcp;
 mod pre_tool_use;
 
 pub use pre_tool_use::reason_line;
