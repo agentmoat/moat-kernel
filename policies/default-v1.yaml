@@ -27,6 +27,26 @@ deny:
   - id: env-secrets
     reason: secret environment variable
     env.read: ["*_KEY", "*_TOKEN", "*_SECRET", "*_PASSWORD", "AWS_*", "GITHUB_TOKEN", "NPM_TOKEN"]
+  - id: env-dump
+    reason: prints every environment variable, secrets included
+    shell:
+      - "env $"
+      - "env -0 $"
+      - "env --null $"
+      - "*/env $"
+      - "printenv $"
+      - "printenv -0 $"
+      - "printenv --null $"
+      - "*/printenv $"
+      - "set $"
+      - "export $"
+      - "export -p $"
+      - "declare $"
+      - "declare -p $"
+      - "declare -x $"
+      - "typeset $"
+      - "typeset -p $"
+      - "typeset -x $"
   - id: env-poison
     reason: changes how later commands resolve or load code
     env.set: ["PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_*", "NODE_OPTIONS", "PYTHONPATH", "GIT_*", "BASH_ENV", "ENV", "PROMPT_COMMAND"]

@@ -136,6 +136,11 @@ fn classify_simple(
             })?;
         }
     }
+    if program == "printenv" {
+        for name in argv[1..].iter().filter(|a| !a.starts_with('-')) {
+            sink.push(AtomicAction::EnvRead { name: name.clone() })?;
+        }
+    }
     if SOURCE_BUILTINS.contains(&program)
         && let Some(file) = argv.get(1)
     {

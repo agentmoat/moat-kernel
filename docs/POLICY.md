@@ -67,6 +67,7 @@ Tokenised with the same lexer as commands, so `a|b` and `a | b` are equal.
 - Tokens are compared as written; flags are not normalised. `rm -rf ~` does not match `rm -fr ~` or `rm -r -f ~`; list every spelling you mean.
 - A bare `*` matches **any number** of arguments, including none: `sudo *` matches `sudo`, `curl * | sh` matches `curl -fsSL https://x | sh -s`.
 - A pattern is a **prefix**: `git status` also matches `git status --short`.
+- A trailing bare `$` ends the match: the command must have no further arguments. `env $` matches `env` alone, not `env FOO=1 git status`; `export -p $` matches `export -p` but not `export -p FOO`. A `$` anywhere else is an ordinary token, and a pattern that is only `$` is rejected by the linter (ADR-010).
 - Pipelines and lists are matched per command **and** as whole suffixes, so `base64 -d | sh` is caught in `echo … | base64 -d | sh`.
 - Commands inside `sh -c "…"`, `eval`, `$( … )`, backticks, subshells and wrappers (`sudo`, `env`, `xargs`, `timeout`, `nohup`, …) are classified as their own commands.
 
@@ -129,6 +130,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 |---|---|---|
 | deny | `secrets-paths` | read **and** write of `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.config/gh`, `~/.netrc`, `~/.docker/config.json`, `.env`, `.env.*`, `.envrc`, keychains |
 | deny | `env-secrets` | reading `*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `AWS_*`, `GITHUB_TOKEN`, `NPM_TOKEN` |
+| deny | `env-dump` | `env`, `printenv`, `set`, `export`, `declare`, `typeset` with no arguments (or only `-0`, `-p`, `-x`), also by absolute path: they print every variable, secrets included. `printenv NAME` is an `env.read` of `NAME` |
 | deny | `env-poison` | setting `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `GIT_*`, `BASH_ENV`, `PROMPT_COMMAND` |
 | deny | `pipe-to-shell` | `curl/wget … \| sh/bash`, `base64 -d \| sh`, `eval` |
 | deny | `destructive` | `rm -rf /`, `rm -rf /*`, `rm -rf ~`, `rm -rf ~/*`, `rm -rf $HOME` (and `-fr`, `--no-preserve-root`), `git push --force*`/`-f*`, `git reset --hard`, `git clean -fdx`, `git branch -D`, `git stash drop/clear`, `sudo`, `mkfs`, `dd if=`, `shutdown`, `reboot` |
@@ -139,13 +141,11 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | allow | `dev-tools` | `tsc`, `eslint`, `prettier`, `biome`, `vitest`, `jest`, `mocha`, `ruff`, `black`, `mypy`, `golangci-lint` |
 | allow | `registries` | `api.github.com`, `github.com`, npm, crates.io, Go proxy, PyPI |
 | allow | `safe-mcp` | read-only GitHub and filesystem MCP tools |
-
-MCP calls are judged by name **and** by what their arguments touch: adapters map path-like arguments (`path`, `paths`, `file_path`, `source`, `destination`, …) to `fs.read`/`fs.write` atoms (write for `write_*`, `edit_*`, `move_*`, `delete_*`-shaped tools and for `destination`/`target`) and URL-like arguments (`url`, `uri`, `endpoint`) to `net` atoms, so `mcp__filesystem__read_file {path: ~/.aws/credentials}` is denied by `secrets-paths` even though `safe-mcp` allows the tool name.
-| ask | `installs` | `npm install`, `pip install`, `cargo add/install`, `brew install`, `gem install` |
-| ask | `push` | `git push`, `npm publish`, `cargo publish`, `gh release` |
 | ask | `installs` | `npm install/i/ci`, `pnpm add/install/dlx`, `yarn add/install/dlx`, `npx`, `pip install`, `cargo add/install`, `brew install`, `gem install` |
 | ask | `push` | `git push`, `npm/pnpm/yarn publish`, `cargo publish`, `gh release` |
 | defaults | `default`, `default.net` | everything else asks; outbound network to unlisted hosts is denied |
+
+MCP calls are judged by name **and** by what their arguments touch: adapters map path-like arguments (`path`, `paths`, `file_path`, `source`, `destination`, …) to `fs.read`/`fs.write` atoms (write for `write_*`, `edit_*`, `move_*`, `delete_*`-shaped tools and for `destination`/`target`) and URL-like arguments (`url`, `uri`, `endpoint`) to `net` atoms, so `mcp__filesystem__read_file {path: ~/.aws/credentials}` is denied by `secrets-paths` even though `safe-mcp` allows the tool name.
 
 ## 7. Recipes
 

@@ -275,3 +275,32 @@
   action: { fs_write: "/p/profile.sh" }
   links: { /p/profile.sh: /Users/me/.zshrc }
   expect: { verdict: deny, rules: [shell-rc] }
+
+# T3 environment dumps: bare env/printenv/set print every secret in the environment
+- id: T3-bare-env
+  action: { shell: "env" }
+  expect: { verdict: deny, rules: [env-dump] }
+- id: T3-bare-printenv
+  action: { shell: "printenv" }
+  expect: { verdict: deny, rules: [env-dump] }
+- id: T3-bare-set
+  action: { shell: "set" }
+  expect: { verdict: deny, rules: [env-dump] }
+- id: T3-export-p
+  action: { shell: "export -p" }
+  expect: { verdict: deny, rules: [env-dump] }
+- id: T3-declare-x
+  action: { shell: "declare -x" }
+  expect: { verdict: deny, rules: [env-dump] }
+- id: T3-env-piped-to-grep
+  action: { shell: "env | grep -i key" }
+  expect: { verdict: deny, rules: [env-dump] }
+- id: T3-absolute-env
+  action: { shell: "/usr/bin/env" }
+  expect: { verdict: deny, rules: [env-dump] }
+- id: T3-env-dump-into-file
+  action: { shell: "printenv > ./out.txt" }
+  expect: { verdict: deny, rules: [env-dump] }
+- id: T3-printenv-secret-name
+  action: { shell: "printenv GITHUB_TOKEN" }
+  expect: { verdict: deny, rules: [env-secrets] }

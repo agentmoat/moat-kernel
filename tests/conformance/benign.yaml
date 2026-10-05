@@ -90,3 +90,6 @@
   action: { shell: "cat ./lib/main.rs" }
   links: { /p/lib: /p/vendor/lib }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-env-named-file-is-not-a-dump
+  action: { shell: "git diff -- env" }
+  expect: { verdict: allow, rules: [dev-shell] }

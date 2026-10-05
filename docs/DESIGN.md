@@ -420,7 +420,8 @@ executables:                    # pin basenames to absolute paths (defeats PATH 
   map from kind (`shell`, `fs.read`, `fs.write`, `net`, `env.read`, `env.set`, `mcp`,
   `"*"`) to a verdict; the synthetic rule id is `default` or `default.<kind>`.
 - Shell rules: a bare `*` token matches any number of argv tokens; other tokens are
-  globs against exactly one token; the rule is a prefix. Pipelines/lists are evaluated
+  globs against exactly one token; the rule is a prefix unless its last token is a bare
+  `$`, which matches only the end of argv (`env $`, ADR-010). Pipelines/lists are evaluated
   per sub-command **and** as whole pipelines (every suffix with ≥ 2 sub-commands), so
   `curl * | sh` and `base64 -d | sh` match wherever they occur.
 - A shell command that *contains* multiple sub-commands (`a && b | c`) is evaluated per

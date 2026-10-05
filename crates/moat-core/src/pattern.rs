@@ -71,6 +71,8 @@ enum Token {
     Any,
     /// A glob matched against exactly one argv token.
     One(GlobMatcher),
+    /// A trailing `$`: argv must end here.
+    End,
 }
 
 /// Shell rule: an ordered token sequence matched as a **prefix** of argv.
@@ -79,7 +81,10 @@ enum Token {
 /// - a bare `*` token matches any number of argv tokens (including none);
 /// - any other token is a glob matched against exactly one argv token
 ///   (`--force*` matches `--force-with-lease`);
-/// - the pattern is a prefix: extra argv tokens after a full match are accepted.
+/// - the pattern is a prefix: extra argv tokens after a full match are accepted,
+///   unless the last token is a bare `$`, which matches only the end of argv
+///   (`env $` is `env` with no arguments, not `env FOO=1 cmd`). A `$` anywhere
+///   else is an ordinary token.
 ///   `git status` therefore also matches `git status --short`; pipelines and
 ///   `&&` lists are split and matched per sub-command and as whole pipelines
 ///   (see `shell.rs`), so `git status | sh` is still caught by `* | sh` rules.
@@ -108,10 +113,14 @@ impl ShellPattern {
                 }
             }
         }
+        let anchored = words.last().is_some_and(|w| w == "$");
+        if anchored {
+            words.pop();
+        }
         if words.is_empty() {
             return Err(PolicyError::EmptyPattern);
         }
-        let tokens = words
+        let mut tokens = words
             .iter()
             .map(|w| {
                 if w == "*" {
@@ -127,6 +136,9 @@ impl ShellPattern {
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;
+        if anchored {
+            tokens.push(Token::End);
+        }
         Ok(Self {
             source: raw.to_owned(),
             tokens,
@@ -161,6 +173,7 @@ fn matches_from(pattern: &[Token], argv: &[String]) -> bool {
             Some((head, tail)) if glob.is_match(head) => matches_from(rest, tail),
             _ => false,
         },
+        Some((Token::End, _)) => argv.is_empty(),
     }
 }
 
@@ -199,6 +212,32 @@ mod tests {
         let p = ShellPattern::compile("* | base64 -d | *sh*").unwrap();
         assert!(p.is_match(&argv("echo abc | base64 -d | sh")));
         assert!(p.is_match(&argv("cat f | base64 -d | bash -x")));
+    }
+
+    #[test]
+    fn trailing_dollar_anchors_the_end_of_argv() {
+        let p = ShellPattern::compile("env $").unwrap();
+        assert!(p.is_match(&argv("env")));
+        assert!(!p.is_match(&argv("env FOO=1 git status")));
+        assert!(!p.is_match(&argv("envsubst")));
+
+        let p = ShellPattern::compile("export -p $").unwrap();
+        assert!(p.is_match(&argv("export -p")));
+        assert!(!p.is_match(&argv("export -p FOO")));
+
+        let p = ShellPattern::compile("* | sh $").unwrap();
+        assert!(p.is_match(&argv("curl x | sh")));
+        assert!(!p.is_match(&argv("curl x | sh -s -- --yes")));
+
+        let p = ShellPattern::compile("echo $ x").unwrap();
+        assert!(
+            p.is_match(&argv("echo $ x")),
+            "`$` before the end is literal"
+        );
+        assert!(matches!(
+            ShellPattern::compile("$"),
+            Err(PolicyError::EmptyPattern)
+        ));
     }
 
     #[test]
