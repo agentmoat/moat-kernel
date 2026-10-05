@@ -64,6 +64,13 @@
 - id: benign-hidden-project-file
   action: { shell: "cat .gitignore" }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+<<<<<<< HEAD
 - id: benign-mcp-filesystem-reads-project-file
   action: { mcp_tool: { name: mcp__filesystem__read_file, reads: ["/p/README.md"] } }
   expect: { verdict: allow, rules: [safe-mcp, project-fs] }
+=======
+
+- id: benign-git-commit-dotted-message
+  action: { shell: "git commit -m fix.bug" }
+  expect: { verdict: allow, rules: [dev-shell] }
+>>>>>>> 9b9f7dd (fix(core): treat bare dotted tokens as hosts only with a known tld)

@@ -80,6 +80,22 @@ pub const SPECIAL_PARAMS: &[char] = &['?', '$', '!', '#', '@', '*', '-', '0'];
 pub const IGNORED_VARS: &[&str] = &["HOME", "PWD", "OLDPWD", "USER", "SHELL", "TERM", "project"];
 
 /// Suffixes that make a dotted token a file name rather than a host.
+/// Top-level domains accepted for a bare dotted token (no scheme). Dotted
+/// identifiers in code (`sys.version`, `os.system`, `console.log`) and names
+/// like `fix.bug` are not hosts; a token with a scheme is always one.
+pub const KNOWN_TLDS: &[&str] = &[
+    "com", "org", "net", "io", "dev", "ai", "co", "app", "sh", "me", "us", "uk", "de", "fr", "jp",
+    "cn", "in", "ru", "br", "edu", "gov", "mil", "int", "info", "biz", "xyz", "cloud", "tech",
+    "so", "to", "ly", "gg", "tv", "fm", "am", "is", "it", "nl", "se", "no", "fi", "dk", "ch", "at",
+    "be", "es", "pt", "pl", "cz", "au", "nz", "ca", "mx", "ar", "cl", "kr", "tw", "hk", "sg", "id",
+    "ph", "vn", "th", "il", "za", "ng", "ke", "eg", "ie", "eu", "asia", "online", "site", "store",
+    "space", "live", "run", "page", "zone", "link", "click", "top", "pro", "name", "mobi",
+    "network", "systems", "services", "digital", "email", "host", "cc", "ws", "nu", "la", "im",
+    "pw", "tk", "ml", "ga", "cf", "gq", "onion", "local", "internal", "lan", "arpa", "ee", "lv",
+    "lt", "ua", "by", "kz", "tr", "gr", "hu", "ro", "bg", "rs", "hr", "si", "sk", "pk", "bd", "lk",
+    "np", "ir", "iq", "sa", "ae", "qa", "my", "pe", "ve", "uy", "ec",
+];
+
 pub const FILE_EXTENSIONS: &[&str] = &[
     "rs", "js", "ts", "tsx", "jsx", "mjs", "cjs", "py", "rb", "php", "go", "java", "kt", "swift",
     "c", "h", "cpp", "hpp", "cs", "md", "txt", "json", "yaml", "yml", "toml", "lock", "sh", "bash",

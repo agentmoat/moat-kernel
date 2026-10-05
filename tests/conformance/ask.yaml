@@ -39,3 +39,10 @@
 - id: ask-empty-command
   action: { shell: "   " }
   expect: { verdict: ask, rules: [unparseable] }
+
+- id: ask-inline-python-prints-version
+  action: { shell: "python3 -c 'import sys; print(sys.version)'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-inline-node-prints-version
+  action: { shell: "node -e 'console.log(process.version)'" }
+  expect: { verdict: ask, rules: [default] }
