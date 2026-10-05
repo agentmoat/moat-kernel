@@ -77,3 +77,22 @@
 - id: ask-set-shell-options-is-not-a-dump
   action: { shell: "set -euo pipefail" }
   expect: { verdict: ask, rules: [default] }
+# T7: make arguments that replace the recipe shell or inject makefile text ask
+- id: ask-make-shell-override-after-target
+  action: { shell: "make test SHELL=/tmp/evil" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-make-shell-override-before-target
+  action: { shell: "make SHELL=/tmp/evil test" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-make-shellflags-override
+  action: { shell: "make test .SHELLFLAGS=-ec" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-make-environment-overrides
+  action: { shell: "make test -e" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-make-eval-harmless-text
+  action: { shell: "make test -E 'x:;id'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-make-file-outside-project
+  action: { shell: "make test --file=/tmp/evil.mk" }
+  expect: { verdict: ask, rules: [default] }

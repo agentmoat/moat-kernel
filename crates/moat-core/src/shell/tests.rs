@@ -185,6 +185,28 @@ fn source_builtin_reads_file() {
 }
 
 #[test]
+fn make_arguments_that_run_code_are_separate_atoms() {
+    let a = parsed("make test SHELL=/tmp/x -e --eval 'x:;id' --file=/tmp/m.mk");
+    for argv in [
+        "make SHELL=/tmp/x",
+        "make -e",
+        "make --eval",
+        "/tmp/x",
+        "id",
+    ] {
+        assert!(has_shell(&a, argv), "{argv}: {a:?}");
+    }
+    assert!(has_read(&a, "/tmp/m.mk"));
+    let plain = parsed("make build -j4 CC=clang");
+    assert!(
+        !plain
+            .iter()
+            .any(|x| matches!(x, AtomicAction::Shell { argv } if argv.len() == 2)),
+        "{plain:?}"
+    );
+}
+
+#[test]
 fn printenv_names_are_env_reads() {
     let a = parsed("printenv -0 GITHUB_TOKEN HOME");
     for name in ["GITHUB_TOKEN", "HOME"] {
