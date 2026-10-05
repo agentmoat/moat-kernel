@@ -4,6 +4,10 @@ Version 0.1 · 2026-10-02 · Companion to `DESIGN.md`. This document exists beca
 "policy + audit" alone is a weak product. It lists where agentmoat would be weak,
 what makes it strong instead, and the public benchmark that proves it.
 
+Status (2026-10-05): L1 (policy decision) and L5 (integrity) are built; L2–L4 (`moat exec`,
+egress proxy, session taint) and MoatBench are design, not code. §2.1–2.3, §3 and most of
+§4 describe planned work and are marked **planned**. What exists: `PROGRESS.md`.
+
 ---
 
 ## 1. Brutal list: where this product dies if we are not careful
@@ -29,14 +33,14 @@ Each layer alone is bypassable. Together, an attacker must defeat all of them, a
 each layer is measured separately in the benchmark.
 
 ```
-L5  Integrity       policy.lock · hook pinning · binary hash · ConfigChange veto
-L4  Session taint   secret-read ⇒ egress needs approval · egress byte budget · anomaly flags
-L3  Egress proxy    per-session allowlist · TLS SNI/Host match · logs every connection
-L2  OS enforcement  moat exec: Seatbelt / Landlock+seccomp(+bwrap) / AppContainer
-L1  Policy decision deny → allow → ask on normalised atomic actions
+L5  Integrity       policy.lock · hook + file pinning · binary path · ConfigChange veto   (built)
+L4  Session taint   secret-read ⇒ egress needs approval · egress byte budget · anomaly flags (planned)
+L3  Egress proxy    per-session allowlist · TLS SNI/Host match · logs every connection      (planned)
+L2  OS enforcement  moat exec: Seatbelt / Landlock+seccomp(+bwrap) / AppContainer           (planned)
+L1  Policy decision deny → allow → ask on normalised atomic actions                          (built)
 ```
 
-### 2.1 L2 from day one: `moat exec` (enforce, not just decide)
+### 2.1 L2: `moat exec` (enforce, not just decide) — planned
 
 Hosts let hooks **rewrite** the tool input (Claude Code `updatedInput`, Codex
 `updatedInput`, OpenClaw `params`). On `allow`, instead of returning the command
@@ -66,7 +70,7 @@ Consequences:
 
 Cost: one extra process spawn per command (~5–10 ms). Acceptable; measured in benchmark.
 
-### 2.2 L3: egress proxy
+### 2.2 L3: egress proxy — planned
 
 `moat exec` sets `HTTP(S)_PROXY`, `ALL_PROXY` and, where the sandbox supports it,
 blocks direct outbound so only the local proxy can reach the network (Anthropic's
@@ -74,7 +78,7 @@ and Codex's pattern). The proxy enforces the session's `net` allowlist by hostna
 (CONNECT/SNI), logs every connection (host, bytes, duration) to the audit DB, and
 feeds L4. Tools that ignore proxies get no network at all.
 
-### 2.3 L4: session taint and budgets (the layer rules cannot provide)
+### 2.3 L4: session taint and budgets (the layer rules cannot provide) — planned
 
 Deterministic, no LLM:
 - **Taint**: when a session reads anything matching `secrets` classes (even if allowed,
@@ -92,25 +96,30 @@ via next tool call) that pure allowlists cannot stop.
 
 ### 2.4 L5: integrity (covered in DESIGN §9 G1, G12)
 
-Per-call verification of policy and hook configs; deny-all on mismatch; protected
-paths; Claude Code `ConfigChange` veto; Phase 2 signed policy bundles.
+Built: `moat guard` verifies the policy, `environment.json`, the approval files and every
+installed hook file against `policy.lock` on each call (entries keyed by file location and
+symlink-aware since #26); any drift denies everything with `kernel-integrity`; protected
+paths in the default policy; Claude Code `ConfigChange` veto; executable pins (ADR-008).
+The lock records the `moat` binary's path, which `doctor` compares; the binary's hash is
+not pinned. Planned: signed policy bundles (Phase 2). Details: ADR-006.
 
 ### 2.5 Coverage matrix (published, kept honest)
 
 | Host | Shell | File read/write | Web fetch | MCP tools | Enforce (L2) | Fail-closed if moat missing |
 |---|---|---|---|---|---|---|
-| Claude Code | hook + exec | hook | hook | hook (`mcp__*`) | yes (macOS/Linux) | no (host limitation) |
-| Codex | hook + exec | partial (hook on shell only; file tools via exec) | via shell | via MCP proxy | yes | no |
-| Cursor | `beforeShellExecution` + exec | `beforeReadFile`; writes via `preToolUse` (Write/Edit/Delete) | via shell | `beforeMCPExecution` | yes | **yes** (`failClosed`, set by `init`) |
-| OpenClaw | plugin + exec | plugin (`derivedPaths`) | plugin | **MCP proxy only** | yes | no |
-| Any MCP host | — | via proxy mapping | via proxy | proxy | n/a | n/a |
+| Claude Code | `PreToolUse` (`Bash`) | `PreToolUse` (`Read`, `Glob`, `Grep`; `Edit`, `Write`, `MultiEdit`, `NotebookEdit`) | `PreToolUse` (`WebFetch`; `WebSearch` is not in the matcher) | `PreToolUse` (`mcp__*`, tool name only; arguments are not mapped yet) | planned | no (host limitation) |
+| Codex | `PreToolUse` (`Bash`) | **not hooked** (the matcher is `Bash` only, so `apply_patch` edits are not seen) | via shell | not hooked | planned | no |
+| Cursor | `beforeShellExecution` | `beforeReadFile`; writes via `preToolUse` | via shell | `beforeMCPExecution` (name only) | planned | **yes** (`failClosed`, set by `init`) |
+| OpenClaw | planned (plugin) | planned (`derivedPaths`) | planned | planned (MCP proxy) | planned | no |
+| Any MCP host | — | planned (proxy mapping) | planned | planned (proxy) | n/a | n/a |
 
-Every "no" and "partial" is a tracked issue with an upstream request. The matrix ships
-in the README; a user never discovers a gap by accident.
+Every "no", "not hooked" and "planned" cell is a tracked gap. This table is the published
+matrix; the README links here. A generated `COVERAGE_MATRIX.md` is planned.
 
 ### 2.6 Windows plan with dates
 
-- v0.1: decide + audit + integrity on Windows; PowerShell conservative tokenizer; CI green.
+- v0.1: decide + audit + integrity on Windows (built; CI green); PowerShell conservative
+  tokenizer (planned: today a PowerShell line is lexed as POSIX and falls through to `ask`).
 - v0.2: egress proxy on Windows (proxy is pure Rust, OS-agnostic).
 - Phase 2 (target ≤ 3 months after v0.1): AppContainer + Job Object `moat exec`.
 
@@ -202,6 +211,10 @@ the README chart, the Show HN post and the nightly leaderboard.
 
 ### 4.1 Engineering rigour on the trusted core
 
+Status: clippy pedantic `-D warnings`, rustfmt, rustdoc `-D warnings`, `cargo-deny`,
+architecture tests and the conformance suite run on every PR. Everything below except
+"Static" is planned.
+
 - **Fuzzing**: `cargo-fuzz` targets for the shell tokenizer, path canonicaliser, policy
   loader and host-payload adapters; run continuously (OSS-Fuzz application after v0.2).
 - **Differential testing**: for 100k generated/recorded commands, compare our tokenization
@@ -217,24 +230,25 @@ the README chart, the Show HN post and the nightly leaderboard.
 
 ### 4.2 Fatigue and usability as first-class metrics
 
-- **Learn mode** (`moat init --learn`, default for the first 24 h): audit everything,
+- **Learn mode** (planned; `moat init --learn`, default for the first 24 h): audit everything,
   deny only the critical classes (secrets, pipe-to-shell, self-protection), propose
   rules from observed benign actions (`moat policy suggest`, deterministic templates).
-- `moat report` shows asks/hour and ask→rule conversions; the release gate uses the
-  same number from the benchmark's benign corpus.
-- Every block message carries: rule id, one-line reason, trace id, and the exact command
-  to allow it if intended (`moat allow "<cmd>" --session`).
+- `moat report` shows asks per active hour (built); ask→rule conversions and the release
+  gate on the benchmark's benign corpus are planned.
+- Every block message carries rule id, one-line reason and trace id (`moat show <id>`);
+  an `ask` is made to stick with `moat allow --last [--always]`.
 
 ### 4.3 Trust operations
 
-- Reproducible builds; Sigstore-signed releases; SBOM; `SECURITY.md` with a 72-hour
-  acknowledgement SLA and coordinated disclosure.
-- Public **bypass challenge** at launch: bounty tiers for L2 escape (highest), L1+L4
+- `SECURITY.md` with a 72-hour acknowledgement SLA and coordinated disclosure (in place);
+  reproducible builds, Sigstore-signed releases and SBOM (planned with the release workflow).
+- Public **bypass challenge** at launch (planned): bounty tiers for L2 escape (highest), L1+L4
   bypass with L2 off (medium), parser divergence (low). Published scoreboard. Each
   valid bypass becomes a benchmark scenario.
 - Independent code audit of `moat-core` + `moat-sandbox` targeted after v0.3 (budget
   item; sponsors or grant).
-- Threat model, coverage matrix and known limitations live in the README, not a wiki.
+- Threat model (`DESIGN.md` §3, `SECURITY.md`), coverage matrix (§2.5) and known
+  limitations (`PROGRESS.md` §3) are linked from the README, not a wiki.
 
 ## 5. Why this beats the alternatives (and composes with them)
 
