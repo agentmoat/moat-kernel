@@ -1,7 +1,6 @@
 //! `moat allow`: turn an `ask` into a session grant or a permanent rule.
 
 use anyhow::{Context as _, Result, bail};
-use moat_audit::Store;
 use moat_core::{Action, Verdict};
 
 use crate::approvals::{Grants, Overlay};
@@ -9,6 +8,9 @@ use crate::cli::AllowArgs;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity;
+
+/// How many recent events `--last` searches for the newest shell `ask`.
+const LAST_ASK_SEARCH: usize = 200;
 
 pub fn run(args: &AllowArgs) -> Result<Code> {
     if !crate::terminal::interactive() {
@@ -54,9 +56,9 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
 
 /// Host, session and command of the most recent `ask` for a shell command.
 fn last_ask(home: &Home) -> Result<(Option<String>, Option<String>, String)> {
-    let store = Store::open_read_only(&home.audit_path())?;
+    let store = home.open_audit()?;
     let event = store
-        .recent(200)?
+        .recent(LAST_ASK_SEARCH)?
         .into_iter()
         .find(|e| e.verdict == Verdict::Ask && matches!(e.action, Some(Action::Shell { .. })))
         .context("no recent `ask` for a shell command in the audit log")?;

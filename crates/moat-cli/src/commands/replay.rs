@@ -1,7 +1,7 @@
 //! `moat replay`: what each agent session did, as a timeline.
 
 use anyhow::{Result, bail};
-use moat_audit::{SessionSummary, Store};
+use moat_audit::SessionSummary;
 use moat_hosts::Host;
 
 use crate::cli::{Format, ReplayArgs};
@@ -11,12 +11,7 @@ use crate::render;
 use crate::time;
 
 pub fn run(args: &ReplayArgs) -> Result<Code> {
-    let home = Home::locate()?;
-    let path = home.audit_path();
-    if !path.is_file() {
-        bail!("no audit log at {}; run `moat init`", path.display());
-    }
-    let store = Store::open_read_only(&path)?;
+    let store = Home::locate()?.open_audit()?;
     let host = args.host.map(Host::id);
 
     let sessions: Vec<SessionSummary> = if let Some(id) = &args.session {
@@ -39,7 +34,7 @@ pub fn run(args: &ReplayArgs) -> Result<Code> {
     };
 
     match args.format {
-        Format::Json => render::sessions_json(&sessions)?,
+        Format::Json => render::json(&sessions)?,
         Format::Text => render::replay(&sessions)?,
     }
     Ok(Code::Ok)

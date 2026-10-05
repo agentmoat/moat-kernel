@@ -22,18 +22,24 @@ pub struct HookSpec {
     pub timeout: u64,
 }
 
+/// Seconds a host waits for a tool-call hook. Long enough for a person to
+/// answer an `ask` prompted by the host; Claude Code and Codex default to 600.
+const TOOL_HOOK_TIMEOUT_S: u64 = 600;
+/// Seconds for the settings-change veto, which never waits for a person.
+const CONFIG_HOOK_TIMEOUT_S: u64 = 60;
+
 const TOOL_MATCHER: &str = "Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|WebFetch|mcp__.*";
 
 const CLAUDE_CODE_HOOKS: &[HookSpec] = &[
     HookSpec {
         event: "PreToolUse",
         matcher: TOOL_MATCHER,
-        timeout: 600,
+        timeout: TOOL_HOOK_TIMEOUT_S,
     },
     HookSpec {
         event: "ConfigChange",
         matcher: "user_settings|project_settings|local_settings",
-        timeout: 60,
+        timeout: CONFIG_HOOK_TIMEOUT_S,
     },
 ];
 
@@ -42,29 +48,29 @@ const CLAUDE_CODE_HOOKS: &[HookSpec] = &[
 const CODEX_HOOKS: &[HookSpec] = &[HookSpec {
     event: "PreToolUse",
     matcher: "Bash|apply_patch|mcp__.*",
-    timeout: 600,
+    timeout: TOOL_HOOK_TIMEOUT_S,
 }];
 
 const CURSOR_HOOKS: &[HookSpec] = &[
     HookSpec {
         event: "beforeShellExecution",
         matcher: "",
-        timeout: 600,
+        timeout: TOOL_HOOK_TIMEOUT_S,
     },
     HookSpec {
         event: "beforeMCPExecution",
         matcher: "",
-        timeout: 600,
+        timeout: TOOL_HOOK_TIMEOUT_S,
     },
     HookSpec {
         event: "beforeReadFile",
         matcher: "",
-        timeout: 600,
+        timeout: TOOL_HOOK_TIMEOUT_S,
     },
     HookSpec {
         event: "preToolUse",
         matcher: "",
-        timeout: 600,
+        timeout: TOOL_HOOK_TIMEOUT_S,
     },
 ];
 

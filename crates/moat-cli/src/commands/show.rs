@@ -1,7 +1,7 @@
 //! `moat show`: inspect audit events.
 
 use anyhow::{Result, bail};
-use moat_audit::{Event, EventId, Store};
+use moat_audit::{Event, EventId};
 
 use crate::cli::{Format, ShowArgs};
 use crate::exit::Code;
@@ -10,12 +10,7 @@ use crate::render;
 use crate::time;
 
 pub fn run(args: &ShowArgs) -> Result<Code> {
-    let home = Home::locate()?;
-    let path = home.audit_path();
-    if !path.is_file() {
-        bail!("no audit log at {}; run `moat init`", path.display());
-    }
-    let store = Store::open_read_only(&path)?;
+    let store = Home::locate()?.open_audit()?;
 
     let events: Vec<Event> = if let Some(id) = &args.id {
         let id: EventId = id.parse()?;
@@ -32,7 +27,7 @@ pub fn run(args: &ShowArgs) -> Result<Code> {
     };
 
     match args.format {
-        Format::Json => render::events_json(&events)?,
+        Format::Json => render::json(&events)?,
         Format::Text if args.id.is_some() => render::event_detail(&events[0])?,
         Format::Text => render::event_table(&events)?,
     }
