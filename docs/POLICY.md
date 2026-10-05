@@ -237,8 +237,11 @@ one host session. A grant applies to any `ask` for that command, including an
 `unparseable` one; it never overrides a `deny`. Permanent rules are appended to
 `~/.moat/policy.d/approved.yaml` with ids `approved-1`, `approved-2`, … and a provenance
 comment, and are merged into your policy at load time so `policy.yaml` is never rewritten.
-Shell rules are prefixes, so a permanently approved `npm install left-pad` also allows
-extra arguments after it; edit the overlay if you want it tighter. Both files are pinned
+The command is stored as a literal pattern: glob characters and `$` are escaped (`cat *` is
+stored as `cat [*]` and approves only a literal `*`), and ids are numbered one past the
+highest existing `approved-N`, so deleting a rule never causes a duplicate id. Shell rules
+are prefixes, so a permanently approved `npm install left-pad` also allows extra arguments
+after it; edit the overlay if you want it tighter. Both files are pinned
 by the lock; `moat allow` must be run from a terminal and is denied to agents.
 
 ## 9. Planned, not yet available
