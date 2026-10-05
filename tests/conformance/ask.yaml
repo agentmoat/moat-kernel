@@ -106,3 +106,7 @@
 - id: ask-decoded-stdin-to-shell-running-a-script
   action: { shell: "base64 -d f | bash build.sh" }
   expect: { verdict: ask, rules: [default] }
+# T9: recording an ordinary command with script is not kernel-self
+- id: ask-script-recording-ordinary-command
+  action: { shell: "script -q build.log make test" }
+  expect: { verdict: ask, rules: [default] }
