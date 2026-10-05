@@ -1,0 +1,109 @@
+//! The harness every end-to-end module shares: an isolated home and the real
+//! `moat` binary.
+//!
+//! Each command runs with the environment cleared except `PATH`, `HOME` and
+//! `USERPROFILE`, so nothing from the developer's machine (a real `~/.moat`,
+//! `CLAUDE_CONFIG_DIR`, a terminal) leaks into a test.
+
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+
+use serde_json::Value;
+use tempfile::TempDir;
+
+/// A throwaway home directory.
+pub struct Sandbox {
+    _dir: TempDir,
+    pub home: PathBuf,
+}
+
+impl Sandbox {
+    /// A home containing the given host configuration directories
+    /// (`.claude`, `.codex`, `.cursor`); nothing is installed.
+    pub fn bare(host_dirs: &[&str]) -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        for host_dir in host_dirs {
+            std::fs::create_dir_all(home.join(host_dir)).unwrap();
+        }
+        Self { _dir: dir, home }
+    }
+
+    /// `bare(host_dirs)` followed by a successful `moat init`.
+    pub fn installed(host_dirs: &[&str]) -> Self {
+        let sb = Self::bare(host_dirs);
+        let out = sb.moat(&["init"]);
+        assert_eq!(out.status.code(), Some(0), "moat init: {}", text(&out));
+        sb
+    }
+
+    /// The command with the isolated environment; callers add arguments.
+    fn command(&self) -> Command {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_moat"));
+        cmd.env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("HOME", &self.home)
+            .env("USERPROFILE", &self.home);
+        cmd
+    }
+
+    /// Run `moat` with no input.
+    pub fn moat(&self, args: &[&str]) -> Output {
+        output(self.command().args(args), None)
+    }
+
+    /// Run `moat` with `stdin` as its input (a hook payload).
+    pub fn moat_stdin(&self, args: &[&str], stdin: &str) -> Output {
+        output(self.command().args(args), Some(stdin))
+    }
+
+    /// Run the hook for `host` with `payload`.
+    pub fn guard(&self, host: &str, payload: &str) -> Output {
+        self.moat_stdin(&["guard", "--host", host], payload)
+    }
+}
+
+fn output(cmd: &mut Command, stdin: Option<&str>) -> Output {
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawning moat");
+    let mut pipe = child.stdin.take().expect("stdin is piped");
+    if let Some(input) = stdin {
+        pipe.write_all(input.as_bytes()).unwrap();
+    }
+    drop(pipe);
+    child.wait_with_output().unwrap()
+}
+
+/// A golden payload under `tests/fixtures/hosts/`, e.g. `cursor/beforeReadFile.json`.
+pub fn fixture(relative: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/hosts")
+        .join(relative);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+/// Standard output as text.
+pub fn stdout(out: &Output) -> String {
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// Standard error as text.
+pub fn stderr(out: &Output) -> String {
+    String::from_utf8_lossy(&out.stderr).into_owned()
+}
+
+/// Standard output followed by standard error, for assertion messages.
+pub fn text(out: &Output) -> String {
+    format!("{}{}", stdout(out), stderr(out))
+}
+
+/// Standard output parsed as one JSON document (`Null` when it is not JSON).
+pub fn json(out: &Output) -> Value {
+    serde_json::from_str(stdout(out).trim()).unwrap_or(Value::Null)
+}

@@ -4,6 +4,8 @@
 //! and the process environment cleared), never the developer's own `~`, and
 //! never the network.
 
+mod common;
+
 mod allow;
 mod approvals;
 mod cli;
