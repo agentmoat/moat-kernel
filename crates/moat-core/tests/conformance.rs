@@ -150,6 +150,7 @@ fn default_policy_conformance() {
         home: "/Users/me".into(),
         project: "/p".into(),
         cwd: "/p".into(),
+        case_insensitive_paths: false,
     };
 
     let compiled = CompiledPolicy::compile(&policy, &ctx).expect("default policy must compile");

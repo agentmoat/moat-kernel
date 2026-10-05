@@ -104,6 +104,7 @@ mod tests {
             home: path_string(&home),
             project: path_string(&project),
             cwd: path_string(&project),
+            case_insensitive_paths: false,
         };
         let resolver = FsPathResolver::new(&ctx);
         (dir, ctx, resolver)

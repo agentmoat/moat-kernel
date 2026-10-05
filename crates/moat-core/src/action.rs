@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::kind::Kind;
+
 /// A tool call as seen from a host, before classification.
 ///
 /// Host adapters (`moat-hosts`) translate each payload into exactly one of
@@ -33,6 +35,18 @@ pub enum Action {
 }
 
 impl Action {
+    /// The kind of action as a user would describe it (`Patch` writes files).
+    #[must_use]
+    pub fn kind(&self) -> Kind {
+        match self {
+            Self::Shell { .. } => Kind::Shell,
+            Self::FsRead { .. } => Kind::FsRead,
+            Self::FsWrite { .. } | Self::Patch { .. } => Kind::FsWrite,
+            Self::Net { .. } => Kind::Net,
+            Self::McpTool { .. } => Kind::Mcp,
+        }
+    }
+
     /// An MCP call whose arguments are not interpreted.
     #[must_use]
     pub fn mcp(name: impl Into<String>) -> Self {
@@ -86,16 +100,28 @@ pub enum AtomicAction {
 }
 
 impl AtomicAction {
+    /// The rule kind this atom is matched against.
     #[must_use]
-    pub fn kind(&self) -> &'static str {
+    pub fn kind(&self) -> Kind {
         match self {
-            Self::Shell { .. } | Self::Pipeline { .. } => "shell",
-            Self::FsRead { .. } => "fs.read",
-            Self::FsWrite { .. } => "fs.write",
-            Self::Net { .. } => "net",
-            Self::EnvRead { .. } => "env.read",
-            Self::EnvSet { .. } => "env.set",
-            Self::McpTool { .. } => "mcp",
+            Self::Shell { .. } | Self::Pipeline { .. } => Kind::Shell,
+            Self::FsRead { .. } => Kind::FsRead,
+            Self::FsWrite { .. } => Kind::FsWrite,
+            Self::Net { .. } => Kind::Net,
+            Self::EnvRead { .. } => Kind::EnvRead,
+            Self::EnvSet { .. } => Kind::EnvSet,
+            Self::McpTool { .. } => Kind::Mcp,
+        }
+    }
+
+    /// The text a glob rule is matched against; `None` for shell atoms, which
+    /// are matched as argv.
+    pub(crate) fn subject(&self) -> Option<&str> {
+        match self {
+            Self::Shell { .. } | Self::Pipeline { .. } => None,
+            Self::FsRead { path } | Self::FsWrite { path } => Some(path),
+            Self::Net { host } => Some(host),
+            Self::EnvRead { name } | Self::EnvSet { name } | Self::McpTool { name } => Some(name),
         }
     }
 
