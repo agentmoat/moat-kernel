@@ -8,7 +8,7 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::redact;
+use crate::{redact, redact_value};
 
 const SCHEMA_VERSION: i64 = 1;
 const BUSY_TIMEOUT_MS: u64 = 2000;
@@ -162,7 +162,7 @@ impl Store {
     /// Append one decision with an explicit timestamp (milliseconds since the epoch).
     pub fn record_at(&self, event: &NewEvent<'_>, ts_ms: i64) -> Result<EventId, StoreError> {
         let action_json = match event.action {
-            Some(action) => redact(&serde_json::to_string(action)?),
+            Some(action) => serde_json::to_string(&redact_value(serde_json::to_value(action)?))?,
             None => "null".to_owned(),
         };
         let reasons: Vec<String> = event.decision.reasons.iter().map(|r| redact(r)).collect();
@@ -236,7 +236,10 @@ pub(crate) fn row_to_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
         let text: String = row.get(index)?;
         serde_json::from_str(&text).map_err(|e| json_error(e, row))
     }
-    let action: Option<Action> = decode(row, 7)?;
+    // A row whose action cell cannot be parsed (logs written before redaction
+    // ran on structured fields) still reports its verdict, rules and reasons
+    // instead of failing the whole query.
+    let action: Option<Action> = decode(row, 7).unwrap_or(None);
     let verdict = match row.get::<_, String>(8)?.as_str() {
         "allow" => Verdict::Allow,
         "ask" => Verdict::Ask,
@@ -325,6 +328,57 @@ mod tests {
         assert_eq!(event.latency_us, 1200);
         assert_eq!(store.count().unwrap(), 1);
         assert!(store.get(EventId(999)).unwrap().is_none());
+    }
+
+    #[test]
+    fn redaction_keeps_stored_json_valid_and_secret_free() {
+        let store = Store::open_in_memory().unwrap();
+        let d = decision(Verdict::Allow, "dev-shell", "ok");
+        for command in [
+            r#"curl -H "X-Api-Key: abc123def456" https://api.github.com"#,
+            r#"export PASSWORD="hunter2""#,
+            "git clone https://user:s3cretpw@github.com/x/y",
+        ] {
+            let a = Action::Shell {
+                command: command.into(),
+            };
+            store.record(&sample(&d, &a)).unwrap();
+        }
+        let events = store.recent(10).unwrap();
+        assert_eq!(events.len(), 3);
+        let raw: Vec<String> = {
+            let mut stmt = store.conn.prepare("SELECT action FROM events").unwrap();
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0)).unwrap();
+            rows.map(Result::unwrap).collect()
+        };
+        for text in &raw {
+            serde_json::from_str::<serde_json::Value>(text).expect("stored action is valid JSON");
+            for secret in ["abc123def456", "hunter2", "s3cretpw"] {
+                assert!(!text.contains(secret), "{secret} leaked: {text}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_corrupt_action_cell_does_not_break_queries() {
+        let store = Store::open_in_memory().unwrap();
+        let d = decision(Verdict::Deny, "secrets-paths", "secret");
+        let a = Action::Shell {
+            command: "cat ~/.ssh/id_rsa".into(),
+        };
+        let id = store.record(&sample(&d, &a)).unwrap();
+        store
+            .conn
+            .execute(
+                "UPDATE events SET action = '{\"shell\":{\"command\":\"broken' WHERE id = ?1",
+                params![id.0],
+            )
+            .unwrap();
+        let event = store.get(id).unwrap().expect("row still readable");
+        assert_eq!(event.action, None);
+        assert_eq!(event.verdict, Verdict::Deny);
+        assert_eq!(event.rules, ["secrets-paths"]);
+        assert_eq!(store.recent(5).unwrap().len(), 1);
     }
 
     #[test]
