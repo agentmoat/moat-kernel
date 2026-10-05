@@ -16,9 +16,11 @@ All notable changes to this project are documented here. The format follows
 - Policy engine: schema v1 with `deny → allow → ask → defaults` evaluation, per-kind defaults, absolute deny, strictest-wins across atomic actions.
 - Shell classification: POSIX lexer (quotes, escapes, redirects, `$(…)`, backticks, here-documents), sub-commands, subshells, `eval`, `sh -c`, wrappers, inline interpreters, environment reads/sets, path and host extraction.
 - Host adapters for Claude Code and Codex `PreToolUse` hooks, and for Cursor (`beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse`; `moat init` writes a fail-closed `~/.cursor/hooks.json`).
-- Audit log in SQLite (WAL) with credential redaction; `moat show`, `moat status`, `moat replay` (per-session timeline) and `moat report` (verdict totals, hosts, top rules, asks per active hour).
+- Audit log in SQLite (WAL) with credential redaction; time-window and per-session queries (`since`, `sessions_since`, `summary`); `moat show [id | --session | --since | --recent]`, `moat replay` (per-session timeline, `--since`/`--session`/`--host`) and `moat report` (verdict totals, hosts, top rules, asks per active hour). Windows accept `all`, `today`, `yesterday`, `12h`, `7d`, `2w` or `YYYY-MM-DD`.
+- `moat status` exits 64 when the installation is unhealthy (missing policy, lock drift, broken hook, missing audit log) so scripts can test it.
 - `moat init` (policy, audit log, idempotent hook installation), `moat guard` (fail-closed), `moat policy lint|check`.
-- Default policy v1 and 83 conformance fixtures.
+- Default policy v1 and 95 conformance fixtures (63 attacks, 20 benign, 12 ask).
+- Host configuration directories can be overridden for tests and unusual installs: `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CURSOR_CONFIG_DIR`; state directory via `MOAT_HOME`.
 
 ### Added (self-protection)
 - `policy.lock`: `moat init` pins SHA-256 digests of the policy and every installed host hook file; `moat guard` verifies them on every call and denies everything with rule `kernel-integrity` when a pinned file changed or disappeared.
@@ -30,6 +32,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - Project standards: `AGENTS.md` contract, CONTRIBUTING, SECURITY, Code of Conduct, pinned-SHA workflows, Conventional Commits PR titles, Dependabot, CODEOWNERS, issue forms, PR template, single quality-gate script, clippy thresholds, rustdoc `-D warnings`, architecture tests, ADR-001…004.
+- CI: `pr-standards` applies `type:`/`area:`/`size:`/`risk:` labels from the title and changed paths, fails PRs over 500 lines (unless `size: override`) or without Testing and Security impact sections; labels are defined in `scripts/ci/sync-labels.sh`.
+- CI: `moat-reviewer` GitHub App posts an advisory first-pass review on every pull request (`pr-review.yml`); `@moat-reviewer` re-runs it.
 - Dependencies: rusqlite 0.40, sha2 0.11, actions/checkout v7.0.1, action-semantic-pull-request v6.1.1.
 - Windows: canonical slash-separated paths keep `C:/` and UNC roots.
 

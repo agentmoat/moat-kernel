@@ -31,7 +31,7 @@ and are being built rather than being bugs:
 |---|---|
 | OS-level enforcement of a decision (a parse the policy misjudges is still only a decision) | `moat exec` sandbox, planned |
 | Network enforcement beyond pattern matching | egress proxy, planned |
-| PowerShell / cmd tokenisation on Windows | any such command is `ask` |
+| PowerShell / cmd tokenisation on Windows | lexed as POSIX; falls through to the `ask` default |
 | Hosts that proceed when the hook binary is missing | host limitation; `moat status` reports it |
 | Agents running in a vendor's cloud rather than on the host | not a target |
 
