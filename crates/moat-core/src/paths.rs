@@ -86,8 +86,17 @@ fn expand_home(raw: &str, home: &str) -> String {
 }
 
 /// Heuristic: does this shell token look like a filesystem path?
+///
+/// Besides the obvious prefixes, a token counts as a path when it traverses
+/// (`src/../x`, `a/..`) or names a hidden entry (`.env`, `config/.env.local`,
+/// `.ssh/id_rsa`): those are the relative forms that reach secrets, and a
+/// bare `cat .env` must produce a file-read atom. Plain `a/b` tokens do not
+/// qualify, so branch names, MIME types and `owner/repo` stay unclassified.
 #[must_use]
 pub fn looks_like_path(token: &str) -> bool {
+    if token.contains("://") {
+        return false;
+    }
     token.starts_with('/')
         || token.starts_with("~/")
         || token == "~"
@@ -101,6 +110,26 @@ pub fn looks_like_path(token: &str) -> bool {
         || drive_prefix(token)
             .is_some_and(|_| matches!(token.as_bytes().get(2), Some(b'/' | b'\\')))
         || token.starts_with("\\\\")
+        || traverses(token)
+        || names_hidden_entry(token)
+}
+
+fn traverses(token: &str) -> bool {
+    token == ".."
+        || token
+            .split(['/', '\\'])
+            .enumerate()
+            .any(|(i, seg)| seg == ".." && (i > 0 || token.len() > 2))
+}
+
+/// A segment such as `.env` or `.ssh` (not `.`, `..`, or a number like `.5`).
+fn names_hidden_entry(token: &str) -> bool {
+    token.split(['/', '\\']).any(|seg| {
+        seg.len() > 1
+            && seg != ".."
+            && seg.starts_with('.')
+            && !seg[1..].chars().all(|c| c.is_ascii_digit())
+    })
 }
 
 #[cfg(test)]
@@ -164,6 +193,34 @@ mod tests {
             assert!(looks_like_path(token), "{token}");
         }
         for token in ["main.rs", "C:", "https://x", "-v", "ab/cd"] {
+            assert!(!looks_like_path(token), "{token}");
+        }
+    }
+
+    #[test]
+    fn relative_forms_that_reach_secrets_are_paths() {
+        for token in [
+            ".env",
+            ".env.production",
+            "config/.env.local",
+            ".ssh/id_rsa",
+            "src/../../.ssh/id_rsa",
+            "a/..",
+            "..",
+            r"src\..\.env",
+        ] {
+            assert!(looks_like_path(token), "{token}");
+        }
+        for token in [
+            "origin/main",
+            "application/json",
+            "owner/repo",
+            ".",
+            ".5",
+            "s/foo/bar/",
+            "https://x/.env",
+            "fix.bug",
+        ] {
             assert!(!looks_like_path(token), "{token}");
         }
     }
