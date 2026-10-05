@@ -370,6 +370,47 @@ fn reads_and_writes_through_symlinks_are_checked_at_the_target() {
     );
 }
 
+/// Windows payloads carry drive-letter paths; they must reach the policy in the
+/// same canonical form as `${project}` and `~` (no `\\?\` verbatim prefix).
+#[cfg(windows)]
+#[test]
+fn windows_drive_letter_payloads_are_canonical() {
+    let sb = Sandbox::new();
+    sb.moat(&["init"]);
+    let project = sb.home.join("proj");
+    std::fs::create_dir_all(project.join(".git")).unwrap();
+    let slash = |p: &Path| p.to_string_lossy().replace('\\', "/");
+    let cwd = slash(&project);
+    let tool = |name: &str, input: serde_json::Value| {
+        serde_json::json!({
+            "session_id": "s-win", "cwd": cwd, "hook_event_name": "PreToolUse",
+            "tool_name": name, "tool_input": input, "tool_use_id": "t1"
+        })
+        .to_string()
+    };
+
+    let write = tool(
+        "Write",
+        serde_json::json!({"file_path": format!("{cwd}/src/main.rs"), "content": "x"}),
+    );
+    let out = sb.guard("claude-code", &write);
+    assert_eq!(
+        decision(&out)["permissionDecision"],
+        "allow",
+        "{}",
+        stderr(&out)
+    );
+
+    let key = format!("{}/.ssh/id_rsa", slash(&sb.home));
+    let out = sb.guard(
+        "claude-code",
+        &tool("Read", serde_json::json!({"file_path": key})),
+    );
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    let reason = decision(&out)["permissionDecisionReason"].to_string();
+    assert!(reason.contains("secrets-paths"), "{reason}");
+}
+
 #[test]
 fn codex_payloads_use_the_same_contract() {
     let sb = Sandbox::new();

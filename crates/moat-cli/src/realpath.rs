@@ -34,7 +34,7 @@ impl FsPathResolver {
         let mut roots: Vec<(String, String)> = [&ctx.project, &ctx.home]
             .into_iter()
             .filter_map(|logical| {
-                let canonical = slash(&fs::canonicalize(logical).ok()?);
+                let canonical = path_string(&fs::canonicalize(logical).ok()?);
                 (&canonical != logical).then(|| (canonical, logical.clone()))
             })
             .collect();
@@ -56,7 +56,7 @@ impl FsPathResolver {
 
 impl PathResolver for FsPathResolver {
     fn resolve(&self, path: &str) -> Option<String> {
-        let real = self.reroot(slash(&real_path(Path::new(path), MAX_LINK_HOPS)?));
+        let real = self.reroot(path_string(&real_path(Path::new(path), MAX_LINK_HOPS)?));
         (real != path).then_some(real)
     }
 }
@@ -77,19 +77,6 @@ fn real_path(path: &Path, hops: u8) -> Option<PathBuf> {
         return real_path(&parent.join(target), hops.checked_sub(1)?);
     }
     Some(real_path(parent, hops)?.join(path.file_name()?))
-}
-
-/// Slash form without Windows' verbatim prefix: `canonicalize` returns
-/// `\\?\C:\x` and `\\?\UNC\server\share`, which the core would not recognise.
-fn slash(path: &Path) -> String {
-    let text = path_string(path);
-    if let Some(unc) = text.strip_prefix("//?/UNC/") {
-        format!("//{unc}")
-    } else if let Some(local) = text.strip_prefix("//?/") {
-        local.to_owned()
-    } else {
-        text
-    }
 }
 
 #[cfg(test)]
@@ -162,12 +149,5 @@ mod tests {
         symlink(format!("{p}/b"), format!("{p}/a")).unwrap();
         symlink(format!("{p}/a"), format!("{p}/b")).unwrap();
         assert_eq!(r.resolve(&format!("{p}/a")), None);
-    }
-
-    #[test]
-    fn verbatim_windows_prefixes_are_removed() {
-        assert_eq!(slash(Path::new("//?/C:/p/x")), "C:/p/x");
-        assert_eq!(slash(Path::new("//?/UNC/srv/share/x")), "//srv/share/x");
-        assert_eq!(slash(Path::new("/p/x")), "/p/x");
     }
 }

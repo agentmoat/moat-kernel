@@ -15,6 +15,7 @@ use anyhow::{Context as _, Result, bail};
 use moat_core::ProgramResolver;
 use serde::{Deserialize, Serialize};
 
+use crate::context::path_string;
 use crate::home::write_private;
 
 const SNAPSHOT_VERSION: u32 = 1;
@@ -64,7 +65,15 @@ pub struct Snapshot {
     pub path: Vec<PathBuf>,
     /// Program name → absolute path found at install time.
     pub programs: BTreeMap<String, PathBuf>,
+    /// Windows executable extensions (`PATHEXT`) in search order, lowercase.
+    /// Captured with the search path so the hook's environment cannot change it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pathext: Vec<String>,
 }
+
+/// Used when `PATHEXT` is unset or empty, and for snapshots written before it
+/// was recorded.
+const DEFAULT_PATHEXT: &[&str] = &[".com", ".exe", ".bat", ".cmd"];
 
 impl Snapshot {
     /// Capture the current process's search path and resolve the pinned programs.
@@ -72,9 +81,14 @@ impl Snapshot {
         let path: Vec<PathBuf> = std::env::var_os("PATH")
             .map(|p| std::env::split_paths(&p).collect())
             .unwrap_or_default();
+        let pathext = if cfg!(windows) {
+            parse_pathext(&std::env::var("PATHEXT").unwrap_or_default())
+        } else {
+            Vec::new()
+        };
         let mut programs = BTreeMap::new();
         for name in PINNED_PROGRAMS {
-            if let Some(found) = find_in(&path, name) {
+            if let Some(found) = find_in(&path, &pathext, name) {
                 programs.insert((*name).to_owned(), found);
             }
         }
@@ -83,6 +97,7 @@ impl Snapshot {
             captured_at_ms: now_ms(),
             path,
             programs,
+            pathext,
         }
     }
 
@@ -109,27 +124,45 @@ impl Snapshot {
 
 impl ProgramResolver for Snapshot {
     fn resolve(&self, program: &str) -> Option<String> {
-        find_in(&self.path, program).map(|p| p.to_string_lossy().replace('\\', "/"))
+        find_in(&self.path, &self.pathext, program).map(|p| path_string(&p))
     }
 
     fn pinned(&self, program: &str) -> Option<String> {
-        self.programs
-            .get(program)
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
+        self.programs.get(program).map(|p| path_string(p))
     }
 }
 
-/// First executable named `program` in `dirs`, following the platform's rules.
-fn find_in(dirs: &[PathBuf], program: &str) -> Option<PathBuf> {
-    let candidates: &[String] = if cfg!(windows) {
-        &[
-            program.to_owned(),
-            format!("{program}.exe"),
-            format!("{program}.cmd"),
-            format!("{program}.bat"),
-        ]
+/// `PATHEXT` (`.COM;.EXE;…`) as lowercase extensions; the default list when empty.
+fn parse_pathext(raw: &str) -> Vec<String> {
+    let exts: Vec<String> = raw
+        .split(';')
+        .map(str::trim)
+        .filter(|e| e.starts_with('.') && e.len() > 1)
+        .map(str::to_ascii_lowercase)
+        .collect();
+    if exts.is_empty() {
+        DEFAULT_PATHEXT.iter().map(|e| (*e).to_owned()).collect()
     } else {
-        &[program.to_owned()]
+        exts
+    }
+}
+
+/// First executable named `program` in `dirs`, following the platform's rules:
+/// on Windows the name as given, then with each `pathext` extension.
+fn find_in(dirs: &[PathBuf], pathext: &[String], program: &str) -> Option<PathBuf> {
+    let candidates: Vec<String> = if cfg!(windows) {
+        let default: Vec<String>;
+        let exts = if pathext.is_empty() {
+            default = parse_pathext("");
+            &default
+        } else {
+            pathext
+        };
+        std::iter::once(program.to_owned())
+            .chain(exts.iter().map(|e| format!("{program}{e}")))
+            .collect()
+    } else {
+        vec![program.to_owned()]
     };
     dirs.iter()
         .filter(|d| !d.as_os_str().is_empty())
@@ -182,6 +215,7 @@ mod tests {
             captured_at_ms: 0,
             path: vec![first.clone(), second.clone()],
             programs: BTreeMap::from([("git".to_owned(), real.clone())]),
+            pathext: Vec::new(),
         };
         assert_eq!(snap.resolve("git").as_deref(), Some(real.to_str().unwrap()));
         assert_eq!(snap.pinned("git").as_deref(), Some(real.to_str().unwrap()));
@@ -191,6 +225,33 @@ mod tests {
         assert_eq!(
             snap.resolve("git").as_deref(),
             Some(planted.to_str().unwrap())
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_resolution_follows_the_recorded_pathext() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("tool.ps1"), "").unwrap();
+        let dirs = [dir.path().to_path_buf()];
+        assert_eq!(find_in(&dirs, &[], "tool"), None);
+        let found = find_in(&dirs, &[".ps1".to_owned()], "tool").unwrap();
+        assert!(path_string(&found).ends_with("/tool.ps1"), "{found:?}");
+    }
+
+    #[test]
+    fn pathext_is_parsed_lowercase_with_a_default() {
+        assert_eq!(
+            parse_pathext(".COM;.EXE; .PS1 ;;bad"),
+            [".com", ".exe", ".ps1"]
+        );
+        assert_eq!(parse_pathext(""), DEFAULT_PATHEXT);
+        let old: Snapshot =
+            serde_json::from_str(r#"{"version":1,"captured_at_ms":0,"path":[],"programs":{}}"#)
+                .unwrap();
+        assert!(
+            old.pathext.is_empty(),
+            "snapshots without pathext still load"
         );
     }
 
