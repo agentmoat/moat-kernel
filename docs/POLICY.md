@@ -94,7 +94,7 @@ Consequences worth remembering:
 
 - **Deny is absolute.** No allow rule can override a deny rule. To express "nothing of this kind except these", use `defaults` plus allow rules, as the default policy does for `net`.
 - An allow rule on `shell` does not allow the paths or hosts the command touches; those are evaluated separately. `cat ~/.ssh/id_rsa` is denied by the path rule even though `cat *` is allowed.
-- `moat guard` checks a path where it really points as well as where it was written: after `ln -s ~/.ssh ./s`, `cat ./s/id_rsa` is denied by `secrets-paths`. A link inside the project that points elsewhere inside the project stays allowed. `moat policy check` does not touch the filesystem and matches the literal path only. Hard links and a link swapped after the check are not seen (ADR-009).
+- `moat guard` checks a path where it really points as well as where it was written: after `ln -s ~/.ssh ./s`, `cat ./s/id_rsa` is denied by `secrets-paths`. A link inside the project that points elsewhere inside the project stays allowed. `moat policy check` resolves symlinks the same way. Hard links and a link swapped after the check are not seen (ADR-009).
 - The explanation names the rules that produced the final verdict; weaker matches are shown as context (`also:` lines, `context` in JSON).
 
 ## 5. Verdicts and what the host does
@@ -214,10 +214,11 @@ After installing a tool in a new location, re-run `moat init` or `moat doctor --
 
 On Windows the snapshot also records `PATHEXT`; a bare program name resolves as written, then with each recorded extension in order (default `.com`, `.exe`, `.bat`, `.cmd`).
 
-`moat policy check` evaluates without the snapshot: installation pins are not consulted,
-and a program pinned under `executables:` in the policy is denied as "not found on the
-kernel search path" unless the command names it by absolute path. Use `moat guard` (or a
-real hook) to test executable pins.
+`moat policy check` decides the way `guard` does: it resolves programs through the snapshot
+when `~/.moat/environment.json` exists and resolves symlinks in checked paths. Without an
+installation, installation pins are not consulted and a program pinned under `executables:`
+is reported as "not found on the kernel search path" unless the command names it by
+absolute path.
 
 ## 8.2 Approvals
 

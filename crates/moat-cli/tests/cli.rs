@@ -128,6 +128,33 @@ fn reserved_blocks_from_older_policies_still_lint() {
     );
 }
 
+/// `policy check` decides the way `guard` does: a read through a symlink is
+/// checked where the link points.
+#[cfg(unix)]
+#[test]
+fn check_resolves_symlinks_like_guard() {
+    let ssh = home().join(".ssh");
+    std::fs::create_dir_all(&ssh).unwrap();
+    std::fs::write(ssh.join("id_rsa"), "key").unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().to_string_lossy().into_owned();
+    std::os::unix::fs::symlink(&ssh, dir.path().join("s")).unwrap();
+    let policy = default_policy();
+    let out = moat(&[
+        "policy",
+        "check",
+        "cat ./s/id_rsa",
+        "--policy",
+        policy.to_str().unwrap(),
+        "--project",
+        &project,
+        "--cwd",
+        &project,
+    ]);
+    assert_eq!(out.status.code(), Some(2), "{}", stdout(&out));
+    assert!(stdout(&out).contains("secrets-paths"), "{}", stdout(&out));
+}
+
 #[test]
 fn lint_rejects_missing_and_invalid_files() {
     let out = moat(&["policy", "lint", "/definitely/not/here.yaml"]);
