@@ -62,8 +62,13 @@ impl PathResolver for FsPathResolver {
 }
 
 /// Canonical form of `path`. A path that does not exist resolves through its
-/// deepest existing ancestor; a dangling symlink through its target.
+/// deepest existing ancestor; a dangling symlink through its target. A root is
+/// kept as written: it cannot be a link, and on Windows `canonicalize("/")`
+/// would turn a drive-less path into one on the current drive.
 fn real_path(path: &Path, hops: u8) -> Option<PathBuf> {
+    if path.parent().is_none() {
+        return Some(path.to_path_buf());
+    }
     if let Ok(real) = fs::canonicalize(path) {
         return Some(real);
     }
@@ -87,12 +92,20 @@ fn slash(path: &Path) -> String {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::os::unix::fs::symlink;
 
     use super::*;
 
+    #[test]
+    fn missing_paths_keep_their_root() {
+        let r = FsPathResolver { roots: Vec::new() };
+        assert_eq!(r.resolve("/moat-missing-root/src/lib.rs"), None);
+    }
+
+    #[cfg(unix)]
     fn setup() -> (tempfile::TempDir, EvalContext, FsPathResolver) {
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().join("home");
@@ -109,6 +122,7 @@ mod tests {
         (dir, ctx, resolver)
     }
 
+    #[cfg(unix)]
     #[test]
     fn plain_paths_inside_the_project_resolve_to_themselves() {
         let (_dir, ctx, r) = setup();
@@ -117,6 +131,7 @@ mod tests {
         assert_eq!(r.resolve(&format!("{p}/src/new/file.rs")), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn linked_directories_and_files_resolve_to_their_target() {
         let (_dir, ctx, r) = setup();
@@ -139,6 +154,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn link_loops_give_up() {
         let (_dir, ctx, r) = setup();
