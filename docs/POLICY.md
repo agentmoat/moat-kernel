@@ -162,7 +162,7 @@ moat policy check "~/.aws/credentials" --kind fs-read --policy ./policy.yaml
 installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
 pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
 until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
-by re-running `moat init`. Edit the policy, then run `moat doctor --accept`.
+by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged.
 
 ### 8.1 Executable pinning and the environment snapshot
 

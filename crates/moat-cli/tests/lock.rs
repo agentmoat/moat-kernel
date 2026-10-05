@@ -127,6 +127,32 @@ fn edited_policy_makes_guard_fail_closed_until_repinned() {
     assert_eq!(sb.guard_read_src()["permissionDecision"], "allow");
 }
 
+#[cfg(unix)]
+#[test]
+fn policy_swapped_for_a_symlink_is_denied_even_with_identical_bytes() {
+    let sb = Sandbox::new();
+    assert_eq!(sb.guard_read_src()["permissionDecision"], "allow");
+
+    let copy = sb.home.join("elsewhere.yaml");
+    std::fs::copy(sb.policy(), &copy).unwrap();
+    std::fs::remove_file(sb.policy()).unwrap();
+    std::os::unix::fs::symlink(&copy, sb.policy()).unwrap();
+
+    let d = sb.guard_read_src();
+    assert_eq!(
+        d["permissionDecision"], "deny",
+        "a link to the same bytes is still a swap"
+    );
+    assert_eq!(d["exit"], 2);
+    let reason = d["permissionDecisionReason"].as_str().unwrap();
+    assert!(reason.contains("kernel-integrity"), "{reason}");
+    assert!(reason.contains("policy.yaml"), "{reason}");
+
+    let status = sb.moat(&["status"], None);
+    assert_eq!(status.status.code(), Some(64));
+    assert!(text(&status).contains("policy.yaml"), "{}", text(&status));
+}
+
 #[test]
 fn removed_hook_file_is_detected() {
     let sb = Sandbox::new();
