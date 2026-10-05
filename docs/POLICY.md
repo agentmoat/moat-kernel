@@ -69,6 +69,7 @@ Tokenised with the same lexer as commands, so `a|b` and `a | b` are equal.
 - A pattern is a **prefix**: `git status` also matches `git status --short`.
 - A trailing bare `$` ends the match: the command must have no further arguments. `env $` matches `env` alone, not `env FOO=1 git status`; `export -p $` matches `export -p` but not `export -p FOO`. A `$` anywhere else is an ordinary token, and a pattern that is only `$` is rejected by the linter (ADR-010).
 - Pipelines and lists are matched per command **and** as whole suffixes, so `base64 -d | sh` is caught in `echo … | base64 -d | sh`.
+- A decoder stage that feeds an interpreter reading stdin, anywhere later in the same pipe chain, is also reported as the canonical pipeline `<decoder> -d | <interpreter>` (`base64 -D x | tr a b | bash -s` → `base64 -d | bash`), so one rule `* -d | bash` covers every decoder spelling. An interpreter given a script file or inline code (`bash build.sh`, `sh -c …`) is not reading its program from stdin and does not produce it.
 - Commands inside `sh -c "…"`, `eval`, `$( … )`, backticks, subshells and wrappers (`sudo`, `env`, `xargs`, `timeout`, `nohup`, …) are classified as their own commands.
 - `make` (and `gmake`) arguments that run code of the caller's choosing become their own `make <argument>` shell action, so a `make test*` allow does not cover them: `--eval`/`-E` text, `-e`/`--environment-overrides`, and the variables `SHELL`, `.SHELLFLAGS`, `MAKESHELL`, `MAKEFLAGS`, `MFLAGS`, plus any `NAME!=command`. The `--eval` text, `!=` commands, `$(shell …)` calls in variable values and the `SHELL=` program are classified as commands; `--file=`, `--makefile=`, `--directory=` and `--include-dir=` values are file reads. `make build -j4 CC=clang` is unaffected.
 
@@ -133,7 +134,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | deny | `env-secrets` | reading `*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `AWS_*`, `GITHUB_TOKEN`, `NPM_TOKEN` |
 | deny | `env-dump` | `env`, `printenv`, `set`, `export`, `declare`, `typeset` with no arguments (or only `-0`, `-p`, `-x`), also by absolute path: they print every variable, secrets included. `printenv NAME` is an `env.read` of `NAME` |
 | deny | `env-poison` | setting `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `GIT_*`, `BASH_ENV`, `PROMPT_COMMAND` |
-| deny | `pipe-to-shell` | `curl/wget … \| sh/bash`, `base64 -d \| sh`, `eval` |
+| deny | `pipe-to-shell` | `curl`/`wget` output, or any decoded/decompressed stream (`base64 -d/-D/--decode`, `openssl … -d`, `xxd -r`, `gunzip`, `zcat`, `gzip -d`, …), piped into a shell or interpreter that reads its program from stdin (`sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `python*`, `node`, `perl`, `ruby`, `php`, `deno`, `bun`, `pwsh`); `eval` |
 | deny | `destructive` | `rm -rf /`, `rm -rf /*`, `rm -rf ~`, `rm -rf ~/*`, `rm -rf $HOME` (and `-fr`, `--no-preserve-root`), `git push --force*`/`-f*`, `git reset --hard`, `git clean -fdx`, `git branch -D`, `git stash drop/clear`, `sudo`, `mkfs`, `dd if=`, `shutdown`, `reboot` |
 | deny | `kernel-self` | writes to `~/.moat`, `~/.codex`, host hook/settings files; `moat policy/init/doctor/allow` from an agent, also by absolute path (`*/moat …`) |
 | deny | `shell-rc` | writes to `~/.zshrc`, `~/.bashrc`, `~/.profile` and friends |

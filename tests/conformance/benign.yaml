@@ -96,3 +96,6 @@
 - id: benign-make-build-parallel-with-variable
   action: { shell: "make build -j4 CC=clang" }
   expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-grep-for-the-word-bash
+  action: { shell: "cat README.md | grep bash" }
+  expect: { verdict: allow, rules: [dev-shell] }

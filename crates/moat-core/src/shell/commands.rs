@@ -1,6 +1,5 @@
 //! From tokens to simple commands to atomic actions.
 
-use super::make;
 use super::tables::{
     ENV_BUILTINS, INLINE_INTERPRETERS, MAKES, PACKAGE_RUNNERS, SHELLS, SOURCE_BUILTINS,
     WRAPPER_OPTIONS_WITH_VALUE, WRAPPER_SUBCOMMANDS, WRAPPERS, WRAPPERS_WITH_VALUE,
@@ -8,6 +7,7 @@ use super::tables::{
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, host_of, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
+use super::{decoders, make};
 use crate::action::AtomicAction;
 use crate::lexer::{self, Operator, Token, Word};
 use crate::paths;
@@ -40,7 +40,9 @@ pub(super) fn classify_into(
     for cmd in &commands {
         classify_simple(cmd, ctx, out, depth)?;
     }
-    push_pipelines(&tokens, &mut Sink::new(out))
+    let mut sink = Sink::new(out);
+    push_pipelines(&tokens, &mut sink)?;
+    decoders::push(&tokens, &mut sink)
 }
 
 /// Group tokens into simple commands. Subshell parentheses are flattened: the
