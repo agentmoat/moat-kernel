@@ -345,3 +345,22 @@ fn unparseable_inputs() {
         ParseOutcome::Unparseable { .. }
     ));
 }
+
+#[test]
+fn atom_bound_holds_on_every_classification_path() {
+    let many: Vec<String> = (0..=super::MAX_ATOMS).map(|i| format!("./f{i}")).collect();
+    for command in [
+        format!("cat {}", many.join(" ")),
+        format!(r"find . -exec cat {} \;", many.join(" ")),
+        format!("make test --eval 'x:;cat {}'", many.join(" ")),
+    ] {
+        match classify(&command, &ctx()) {
+            ParseOutcome::Unparseable { reason } => {
+                assert!(reason.contains(&super::MAX_ATOMS.to_string()), "{reason}");
+            }
+            ParseOutcome::Parsed(atoms) => panic!("{} atoms accepted", atoms.len()),
+        }
+    }
+    let few: Vec<String> = (0..10).map(|i| format!("./f{i}")).collect();
+    assert_eq!(parsed(&format!("cat {}", few.join(" "))).len(), 11);
+}

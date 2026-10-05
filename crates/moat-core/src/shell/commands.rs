@@ -30,7 +30,7 @@ impl SimpleCommand {
 pub(super) fn classify_into(
     command: &str,
     ctx: &ShellContext<'_>,
-    out: &mut Vec<AtomicAction>,
+    sink: &mut Sink,
     depth: u8,
 ) -> Result<(), ClassifyError> {
     if depth > MAX_DEPTH {
@@ -39,11 +39,10 @@ pub(super) fn classify_into(
     let tokens = lexer::lex(command)?;
     let commands = group_commands(&tokens);
     for cmd in &commands {
-        classify_simple(cmd, ctx, out, depth)?;
+        classify_simple(cmd, ctx, sink, depth)?;
     }
-    let mut sink = Sink::new(out);
-    push_pipelines(&tokens, &mut sink)?;
-    decoders::push(&tokens, &mut sink)
+    push_pipelines(&tokens, sink)?;
+    decoders::push(&tokens, sink)
 }
 
 /// Group tokens into simple commands. Subshell parentheses are flattened: the
@@ -91,15 +90,14 @@ fn group_commands(tokens: &[Token]) -> Vec<SimpleCommand> {
 fn classify_simple(
     cmd: &SimpleCommand,
     ctx: &ShellContext<'_>,
-    out: &mut Vec<AtomicAction>,
+    sink: &mut Sink,
     depth: u8,
 ) -> Result<(), ClassifyError> {
     for w in &cmd.words {
         for inner in &w.substitutions {
-            classify_into(inner, ctx, out, depth + 1)?;
+            classify_into(inner, ctx, sink, depth + 1)?;
         }
     }
-    let mut sink = Sink::new(out);
     for r in &cmd.reads {
         sink.push(AtomicAction::FsRead {
             path: normalise(r, ctx),
@@ -152,18 +150,18 @@ fn classify_simple(
             path: normalise(file, ctx),
         })?;
     }
-    classify_arguments(&argv, program, words, ctx, &mut sink)?;
+    classify_arguments(&argv, program, words, ctx, sink)?;
 
     if MAKES.contains(&program) {
-        return make::classify(&argv, ctx, out, depth);
+        return make::classify(&argv, ctx, sink, depth);
     }
 
     if program == "eval" && argv.len() > 1 {
-        return classify_into(&argv[1..].join(" "), ctx, out, depth + 1);
+        return classify_into(&argv[1..].join(" "), ctx, sink, depth + 1);
     }
     if SHELLS.contains(&program) {
         if let Some(payload) = flag_payload(&argv, &["-c"]) {
-            return classify_into(payload, ctx, out, depth + 1);
+            return classify_into(payload, ctx, sink, depth + 1);
         }
         if let Some(script) = argv.iter().skip(1).find(|a| !a.starts_with('-')) {
             sink.push(AtomicAction::FsRead {
@@ -175,26 +173,26 @@ fn classify_simple(
     if PACKAGE_RUNNERS.contains(&program)
         && let Some(payload) = flag_payload(&argv, &["-c", "--call"])
     {
-        return classify_into(payload, ctx, out, depth + 1);
+        return classify_into(payload, ctx, sink, depth + 1);
     }
     if let Some(inner) = wrapped_command(&argv, program) {
-        return classify_wrapped(inner, ctx, out, depth);
+        return classify_wrapped(inner, ctx, sink, depth);
     }
     if let Some((_, flags)) = INLINE_INTERPRETERS
         .iter()
         .find(|(name, _)| *name == program)
         && let Some(payload) = flag_payload(&argv, flags)
     {
-        scan_payload(payload, ctx, &mut sink)?;
+        scan_payload(payload, ctx, sink)?;
     }
-    options::classify(&argv, program, ctx, out, depth)
+    options::classify(&argv, program, ctx, sink, depth)
 }
 
 /// Classify a wrapper's inner argv (`sudo rm …` → `rm …`) as its own command.
 pub(super) fn classify_wrapped(
     inner: &[String],
     ctx: &ShellContext<'_>,
-    out: &mut Vec<AtomicAction>,
+    sink: &mut Sink,
     depth: u8,
 ) -> Result<(), ClassifyError> {
     if depth >= MAX_DEPTH {
@@ -210,7 +208,7 @@ pub(super) fn classify_wrapped(
             .collect(),
         ..SimpleCommand::default()
     };
-    classify_simple(&cmd, ctx, out, depth + 1)
+    classify_simple(&cmd, ctx, sink, depth + 1)
 }
 
 /// For `sudo -u x cmd …`, `env A=1 cmd …`, `xargs -0 cmd …`, `timeout 5 cmd …`
@@ -274,7 +272,7 @@ fn classify_arguments(
     program: &str,
     words: &[Word],
     ctx: &ShellContext<'_>,
-    sink: &mut Sink<'_>,
+    sink: &mut Sink,
 ) -> Result<(), ClassifyError> {
     // For copy-like programs the destination is the last operand, which may be a
     // remote spec (`host:/dir`); only a local destination is a write.
@@ -335,7 +333,7 @@ fn classify_arguments(
 fn scan_payload(
     payload: &str,
     ctx: &ShellContext<'_>,
-    sink: &mut Sink<'_>,
+    sink: &mut Sink,
 ) -> Result<(), ClassifyError> {
     let is_separator =
         |c: char| c.is_whitespace() || matches!(c, '(' | ')' | ',' | ';' | '\'' | '"' | '`');
@@ -356,7 +354,7 @@ fn scan_payload(
 
 /// Emit a `Pipeline` atom for every suffix of a pipeline/list with ≥ 2 commands
 /// so prefix rules such as `curl * | sh` match at any boundary.
-fn push_pipelines(tokens: &[Token], sink: &mut Sink<'_>) -> Result<(), ClassifyError> {
+fn push_pipelines(tokens: &[Token], sink: &mut Sink) -> Result<(), ClassifyError> {
     let mut flat: Vec<String> = Vec::new();
     let mut starts: Vec<usize> = Vec::new();
     let mut at_command_start = true;

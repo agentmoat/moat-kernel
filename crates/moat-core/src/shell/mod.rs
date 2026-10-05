@@ -63,12 +63,12 @@ pub const MAX_ATOMS: usize = 2048;
 /// Classify a shell command string into atomic actions.
 #[must_use]
 pub fn classify(command: &str, ctx: &ShellContext<'_>) -> ParseOutcome {
-    let mut out = Vec::new();
-    match commands::classify_into(command, ctx, &mut out, 0) {
-        Ok(()) if out.is_empty() => ParseOutcome::Unparseable {
+    let mut sink = Sink::default();
+    match commands::classify_into(command, ctx, &mut sink, 0) {
+        Ok(()) if sink.atoms.is_empty() => ParseOutcome::Unparseable {
             reason: "no command found".to_owned(),
         },
-        Ok(()) => ParseOutcome::Parsed(out),
+        Ok(()) => ParseOutcome::Parsed(sink.atoms),
         Err(e) => ParseOutcome::Unparseable {
             reason: e.to_string(),
         },
@@ -87,23 +87,23 @@ pub(crate) enum ClassifyError {
 }
 
 /// Accumulates atomic actions with de-duplication and a hard size bound.
-pub(crate) struct Sink<'o> {
-    out: &'o mut Vec<AtomicAction>,
+///
+/// Every classifier function writes through a `&mut Sink`, never a bare
+/// `Vec`, so no code path can exceed [`MAX_ATOMS`].
+#[derive(Debug, Default)]
+pub(crate) struct Sink {
+    atoms: Vec<AtomicAction>,
 }
 
-impl<'o> Sink<'o> {
-    pub(crate) fn new(out: &'o mut Vec<AtomicAction>) -> Self {
-        Self { out }
-    }
-
+impl Sink {
     pub(crate) fn push(&mut self, atom: AtomicAction) -> Result<(), ClassifyError> {
-        if self.out.contains(&atom) {
+        if self.atoms.contains(&atom) {
             return Ok(());
         }
-        if self.out.len() >= MAX_ATOMS {
+        if self.atoms.len() >= MAX_ATOMS {
             return Err(ClassifyError::TooManyActions);
         }
-        self.out.push(atom);
+        self.atoms.push(atom);
         Ok(())
     }
 }

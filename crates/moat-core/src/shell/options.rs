@@ -21,7 +21,7 @@ pub(super) fn classify(
     argv: &[String],
     program: &str,
     ctx: &ShellContext<'_>,
-    out: &mut Vec<AtomicAction>,
+    sink: &mut Sink,
     depth: u8,
 ) -> Result<(), ClassifyError> {
     let mut i = 1;
@@ -34,7 +34,7 @@ pub(super) fn classify(
                 .position(|a| a == ";" || a == "+")
                 .unwrap_or(rest.len());
             if end > 0 {
-                classify_wrapped(&rest[..end], ctx, out, depth)?;
+                classify_wrapped(&rest[..end], ctx, sink, depth)?;
             }
             i += end + 1;
             continue;
@@ -53,7 +53,7 @@ pub(super) fn classify(
             None => None,
         };
         if let Some(path) = target.filter(|p| !p.is_empty() && *p != "-") {
-            Sink::new(out).push(AtomicAction::FsWrite {
+            sink.push(AtomicAction::FsWrite {
                 path: paths::normalise(path, ctx.home, ctx.project, ctx.cwd),
             })?;
         }
