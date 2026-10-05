@@ -116,6 +116,15 @@ impl Store {
         Self::initialise(conn)
     }
 
+    /// Writable handle to an existing database. Unlike [`Store::open`] it does
+    /// not create one, so a deleted audit log is an error rather than a silent
+    /// fresh start.
+    pub fn open_existing(path: &Path) -> Result<Self, StoreError> {
+        let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+        let conn = Connection::open_with_flags(path, flags)?;
+        Self::initialise(conn)
+    }
+
     /// Read-only handle; fails if the database does not exist.
     pub fn open_read_only(path: &Path) -> Result<Self, StoreError> {
         let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;

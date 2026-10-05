@@ -12,7 +12,9 @@ pub enum Code {
     Deny = 2,
     /// Verdict `ask` that was not resolved; adapters treat it as deny.
     Ask = 3,
-    /// Usage or configuration error. Adapters fail closed on any value ≥ 64.
+    /// Usage or configuration error from a command a person ran. `guard` never
+    /// returns it: Claude Code treats any exit other than 0 or 2 as a
+    /// non-blocking hook failure, so `guard` answers `deny` + 2 instead.
     Usage = 64,
 }
 
