@@ -9,6 +9,11 @@ use serde::Serialize;
 
 use crate::time::{clock, timestamp};
 
+/// Column widths that keep `show` and `replay` rows on one 100-column line.
+const RULES_WIDTH: usize = 14;
+const TABLE_ACTION_WIDTH: usize = 70;
+const REPLAY_ACTION_WIDTH: usize = 52;
+
 #[derive(Serialize)]
 struct DecisionReport<'a> {
     verdict: Verdict,
@@ -17,17 +22,23 @@ struct DecisionReport<'a> {
     context: &'a [String],
 }
 
+/// Pretty JSON on stdout, one document per call, for `--format json`.
+pub fn json<T: Serialize + ?Sized>(value: &T) -> Result<()> {
+    let mut out = io::stdout().lock();
+    serde_json::to_writer_pretty(&mut out, value)?;
+    writeln!(out)?;
+    Ok(())
+}
+
+/// A decision as `policy check --format json` reports it: `context` is always
+/// present so scripts need not special-case it.
 pub fn decision_json(decision: &Decision) -> Result<()> {
-    let report = DecisionReport {
+    json(&DecisionReport {
         verdict: decision.verdict,
         rules: &decision.rules,
         reasons: &decision.reasons,
         context: &decision.context,
-    };
-    let mut out = io::stdout().lock();
-    serde_json::to_writer_pretty(&mut out, &report)?;
-    writeln!(out)?;
-    Ok(())
+    })
 }
 
 pub fn decision_text(decision: &Decision) -> Result<()> {
@@ -40,13 +51,6 @@ pub fn decision_text(decision: &Decision) -> Result<()> {
     for line in &decision.context {
         writeln!(out, "   also  : {line}")?;
     }
-    Ok(())
-}
-
-pub fn events_json(events: &[Event]) -> Result<()> {
-    let mut out = io::stdout().lock();
-    serde_json::to_writer_pretty(&mut out, events)?;
-    writeln!(out)?;
     Ok(())
 }
 
@@ -68,24 +72,10 @@ pub fn event_table(events: &[Event]) -> Result<()> {
             clock(event.ts_ms),
             event.host,
             event.verdict.as_str(),
-            truncate(&event.rules.join(","), 14),
-            truncate(&describe(event), 70),
+            truncate(&event.rules.join(","), RULES_WIDTH),
+            truncate(&describe(event), TABLE_ACTION_WIDTH),
         )?;
     }
-    Ok(())
-}
-
-pub fn sessions_json(sessions: &[SessionSummary]) -> Result<()> {
-    let mut out = io::stdout().lock();
-    serde_json::to_writer_pretty(&mut out, sessions)?;
-    writeln!(out)?;
-    Ok(())
-}
-
-pub fn summary_json(summary: &Summary) -> Result<()> {
-    let mut out = io::stdout().lock();
-    serde_json::to_writer_pretty(&mut out, summary)?;
-    writeln!(out)?;
     Ok(())
 }
 
@@ -119,7 +109,7 @@ pub fn replay(sessions: &[SessionSummary]) -> Result<()> {
                 out,
                 "  {branch} {:<8} {:<52} {} {}",
                 kind,
-                truncate(&describe(event), 52),
+                truncate(&describe(event), REPLAY_ACTION_WIDTH),
                 verdict_glyph(event.verdict),
                 event.rules.join(", "),
             )?;

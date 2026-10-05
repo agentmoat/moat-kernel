@@ -1,12 +1,10 @@
 //! `moat status`: is the kernel installed, current and active?
 
-use std::fmt::Write as _;
 use std::fs;
 
 use anyhow::{Context as _, Result};
 use moat_audit::Store;
 use moat_hosts::Host;
-use sha2::{Digest as _, Sha256};
 
 use crate::exit::Code;
 use crate::home::Home;
@@ -25,12 +23,7 @@ pub fn run() -> Result<Code> {
     match home.load_policy() {
         Ok(policy) => {
             let bytes = fs::read(&policy_path)?;
-            let digest = Sha256::digest(&bytes)
-                .iter()
-                .fold(String::new(), |mut hex, byte| {
-                    let _ = write!(hex, "{byte:02x}");
-                    hex
-                });
+            let digest = crate::integrity::sha256_hex(&bytes);
             let (deny, allow, ask) = policy.rule_count();
             println!(
                 "policy           {}  sha256:{digest}  ({deny} deny, {allow} allow, {ask} ask)",

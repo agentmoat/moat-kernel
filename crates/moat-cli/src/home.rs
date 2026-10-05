@@ -94,6 +94,16 @@ impl Home {
         Ok(policy)
     }
 
+    /// The audit log, read-only; an error naming `moat init` when it is missing.
+    pub fn open_audit(&self) -> Result<moat_audit::Store> {
+        let path = self.audit_path();
+        if !path.is_file() {
+            bail!("no audit log at {}; run `moat init`", path.display());
+        }
+        moat_audit::Store::open_read_only(&path)
+            .with_context(|| format!("opening {}", path.display()))
+    }
+
     /// Create empty approval files so the lock covers them from the first run.
     pub fn ensure_approval_files(&self) -> Result<()> {
         if !self.grants_path().exists() {

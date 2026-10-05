@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -24,7 +23,7 @@ const LOCK_VERSION: u32 = 1;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lock {
     pub version: u32,
-    pub pinned_at_ms: u64,
+    pub pinned_at_ms: i64,
     /// Absolute path of the `moat` binary the hooks point at.
     pub binary: String,
     /// Canonical path → lowercase hex SHA-256 of the file contents.
@@ -82,7 +81,7 @@ impl Lock {
         }
         Ok(Self {
             version: LOCK_VERSION,
-            pinned_at_ms: now_ms(),
+            pinned_at_ms: crate::time::now_ms(),
             binary: binary.to_string_lossy().into_owned(),
             entries,
         })
@@ -177,19 +176,18 @@ fn digest(path: &Path) -> Result<String> {
         bytes.push(b'\n');
     }
     bytes.extend(fs::read(path).with_context(|| format!("reading {}", path.display()))?);
-    Ok(Sha256::digest(&bytes)
+    Ok(sha256_hex(&bytes))
+}
+
+/// Lowercase hex SHA-256, as pinned in the lock and shown by `status`.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
         .iter()
         .fold(String::with_capacity(64), |mut hex, b| {
             use std::fmt::Write as _;
             let _ = write!(hex, "{b:02x}");
             hex
-        }))
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+        })
 }
 
 #[cfg(test)]

@@ -9,7 +9,6 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, bail};
 use moat_core::ProgramResolver;
@@ -60,7 +59,7 @@ pub const PINNED_PROGRAMS: &[&str] = &[
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Snapshot {
     pub version: u32,
-    pub captured_at_ms: u64,
+    pub captured_at_ms: i64,
     /// Search path directories, in order, as seen by `moat init`.
     pub path: Vec<PathBuf>,
     /// Program name → absolute path found at install time.
@@ -94,7 +93,7 @@ impl Snapshot {
         }
         Self {
             version: SNAPSHOT_VERSION,
-            captured_at_ms: now_ms(),
+            captured_at_ms: crate::time::now_ms(),
             path,
             programs,
             pathext,
@@ -179,12 +178,6 @@ fn is_executable(path: &Path) -> bool {
 #[cfg(not(unix))]
 fn is_executable(path: &Path) -> bool {
     path.is_file()
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
 
 #[cfg(test)]
