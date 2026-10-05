@@ -12,6 +12,7 @@ jobs:
   label-and-check:
     name: labels · size · risk · body
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.actor != 'dependabot[bot]'
     env:
       GH_TOKEN: ${{ github.token }}
