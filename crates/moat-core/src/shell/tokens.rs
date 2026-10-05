@@ -1,7 +1,7 @@
 //! Recognisers for what a single shell word can name: an assignment, variable
 //! references, or a network host.
 
-use super::tables::{FILE_EXTENSIONS, IGNORED_VARS, SPECIAL_PARAMS};
+use super::tables::{FILE_EXTENSIONS, IGNORED_VARS, KNOWN_TLDS, SPECIAL_PARAMS};
 
 /// `NAME=value` or `NAME+=value` → `NAME`.
 pub fn assignment_name(word: &str) -> Option<&str> {
@@ -82,7 +82,9 @@ pub fn host_of(token: &str) -> Option<String> {
         if !(2..=24).contains(&tld.len()) || !tld.chars().all(|c| c.is_ascii_alphabetic()) {
             return None;
         }
-        if !has_scheme && FILE_EXTENSIONS.contains(&tld.as_str()) {
+        if !has_scheme
+            && (FILE_EXTENSIONS.contains(&tld.as_str()) || !KNOWN_TLDS.contains(&tld.as_str()))
+        {
             return None;
         }
     }

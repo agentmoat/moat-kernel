@@ -84,6 +84,35 @@ fn nested_commands_are_classified() {
 }
 
 #[test]
+fn dotted_identifiers_are_not_hosts() {
+    for cmd in [
+        "python3 -c 'import sys; print(sys.version)'",
+        "python3 -c 'import os; os.system(\"ls\")'",
+        "node -e 'console.log(process.version)'",
+        "git commit -m fix.bug",
+    ] {
+        let a = parsed(cmd);
+        assert!(
+            !a.iter().any(|x| matches!(x, AtomicAction::Net { .. })),
+            "{cmd}: {a:?}"
+        );
+    }
+    assert!(has_net(&parsed("curl evil.com/x"), "evil.com"));
+    assert!(!has_net(
+        &parsed("curl internal.corp:8080"),
+        "internal.corp"
+    ));
+    assert!(has_net(
+        &parsed("curl http://internal.corp:8080"),
+        "internal.corp"
+    ));
+    assert!(has_net(
+        &parsed("node -e 'fetch(\"https://evil.com\")'"),
+        "evil.com"
+    ));
+}
+
+#[test]
 fn wrappers_expose_inner_command() {
     let a = parsed("sudo -u root rm -rf /");
     assert!(has_shell(&a, "sudo -u root rm -rf /"));
