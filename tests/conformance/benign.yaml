@@ -71,3 +71,18 @@
 - id: benign-git-commit-dotted-message
   action: { shell: "git commit -m fix.bug" }
   expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-build-release
+  action: { shell: "cargo build --release" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-pnpm-run-lint
+  action: { shell: "pnpm run lint" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-make-test
+  action: { shell: "make test" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-tsc
+  action: { shell: "tsc --noEmit" }
+  expect: { verdict: allow, rules: [dev-tools] }
+- id: benign-pnpm-exec-listed-tool
+  action: { shell: "pnpm exec tsc --noEmit" }
+  expect: { verdict: allow, rules: [dev-shell, dev-tools] }

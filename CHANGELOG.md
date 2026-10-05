@@ -18,6 +18,9 @@ All notable changes to this project are documented here. The format follows
 - `Action::McpTool` carries the paths and hosts an adapter derived from the call's arguments (`reads`, `writes`, `hosts`); the engine turns them into `fs.read`, `fs.write` and `net` atoms, so an allowed MCP tool name can no longer read `~/.aws/credentials` or fetch an unlisted host. Conformance fixtures accept `mcp_tool: { name, reads, writes, hosts }`.
 - Claude Code and Cursor adapters derive those paths and hosts from MCP `tool_input` by argument name (`path`, `paths`, `file_path`, `source`, `destination`, `url`, …); write-shaped tool names (`write_*`, `edit_*`, `move_*`, `delete_*`) and `destination`/`target` arguments produce `fs.write`.
 
+### Changed
+- Default policy: `dev-shell` lists explicit subcommands instead of `pnpm *`, `yarn *`, `cargo *`, `make *`, so the `installs` and `push` ask rules are reachable again (`cargo add/install/publish`, `pnpm add/install`, `yarn add/install` now ask; `npx`/`dlx` ask). New `dev-tools` allow group (`tsc`, `eslint`, `prettier`, `vitest`, `jest`, `ruff`, `mypy`, …). `destructive` matches `rm -rf /*` literally (no longer every absolute path), adds `-fr` variants, `--no-preserve-root`, `git branch -D`, `git stash drop/clear`. `kernel-self` also matches `moat` run by absolute path. `secrets-paths` adds `.envrc`.
+
 ### Added
 - Policy engine: schema v1 with `deny → allow → ask → defaults` evaluation, per-kind defaults, absolute deny, strictest-wins across atomic actions.
 - Shell classification: POSIX lexer (quotes, escapes, redirects, `$(…)`, backticks, here-documents), sub-commands, subshells, `eval`, `sh -c`, wrappers, inline interpreters, environment reads/sets, path and host extraction.
