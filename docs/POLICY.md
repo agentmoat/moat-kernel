@@ -14,21 +14,18 @@ defaults:                           # verdict when no rule matches
   "*": ask                          #   one verdict for everything, or a map per kind
   net: deny                         #   keys other than the seven kinds and "*" are accepted but never consulted
 
-scope:
-  project_roots: ["."]              # reserved for multi-root projects; "." = the git root of the call's cwd
-
 deny:   [ <rule group>, … ]         # evaluated first; a match here is final
 allow:  [ <rule group>, … ]         # evaluated second
 ask:    [ <rule group>, … ]         # evaluated third
 
-approval:
-  channel: terminal                 # terminal | telegram      (telegram: planned)
-  remember: session                 # once | session | permanent
-  timeout_s: 300
-
 executables:                        # pin program names to absolute paths (enforced, see §8.1)
   git: ["/usr/bin/git", "/opt/homebrew/bin/git"]
 ```
+
+`approval:` (`channel`, `remember`, `timeout_s`) and `scope:` (`project_roots`) are reserved:
+they are accepted so older policy files stay valid, have no effect yet, and `moat policy lint`
+says so. Approvals are made with `moat allow` (§8.2); the project root is the git root of the
+call's working directory.
 
 Unknown keys are rejected. Rule ids must be unique across all three lists and must
 not be empty; a rule group must contain at least one pattern.
