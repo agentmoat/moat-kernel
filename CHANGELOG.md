@@ -12,6 +12,9 @@ All notable changes to this project are documented here. The format follows
 - Shell classification: tokens that traverse (`src/../x`) or name a hidden entry (`.env`, `config/.env.local`, `.ssh/id_rsa`) are now treated as paths, so `cat .env` and `cat src/../../.ssh/id_rsa` produce file-read atoms and hit `secrets-paths`; previously only tokens starting with `/`, `~`, `./` or `../` did and such commands were allowed by `dev-shell`.
 - Audit redaction now runs on the structured action before it is JSON-encoded. Previously it ran on the encoded text, where escaped quotes broke the patterns: a command such as `curl -H "X-Api-Key: …"` was stored as invalid JSON (making `moat show`, `replay` and `report` fail for the whole window) and `export PASSWORD="…"` kept the secret. Rows with an unparsable action cell are now read with the action omitted instead of failing the query.
 
+### Added (MCP arguments)
+- `Action::McpTool` carries the paths and hosts an adapter derived from the call's arguments (`reads`, `writes`, `hosts`); the engine turns them into `fs.read`, `fs.write` and `net` atoms, so an allowed MCP tool name can no longer read `~/.aws/credentials` or fetch an unlisted host. Conformance fixtures accept `mcp_tool: { name, reads, writes, hosts }`.
+
 ### Added
 - Policy engine: schema v1 with `deny → allow → ask → defaults` evaluation, per-kind defaults, absolute deny, strictest-wins across atomic actions.
 - Shell classification: POSIX lexer (quotes, escapes, redirects, `$(…)`, backticks, here-documents), sub-commands, subshells, `eval`, `sh -c`, wrappers, inline interpreters, environment reads/sets, path and host extraction.

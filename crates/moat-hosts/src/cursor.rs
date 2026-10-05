@@ -73,7 +73,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
             let tool = required(p.tool_name, "tool_name")?;
             let server = p.mcp_server_name.unwrap_or_else(|| "unknown".to_owned());
             let name = format!("mcp__{server}__{tool}");
-            (name.clone(), Some(Action::McpTool { name }))
+            (name.clone(), Some(Action::mcp(name)))
         }
         "beforeReadFile" => (
             "Read".to_owned(),
@@ -175,9 +175,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             mcp.action,
-            Some(Action::McpTool {
-                name: "mcp__github__get_pull_request".into()
-            })
+            Some(Action::mcp("mcp__github__get_pull_request"))
         );
         assert_eq!(
             mcp.cwd.as_deref(),

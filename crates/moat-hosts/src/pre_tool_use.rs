@@ -90,9 +90,7 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
                 path: path.to_owned(),
             }
         }
-        name if name.starts_with("mcp__") => Action::McpTool {
-            name: name.to_owned(),
-        },
+        name if name.starts_with("mcp__") => Action::mcp(name.to_owned()),
         _ => return Ok(None),
     };
     Ok(Some(action))
@@ -187,9 +185,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             mcp.action,
-            Some(Action::McpTool {
-                name: "mcp__github__get_pull_request".into()
-            })
+            Some(Action::mcp("mcp__github__get_pull_request"))
         );
     }
 

@@ -226,7 +226,7 @@ fn describe(action: Option<&Action>, tool: &str) -> String {
         Some(Action::FsRead { path }) => format!("read {path}"),
         Some(Action::FsWrite { path }) => format!("write {path}"),
         Some(Action::Net { url }) => format!("fetch {url}"),
-        Some(Action::McpTool { name }) => name.clone(),
+        Some(Action::McpTool { name, .. }) => name.clone(),
         None => format!("{tool} (ungoverned)"),
     }
 }

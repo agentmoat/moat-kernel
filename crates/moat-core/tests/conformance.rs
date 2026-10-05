@@ -37,7 +37,23 @@ struct FixtureAction {
     fs_read: Option<String>,
     fs_write: Option<String>,
     net: Option<String>,
-    mcp_tool: Option<String>,
+    mcp_tool: Option<McpFixture>,
+}
+
+/// `mcp_tool: "name"` or `mcp_tool: { name, reads, writes, hosts }`.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum McpFixture {
+    Name(String),
+    Call {
+        name: String,
+        #[serde(default)]
+        reads: Vec<String>,
+        #[serde(default)]
+        writes: Vec<String>,
+        #[serde(default)]
+        hosts: Vec<String>,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,7 +71,20 @@ impl FixtureAction {
             self.fs_read.map(|path| Action::FsRead { path }),
             self.fs_write.map(|path| Action::FsWrite { path }),
             self.net.map(|url| Action::Net { url }),
-            self.mcp_tool.map(|name| Action::McpTool { name }),
+            self.mcp_tool.map(|m| match m {
+                McpFixture::Name(name) => Action::mcp(name),
+                McpFixture::Call {
+                    name,
+                    reads,
+                    writes,
+                    hosts,
+                } => Action::McpTool {
+                    name,
+                    reads,
+                    writes,
+                    hosts,
+                },
+            }),
         ];
         let mut present: Vec<Action> = candidates.into_iter().flatten().collect();
         assert_eq!(
