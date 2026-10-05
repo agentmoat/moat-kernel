@@ -18,8 +18,8 @@ use crate::policy::{Defaults, Policy, RuleGroup};
 const HOME: &str = "/__home__";
 const PROJECT: &str = "/__project__";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 /// A policy construct that is valid but probably not what its author meant.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Warning {
     /// Rule id the warning is about (`defaults` for the defaults table).
     pub rule: String,

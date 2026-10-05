@@ -1,3 +1,5 @@
+//! The audit database: schema, writes and row decoding.
+
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
@@ -32,18 +34,29 @@ CREATE INDEX IF NOT EXISTS events_session ON events(session_id, id);
 CREATE INDEX IF NOT EXISTS events_ts ON events(ts_ms);
 ";
 
+/// Why the audit database could not be used. `guard` denies on any of these.
 #[derive(Debug, Error)]
 pub enum StoreError {
+    /// `SQLite` failed (open, query, constraint).
     #[error("audit database: {0}")]
     Sqlite(#[from] rusqlite::Error),
+    /// The database was written by a newer `moat`.
     #[error(
         "audit database schema version {found} is newer than this build supports ({supported})"
     )]
-    SchemaTooNew { found: i64, supported: i64 },
+    SchemaTooNew {
+        /// Schema version in the file.
+        found: i64,
+        /// Schema version this build supports.
+        supported: i64,
+    },
+    /// A `moat show <id>` argument is not a hex event id.
     #[error("invalid event id `{0}`; expected hex such as 1f")]
     InvalidId(String),
+    /// An event could not be encoded for storage.
     #[error("encoding event: {0}")]
     Encode(#[from] serde_json::Error),
+    /// The database file could not be created or restricted.
     #[error("audit database file: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -75,33 +88,58 @@ impl FromStr for EventId {
 /// What a caller records. Secrets are redacted before storage.
 #[derive(Debug, Clone)]
 pub struct NewEvent<'a> {
+    /// Host id.
     pub host: &'a str,
+    /// Host session id.
     pub session_id: &'a str,
+    /// Host call id, when sent.
     pub call_id: Option<&'a str>,
+    /// Working directory, when sent.
     pub cwd: Option<&'a str>,
+    /// Tool name as the host spells it.
     pub tool: &'a str,
+    /// The governed action; `None` for an ungoverned tool.
     pub action: Option<&'a Action>,
+    /// The decision taken.
     pub decision: &'a Decision,
+    /// Time spent deciding, in microseconds.
     pub latency_us: u64,
 }
 
 /// A stored decision.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event {
+    /// Row id.
     pub id: EventId,
+    /// Time recorded (ms since the epoch).
     pub ts_ms: i64,
+    /// Host id.
     pub host: String,
+    /// Host session id.
     pub session_id: String,
+    /// Host call id, when sent.
     pub call_id: Option<String>,
+    /// Working directory, when sent.
     pub cwd: Option<String>,
+    /// Tool name as the host spells it.
     pub tool: String,
+    /// The governed action (redacted); `None` for an ungoverned tool.
     pub action: Option<Action>,
+    /// The stored action could not be decoded (a corrupt or hand-edited row);
+    /// `action` is then `None` although the tool was governed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub action_unreadable: bool,
+    /// The verdict.
     pub verdict: Verdict,
+    /// Rule ids that produced the verdict.
     pub rules: Vec<String>,
+    /// One redacted reason per rule.
     pub reasons: Vec<String>,
+    /// Time spent deciding, in microseconds.
     pub latency_us: i64,
 }
 
+/// A handle to the audit database.
 #[derive(Debug)]
 pub struct Store {
     pub(crate) conn: Connection,
@@ -134,6 +172,7 @@ impl Store {
         Ok(Self { conn })
     }
 
+    /// A throwaway database for tests.
     pub fn open_in_memory() -> Result<Self, StoreError> {
         Self::initialise(Connection::open_in_memory()?)
     }
@@ -188,6 +227,7 @@ impl Store {
         Ok(EventId(self.conn.last_insert_rowid()))
     }
 
+    /// One event by id.
     pub fn get(&self, id: EventId) -> Result<Option<Event>, StoreError> {
         self.conn
             .query_row(
@@ -220,6 +260,7 @@ impl Store {
         rows.collect::<Result<_, _>>().map_err(Into::into)
     }
 
+    /// Number of stored events.
     pub fn count(&self) -> Result<u64, StoreError> {
         let n: i64 = self
             .conn
@@ -238,15 +279,15 @@ pub(crate) fn row_to_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
         let text: String = row.get(index)?;
         serde_json::from_str(&text).map_err(|e| json_error(e, row))
     }
-    // A row whose action cell cannot be parsed (logs written before redaction
-    // ran on structured fields) still reports its verdict, rules and reasons
-    // instead of failing the whole query.
-    let action: Option<Action> = decode(row, 7).unwrap_or(None);
-    let verdict = match row.get::<_, String>(8)?.as_str() {
-        "allow" => Verdict::Allow,
-        "ask" => Verdict::Ask,
-        _ => Verdict::Deny,
-    };
+    // A row whose action cell cannot be decoded (corrupt or hand-edited) still
+    // reports its verdict, rules and reasons instead of failing the whole
+    // query, and says that its action is unreadable.
+    let decoded: Result<Option<Action>, _> = decode(row, 7);
+    let action_unreadable = decoded.is_err();
+    let verdict_text: String = row.get(8)?;
+    let verdict = verdict_text.parse::<Verdict>().map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
+    })?;
     Ok(Event {
         id: EventId(row.get(0)?),
         ts_ms: row.get(1)?,
@@ -255,7 +296,8 @@ pub(crate) fn row_to_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
         call_id: row.get(4)?,
         cwd: row.get(5)?,
         tool: row.get(6)?,
-        action,
+        action: decoded.unwrap_or(None),
+        action_unreadable,
         verdict,
         rules: decode(row, 9)?,
         reasons: decode(row, 10)?,
@@ -409,9 +451,20 @@ mod tests {
             .unwrap();
         let event = store.get(id).unwrap().expect("row still readable");
         assert_eq!(event.action, None);
+        assert!(
+            event.action_unreadable,
+            "the row says its action is unreadable"
+        );
         assert_eq!(event.verdict, Verdict::Deny);
         assert_eq!(event.rules, ["secrets-paths"]);
         assert_eq!(store.recent(5).unwrap().len(), 1);
+        let ungoverned = store
+            .record(&NewEvent {
+                action: None,
+                ..sample(&d, &a)
+            })
+            .unwrap();
+        assert!(!store.get(ungoverned).unwrap().unwrap().action_unreadable);
     }
 
     #[test]
@@ -486,9 +539,8 @@ mod tests {
 
     #[test]
     fn file_store_round_trip_and_reopen() {
-        let dir = std::env::temp_dir().join(format!("moat-audit-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("audit.db");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.db");
         let d = decision(Verdict::Ask, "installs", "new dependency");
         let a = Action::Shell {
             command: "npm install x".into(),
@@ -496,6 +548,18 @@ mod tests {
         let id = Store::open(&path).unwrap().record(&sample(&d, &a)).unwrap();
         let reopened = Store::open_read_only(&path).unwrap();
         assert_eq!(reopened.get(id).unwrap().unwrap().verdict, Verdict::Ask);
-        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn open_existing_refuses_a_missing_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.db");
+        assert!(Store::open_existing(&path).is_err());
+        assert!(
+            !path.exists(),
+            "a deleted audit log is not silently recreated"
+        );
+        Store::open(&path).unwrap();
+        assert!(Store::open_existing(&path).is_ok());
     }
 }

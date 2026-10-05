@@ -69,7 +69,7 @@ pub fn event_table(events: &[Event]) -> Result<()> {
             event.host,
             event.verdict.as_str(),
             truncate(&event.rules.join(","), 14),
-            truncate(&describe(event.action.as_ref(), &event.tool), 70),
+            truncate(&describe(event), 70),
         )?;
     }
     Ok(())
@@ -119,7 +119,7 @@ pub fn replay(sessions: &[SessionSummary]) -> Result<()> {
                 out,
                 "  {branch} {:<8} {:<52} {} {}",
                 kind,
-                truncate(&describe(event.action.as_ref(), &event.tool), 52),
+                truncate(&describe(event), 52),
                 verdict_glyph(event.verdict),
                 event.rules.join(", "),
             )?;
@@ -199,11 +199,7 @@ pub fn event_detail(event: &Event) -> Result<()> {
         writeln!(out, "   cwd     : {cwd}")?;
     }
     writeln!(out, "   tool    : {}", event.tool)?;
-    writeln!(
-        out,
-        "   action  : {}",
-        describe(event.action.as_ref(), &event.tool)
-    )?;
+    writeln!(out, "   action  : {}", describe(event))?;
     writeln!(out, "   rules   : {}", event.rules.join(" · "))?;
     for reason in &event.reasons {
         writeln!(out, "   reason  : {reason}")?;
@@ -220,8 +216,12 @@ fn verdict_mark(verdict: Verdict) -> &'static str {
     }
 }
 
-fn describe(action: Option<&Action>, tool: &str) -> String {
-    match action {
+fn describe(event: &Event) -> String {
+    if event.action_unreadable {
+        return format!("{} (action unreadable)", event.tool);
+    }
+    let tool = &event.tool;
+    match event.action.as_ref() {
         Some(Action::Shell { command }) => command.clone(),
         Some(Action::FsRead { path }) => format!("read {path}"),
         Some(Action::FsWrite { path }) => format!("write {path}"),

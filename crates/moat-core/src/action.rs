@@ -46,14 +46,14 @@ pub enum Action {
     McpTool {
         /// `mcp__<server>__<tool>`.
         name: String,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         /// Paths the call reads, derived from its arguments.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         reads: Vec<String>,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         /// Paths the call writes, derived from its arguments.
-        writes: Vec<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        writes: Vec<String>,
         /// URLs or hosts the call contacts, derived from its arguments.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         hosts: Vec<String>,
     },
 }
