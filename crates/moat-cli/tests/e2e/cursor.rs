@@ -1,76 +1,26 @@
 //! Cursor integration end to end: `init` writes a fail-closed `hooks.json`,
 //! `guard --host cursor` answers in Cursor's permission format.
 
-use std::io::Write as _;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
-
 use serde_json::Value;
-use tempfile::TempDir;
 
-struct Sandbox {
-    _dir: TempDir,
-    home: PathBuf,
+use crate::common::{Sandbox, fixture as host_fixture, json, text};
+
+fn sandbox() -> Sandbox {
+    Sandbox::installed(&[".cursor"])
 }
 
-impl Sandbox {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let home = dir.path().join("home");
-        std::fs::create_dir_all(home.join(".cursor")).unwrap();
-        let sb = Self { _dir: dir, home };
-        let out = sb.moat(&["init"], "");
-        assert_eq!(out.status.code(), Some(0), "{}", text(&out));
-        sb
-    }
-
-    fn moat(&self, args: &[&str], stdin: &str) -> Output {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_moat"))
-            .args(args)
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .env("HOME", &self.home)
-            .env("USERPROFILE", &self.home)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(stdin.as_bytes())
-            .unwrap();
-        child.wait_with_output().unwrap()
-    }
-
-    fn guard(&self, payload: &str) -> (Option<i32>, Value) {
-        let out = self.moat(&["guard", "--host", "cursor"], payload);
-        let doc = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim())
-            .unwrap_or(Value::Null);
-        (out.status.code(), doc)
-    }
+fn guard(sb: &Sandbox, payload: &str) -> (Option<i32>, Value) {
+    let out = sb.guard("cursor", payload);
+    (out.status.code(), json(&out))
 }
 
 fn fixture(name: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/hosts/cursor")
-        .join(name);
-    std::fs::read_to_string(path).unwrap()
-}
-
-fn text(out: &Output) -> String {
-    format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    )
+    host_fixture(&format!("cursor/{name}"))
 }
 
 #[test]
 fn init_installs_fail_closed_hooks_for_every_cursor_event() {
-    let sb = Sandbox::new();
+    let sb = sandbox();
     let root: Value =
         serde_json::from_str(&std::fs::read_to_string(sb.home.join(".cursor/hooks.json")).unwrap())
             .unwrap();
@@ -94,15 +44,15 @@ fn init_installs_fail_closed_hooks_for_every_cursor_event() {
             "{event}"
         );
     }
-    let status = sb.moat(&["status"], "");
+    let status = sb.moat(&["status"]);
     assert_eq!(status.status.code(), Some(0), "{}", text(&status));
     assert!(text(&status).contains("Cursor"));
 }
 
 #[test]
 fn shell_exfiltration_is_denied_in_cursor_format() {
-    let sb = Sandbox::new();
-    let (code, doc) = sb.guard(&fixture("beforeShellExecution.json"));
+    let sb = sandbox();
+    let (code, doc) = guard(&sb, &fixture("beforeShellExecution.json"));
     assert_eq!(code, Some(2));
     assert_eq!(doc["permission"], "deny");
     let msg = doc["user_message"].as_str().unwrap();
@@ -112,7 +62,7 @@ fn shell_exfiltration_is_denied_in_cursor_format() {
 
 #[test]
 fn secret_file_read_and_safe_mcp_tool() {
-    let sb = Sandbox::new();
+    let sb = sandbox();
     let read = serde_json::json!({
         "conversation_id": "conv-42", "generation_id": "gen-9",
         "hook_event_name": "beforeReadFile", "cursor_version": "2.3.1",
@@ -121,7 +71,7 @@ fn secret_file_read_and_safe_mcp_tool() {
         "content": "[default]", "attachments": []
     })
     .to_string();
-    let (code, doc) = sb.guard(&read);
+    let (code, doc) = guard(&sb, &read);
     assert_eq!(code, Some(2), "{doc}");
     assert_eq!(doc["permission"], "deny");
     assert!(
@@ -132,15 +82,15 @@ fn secret_file_read_and_safe_mcp_tool() {
         "{doc}"
     );
 
-    let (code, doc) = sb.guard(&fixture("beforeMCPExecution.json"));
+    let (code, doc) = guard(&sb, &fixture("beforeMCPExecution.json"));
     assert_eq!(code, Some(0));
     assert_eq!(doc["permission"], "allow", "{doc}");
 }
 
 #[test]
 fn mcp_fetch_to_an_unlisted_host_is_denied() {
-    let sb = Sandbox::new();
-    let (code, doc) = sb.guard(&fixture("beforeMCPExecution-fetch.json"));
+    let sb = sandbox();
+    let (code, doc) = guard(&sb, &fixture("beforeMCPExecution-fetch.json"));
     assert_eq!(code, Some(2));
     assert_eq!(doc["permission"], "deny");
     let msg = doc["agent_message"].to_string();
@@ -151,8 +101,8 @@ fn mcp_fetch_to_an_unlisted_host_is_denied() {
 /// its name alone: the path it would read is unknown.
 #[test]
 fn mcp_arguments_that_do_not_parse_fail_closed() {
-    let sb = Sandbox::new();
-    let (code, doc) = sb.guard(&fixture("beforeMCPExecution-malformed.json"));
+    let sb = sandbox();
+    let (code, doc) = guard(&sb, &fixture("beforeMCPExecution-malformed.json"));
     assert_eq!(code, Some(2));
     assert_eq!(doc["permission"], "deny");
     let msg = doc["agent_message"].to_string();
@@ -161,7 +111,7 @@ fn mcp_arguments_that_do_not_parse_fail_closed() {
 
 #[test]
 fn pre_tool_use_write_inside_the_workspace_is_allowed() {
-    let sb = Sandbox::new();
+    let sb = sandbox();
     let project = sb.home.join("proj");
     std::fs::create_dir_all(project.join(".git")).unwrap();
     let payload = serde_json::json!({
@@ -172,11 +122,11 @@ fn pre_tool_use_write_inside_the_workspace_is_allowed() {
         "tool_use_id": "tu-9"
     })
     .to_string();
-    let (code, doc) = sb.guard(&payload);
+    let (code, doc) = guard(&sb, &payload);
     assert_eq!(code, Some(0));
     assert_eq!(doc["permission"], "allow", "{doc}");
 
-    let (code, doc) = sb.guard(&fixture("preToolUse-shell.json"));
+    let (code, doc) = guard(&sb, &fixture("preToolUse-shell.json"));
     assert_eq!(code, Some(0));
     assert_eq!(doc["permission"], "allow");
     assert!(doc["user_message"].as_str().unwrap().contains("ungoverned"));
@@ -184,8 +134,11 @@ fn pre_tool_use_write_inside_the_workspace_is_allowed() {
 
 #[test]
 fn unknown_cursor_event_fails_closed() {
-    let sb = Sandbox::new();
-    let (code, doc) = sb.guard(r#"{"hook_event_name":"afterFileEdit","file_path":"/p/x"}"#);
+    let sb = sandbox();
+    let (code, doc) = guard(
+        &sb,
+        r#"{"hook_event_name":"afterFileEdit","file_path":"/p/x"}"#,
+    );
     assert_eq!(code, Some(2));
     assert_eq!(doc["permission"], "deny");
     assert!(
