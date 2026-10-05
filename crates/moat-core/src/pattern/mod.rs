@@ -8,6 +8,36 @@ pub use literal::literal_shell_pattern;
 use crate::lexer;
 use crate::policy::PolicyError;
 
+/// `!pattern` → `(true, "pattern")`. A leading `!` makes a pattern an exclusion
+/// within its list, for globs and shell patterns alike.
+pub(crate) fn split_negation(raw: &str) -> (bool, &str) {
+    match raw.strip_prefix('!') {
+        Some(rest) => (true, rest),
+        None => (false, raw),
+    }
+}
+
+/// A compiled pattern that may be an exclusion.
+pub(crate) trait Matcher<C: ?Sized> {
+    fn is_match(&self, candidate: &C) -> bool;
+    fn negated(&self) -> bool;
+}
+
+/// Evaluate a list of (possibly negated) patterns: a candidate matches if at
+/// least one positive pattern matches and no negated pattern matches.
+pub(crate) fn any_match<C: ?Sized, M: Matcher<C>>(patterns: &[M], candidate: &C) -> bool {
+    let mut positive = false;
+    for p in patterns {
+        if p.is_match(candidate) {
+            if p.negated() {
+                return false;
+            }
+            positive = true;
+        }
+    }
+    positive
+}
+
 /// A compiled glob for paths, hosts, env names and MCP tool names.
 #[derive(Debug, Clone)]
 pub struct GlobPattern {
@@ -17,12 +47,29 @@ pub struct GlobPattern {
     pub negated: bool,
 }
 
+impl Matcher<str> for GlobPattern {
+    fn is_match(&self, candidate: &str) -> bool {
+        Self::is_match(self, candidate)
+    }
+
+    fn negated(&self) -> bool {
+        self.negated
+    }
+}
+
+impl Matcher<[String]> for ShellPattern {
+    fn is_match(&self, argv: &[String]) -> bool {
+        Self::is_match(self, argv)
+    }
+
+    fn negated(&self) -> bool {
+        self.negated
+    }
+}
+
 impl GlobPattern {
     pub fn compile(raw: &str, case_insensitive: bool) -> Result<Self, PolicyError> {
-        let (negated, body) = match raw.strip_prefix('!') {
-            Some(rest) => (true, rest),
-            None => (false, raw),
-        };
+        let (negated, body) = split_negation(raw);
         if body.is_empty() {
             return Err(PolicyError::EmptyPattern);
         }
@@ -65,22 +112,6 @@ impl GlobPattern {
     }
 }
 
-/// Evaluate a list of (possibly negated) globs: a candidate matches if at
-/// least one positive pattern matches and no negated pattern matches.
-#[must_use]
-pub fn any_match(patterns: &[GlobPattern], candidate: &str) -> bool {
-    let mut positive = false;
-    for p in patterns {
-        if p.is_match(candidate) {
-            if p.negated {
-                return false;
-            }
-            positive = true;
-        }
-    }
-    positive
-}
-
 #[derive(Debug, Clone)]
 enum Token {
     /// A bare `*`: matches zero or more argv tokens.
@@ -112,29 +143,11 @@ pub struct ShellPattern {
     pub negated: bool,
 }
 
-/// Evaluate a list of (possibly negated) shell patterns like [`any_match`].
-#[must_use]
-pub fn any_shell_match(patterns: &[ShellPattern], argv: &[String]) -> bool {
-    let mut positive = false;
-    for p in patterns {
-        if p.is_match(argv) {
-            if p.negated {
-                return false;
-            }
-            positive = true;
-        }
-    }
-    positive
-}
-
 impl ShellPattern {
     pub fn compile(raw: &str) -> Result<Self, PolicyError> {
         // Patterns are tokenised with the same lexer as commands so that `a|b`
         // and `a | b` mean the same thing on both sides of the match.
-        let (negated, body) = match raw.strip_prefix('!') {
-            Some(rest) => (true, rest),
-            None => (false, raw),
-        };
+        let (negated, body) = split_negation(raw);
         let lexed = lexer::lex(body).map_err(|_| PolicyError::BadShellPattern {
             pattern: raw.to_owned(),
         })?;
@@ -371,12 +384,9 @@ mod tests {
             ShellPattern::compile("find *").unwrap(),
             ShellPattern::compile("!find * -exec*").unwrap(),
         ];
-        assert!(any_shell_match(&list, &argv("find . -name x")));
-        assert!(!any_shell_match(
-            &list,
-            &argv("find . -name x -execdir rm {} ;")
-        ));
-        assert!(!any_shell_match(&list[1..], &argv("find . -exec x")));
+        assert!(any_match(&list, &argv("find . -name x")));
+        assert!(!any_match(&list, &argv("find . -name x -execdir rm {} ;")));
+        assert!(!any_match(&list[1..], &argv("find . -exec x")));
         assert!(!list[0].covers(&list[1]) && !list[1].covers(&list[0]));
     }
 

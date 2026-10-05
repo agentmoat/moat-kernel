@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 /// Outcome of evaluating one or more atomic actions.
@@ -13,6 +15,7 @@ pub enum Verdict {
 }
 
 impl Verdict {
+    /// The lowercase name used in hook responses, the audit log and output.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -20,6 +23,22 @@ impl Verdict {
             Self::Ask => "ask",
             Self::Deny => "deny",
         }
+    }
+}
+
+/// A name that is not `allow`, `ask` or `deny`.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("unknown verdict `{0}`")]
+pub struct UnknownVerdict(pub String);
+
+impl FromStr for Verdict {
+    type Err = UnknownVerdict;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        [Self::Allow, Self::Ask, Self::Deny]
+            .into_iter()
+            .find(|v| v.as_str() == s)
+            .ok_or_else(|| UnknownVerdict(s.to_owned()))
     }
 }
 
@@ -42,6 +61,7 @@ pub struct Decision {
 }
 
 impl Decision {
+    /// A decision with no rules yet.
     #[must_use]
     pub fn new(verdict: Verdict) -> Self {
         Self {
@@ -50,6 +70,14 @@ impl Decision {
             reasons: Vec::new(),
             context: Vec::new(),
         }
+    }
+
+    /// A decision produced by one rule for one reason.
+    #[must_use]
+    pub fn single(verdict: Verdict, rule: &str, reason: impl Into<String>) -> Self {
+        let mut decision = Self::new(verdict);
+        decision.push(rule, reason.into());
+        decision
     }
 
     pub(crate) fn push(&mut self, rule: &str, reason: String) {
@@ -83,7 +111,26 @@ impl Decision {
 
 #[cfg(test)]
 mod tests {
-    use super::{Decision, Verdict};
+    use super::{Decision, UnknownVerdict, Verdict};
+
+    #[test]
+    fn verdict_names_round_trip() {
+        for v in [Verdict::Allow, Verdict::Ask, Verdict::Deny] {
+            assert_eq!(v.as_str().parse::<Verdict>(), Ok(v));
+        }
+        assert_eq!(
+            "block".parse::<Verdict>(),
+            Err(UnknownVerdict("block".into()))
+        );
+    }
+
+    #[test]
+    fn single_carries_one_rule_and_reason() {
+        let d = Decision::single(Verdict::Deny, "kernel-error", "no lock");
+        assert_eq!(d.rules, ["kernel-error"]);
+        assert_eq!(d.reasons, ["no lock"]);
+        assert!(d.context.is_empty());
+    }
 
     fn decided(verdict: Verdict, rule: &str) -> Decision {
         let mut d = Decision::new(verdict);

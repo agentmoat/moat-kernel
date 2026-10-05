@@ -67,12 +67,13 @@ fn split_root(path: &str) -> (String, &str) {
 /// Expand `~` and `${project}` inside a *pattern* (not a path), leaving globs intact.
 #[must_use]
 pub fn expand_pattern(raw: &str, home: &str, project: &str) -> String {
-    let (neg, body) = match raw.strip_prefix('!') {
-        Some(b) => ("!", b),
-        None => ("", raw),
-    };
-    let s = expand_home(body, home).replace("${project}", project);
-    format!("{neg}{s}")
+    let (negated, body) = crate::pattern::split_negation(raw);
+    let expanded = expand_home(body, home).replace("${project}", project);
+    if negated {
+        format!("!{expanded}")
+    } else {
+        expanded
+    }
 }
 
 fn expand_home(raw: &str, home: &str) -> String {

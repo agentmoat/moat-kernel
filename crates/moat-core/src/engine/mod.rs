@@ -6,7 +6,7 @@
 //! is expressed through per-kind `defaults`, never through a deny rule.
 
 use crate::action::{Action, AtomicAction};
-use crate::pattern::{GlobPattern, ShellPattern, any_match, any_shell_match};
+use crate::pattern::{GlobPattern, ShellPattern, any_match};
 use crate::policy::{Policy, PolicyError, RuleGroup};
 use crate::programs::{self, NoResolver, ProgramResolver};
 use crate::realpath::PathResolver;
@@ -128,9 +128,11 @@ impl<'p> CompiledPolicy<'p> {
             return None;
         }
         let (verdict, rule_id) = self.policy.defaults.for_kind(action.kind());
-        let mut d = Decision::new(verdict);
-        d.push(&rule_id, format!("no rule matched {}", action.describe()));
-        Some(d)
+        Some(Decision::single(
+            verdict,
+            &rule_id,
+            format!("no rule matched {}", action.describe()),
+        ))
     }
 }
 
@@ -138,7 +140,7 @@ impl CompiledGroup<'_> {
     fn matches(&self, action: &AtomicAction) -> bool {
         match action {
             AtomicAction::Shell { argv } | AtomicAction::Pipeline { argv } => {
-                any_shell_match(&self.shell, argv)
+                any_match(&self.shell, argv.as_slice())
             }
             AtomicAction::FsRead { path } => any_match(&self.fs_read, path),
             AtomicAction::FsWrite { path } => any_match(&self.fs_write, path),
@@ -278,9 +280,7 @@ fn with_resolved_paths(atoms: Vec<AtomicAction>, paths: &dyn PathResolver) -> Ve
 }
 
 fn unparseable(reason: String) -> Decision {
-    let mut decision = Decision::new(Verdict::Ask);
-    decision.push("unparseable", reason);
-    decision
+    Decision::single(Verdict::Ask, "unparseable", reason)
 }
 
 /// Compile `policy` for `ctx` and decide a single action.
