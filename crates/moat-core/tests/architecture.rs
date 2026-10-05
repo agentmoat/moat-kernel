@@ -1,8 +1,8 @@
 //! Architecture invariants for the trusted core (`REPO_STRUCTURE.md` §3).
 //!
 //! `moat-core` must stay pure: no internal crates, no I/O or runtime crates.
-//! The wasm32 build in CI proves the absence of OS calls; this test keeps the
-//! dependency list from drifting in the first place.
+//! The wasm32 build in CI catches most OS calls; `std::fs`/`std::env` still
+//! compile there, so the source scan below is what actually enforces purity.
 
 use std::fs;
 use std::path::Path;
@@ -47,6 +47,36 @@ fn no_source_file_exceeds_the_size_budget() {
     assert!(
         offenders.is_empty(),
         "split these files:\n{}",
+        offenders.join("\n")
+    );
+}
+
+const FORBIDDEN_IN_CORE: &[&str] = &[
+    "std::fs",
+    "std::env",
+    "std::process",
+    "std::net",
+    "std::io::std",
+    "println!",
+    "eprintln!",
+    "dbg!",
+];
+
+#[test]
+fn core_sources_do_no_io() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut offenders = Vec::new();
+    visit(&src, &mut |path| {
+        for (n, line) in fs::read_to_string(path).unwrap().lines().enumerate() {
+            let code = line.split("//").next().unwrap_or("");
+            if let Some(hit) = FORBIDDEN_IN_CORE.iter().find(|t| code.contains(*t)) {
+                offenders.push(format!("{}:{} uses {hit}", path.display(), n + 1));
+            }
+        }
+    });
+    assert!(
+        offenders.is_empty(),
+        "moat-core must stay free of I/O; inject it from the CLI through a trait:\n{}",
         offenders.join("\n")
     );
 }
