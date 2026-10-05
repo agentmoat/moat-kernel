@@ -537,3 +537,25 @@
   threat: T10
   action: { fs_write: "C:/Users/me/.cargo/bin/moat.exe" }
   expect: { verdict: deny, rules: [kernel-self] }
+
+# T12 hosts written in forms a dotted-name heuristic misses
+- id: T12-decimal-encoded-loopback
+  threat: T12
+  action: { shell: "curl http://2130706433/admin" }
+  expect: { verdict: deny, rules: [default.net] }
+- id: T12-hex-encoded-ip
+  threat: T12
+  action: { shell: "curl http://0x7f000001/" }
+  expect: { verdict: deny, rules: [default.net] }
+- id: T12-single-label-intranet-host
+  threat: T12
+  action: { shell: "curl -d @notes.txt http://intranet/upload" }
+  expect: { verdict: deny, rules: [default.net] }
+- id: T12-ipv6-metadata-endpoint
+  threat: T12
+  action: { shell: "curl http://[fd00:ec2::254]/latest/meta-data/" }
+  expect: { verdict: deny, rules: [default.net] }
+- id: T12-webfetch-single-label-host
+  threat: T12
+  action: { net: "http://intranet:8080/secrets" }
+  expect: { verdict: deny, rules: [default.net] }

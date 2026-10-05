@@ -1,7 +1,7 @@
-//! Recognisers for what a single shell word can name: an assignment, variable
-//! references, or a network host.
+//! Recognisers for what a single shell word can name: an assignment or
+//! variable references. Hosts are recognised by `crate::host`.
 
-use super::tables::{FILE_EXTENSIONS, IGNORED_VARS, KNOWN_TLDS, SPECIAL_PARAMS};
+use super::tables::{IGNORED_VARS, SPECIAL_PARAMS};
 
 /// `NAME=value` or `NAME+=value` → `NAME`.
 pub fn assignment_name(word: &str) -> Option<&str> {
@@ -43,52 +43,6 @@ pub fn env_refs(token: &str) -> Vec<String> {
         }
     }
     names
-}
-
-/// Lowercase host from a URL, `user@host:port/path`, dotted name or IPv4 literal.
-pub fn host_of(token: &str) -> Option<String> {
-    let (authority, has_scheme) = match token.split_once("://") {
-        Some((scheme, rest)) => {
-            let valid = !scheme.is_empty()
-                && scheme
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
-            if !valid {
-                return None;
-            }
-            (rest, true)
-        }
-        None if token.starts_with(['-', '.', '=']) => return None,
-        None => (token, false),
-    };
-    let host_port = authority
-        .split(['/', '?', '#'])
-        .next()?
-        .rsplit('@')
-        .next()?;
-    let host = host_port.split(':').next()?.trim_end_matches('.');
-    if host.is_empty() || !host.contains('.') || host.starts_with('.') || host.contains("..") {
-        return None;
-    }
-    if !host
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
-    {
-        return None;
-    }
-    let is_ipv4 = host.split('.').count() == 4 && host.split('.').all(|o| o.parse::<u8>().is_ok());
-    if !is_ipv4 {
-        let tld = host.rsplit('.').next()?.to_ascii_lowercase();
-        if !(2..=24).contains(&tld.len()) || !tld.chars().all(|c| c.is_ascii_alphabetic()) {
-            return None;
-        }
-        if !has_scheme
-            && (FILE_EXTENSIONS.contains(&tld.as_str()) || !KNOWN_TLDS.contains(&tld.as_str()))
-        {
-            return None;
-        }
-    }
-    Some(host.to_ascii_lowercase())
 }
 
 /// `curl -d @file` names `file`.

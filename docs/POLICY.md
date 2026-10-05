@@ -76,6 +76,7 @@ Tokenised with the same lexer as commands, so `a|b` and `a | b` are equal.
 
 ### 3.2 Path, host and name globs
 - `*` matches within one path segment; `**` matches across segments: `~/.ssh/**`, `**/.env.*`.
+- Hosts are matched lowercase without userinfo, port, trailing dot or IPv6 brackets (`http://u@[::1]:8080/` is `::1`). A word with a scheme is always a URL, so `http://localhost`, `http://intranet` and numeric forms such as `http://2130706433/` are network actions; a word without a scheme counts only as a dotted name under a known top-level domain or an IPv4 address.
 - `~` and `${project}` are expanded in patterns before matching; `${project}` is the git root above the call's working directory (or the directory itself when there is no repository). `$HOME` and `${HOME}` are expanded in the *action's* path (so `cat $HOME/.ssh/id_rsa` is seen as `~/.ssh/id_rsa`) but not in patterns: write `~` in rules.
 - A leading `!` excludes matches within the same list of the same group, in `deny`, `allow` and `ask` alike: a candidate matches when at least one positive pattern matches and no negated pattern does. Example: `fs.write: ["${project}/**", "!${project}/.git/**"]`.
 - Paths are compared in slash-separated canonical form on every platform (`C:/Users/me/x` on Windows, never the `\\?\C:\…` verbatim form), case-insensitively on macOS and Windows.
@@ -146,6 +147,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | allow | `registries` | `api.github.com`, `github.com`, npm, crates.io, Go proxy, PyPI |
 | allow | `safe-mcp` | read-only GitHub and filesystem MCP tools |
 | ask | `installs` | `npm install/i/ci`, `pnpm add/install/dlx`, `yarn add/install/dlx`, `npx`, `pip install`, `cargo add/install`, `brew install`, `gem install` |
+| ask | `local-net` | network to `localhost`, `127.0.0.1`, `::1` (a local service may expose a control API) |
 | ask | `push` | `git push`, `npm/pnpm/yarn publish`, `cargo publish`, `gh release` |
 | defaults | `default`, `default.net` | everything else asks; outbound network to unlisted hosts is denied |
 

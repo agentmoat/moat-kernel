@@ -1,0 +1,128 @@
+//! Host names in URLs and shell words: one parser for every action kind.
+//!
+//! A host is reported lowercase, without userinfo, port, trailing dot or IPv6
+//! brackets (`http://User@[::1]:8080/` → `::1`). Net rules match that form.
+//!
+//! Two entry points differ only in how much evidence they need:
+//! - [`of_url`]: the caller knows the text is a URL (`WebFetch`, MCP `url`
+//!   arguments), so any non-empty host counts, including `localhost`,
+//!   numeric forms such as `2130706433` and IPv6 literals.
+//! - [`of_word`]: a shell word that may or may not be a host. With a scheme
+//!   it is a URL and gets the same treatment; without one it must look like a
+//!   dotted name with a known top-level domain, or an IPv4 address, so that
+//!   `fix.bug` and `main.rs` stay words.
+
+use crate::shell::tables::{FILE_EXTENSIONS, KNOWN_TLDS};
+
+/// Host of a URL, with or without its scheme.
+#[must_use]
+pub fn of_url(url: &str) -> Option<String> {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    authority_host(rest)
+}
+
+/// Host named by one shell word, if the word is evidently a network address.
+#[must_use]
+pub fn of_word(token: &str) -> Option<String> {
+    match token.split_once("://") {
+        Some((scheme, rest)) => {
+            let valid = !scheme.is_empty()
+                && scheme
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+            if valid { authority_host(rest) } else { None }
+        }
+        None if token.starts_with(['-', '.', '=']) => None,
+        None => authority_host(token).filter(|h| looks_like_bare_host(h)),
+    }
+}
+
+/// `[userinfo@]host[:port]` up to the first `/`, `?` or `#`.
+fn authority_host(rest: &str) -> Option<String> {
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host_port = authority.rsplit('@').next()?;
+    let host = if let Some(bracketed) = host_port.strip_prefix('[') {
+        bracketed.split(']').next()?
+    } else {
+        host_port.split(':').next()?
+    };
+    let host = host.trim_end_matches('.');
+    let valid = !host.is_empty()
+        && !host.starts_with('.')
+        && !host.contains("..")
+        && host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | ':' | '%'));
+    valid.then(|| host.to_ascii_lowercase())
+}
+
+/// Without a scheme only dotted names under a known TLD and IPv4 literals count.
+fn looks_like_bare_host(host: &str) -> bool {
+    if host.contains(':') || host.contains('_') || !host.contains('.') {
+        return false;
+    }
+    let labels: Vec<&str> = host.split('.').collect();
+    if labels.len() == 4 && labels.iter().all(|o| o.parse::<u8>().is_ok()) {
+        return true;
+    }
+    let tld = labels.last().copied().unwrap_or_default();
+    (2..=24).contains(&tld.len())
+        && tld.chars().all(|c| c.is_ascii_alphabetic())
+        && KNOWN_TLDS.contains(&tld)
+        && !FILE_EXTENSIONS.contains(&tld)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn urls_report_every_host_form() {
+        for (url, host) in [
+            ("https://Api.GitHub.com/x?y#z", "api.github.com"),
+            ("http://user:pw@evil.com:8443/", "evil.com"),
+            ("http://localhost:8080/x", "localhost"),
+            ("http://intranet/x", "intranet"),
+            ("http://[::1]:8080/x", "::1"),
+            ("http://[FE80::1%25en0]/", "fe80::1%25en0"),
+            ("http://2130706433/", "2130706433"),
+            ("http://0x7f000001/", "0x7f000001"),
+            ("http://127.1/", "127.1"),
+            ("example.com/path", "example.com"),
+            ("http://evil.com./", "evil.com"),
+        ] {
+            assert_eq!(of_url(url).as_deref(), Some(host), "{url}");
+            assert_eq!(of_word(url).as_deref(), Some(host), "{url}");
+        }
+        for url in ["https://", "http:///x", "http://..evil/", "http://a b/"] {
+            assert_eq!(of_url(url), None, "{url}");
+        }
+    }
+
+    #[test]
+    fn bare_words_need_a_known_tld_or_ipv4() {
+        for (word, host) in [
+            ("prod.example.com", "prod.example.com"),
+            ("deploy@prod.example.com", "prod.example.com"),
+            ("10.0.0.5", "10.0.0.5"),
+            ("evil.com:443", "evil.com"),
+        ] {
+            assert_eq!(of_word(word).as_deref(), Some(host), "{word}");
+        }
+        for word in [
+            "localhost",
+            "fix.bug",
+            "main.rs",
+            "sys.version",
+            "a.b.c",
+            "-v",
+            ".env",
+            "=x",
+            "::1",
+            "my_host.com",
+            "1.2.3",
+        ] {
+            assert_eq!(of_word(word), None, "{word}");
+        }
+    }
+}
