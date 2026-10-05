@@ -1,7 +1,5 @@
 //! `moat doctor`: verify the installation and, from a terminal, accept changes.
 
-use std::io::IsTerminal as _;
-
 use anyhow::{Context as _, Result, bail};
 use moat_audit::Store;
 use moat_hosts::Host;
@@ -151,7 +149,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
     }
 
     if args.accept {
-        if !std::io::stdin().is_terminal() {
+        if !crate::terminal::interactive() {
             bail!(
                 "`moat doctor --accept` must be run by a person in a terminal, not from a hook or script"
             );

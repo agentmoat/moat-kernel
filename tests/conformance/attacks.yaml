@@ -386,3 +386,11 @@
 - id: T9-rename-project-hook-dir
   action: { shell: "mv .claude .claude-off" }
   expect: { verdict: deny, rules: [kernel-self] }
+
+# T9 the kernel's own environment variables (state dir, test-only terminal override)
+- id: T9-export-moat-home
+  action: { shell: "export MOAT_HOME=/tmp/evil" }
+  expect: { verdict: deny, rules: [env-poison] }
+- id: T9-assume-tty-prefix-on-allow
+  action: { shell: "MOAT_ASSUME_TTY=1 moat allow --last --always" }
+  expect: { verdict: deny, rules: [env-poison, kernel-self] }

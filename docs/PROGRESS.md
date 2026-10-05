@@ -103,6 +103,8 @@ P0 (allow where deny is promised):
 
 - The state and host directories themselves were not protected (`mv ~/.moat …`, `ln -sfn /tmp/evil ~/.moat`, `rm -rf ~/.claude` asked) and the lock reported a pinned file as intact when a parent directory was swapped for a link (found 2026-10-05; fixed: directory patterns in `kernel-self`, `mv` source is a write, lock compares stored keys).
 
+- `moat allow` success paths were untestable behind the terminal check (fixed: debug-only `MOAT_ASSUME_TTY`, `tests/allow.rs`).
+
 P1 (false denies):
 - `rm -rf /tmp/build` is denied because `rm -rf /*` is a per-token glob matching any absolute path.
 - Dotted identifiers inside interpreter payloads and arguments (`python3 -c "import sys; …"`, `git commit -m fix.bug`) are treated as hosts and denied by `default.net`.
