@@ -22,6 +22,11 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 struct Fixture {
     id: String,
+    /// Threat class from DESIGN.md §3.3 (`T1`…`T12`). Required for attack and
+    /// ask fixtures; benign fixtures may name the threat whose rule they keep
+    /// from over-matching.
+    #[serde(default)]
+    threat: Option<String>,
     action: FixtureAction,
     expect: Expect,
     /// Program name → path it resolves to on the kernel search path.
@@ -188,5 +193,99 @@ fn default_policy_conformance() {
     assert!(
         failed == 0,
         "{failed} of {total} conformance fixtures failed:\n{report}"
+    );
+}
+
+/// Threat classes of DESIGN.md §3.3, as listed in `docs/COVERAGE.md`.
+const THREATS: [(&str, &str); 12] = [
+    ("T1", "Secret exfiltration via shell"),
+    ("T2", "Secret exfiltration via file tools"),
+    ("T3", "Secret exfiltration via environment"),
+    ("T4", "Destructive git / filesystem operations"),
+    ("T5", "Supply-chain execution"),
+    ("T6", "Environment poisoning"),
+    ("T7", "Obfuscation and nested execution"),
+    ("T8", "MCP tool poisoning / over-privileged tools"),
+    ("T9", "Hook / policy tampering by the agent"),
+    ("T10", "Hook supply chain (trojaned hook binary)"),
+    ("T11", "Time-of-check / time-of-use, symlinks"),
+    ("T12", "Network to unknown hosts"),
+];
+
+/// Every attack and ask fixture names a known threat, every threat has at least
+/// one attack fixture, and `docs/COVERAGE.md` is the table generated from them.
+/// Regenerate with `MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`.
+#[test]
+fn threat_coverage_is_complete_and_documented() {
+    let root = repo_root();
+    let fixtures = load_fixtures(&root.join("tests/conformance"));
+    let mut by_threat: BTreeMap<&str, Vec<(&str, &Fixture)>> = BTreeMap::new();
+    let mut problems = Vec::new();
+    for (file, fixture) in &fixtures {
+        match fixture.threat.as_deref() {
+            Some(t) if THREATS.iter().any(|(id, _)| *id == t) => {
+                by_threat
+                    .entry(t)
+                    .or_default()
+                    .push((file.as_str(), fixture));
+            }
+            Some(t) => problems.push(format!("{file}/{}: unknown threat `{t}`", fixture.id)),
+            None if file != "benign.yaml" => {
+                problems.push(format!("{file}/{}: missing `threat`", fixture.id));
+            }
+            None => {}
+        }
+    }
+    let count = |t: &str, file: &str| {
+        by_threat
+            .get(t)
+            .map_or(0, |v| v.iter().filter(|(f, _)| *f == file).count())
+    };
+    for (t, name) in THREATS {
+        if count(t, "attacks.yaml") == 0 {
+            problems.push(format!("{t} ({name}) has no attack fixture"));
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+
+    let mut doc = String::from(
+        "# Threat coverage\n\n\
+         Generated from `tests/conformance/*.yaml` by the conformance suite; do not edit.\n\
+         Regenerate with `MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`.\n\
+         Threat classes are defined in `docs/DESIGN.md` §3.3. A fixture is one tool call and\n\
+         the verdict and rule ids the default policy must produce for it.\n\n\
+         | Threat | Class | Attacks | Asks | Benign |\n|---|---|---|---|---|\n",
+    );
+    for (t, name) in THREATS {
+        let _ = writeln!(
+            doc,
+            "| {t} | {name} | {} | {} | {} |",
+            count(t, "attacks.yaml"),
+            count(t, "ask.yaml"),
+            count(t, "benign.yaml")
+        );
+    }
+    for (t, name) in THREATS {
+        let _ = write!(doc, "\n## {t}: {name}\n\n");
+        for (file, f) in by_threat.get(t).into_iter().flatten() {
+            let _ = writeln!(
+                doc,
+                "- `{}` ({}): {:?} [{}]",
+                f.id,
+                file.trim_end_matches(".yaml"),
+                f.expect.verdict,
+                f.expect.rules.join(", ")
+            );
+        }
+    }
+    let path = root.join("docs/COVERAGE.md");
+    if std::env::var_os("MOAT_UPDATE_COVERAGE").is_some() {
+        fs::write(&path, &doc).unwrap();
+    }
+    let current = fs::read_to_string(&path).unwrap_or_default();
+    assert!(
+        current.replace("\r\n", "\n") == doc,
+        "docs/COVERAGE.md is out of date; run \
+         `MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`"
     );
 }

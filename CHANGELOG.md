@@ -32,6 +32,7 @@ All notable changes to this project are documented here. The format follows
 - Claude Code and Cursor adapters derive those paths and hosts from MCP `tool_input` by argument name (`path`, `paths`, `file_path`, `source`, `destination`, `url`, …); write-shaped tool names (`write_*`, `edit_*`, `move_*`, `delete_*`) and `destination`/`target` arguments produce `fs.write`.
 
 ### Changed
+- Conformance fixtures carry `threat: T1…T12` (required for attacks and asks); `docs/COVERAGE.md` is generated from them and the suite fails when it is stale or a threat class has no attack fixture.
 - `moat allow` and `moat doctor --accept` success paths are covered end to end (`tests/allow.rs`): session grant via `--last` and explicit `--session`, `--always` overlay with lock re-pin, `doctor --accept` after an owner edit. Debug builds honour `MOAT_ASSUME_TTY=1` for these tests; release builds do not contain the override.
 - Default policy: new allow group `dev-readonly` (`wc`, `diff`, `tree`, read-only `docker ps/images/logs/version`, `gh pr/issue/run/repo` view and list commands, reads of `PATH`, `HOME`, `USER`, `SHELL`, `PWD`, `LANG`, `TERM`, `TMPDIR`, `EDITOR`); `--output`/`-o` forms are excluded. The benign conformance corpus grows from 34 to 87 fixtures.
 - Shell pattern lists accept `!` exclusions, with the same semantics as glob lists (ADR-012).

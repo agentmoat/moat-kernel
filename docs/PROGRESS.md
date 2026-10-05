@@ -107,6 +107,8 @@ P0 (allow where deny is promised):
 
 - The `moat` binary that every hook runs was not protected (`cp /tmp/evil ~/.cargo/bin/moat` asked) and T10 had no attack fixture (fixed: `**/bin/moat` in `kernel-self`, `curl -o`/`wget -O` are writes).
 
+- Fixtures had no `threat` field and no coverage table (fixed: `threat:` on every attack/ask, generated `docs/COVERAGE.md`, gate fails on a threat with zero attacks).
+
 P1 (false denies):
 - `rm -rf /tmp/build` is denied because `rm -rf /*` is a per-token glob matching any absolute path.
 - Dotted identifiers inside interpreter payloads and arguments (`python3 -c "import sys; …"`, `git commit -m fix.bug`) are treated as hosts and denied by `default.net`.
