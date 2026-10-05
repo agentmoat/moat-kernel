@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- `moat guard` resolves symlinks in every path a tool call reads or writes and checks the resolved path as well as the literal one, strictest wins: after `ln -s ~/.ssh ./s`, `cat ./s/id_rsa`, `echo … >> s/authorized_keys` and a `Read` of `proj/s/id_rsa` are denied by `secrets-paths`; previously they were allowed by `project-fs`. New files resolve through their directory, dangling links through their target. Conformance fixtures accept `links:` (ADR-009).
+
 ### Fixed
 - `moat guard` denies (`kernel-error`, exit 2) when the audit log cannot be opened or written, when the hook response cannot be written to stdout, or when the kernel itself panics; previously an unavailable log printed a warning and the call proceeded unrecorded, and a panic exited 101, which Claude Code treats as non-blocking. `guard` no longer recreates a deleted `audit.db`; only `moat init` creates it.
 - Host detection: a bare dotted token without a scheme is a host only when its last label is a known top-level domain, so `python -c "import sys; print(sys.version)"`, `node -e "console.log(process.version)"` and `git commit -m fix.bug` no longer produce a network atom (and a false `default.net` deny). Tokens with a scheme and IPv4 literals are unchanged.

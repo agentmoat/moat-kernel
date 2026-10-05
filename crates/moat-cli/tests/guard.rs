@@ -327,6 +327,49 @@ fn mcp_arguments_are_checked_as_paths() {
     assert!(reason.contains("secrets-paths"), "{reason}");
 }
 
+/// Symlinks are only created on Unix here; Windows needs a privilege for them.
+#[cfg(unix)]
+#[test]
+fn reads_and_writes_through_symlinks_are_checked_at_the_target() {
+    let sb = Sandbox::new();
+    sb.moat(&["init"]);
+    let project = sb.home.join("proj");
+    std::fs::create_dir_all(project.join(".git")).unwrap();
+    std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
+    std::fs::write(sb.home.join(".ssh/id_rsa"), "key").unwrap();
+    std::os::unix::fs::symlink(sb.home.join(".ssh"), project.join("s")).unwrap();
+    let cwd = project.to_string_lossy();
+    let bash = |command: &str| {
+        serde_json::json!({
+            "session_id": "s-link", "cwd": cwd, "hook_event_name": "PreToolUse",
+            "tool_name": "Bash", "tool_input": {"command": command}, "tool_use_id": "t1"
+        })
+        .to_string()
+    };
+
+    for command in ["cat ./s/id_rsa", "echo k >> s/authorized_keys"] {
+        let out = sb.guard("claude-code", &bash(command));
+        assert_eq!(out.status.code(), Some(2), "{command}: {}", stderr(&out));
+        let reason = decision(&out)["permissionDecisionReason"].to_string();
+        assert!(reason.contains("secrets-paths"), "{command}: {reason}");
+        assert!(reason.contains(".ssh/"), "{command}: {reason}");
+    }
+    let read = serde_json::json!({
+        "session_id": "s-link", "cwd": cwd, "tool_name": "Read",
+        "tool_input": {"file_path": project.join("s/id_rsa").to_string_lossy()}
+    });
+    let out = sb.guard("claude-code", &read.to_string());
+    assert_eq!(decision(&out)["permissionDecision"], "deny");
+
+    let out = sb.guard("claude-code", &bash("cat ./src/main.rs"));
+    assert_eq!(
+        decision(&out)["permissionDecision"],
+        "allow",
+        "{}",
+        stderr(&out)
+    );
+}
+
 #[test]
 fn codex_payloads_use_the_same_contract() {
     let sb = Sandbox::new();

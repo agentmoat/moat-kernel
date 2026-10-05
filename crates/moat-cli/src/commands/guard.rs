@@ -20,6 +20,7 @@ use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity::Lock;
 use crate::project;
+use crate::realpath::FsPathResolver;
 
 const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024;
 const UNGOVERNED_RULE: &str = "ungoverned";
@@ -110,11 +111,9 @@ fn evaluate(host: Host) -> Result<(Option<HookRequest>, Decision)> {
         cwd: context::path_string(&cwd),
     };
     let snapshot = Snapshot::load(&home.environment_path())?;
-    let mut decision = CompiledPolicy::compile(&policy, &ctx)?.decide_with(
-        action,
-        &snapshot,
-        &moat_core::NoResolver,
-    );
+    let paths = FsPathResolver::new(&ctx);
+    let mut decision =
+        CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot, &paths);
     if decision.verdict == Verdict::Ask
         && let moat_core::Action::Shell { command } = action
         && Grants::load(&home.grants_path())?.matches(host.id(), &request.session_id, command)
