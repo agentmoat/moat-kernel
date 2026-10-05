@@ -162,6 +162,29 @@ fn symlinked_paths_are_checked_at_both_locations() {
 }
 
 #[test]
+fn patches_write_every_file_and_ask_when_empty() {
+    let p = policy(
+        "version: 1\ndefaults: ask\ndeny:\n  - id: rc\n    fs.write: ['~/.zshrc']\n\
+         allow:\n  - id: proj\n    fs.write: ['${project}/**']\n",
+    );
+    let patch = |w: &[&str]| Action::Patch {
+        writes: w.iter().map(|s| (*s).to_owned()).collect(),
+    };
+    let d = evaluate(&p, &ctx(), &patch(&["src/a.rs", "src/b.rs"])).unwrap();
+    assert_eq!(d.verdict, Verdict::Allow);
+    let d = evaluate(&p, &ctx(), &patch(&["src/a.rs", "~/.zshrc"])).unwrap();
+    assert_eq!(
+        (d.verdict, d.rules.as_slice()),
+        (Verdict::Deny, &["rc".to_owned()][..])
+    );
+    let d = evaluate(&p, &ctx(), &patch(&[])).unwrap();
+    assert_eq!(
+        (d.verdict, d.rules.as_slice()),
+        (Verdict::Ask, &["unparseable".to_owned()][..])
+    );
+}
+
+#[test]
 fn compiled_policy_is_reusable() {
     let p = policy("version: 1\ndefaults: ask\nallow:\n  - id: ls\n    shell: ['ls*']\n");
     let compiled = CompiledPolicy::compile(&p, &ctx()).unwrap();

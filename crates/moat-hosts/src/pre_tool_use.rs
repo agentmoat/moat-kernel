@@ -79,6 +79,10 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
             path: field("notebook_path")?,
         },
         "WebFetch" => Action::Net { url: field("url")? },
+        // Codex file edits: the patch text names every file it touches.
+        "apply_patch" => Action::Patch {
+            writes: crate::patch::writes(&field("command")?),
+        },
         "Glob" | "Grep" => {
             let path = input
                 .get("path")
@@ -213,6 +217,37 @@ mod tests {
         assert_eq!(req.session_id, "codex-9a02");
         assert_eq!(req.call_id.as_deref(), Some("call_77"));
         assert!(matches!(req.action, Some(Action::Shell { .. })));
+    }
+
+    #[test]
+    fn codex_apply_patch_writes_every_file_it_names() {
+        let req = Host::Codex
+            .parse_request(&fixture("codex", "pretooluse-apply-patch"))
+            .unwrap();
+        assert_eq!(req.tool, "apply_patch");
+        assert_eq!(
+            req.action,
+            Some(Action::Patch {
+                writes: vec!["src/lib.rs".into(), "~/.zshrc".into()]
+            })
+        );
+        let empty = r#"{"session_id":"s","tool_name":"apply_patch","tool_input":{}}"#;
+        assert!(
+            Host::Codex.parse_request(empty).is_err(),
+            "missing patch text"
+        );
+    }
+
+    #[test]
+    fn codex_mcp_arguments_are_paths() {
+        let req = Host::Codex
+            .parse_request(&fixture("codex", "pretooluse-mcp"))
+            .unwrap();
+        let Some(Action::McpTool { name, reads, .. }) = req.action else {
+            panic!("{:?}", req.action);
+        };
+        assert_eq!(name, "mcp__filesystem__read_file");
+        assert_eq!(reads, ["~/.aws/credentials"]);
     }
 
     #[test]

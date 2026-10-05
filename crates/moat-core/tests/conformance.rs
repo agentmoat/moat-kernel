@@ -43,6 +43,8 @@ struct FixtureAction {
     fs_write: Option<String>,
     net: Option<String>,
     mcp_tool: Option<McpFixture>,
+    /// Files a multi-file patch writes (Codex `apply_patch`).
+    patch: Option<Vec<String>>,
 }
 
 /// `mcp_tool: "name"` or `mcp_tool: { name, reads, writes, hosts }`.
@@ -76,6 +78,7 @@ impl FixtureAction {
             self.fs_read.map(|path| Action::FsRead { path }),
             self.fs_write.map(|path| Action::FsWrite { path }),
             self.net.map(|url| Action::Net { url }),
+            self.patch.map(|writes| Action::Patch { writes }),
             self.mcp_tool.map(|m| match m {
                 McpFixture::Name(name) => Action::mcp(name),
                 McpFixture::Call {

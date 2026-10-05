@@ -149,3 +149,7 @@
 - id: ask-move-project-file
   action: { shell: "mv src/a.rs src/b.rs" }
   expect: { verdict: ask, rules: [default] }
+# A patch that names no file cannot be checked
+- id: ask-patch-without-files
+  action: { patch: [] }
+  expect: { verdict: ask, rules: [unparseable] }

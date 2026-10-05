@@ -419,14 +419,19 @@ fn codex_payloads_use_the_same_contract() {
     assert!(stdout(&out).contains("Codex"), "{}", stdout(&out));
     assert!(sb.home.join(".codex/hooks.json").is_file());
 
-    let out = sb.guard("codex", &fixture("codex/pretooluse-shell.json"));
-    assert_eq!(out.status.code(), Some(2));
-    assert!(
-        decision(&out)["permissionDecisionReason"]
-            .as_str()
-            .unwrap()
-            .contains("env-poison")
-    );
+    let hooks = std::fs::read_to_string(sb.home.join(".codex/hooks.json")).unwrap();
+    assert!(hooks.contains("Bash|apply_patch|mcp__.*"), "{hooks}");
+
+    for (payload, rule) in [
+        ("codex/pretooluse-shell.json", "env-poison"),
+        ("codex/pretooluse-apply-patch.json", "shell-rc"),
+        ("codex/pretooluse-mcp.json", "secrets-paths"),
+    ] {
+        let out = sb.guard("codex", &fixture(payload));
+        assert_eq!(out.status.code(), Some(2), "{payload}: {}", stderr(&out));
+        let reason = decision(&out)["permissionDecisionReason"].to_string();
+        assert!(reason.contains(rule), "{payload}: {reason}");
+    }
 }
 
 #[test]
