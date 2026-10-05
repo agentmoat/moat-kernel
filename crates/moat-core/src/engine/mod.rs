@@ -6,13 +6,13 @@
 //! is expressed through per-kind `defaults`, never through a deny rule.
 
 use crate::action::{Action, AtomicAction};
-use crate::paths;
 use crate::pattern::{GlobPattern, ShellPattern, any_match, any_shell_match};
 use crate::policy::{Policy, PolicyError, RuleGroup};
 use crate::programs::{self, NoResolver, ProgramResolver};
 use crate::realpath::PathResolver;
 use crate::shell::{ParseOutcome, ShellContext, classify};
 use crate::verdict::{Decision, Verdict};
+use crate::{host, paths};
 
 /// Everything the engine needs from the environment. Supplied by the caller.
 #[derive(Debug, Clone)]
@@ -179,7 +179,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
                 })
                 .collect(),
         ),
-        Action::Net { url } => match host_of_url(url) {
+        Action::Net { url } => match host::of_url(url) {
             Some(host) => ParseOutcome::Parsed(vec![AtomicAction::Net { host }]),
             None => ParseOutcome::Unparseable {
                 reason: format!("no host in url `{url}`"),
@@ -200,7 +200,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
                     .map(|p| AtomicAction::FsWrite { path: norm(p) }),
             );
             for host in hosts {
-                match host_of_url(host).or_else(|| host_of_url(&format!("https://{host}"))) {
+                match host::of_url(host) {
                     Some(host) => atoms.push(AtomicAction::Net { host }),
                     None => {
                         return ParseOutcome::Unparseable {
@@ -211,22 +211,6 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
             }
             ParseOutcome::Parsed(atoms)
         }
-    }
-}
-
-fn host_of_url(url: &str) -> Option<String> {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    let host = rest
-        .split(['/', '?', '#'])
-        .next()?
-        .rsplit('@')
-        .next()?
-        .split(':')
-        .next()?;
-    if host.is_empty() {
-        None
-    } else {
-        Some(host.to_ascii_lowercase())
     }
 }
 

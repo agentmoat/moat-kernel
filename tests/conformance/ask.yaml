@@ -200,3 +200,12 @@
   threat: T7
   action: { patch: [] }
   expect: { verdict: ask, rules: [unparseable] }
+# T12: local services ask rather than being denied as unknown hosts
+- id: ask-curl-localhost-dev-server
+  threat: T12
+  action: { shell: "curl http://localhost:3000/health" }
+  expect: { verdict: ask, rules: [local-net] }
+- id: ask-curl-ipv6-loopback
+  threat: T12
+  action: { shell: "curl http://[::1]:8080/" }
+  expect: { verdict: ask, rules: [local-net] }

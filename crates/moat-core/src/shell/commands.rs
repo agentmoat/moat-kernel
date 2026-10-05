@@ -5,10 +5,11 @@ use super::tables::{
     WRAPPER_OPTIONS_WITH_VALUE, WRAPPER_SUBCOMMANDS, WRAPPERS, WRAPPERS_WITH_VALUE,
     WRITE_ALL_PATHS, WRITE_LAST_PATH,
 };
-use super::tokens::{assignment_name, basename, env_refs, flag_payload, host_of, strip_at};
+use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
 use super::{decoders, make, options};
 use crate::action::AtomicAction;
+use crate::host;
 use crate::lexer::{self, Operator, Token, Word};
 use crate::paths;
 
@@ -321,7 +322,7 @@ fn classify_arguments(
         }
         // Quoted prose ("see example.com") is not a host unless it is a full URL.
         if (!word.quoted || tok.contains("://"))
-            && let Some(host) = host_of(tok)
+            && let Some(host) = host::of_word(tok)
         {
             sink.push(AtomicAction::Net { host })?;
         }
@@ -343,7 +344,7 @@ fn scan_payload(
             sink.push(AtomicAction::FsRead {
                 path: normalise(raw, ctx),
             })?;
-        } else if let Some(host) = host_of(raw) {
+        } else if let Some(host) = host::of_word(raw) {
             sink.push(AtomicAction::Net { host })?;
         }
         for name in env_refs(raw) {

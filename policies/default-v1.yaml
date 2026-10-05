@@ -264,6 +264,9 @@ ask:
   - id: push
     reason: publishes to a remote
     shell: ["git push *", "npm publish*", "pnpm publish*", "yarn publish*", "cargo publish*", "gh release *"]
+  - id: local-net
+    reason: local service; may expose a control API (Docker, databases, cloud agents)
+    net: ["localhost", "127.0.0.1", "::1"]
 
 approval:
   channel: terminal

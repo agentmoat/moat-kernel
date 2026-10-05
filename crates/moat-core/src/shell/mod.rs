@@ -12,7 +12,7 @@
 //! | `$VAR` / `${VAR}` references, `printenv NAME` | `EnvRead` |
 //! | path-looking arguments, `<` targets, `source`/`.` files | `FsRead` |
 //! | `>`/`>>`/`&>` targets, `tee`, destructive/destination args | `FsWrite` |
-//! | URLs, `host:port`, dotted hosts, IP literals | `Net` |
+//! | URLs with any host, bare dotted names under a known TLD, IPv4 literals (`crate::host`) | `Net` |
 //! | `$( … )`, backticks, `sh -c`, `eval`, `xargs`, `sudo`, `env`, … | nested classification |
 //! | `python -c`, `node -e`, `perl -e`, … payloads | URL/path scan of the payload |
 //! | `find -exec/-execdir/-ok/-okdir` commands, `--output=FILE` (`options.rs`) | nested classification, `FsWrite` |
@@ -30,7 +30,7 @@ mod commands;
 mod decoders;
 mod make;
 mod options;
-mod tables;
+pub(crate) mod tables;
 #[cfg(test)]
 mod tests;
 mod tokens;

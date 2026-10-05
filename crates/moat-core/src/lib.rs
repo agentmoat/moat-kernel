@@ -10,6 +10,7 @@
 
 pub mod action;
 pub mod engine;
+pub mod host;
 pub mod lexer;
 pub mod lint;
 pub mod paths;

@@ -18,7 +18,7 @@ the verdict and rule ids the default policy must produce for it.
 | T9 | Hook / policy tampering by the agent | 23 | 3 | 0 |
 | T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
 | T11 | Time-of-check / time-of-use, symlinks | 5 | 1 | 0 |
-| T12 | Network to unknown hosts | 5 | 3 | 0 |
+| T12 | Network to unknown hosts | 10 | 5 | 0 |
 
 ## T1: Secret exfiltration via shell
 
@@ -218,8 +218,15 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-inline-python-prints-version` (ask): Ask [default]
 - `ask-inline-node-prints-version` (ask): Ask [default]
 - `ask-gh-api-can-write` (ask): Ask [default]
+- `ask-curl-localhost-dev-server` (ask): Ask [local-net]
+- `ask-curl-ipv6-loopback` (ask): Ask [local-net]
 - `T12-webfetch-unknown-host` (attacks): Deny [default.net]
 - `T12-curl-unknown-host` (attacks): Deny [default.net]
 - `T12-netcat-ip` (attacks): Deny [default.net]
 - `T12-ssh-unknown` (attacks): Deny [default.net]
 - `T12-curl-bare-host` (attacks): Deny [default.net]
+- `T12-decimal-encoded-loopback` (attacks): Deny [default.net]
+- `T12-hex-encoded-ip` (attacks): Deny [default.net]
+- `T12-single-label-intranet-host` (attacks): Deny [default.net]
+- `T12-ipv6-metadata-endpoint` (attacks): Deny [default.net]
+- `T12-webfetch-single-label-host` (attacks): Deny [default.net]
