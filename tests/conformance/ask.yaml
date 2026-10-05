@@ -132,3 +132,16 @@
 - id: ask-cargo-config-override
   action: { shell: "cargo test --config 'build.rustc-wrapper=\"/tmp/x\"'" }
   expect: { verdict: ask, rules: [default] }
+# Inspection that can run code, write, or mutate stays outside dev-readonly
+- id: ask-sed-script-can-execute
+  action: { shell: "sed -n '1e id' src/main.rs" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-gh-api-can-write
+  action: { shell: "gh api repos/x/y -X DELETE" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-docker-run
+  action: { shell: "docker run --rm alpine" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-gh-run-view-writes-output-file
+  action: { shell: "gh run view 3 --log -o out.txt" }
+  expect: { verdict: ask, rules: [default] }
