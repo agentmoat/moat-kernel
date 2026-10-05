@@ -243,7 +243,7 @@ impl Policy {
                     problem: "no paths listed".into(),
                 });
             }
-            if let Some(bad) = paths.iter().find(|p| !p.starts_with('/')) {
+            if let Some(bad) = paths.iter().find(|p| !crate::paths::is_absolute(p)) {
                 return Err(PolicyError::Rule {
                     rule: format!("executables.{name}"),
                     problem: format!("`{bad}` is not an absolute path"),
@@ -309,6 +309,14 @@ mod tests {
             p.defaults.for_kind("shell"),
             (Verdict::Ask, "default".to_owned())
         );
+    }
+
+    #[test]
+    fn executables_must_be_absolute_on_every_platform() {
+        let ok = "version: 1\nexecutables:\n  git: ['/usr/bin/git', 'C:/Program Files/Git/bin/git.exe']\n";
+        assert!(Policy::parse(ok).is_ok());
+        let rel = "version: 1\nexecutables:\n  git: ['bin/git']\n";
+        assert!(matches!(Policy::parse(rel), Err(PolicyError::Rule { .. })));
     }
 
     #[test]

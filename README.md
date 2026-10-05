@@ -104,7 +104,7 @@ Credentials are redacted before anything is stored. The log is a SQLite file und
 
 ```bash
 $EDITOR ~/.moat/policy.yaml
-moat policy lint             # schema version, unknown keys, duplicate or missing ids, bad globs
+moat policy lint             # errors: schema, unknown keys, ids, bad globs; warnings: unreachable rules, unknown default kinds
 moat doctor --accept         # you edited it, so re-pin the lock (terminal only)
 ```
 

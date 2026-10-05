@@ -43,6 +43,24 @@ impl GlobPattern {
         self.matcher.is_match(candidate)
     }
 
+    /// True when every candidate `other` matches is also matched by `self`.
+    /// Negated patterns never cover. Conservative: a glob `other` is covered
+    /// only by the same glob or by `self` = `prefix/**` with `other` under `prefix/`.
+    #[must_use]
+    pub fn covers(&self, other: &Self) -> bool {
+        if self.negated || other.negated {
+            return false;
+        }
+        let (mine, theirs) = (&self.source, &other.source);
+        if !has_glob_syntax(theirs) {
+            return self.is_match(theirs);
+        }
+        mine == theirs
+            || mine.strip_suffix("**").is_some_and(|prefix| {
+                prefix.ends_with('/') && !has_glob_syntax(prefix) && theirs.starts_with(prefix)
+            })
+    }
+
     #[must_use]
     pub fn source(&self) -> &str {
         &self.source
@@ -69,8 +87,8 @@ pub fn any_match(patterns: &[GlobPattern], candidate: &str) -> bool {
 enum Token {
     /// A bare `*`: matches zero or more argv tokens.
     Any,
-    /// A glob matched against exactly one argv token.
-    One(GlobMatcher),
+    /// A glob matched against exactly one argv token, with its source text.
+    One(GlobMatcher, String),
     /// A trailing `$`: argv must end here.
     End,
 }
@@ -129,7 +147,7 @@ impl ShellPattern {
                 GlobBuilder::new(w)
                     .literal_separator(false)
                     .build()
-                    .map(|g| Token::One(g.compile_matcher()))
+                    .map(|g| Token::One(g.compile_matcher(), w.clone()))
                     .map_err(|e| PolicyError::BadGlob {
                         pattern: raw.to_owned(),
                         source: e,
@@ -148,6 +166,31 @@ impl ShellPattern {
     #[must_use]
     pub fn is_match(&self, argv: &[String]) -> bool {
         matches_from(&self.tokens, argv)
+    }
+
+    /// True when every command `other` matches is also matched by `self`.
+    /// Conservative: `false` when that cannot be shown from the patterns alone.
+    #[must_use]
+    pub fn covers(&self, other: &Self) -> bool {
+        let anchored = |p: &Self| matches!(p.tokens.last(), Some(Token::End));
+        let Ok(lexed) = lexer::lex(&other.source) else {
+            return false;
+        };
+        let mut words: Vec<String> = lexed
+            .into_iter()
+            .filter_map(|t| match t {
+                lexer::Token::Word(w) => Some(w.text),
+                lexer::Token::Operator(op) => Some(op.symbol().to_owned()),
+                lexer::Token::HereDoc { .. } => None,
+            })
+            .collect();
+        if anchored(other) {
+            words.pop();
+        } else if anchored(self) {
+            return false;
+        }
+        let words: Vec<&str> = words.iter().map(String::as_str).collect();
+        covers_from(&self.tokens, &words)
     }
 
     #[must_use]
@@ -169,12 +212,46 @@ fn matches_from(pattern: &[Token], argv: &[String]) -> bool {
             }
             (0..=argv.len()).any(|skip| matches_from(rest, &argv[skip..]))
         }
-        Some((Token::One(glob), rest)) => match argv.split_first() {
+        Some((Token::One(glob, _), rest)) => match argv.split_first() {
             Some((head, tail)) if glob.is_match(head) => matches_from(rest, tail),
             _ => false,
         },
         Some((Token::End, _)) => argv.is_empty(),
     }
+}
+
+/// Does every argv `words` (a pattern's own tokens) can match also match
+/// `pattern`? Like [`matches_from`], but a word that is itself a glob is only
+/// covered by an equal glob, a broader `literal*` glob or a bare `*`, so the
+/// answer errs towards "no".
+fn covers_from(pattern: &[Token], words: &[&str]) -> bool {
+    match pattern.split_first() {
+        None => true,
+        Some((Token::Any, rest)) => {
+            rest.is_empty() || (0..=words.len()).any(|skip| covers_from(rest, &words[skip..]))
+        }
+        Some((Token::One(glob, source), rest)) => match words.split_first() {
+            Some((word, tail)) if glob_covers(glob, source, word) => covers_from(rest, tail),
+            _ => false,
+        },
+        Some((Token::End, _)) => words.is_empty(),
+    }
+}
+
+fn has_glob_syntax(text: &str) -> bool {
+    text.contains(['*', '?', '[', '{'])
+}
+
+/// A glob covers a word when the word is literal and matches, the word is the
+/// same glob, or the glob is `prefix*` and the word starts with `prefix`.
+fn glob_covers(glob: &GlobMatcher, source: &str, word: &str) -> bool {
+    if !has_glob_syntax(word) {
+        return glob.is_match(word);
+    }
+    source == word
+        || source
+            .strip_suffix('*')
+            .is_some_and(|prefix| !has_glob_syntax(prefix) && word.starts_with(prefix))
 }
 
 #[cfg(test)]
@@ -238,6 +315,36 @@ mod tests {
             ShellPattern::compile("$"),
             Err(PolicyError::EmptyPattern)
         ));
+    }
+
+    #[test]
+    fn shell_coverage_is_conservative() {
+        let c = |a: &str, b: &str| {
+            ShellPattern::compile(a)
+                .unwrap()
+                .covers(&ShellPattern::compile(b).unwrap())
+        };
+        assert!(c("cargo *", "cargo publish*"));
+        assert!(c("cargo pub*", "cargo publish*"));
+        assert!(c("cargo", "cargo install"));
+        assert!(c("env", "env $"));
+        assert!(c("env $", "env $"));
+        assert!(!c("env $", "env"));
+        assert!(!c("cargo publish", "cargo pub*"));
+        assert!(!c("cargo ?", "cargo *"));
+        assert!(!c("cargo build*", "cargo *"));
+        assert!(!c("git status*", "git push*"));
+    }
+
+    #[test]
+    fn glob_coverage_is_conservative() {
+        let g = |s: &str| GlobPattern::compile(s, false).unwrap();
+        assert!(g("/p/**").covers(&g("/p/secrets/**")));
+        assert!(g("/p/**").covers(&g("/p/a.rs")));
+        assert!(g("*.github.com").covers(&g("api.github.com")));
+        assert!(!g("/p/*").covers(&g("/p/**")));
+        assert!(!g("/p/**").covers(&g("!/p/x")));
+        assert!(!g("/p/a/**").covers(&g("/p/**")));
     }
 
     #[test]

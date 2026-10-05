@@ -11,6 +11,7 @@
 pub mod action;
 pub mod engine;
 pub mod lexer;
+pub mod lint;
 pub mod paths;
 pub mod pattern;
 pub mod policy;

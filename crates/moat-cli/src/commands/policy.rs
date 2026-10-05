@@ -13,9 +13,18 @@ use crate::render;
 
 pub fn lint(args: &LintArgs) -> Result<Code> {
     let (policy, path) = load(args.file.clone())?;
+    let warnings = moat_core::lint::warnings(&policy);
+    for warning in &warnings {
+        println!("warning: {warning}");
+    }
     let (deny, allow, ask) = policy.rule_count();
+    let suffix = match warnings.len() {
+        0 => String::new(),
+        1 => ", 1 warning".to_owned(),
+        n => format!(", {n} warnings"),
+    };
     println!(
-        "ok: {} ({deny} deny, {allow} allow, {ask} ask groups)",
+        "ok: {} ({deny} deny, {allow} allow, {ask} ask groups{suffix})",
         path.display()
     );
     Ok(Code::Ok)

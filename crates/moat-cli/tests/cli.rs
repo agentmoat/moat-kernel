@@ -56,6 +56,31 @@ fn lint_accepts_default_policy() {
     let out = moat(&["policy", "lint", default_policy().to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(0));
     assert!(stdout(&out).starts_with("ok: "));
+    assert!(!stdout(&out).contains("warning"), "{}", stdout(&out));
+}
+
+#[test]
+fn lint_warns_about_unreachable_rules_without_failing() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("policy.yaml");
+    std::fs::write(
+        &file,
+        "version: 1\ndefaults: { netw: deny }\nallow:\n  - id: dev\n    shell: ['cargo *']\n\
+         ask:\n  - id: push\n    shell: ['cargo publish*']\n",
+    )
+    .unwrap();
+    let out = moat(&["policy", "lint", file.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0));
+    let text = stdout(&out);
+    assert!(
+        text.contains("warning: rule `defaults`: unknown kind `netw`"),
+        "{text}"
+    );
+    assert!(
+        text.contains("warning: rule `push`: ask shell pattern `cargo publish*` is unreachable"),
+        "{text}"
+    );
+    assert!(text.contains("2 warnings)"), "{text}");
 }
 
 #[test]
