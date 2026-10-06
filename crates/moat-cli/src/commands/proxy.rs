@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use anyhow::{Context as _, Result, bail};
 use moat_audit::{NewEvent, Store};
 use moat_core::{Action, CompiledPolicy};
-use moat_proxy::{Connection, Limits, Proxy, RecordError, Recorder, SystemResolver};
+use moat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, SystemResolver};
 
 use crate::cli::ProxyArgs;
 use crate::context;
@@ -65,6 +65,7 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
         recorder: &recorder,
         limits: &limits,
         loopback_ok: &[],
+        broker: &Broker::default(),
     };
     proxy.serve(&listener).context("accepting connections")?;
     Ok(Code::Ok)

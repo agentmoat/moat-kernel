@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 use moat_core::{
     Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, MapPathResolver, MapResolver, Policy,
-    Secret, Taint, Verdict,
+    Taint, TaintSecret, Verdict,
 };
 use serde::Deserialize;
 
@@ -269,7 +269,7 @@ fn default_policy_conformance() {
 /// A session that read a secret and fetched untrusted content.
 fn worst_taint() -> Taint {
     Taint {
-        secrets: vec![Secret {
+        secrets: vec![TaintSecret {
             source: "read /Users/me/.ssh/id_rsa".into(),
             host: None,
         }],

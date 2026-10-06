@@ -99,7 +99,9 @@ value from `source` and is the only component that uses it.
   - `plain_http: true` is set for a host that is not loopback (`localhost`, `*.localhost`,
     `127.0.0.0/8`).
 
-The proxy does not use `secrets:` yet; #172 tracks injection and leak blocking.
+The proxy refuses a request to any other host that carries the placeholder or the value,
+in its head or plain-HTTP body (`proxy-secret`, §5.1). `moat proxy` does not load
+`secrets:` yet, and injection is not built yet (#172).
 
 ## 3. Pattern syntax
 
@@ -213,7 +215,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | `session-taint` | ask | earlier calls of the session read secret material or untrusted content, and this call could carry the secret out or persist the content (§4.1) |
 | `approved-session` | allow | an `ask` for a shell command that a person granted with `moat allow` for this host session (§8.2) |
 | `approved-<n>` | allow | a permanent rule in `~/.moat/policy.d/approved.yaml` written by `moat allow --always` |
-| `proxy-address`, `proxy-sni`, `proxy-request`, `proxy-upstream` | deny | `moat proxy` refused a connection: a loopback, link-local, metadata, or unnamed private destination, a TLS server name that does not match the CONNECT host, a request it does not serve, or a destination it could not reach (§5.2) |
+| `proxy-address`, `proxy-sni`, `proxy-request`, `proxy-upstream`, `proxy-secret` | deny | `moat proxy` refused a connection: a loopback, link-local, metadata, or unnamed private destination, a TLS server name that does not match the CONNECT host, a request it does not serve, a destination it could not reach, or a brokered secret sent to a host other than its own (§2.1, §5.2) |
 
 ### 5.2 `moat proxy`
 

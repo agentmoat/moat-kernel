@@ -126,6 +126,22 @@ something the alpha claims to stop.
   default policy, `secrets-paths` denies, so only the secrets broker (#172) or a policy
   that asks for secret reads can taint a session. An edited or deleted audit event
   clears taint until `moat doctor` reports the broken chain.
+- **The secrets broker (ADR-020) keeps a value from the agent, nothing more.**
+  `moat-proxy` holds the value of each `secrets:` entry. It refuses and records
+  (`proxy-secret`) any request to another host whose head, or plain-HTTP body, carries
+  the placeholder or the value. It defends against a prompt-injected agent that sends
+  the token it holds to a host of the attacker's choosing, or through an allowed relay.
+  The agent only ever holds the placeholder. It does not defend against:
+  - an agent that reads the source itself (a file or variable no deny rule covers;
+    `moat policy lint` warns);
+  - the value encoded (base64, percent-encoding, compression) or split across requests,
+    since the check matches exact bytes;
+  - anything inside a CONNECT tunnel, which is TLS and is not decrypted;
+  - covert channels such as timing, or data hidden in requests to the owner host;
+  - an agent that asks the user to paste the secret into the conversation;
+  - the owner host itself misusing or reflecting the token.
+
+  `moat proxy` does not load `secrets:` yet (#172).
 - **Hosts proceed when the hook binary is missing.** Claude Code and Codex treat a
   hook that cannot start as a non-blocking error and run the tool call. Cursor blocks
   because `moat init` sets `failClosed`. `moat status` and `moat doctor` report a

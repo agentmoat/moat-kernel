@@ -31,7 +31,9 @@ mod shell;
 mod verdict;
 
 pub use action::{Action, AtomicAction};
-pub use engine::{CompiledPolicy, EvalContext, Secret, Taint, evaluate};
+// The taint `Secret` (material a session read) is exported as `TaintSecret`, apart
+// from the policy's brokered `Secret`.
+pub use engine::{CompiledPolicy, EvalContext, Secret as TaintSecret, Taint, evaluate};
 pub use kind::{Kind, UnknownKind};
 pub use pattern::literal_shell_pattern;
 pub use policy::{Defaults, Policy, PolicyError, RuleGroup, SandboxSettings};

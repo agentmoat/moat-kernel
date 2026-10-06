@@ -396,6 +396,9 @@ Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `st
   1. Read the request head, at most 16 KiB within 10 s. Two forms are served:
      - `CONNECT host:port`
      - one absolute-form `http://` request
+
+     Refuse (`proxy-secret`) a request whose head, or body bytes read with it, carries a
+     brokered secret's placeholder or value when the host is not that secret's own.
   2. Decide the host as a `fetch` atom through `CompiledPolicy` (POLICY.md §4). Only
      `allow` passes. An `ask` is refused, because the proxy cannot prompt.
      `metadata.google.internal` and `metadata.goog` are refused by name whatever the
@@ -423,12 +426,15 @@ Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `st
      `net` `connect://host:port` or `http://host:port` (never the path), and the verdict
      and rules. If the row cannot be written, the connection is refused.
   7. Relay bytes both ways. A connection is closed after 120 s with no bytes in either
-     direction.
+     direction. A plain-HTTP client stream keeps being checked for brokered secrets,
+     across read boundaries. A chunk that completes one is not forwarded: the
+     connection closes and a second row (`proxy-secret`) is recorded.
 - **Rule ids of its own:**
   - `proxy-address`: refused destination
   - `proxy-sni`: SNI missing or mismatched, or not TLS
   - `proxy-request`: unparseable or unsupported request
   - `proxy-upstream`: DNS or connect failure
+  - `proxy-secret`: a brokered secret sent towards a host other than its own
   - `proxy-audit`: written to stderr only, since the audit log is what failed
 - **Limits:**
   - 256 concurrent connections; the next is answered `503`.
