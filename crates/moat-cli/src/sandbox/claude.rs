@@ -13,10 +13,14 @@
 //!   under the user directories (`/Users`, `/home`, `/Volumes`, …) outside the
 //!   working directories, and makes file tools refuse them.
 
+mod settings;
+
 use anyhow::Result;
 use moat_core::ir::{Access, Effect, Enforcement, Rule};
 use moat_core::{AtomicAction, Kind};
 use serde_json::{Map, Value, json};
+
+pub use settings::{apply, in_sync, protect, weaknesses};
 
 use super::Report;
 use super::patterns::{Spot, domain, has_glob, literal_tree, push_unique, split, spot};

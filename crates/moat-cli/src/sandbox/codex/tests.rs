@@ -143,3 +143,32 @@ fn a_write_grant_needs_the_read_and_a_root_inside_a_deny_is_refused() {
         "{losses:?}"
     );
 }
+
+#[test]
+fn protect_denies_the_codex_home_and_in_sync_ignores_other_keys() {
+    let mut out = generated(DEFAULT_POLICY);
+    protect(&mut out, std::path::Path::new("/cfg/codex"));
+    assert_eq!(mode(&out, &[], "/cfg/codex"), Some("deny"));
+    let mut doc: DocumentMut = "# mine\nmodel = \"o3\"\n".parse().unwrap();
+    assert!(!in_sync(&doc, &out));
+    assert!(
+        weaknesses(&doc)
+            .iter()
+            .any(|w| w.contains("default_permissions"))
+    );
+    apply(&mut doc, &out).unwrap();
+    assert!(in_sync(&doc, &out) && weaknesses(&doc).is_empty());
+    let before = owned_part(&doc);
+    doc["projects"]["/w"]["trust_level"] = toml_edit::value("trusted");
+    assert_eq!(
+        owned_part(&doc),
+        before,
+        "Codex's own keys are not moat's part"
+    );
+    assert!(
+        doc.to_string().starts_with("# mine\nmodel = \"o3\"\n"),
+        "{doc}"
+    );
+    doc["sandbox_mode"] = toml_edit::value("danger-full-access");
+    assert!(weaknesses(&doc).iter().any(|w| w.contains("sandbox_mode")));
+}
