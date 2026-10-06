@@ -164,9 +164,21 @@ something the alpha claims to stop.
   running as the user, see "Decide-only") can delete the newest events and leave a
   valid shorter chain, or rewrite events and recompute every hash after them. Keeping
   the head hash or count elsewhere on the same machine would need a second write on
-  every `guard` call and could be rewritten by the same attacker, so it is not done;
-  anchoring the head hash off the machine is #129. Events written before audit
-  schema 2 are not covered.
+  every `guard` call and could be rewritten by the same attacker, so it is not done.
+  Anchoring the head off the machine is left to the person: `moat doctor` and
+  `moat audit verify` print it, and `moat audit verify --anchor` checks a later
+  export against it. Events written before audit schema 2 are not covered.
+- **What verifying an export proves.** `moat audit verify` shows that every line is
+  the event its hash commits to, and that runs of consecutive ids are unbroken
+  links. It does not show that the export is complete. Dropping the newest lines,
+  or exporting from a truncated log, leaves a file that verifies, and so does
+  deleting a middle event, which looks like a filter gap. Only an anchored head
+  catches those: a recorded hash that the export must contain. The anchor does not
+  cover events after it. Anyone who can write the database can recompute every hash
+  before exporting (the chain is unkeyed), so an export is evidence about the log
+  as it was at export time, no more. Exported cells are the redacted store cells.
+  A secret shape that redaction learned after an event was recorded stays in that
+  event.
 
 ## 6. How the claims are tested
 
