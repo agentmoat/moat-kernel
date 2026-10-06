@@ -1,5 +1,7 @@
 //! `moat allow`: turn an `ask` into a session grant or a permanent rule.
 
+use std::io::Write as _;
+
 use anyhow::{Context as _, Result, bail};
 use moat_core::{Action, Verdict};
 
@@ -8,6 +10,7 @@ use crate::cli::AllowArgs;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity;
+use crate::render::Deferred;
 
 /// How many recent events `--last` searches for the newest shell `ask`.
 const LAST_ASK_SEARCH: usize = 200;
@@ -21,13 +24,14 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
         bail!("{} does not exist; run `moat init`", home.root().display());
     }
 
+    let mut out = Deferred::default();
     let (host, session, command) = match (&args.command, args.last) {
         (Some(command), false) => (
             args.host.map(|h| h.id().to_owned()),
             args.session.clone(),
             command.clone(),
         ),
-        (None, true) => last_ask(&home)?,
+        (None, true) => last_ask(&home, &mut out)?,
         _ => bail!("give a command, or --last to take the most recent ask"),
     };
 
@@ -36,8 +40,12 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
         let mut overlay = Overlay::load(&path)?;
         let rule = overlay.allow_command(&command)?.clone();
         overlay.save(&path)?;
-        println!("✔ permanent rule {} allows shell \"{command}\"", rule.id);
-        warn_if_shadowed(&home, &rule.id);
+        writeln!(
+            out,
+            "✔ permanent rule {} allows shell \"{command}\"",
+            rule.id
+        )?;
+        warn_if_shadowed(&home, &rule.id, &mut out)?;
     } else {
         let session = session.context(
             "give --host and --session for a session grant, --always for a permanent rule, or --last",
@@ -47,30 +55,32 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
         let mut grants = Grants::load(&path)?;
         grants.grant(&host, &session, &command);
         grants.save(&path)?;
-        println!("✔ session {session} on {host} may run \"{command}\"");
+        writeln!(out, "✔ session {session} on {host} may run \"{command}\"")?;
     }
 
     let binary = crate::install::hook_binary()?;
     let lock = integrity::repin(&home, &binary)?;
-    println!("✔ lock re-pinned ({} files)", lock.entries.len());
+    writeln!(out, "✔ lock re-pinned ({} files)", lock.entries.len())?;
+    out.finish()?;
     Ok(Code::Ok)
 }
 
 /// A rule a deny already covers can never decide anything; say so rather than
 /// let the person believe the command is now allowed.
-fn warn_if_shadowed(home: &Home, id: &str) {
+fn warn_if_shadowed(home: &Home, id: &str, out: &mut Deferred) -> Result<()> {
     let Ok(policy) = home.load_policy() else {
-        return;
+        return Ok(());
     };
     for warning in moat_core::lint::warnings(&policy) {
         if warning.rule == id {
-            println!("warning: {warning}");
+            writeln!(out, "warning: {warning}")?;
         }
     }
+    Ok(())
 }
 
 /// Host, session and command of the most recent `ask` for a shell command.
-fn last_ask(home: &Home) -> Result<(Option<String>, Option<String>, String)> {
+fn last_ask(home: &Home, out: &mut Deferred) -> Result<(Option<String>, Option<String>, String)> {
     let store = home.open_audit()?;
     let event = store
         .recent(LAST_ASK_SEARCH)?
@@ -80,9 +90,10 @@ fn last_ask(home: &Home) -> Result<(Option<String>, Option<String>, String)> {
     let Some(Action::Shell { command }) = event.action else {
         unreachable!("filtered to shell actions");
     };
-    println!(
+    writeln!(
+        out,
         "last ask: {} on {} (session {}) wanted to run \"{command}\"",
         event.id, event.host, event.session_id
-    );
+    )?;
     Ok((Some(event.host), Some(event.session_id), command))
 }

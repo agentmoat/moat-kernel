@@ -1,5 +1,7 @@
 //! `moat doctor`: verify the installation and, from a terminal, accept changes.
 
+use std::io::Write as _;
+
 use anyhow::{Result, bail};
 use moat_audit::Store;
 use moat_hosts::Host;
@@ -9,6 +11,7 @@ use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig, stale_hint};
 use crate::integrity::{self, Lock};
+use crate::render::Deferred;
 
 /// What a check is about, so accepting changes clears exactly the problems a
 /// re-pin fixes.
@@ -25,18 +28,20 @@ enum Area {
 
 struct Report {
     problems: Vec<(Area, String)>,
+    out: Deferred,
 }
 
 impl Report {
     fn line(&mut self, area: Area, ok: bool, text: String) {
-        println!("{} {text}", if ok { "✔" } else { "✗" });
+        // `Deferred` keeps a write error for `finish`; it never returns one here.
+        let _ = writeln!(self.out, "{} {text}", if ok { "✔" } else { "✗" });
         if !ok {
             self.problems.push((area, text));
         }
     }
 
-    fn note(text: &str) {
-        println!("· {text}");
+    fn note(&mut self, text: &str) {
+        let _ = writeln!(self.out, "· {text}");
     }
 }
 
@@ -45,6 +50,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
     let binary = crate::install::hook_binary()?;
     let mut report = Report {
         problems: Vec::new(),
+        out: Deferred::default(),
     };
 
     report.line(
@@ -148,7 +154,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
                 );
             }
             HookState::Missing if !config.host_present() => {
-                Report::note(&format!("{name:<16} host not found"));
+                report.note(&format!("{name:<16} host not found"));
             }
             HookState::Missing => {
                 report.line(
@@ -195,10 +201,14 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
             );
         }
         if drift.is_empty() && lock.is_some() {
-            println!("nothing to accept: lock is intact");
+            writeln!(report.out, "nothing to accept: lock is intact")?;
         } else {
             let lock = integrity::repin(&home, &binary)?;
-            println!("✔ lock re-pinned for {} files", lock.entries.len());
+            writeln!(
+                report.out,
+                "✔ lock re-pinned for {} files",
+                lock.entries.len()
+            )?;
             report
                 .problems
                 .retain(|(area, _)| !matches!(area, Area::Lock | Area::Binary));
@@ -206,12 +216,15 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
     }
 
     if report.problems.is_empty() {
-        println!("healthy");
+        writeln!(report.out, "healthy")?;
+        report.out.finish()?;
         return Ok(Code::Ok);
     }
-    println!(
+    writeln!(
+        report.out,
         "{} problem(s). `moat init` re-installs and re-pins; `moat doctor --accept` accepts edits you made yourself.",
         report.problems.len()
-    );
+    )?;
+    report.out.finish()?;
     Ok(Code::Usage)
 }

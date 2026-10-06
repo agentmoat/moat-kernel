@@ -23,6 +23,48 @@ struct DecisionReport<'a> {
 }
 
 /// Pretty JSON on stdout, one document per call, for `--format json`.
+/// Standard output for commands that change state (`init`, `allow`, `doctor`).
+///
+/// A failed write is remembered rather than returned, so a reader that closes
+/// the pipe early (`moat init | head -1`) cannot stop the command between
+/// saving a file and re-pinning the lock. [`Deferred::finish`] reports the
+/// failure once the work is done, and `main` turns a broken pipe into exit 0.
+#[derive(Default)]
+pub struct Deferred {
+    error: Option<io::Error>,
+}
+
+impl Deferred {
+    /// The first write error, if any, now that the command has done its work.
+    pub fn finish(mut self) -> Result<()> {
+        self.flush()?;
+        match self.error {
+            Some(error) => Err(error.into()),
+            None => Ok(()),
+        }
+    }
+}
+
+impl Write for Deferred {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.error.is_none()
+            && let Err(error) = io::stdout().write_all(buf)
+        {
+            self.error = Some(error);
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.error.is_none()
+            && let Err(error) = io::stdout().flush()
+        {
+            self.error = Some(error);
+        }
+        Ok(())
+    }
+}
+
 pub fn json<T: Serialize + ?Sized>(value: &T) -> Result<()> {
     let mut out = io::stdout().lock();
     serde_json::to_writer_pretty(&mut out, value)?;

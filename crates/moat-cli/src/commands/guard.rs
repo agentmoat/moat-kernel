@@ -36,7 +36,9 @@ pub fn run(args: &GuardArgs) -> Code {
     }
     let decision = kernel_error(&anyhow::Error::msg("internal error while deciding"));
     let response = host.render_response(&HookEvent::default(), &decision);
-    println!("{response}");
+    // `println!` would panic again on a closed pipe and exit 101; exit 2 is
+    // the deny every host honours whether or not the response arrives.
+    let _ = writeln!(io::stdout(), "{response}");
     eprintln!("{}", moat_hosts::reason_line(&decision));
     Code::Deny
 }

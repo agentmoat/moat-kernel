@@ -1,6 +1,7 @@
 //! `moat status`: is the kernel installed, current and active?
 
 use std::fs;
+use std::io::{self, Write as _};
 
 use anyhow::Result;
 use moat_audit::Store;
@@ -16,8 +17,9 @@ pub fn run() -> Result<Code> {
     let home = Home::locate()?;
     let binary = crate::install::hook_binary()?;
     let mut healthy = true;
+    let mut out = io::stdout().lock();
 
-    println!("state directory  {}", home.root().display());
+    writeln!(out, "state directory  {}", home.root().display())?;
 
     let policy_path = home.policy_path();
     match home.load_policy() {
@@ -25,14 +27,15 @@ pub fn run() -> Result<Code> {
             let bytes = fs::read(&policy_path)?;
             let digest = crate::integrity::sha256_hex(&bytes);
             let (deny, allow, ask) = policy.rule_count();
-            println!(
+            writeln!(
+                out,
                 "policy           {}  sha256:{digest}  ({deny} deny, {allow} allow, {ask} ask)",
                 policy_path.display()
-            );
+            )?;
         }
         Err(error) => {
             healthy = false;
-            println!("policy           ✗ {error:#}");
+            writeln!(out, "policy           ✗ {error:#}")?;
         }
     }
 
@@ -41,24 +44,25 @@ pub fn run() -> Result<Code> {
         Ok(lock) => {
             let drift = lock.verify();
             if drift.is_empty() {
-                println!(
+                writeln!(
+                    out,
                     "lock             ✔ {} files pinned, intact",
                     lock.entries.len()
-                );
+                )?;
             } else {
                 healthy = false;
                 for d in drift {
-                    println!("lock             ✗ {d} (run `moat doctor`)");
+                    writeln!(out, "lock             ✗ {d} (run `moat doctor`)")?;
                 }
             }
         }
         Err(_) if !lock_path.exists() => {
             healthy = false;
-            println!("lock             ✗ missing (run `moat init`)");
+            writeln!(out, "lock             ✗ missing (run `moat init`)")?;
         }
         Err(error) => {
             healthy = false;
-            println!("lock             ✗ {error:#}");
+            writeln!(out, "lock             ✗ {error:#}")?;
         }
     }
 
@@ -80,29 +84,31 @@ pub fn run() -> Result<Code> {
                 format!("✗ {error}")
             }
         };
-        println!(
+        writeln!(
+            out,
             "{:<16} {line}  {}",
             host.display_name(),
             config.settings_path.display()
-        );
+        )?;
     }
 
     let audit_path = home.audit_path();
     if audit_path.is_file() {
         let store = Store::open_read_only(&audit_path)?;
-        println!(
+        writeln!(
+            out,
             "audit log        {}  ({} events)",
             audit_path.display(),
             store.count()?
-        );
+        )?;
         let recent = store.recent(5)?;
         if !recent.is_empty() {
-            println!();
+            writeln!(out)?;
             render::event_table(&recent)?;
         }
     } else {
         healthy = false;
-        println!("audit log        ✗ missing (run `moat init`)");
+        writeln!(out, "audit log        ✗ missing (run `moat init`)")?;
     }
 
     Ok(if healthy { Code::Ok } else { Code::Usage })
