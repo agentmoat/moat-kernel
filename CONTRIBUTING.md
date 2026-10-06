@@ -9,6 +9,11 @@ purpose; the detail lives in `docs/`.
   `docs/DESIGN.md` §6–7 if you touch policy or shell classification.
 - Security-relevant findings go through a private advisory, never a public issue.
   See `SECURITY.md`.
+- A safe command the default policy denies or asks about is a *false positive*: open an
+  issue with the false-positive form and paste `moat policy check` output. A dangerous
+  command it allows is a vulnerability: report it privately.
+- Changes to semantics, invariants or crate boundaries start as a design proposal issue
+  and land with an ADR.
 
 ## Setup
 

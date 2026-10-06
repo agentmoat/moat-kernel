@@ -1,0 +1,41 @@
+name: Design proposal
+description: A change to semantics, an invariant or a crate boundary; accepted proposals become ADRs.
+labels: [design]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read `AGENTS.md` §3 (invariants) and the ADRs in `docs/adr/` first. A proposal that
+        moves an invariant needs a new ADR that supersedes the old one; ADRs are never edited.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What cannot be expressed or defended today, with a concrete example.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The change, including policy syntax, CLI or data formats it touches.
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariants and fail-open review
+      description: Which AGENTS.md invariants this touches, and which error path could now allow an action.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: tests
+    attributes:
+      label: How it would be proven
+      description: Conformance fixtures (attack, benign, ask), unit or end-to-end tests.
+    validations:
+      required: true
