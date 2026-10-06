@@ -167,20 +167,23 @@ pub struct ChainReport {
     pub broken: Option<ChainBreak>,
 }
 
-const ROWS: &str = "SELECT id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us, prev_hash, hash FROM events ORDER BY id";
+/// Every stored cell of an event, in the order [`read_row`] expects.
+pub(super) const ROWS: &str = "SELECT id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us, prev_hash, hash FROM events";
 
-struct Row {
-    id: i64,
-    ts_ms: i64,
-    cells: [String; 7],
-    call_id: Option<String>,
-    cwd: Option<String>,
-    latency_us: i64,
-    prev_hash: Option<String>,
-    hash: Option<String>,
+/// One event's cells exactly as stored.
+pub(super) struct Row {
+    pub id: i64,
+    pub ts_ms: i64,
+    /// `host`, `session_id`, `tool`, `action`, `verdict`, `rules`, `reasons`.
+    pub cells: [String; 7],
+    pub call_id: Option<String>,
+    pub cwd: Option<String>,
+    pub latency_us: i64,
+    pub prev_hash: Option<String>,
+    pub hash: Option<String>,
 }
 
-fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
+pub(super) fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
     Ok(Row {
         id: row.get(0)?,
         ts_ms: row.get(1)?,
@@ -246,7 +249,7 @@ impl Store {
             )
             .optional()?
             .unwrap_or(0);
-        let mut stmt = self.conn.prepare(ROWS)?;
+        let mut stmt = self.conn.prepare(&format!("{ROWS} ORDER BY id"))?;
         let mut rows = stmt.query([])?;
         while let Some(raw) = rows.next()? {
             report.events += 1;

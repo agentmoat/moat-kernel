@@ -14,7 +14,8 @@ moat-core.workspace = true
 rusqlite.workspace = true
 regex.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+# `raw_value` embeds stored JSON cells in an export byte for byte (export.rs).
+serde_json = { workspace = true, features = ["raw_value"] }
 sha2.workspace = true
 thiserror.workspace = true
 
