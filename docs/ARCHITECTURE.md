@@ -93,6 +93,8 @@ Claude Code treats exit 101 as a non-blocking error.
   capped at 2048 atoms.
 - **ForeignShell** (Claude Code `PowerShell`). Always `ask` with rule `unparseable`;
   there is no PowerShell parser.
+- **ReadFiles** (Claude Code `SendFile`, absolute Glob patterns). One `fs.read` per
+  path; an empty list asks.
 - **Patch** (Codex `apply_patch`). One `fs.write` per added, updated, deleted or
   moved-to file; a patch naming no file asks.
 - **McpTool.** An `mcp` atom for the tool name, plus `fs.*` and `net` atoms for path-
@@ -101,6 +103,29 @@ Claude Code treats exit 101 as a non-blocking error.
 
 Anything the lexer or classifier cannot make sense of is `unparseable`, which the
 engine turns into `ask`, never `allow`.
+
+### Host tool mapping
+
+| Host tool | Field read | Action |
+|---|---|---|
+| Claude Code, Codex `Bash`; Cursor `beforeShellExecution` | `command` | `Shell` |
+| Claude Code `Monitor` | `command`, or `ws.url` (exactly one) | `Shell`, or `Net` |
+| Claude Code `PowerShell` | `command` | `ForeignShell` |
+| Claude Code `Read`; Cursor `beforeReadFile`, `preToolUse` `Read` | `file_path` | `FsRead` |
+| Claude Code `LSP` | `filePath` | `FsRead` |
+| Claude Code `Glob`, `Grep`; Cursor `preToolUse` `Glob`, `Grep` | `path`, else the working directory; an absolute or `~` Glob `pattern` also reads its directory part (Claude Code searches that instead of `path`) | `FsRead`, `ReadFiles` |
+| Claude Code `SendFile` | every path in `files` (the contents go to another session; an empty or non-string list is an adapter error, so `deny`) | `ReadFiles` |
+| Claude Code `Edit`, `Write`, `MultiEdit`; `NotebookEdit` | `file_path`; `notebook_path` | `FsWrite` |
+| Cursor `preToolUse` `Write`, `Edit`, `MultiEdit`, `StrReplace`, `Delete` | `file_path` | `FsWrite` |
+| Claude Code `WebFetch` | `url` | `Fetch` |
+| Codex `apply_patch` | `command` (the patch envelope) | `Patch` |
+| `mcp__<server>__<tool>` (Claude Code, Codex); Cursor `beforeMCPExecution` | tool name and arguments (Cursor: `mcp_server_name`, `tool_name`, `tool_input`) | `McpTool` |
+| anything else (Claude Code `Task`, Codex `update_plan`, Cursor `preToolUse` `Shell`) | — | none: `ungoverned` |
+
+Claude Code calls only reach `moat` for tools in the installed matcher
+(`crates/moat-cli/src/install/mod.rs`); a tool outside it is never seen.
+Cursor's hook documentation names `Grep` but not `Glob` and gives no file tool's
+arguments, so those keys are unverified (`tests/fixtures/hosts/cursor/README.md`).
 
 ## 4. Decision
 
@@ -150,7 +175,11 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
   --accept` and `moat allow` from an interactive terminal.
 - **ConfigChange veto.** Claude Code reports settings changes; a pinned file that no
   longer matches the lock is blocked for the session. Codex and Cursor have no such
-  event, so there the next tool call is denied instead.
+  event, so there the next tool call is denied instead. A `/settings-review` accept
+  writes the new contents to `<file>.proposed-<8 hex>`, fires `ConfigChange` for that
+  copy and renames it over the file only if no hook blocks; when `<file>` is pinned,
+  the copy is blocked unless the file still matches the lock and the copy's bytes equal
+  the pinned ones, so a reviewed edit of a pinned file cannot pass the hook.
 - **`kernel-self` rules.** The default policy denies agent writes to the state and
   host directories, hook files and any `bin/moat`, and denies `moat
   allow|doctor|init|policy` from an agent, including under pseudo-terminal wrappers
@@ -208,6 +237,8 @@ fuzz/                          cargo-fuzz targets: decide_shell, policy_parse,
 docs/                          this document, POLICY, THREAT_MODEL, ROADMAP,
                                COVERAGE (generated), adr/
 scripts/ci/quality-gate.sh     the one gate CI and the pre-push hook run
+scripts/ci/guard-latency.py    times `moat guard` per process in CI (the `latency` job)
+scripts/ci/sync-labels.sh      the repository's label set
 ```
 
 ## 11. Testing layers
@@ -221,6 +252,7 @@ scripts/ci/quality-gate.sh     the one gate CI and the pre-push hook run
 | End to end | `crates/moat-cli/tests/e2e/` (real binary, isolated `HOME`/`MOAT_HOME`) | every PR, all OS |
 | `wasm32` purity build | CI job | every PR |
 | Fuzz | `fuzz/`, one minute per target on PRs, ten minutes weekly | CI |
+| Guard latency | `scripts/ci/guard-latency.py`: one process per call, end to end and as recorded by guard; warns above the 15 ms p95 budget, fails above 45 ms (about 3 ms deciding and 8 ms end to end on Apple silicon) | every PR, `latency` job (not required) |
 
 CI runs `scripts/ci/quality-gate.sh` on macOS (arm64, x64), Linux and Windows, plus
 `cargo-deny`, the crate packaging check and `actionlint`/`zizmor` on workflows.

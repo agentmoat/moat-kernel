@@ -36,7 +36,7 @@ Older ADRs cite documents that were folded into the current set. Read them as:
 | `DESIGN.md` §8.3–8.4 (own approval prompt, Telegram) | not built; [ROADMAP.md](../ROADMAP.md) |
 | `STRENGTH.md` §3.3 (benchmark gate), `PROGRESS.md` §4 | [ROADMAP.md](../ROADMAP.md) and issue #144 |
 | `STRENGTH.md` W6 (prompt fatigue), §4.1 (fuzzing, differential testing) | [THREAT_MODEL.md](../THREAT_MODEL.md) §5–6 |
-| `TECH_STACK.md` | ADR-001 |
+| `TECH_STACK.md` | ADR-001 (the full scored comparison is in git history) |
 
 Some ADR consequences describe gaps that later work closed: ADR-008's note that
 `moat policy check` has no environment snapshot and that Windows ignores `PATHEXT`,

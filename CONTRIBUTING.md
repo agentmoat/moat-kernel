@@ -6,7 +6,8 @@ purpose; the detail lives in `docs/`.
 ## Before you start
 
 - Read `AGENTS.md` (the contract for humans and coding agents working here) and
-  `docs/DESIGN.md` §6–7 if you touch policy or shell classification.
+  `docs/POLICY.md` and `docs/ARCHITECTURE.md` §3–4 if you touch policy or shell
+  classification.
 - Security-relevant findings go through a private advisory, never a public issue.
   See `SECURITY.md`.
 - A safe command the default policy denies or asks about is a *false positive*: open an

@@ -1,4 +1,4 @@
-//! Path normalisation without touching the filesystem (DESIGN.md §7.3).
+//! Path normalisation without touching the filesystem (docs/POLICY.md §3.2).
 //!
 //! All paths are handled in a slash-separated canonical form on every platform:
 //! `/Users/me/x` on Unix, `C:/Users/me/x` or `//server/share/x` on Windows.

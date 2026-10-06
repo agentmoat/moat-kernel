@@ -21,5 +21,5 @@ Modules: `policy` (schema, lint), `lexer/` (tokens), `shell/` (classification),
 `pattern` (globs and shell patterns), `paths` (canonical paths), `engine`
 (deny → allow → ask → defaults, strictest wins), `verdict`, `action`.
 
-Semantics are specified in `docs/POLICY.md` and `docs/DESIGN.md` §6–7 and
+Semantics are specified in `docs/POLICY.md` and `docs/ARCHITECTURE.md` §3–4 and
 enforced by `tests/conformance/`.
