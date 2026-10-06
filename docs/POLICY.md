@@ -61,6 +61,7 @@ kind. One tool call usually produces several atomic actions (see §4).
 Tokenised with the same lexer as commands, so `a|b` and `a | b` are equal.
 
 - Each token is a glob matched against exactly one argument: `git push --force*` matches `git push --force-with-lease`.
+- git's global options are the one normalisation: `git -C dir push --force`, `git -c k=v reset --hard` and `git --git-dir=x push …` are matched as `git push --force`, `git reset --hard` and `git push …`, and `-C`/`--git-dir`/`--work-tree` values are `fs.read`s. A `-c`/`--config-env` key outside a short inert list (`color.*`, `user.name`, `core.quotepath`, …), `--exec-path=` or an unknown global option can make git run a program (`core.fsmonitor`, `core.hooksPath`, `alias.*`, `credential.helper`, `include.path`, …), so the command is also checked as written, which no `git <subcommand>` allow matches.
 - Tokens are compared as written; flags are not normalised. `rm -rf ~` does not match `rm -fr ~` or `rm -r -f ~`; list every spelling you mean.
 - A bare `*` matches **any number** of arguments, including none: `sudo *` matches `sudo`, `curl * | sh` matches `curl -fsSL https://x | sh -s`.
 - A pattern is a **prefix**: `git status` also matches `git status --short`.

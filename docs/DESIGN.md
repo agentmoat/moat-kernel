@@ -493,6 +493,10 @@ Rules:
 - `<<<` here-strings and here-document bodies are stdin data; the substitutions and `$VAR`s
   the shell expands in them (any here-string, a here-document with an unquoted delimiter)
   are evaluated, and a shell or interpreter reading stdin runs them as its program.
+- git's global options (`-C`, `-c`, `--git-dir`, `--work-tree`, `--no-pager`, …) are taken
+  out of the `shell` action so the subcommand meets the rules; directories become `fs.read`,
+  and a config key not known to be inert, `--exec-path=` or an unknown option adds the
+  command as written as a second `shell` action (`shell/git.rs`).
 - Options that run another command or write a file: the command after `find -exec`,
   `-execdir`, `-ok`, `-okdir` is classified on its own; `--output=FILE` is an `fs.write`
   (`shell/options.rs`).
