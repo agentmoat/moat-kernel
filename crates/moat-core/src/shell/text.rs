@@ -1,5 +1,5 @@
 //! Text tools whose arguments are data, not files or shell: `sort`, `uniq`,
-//! `cut`, and `sed` (`sed/`), whose script is data too.
+//! `cut`, and `sed` (`sed/`) and `awk` (`awk.rs`), whose programs are data too.
 //!
 //! These tools read their file operands and print, except for a few options and
 //! operands that write a file (`sort -o out`, `uniq in out`) or run a program
@@ -9,7 +9,7 @@
 //! harmless becomes a `<program> @<argument>` shell atom; the default policy's
 //! `text-tools` rule excludes those, so the command asks.
 
-use super::{ClassifyError, ShellContext, Sink, sed};
+use super::{ClassifyError, ShellContext, Sink, awk, sed};
 use crate::action::AtomicAction;
 
 /// What the caller must know about a text tool's arguments.
@@ -66,6 +66,7 @@ pub(super) fn classify(
 ) -> Result<Operands, ClassifyError> {
     let (mut ops, operands) = match program {
         "sed" => return sed::classify(argv, ctx, sink),
+        "awk" => return awk::classify(argv, sink),
         "sort" => options(argv, &SORT, SORT_WRITES, ctx, sink)?,
         "uniq" => options(argv, &UNIQ, &[], ctx, sink)?,
         "cut" => options(argv, &CUT, &[], ctx, sink)?,

@@ -449,3 +449,15 @@
 - id: benign-sed-write-into-project
   action: { shell: "sed -n '/ERROR/w errors.log' build.log" }
   expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-print-field
+  action: { shell: "awk '{print $1}' data.txt" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-comparison-before-print
+  action: { shell: "awk -F, '$3 > 100 {print $1}' data.csv" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-regex-is-not-a-path
+  action: { shell: "awk '/error/ {n++} END {print n}' build.log" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-in-pipeline
+  action: { shell: "cut -d, -f2 data.csv | sort | uniq -c | awk '{print $2}'" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }

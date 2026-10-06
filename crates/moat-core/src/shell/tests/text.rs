@@ -99,6 +99,32 @@ fn sed_in_place_writes_operands_and_backups() {
 }
 
 #[test]
+fn awk_program_and_option_values_are_not_files() {
+    let a = parsed("awk -F / -v x=/a '/error/ {print $1}' log.txt");
+    assert!(has_read(&a, "/p/log.txt"));
+    assert!(!has_unproven(&a));
+    assert!(
+        !a.iter()
+            .any(|x| matches!(x, AtomicAction::FsRead { path } if path != "/p/log.txt"))
+    );
+    // awk stops reading options at the program: `-F` and the key are files
+    let a = parsed("awk '{print}' -F ~/.ssh/id_rsa");
+    assert!(has_read(&a, "/Users/me/.ssh/id_rsa"));
+}
+
+#[test]
+fn awk_forms_that_may_do_more_are_reported() {
+    for cmd in [
+        "awk 'BEGIN{system(\"id\")}'",
+        "awk '{print > \"out\"}' x",
+        "awk -f prog.awk x",
+        "awk --source='{print}' x",
+    ] {
+        assert!(has_unproven(&parsed(cmd)), "{cmd}");
+    }
+}
+
+#[test]
 fn sed_forms_that_may_do_more_are_reported() {
     for cmd in [
         "sed -n '1e id' x",

@@ -471,3 +471,15 @@
   threat: T4
   action: { shell: "sed -i.bak -e 's/a/b/' /tmp/notes.txt" }
   expect: { verdict: ask, rules: [default] }
+- id: ask-awk-program-file
+  threat: T7
+  action: { shell: "awk -f report.awk data.txt" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-awk-include
+  threat: T7
+  action: { shell: "awk '@include \"lib.awk\"; {print}' data.txt" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-awk-unknown-option
+  threat: T7
+  action: { shell: "awk --source='{print}' data.txt" }
+  expect: { verdict: ask, rules: [default] }

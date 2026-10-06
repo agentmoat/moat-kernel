@@ -19,6 +19,7 @@
 //! | `make --eval`, `-e`, `SHELL=`, `X!=cmd`, `$(shell …)` (`make.rs`) | `make <arg>` `Shell` atom + nested classification |
 //! | text tool options (`text.rs`): `sort -o FILE`, `uniq in out`; an unknown option | `FsWrite`; `<program> @<option>` `Shell` atom |
 //! | `sed` scripts (`sed/`): `r FILE`, `w FILE`; `e`, anything not understood | `FsRead`, `FsWrite`; `sed @<script>` `Shell` atom |
+//! | `awk` programs (`awk.rs`) with `system`, `\|`, `getline`, `ENVIRON`, `ARGV`, `@`, `print … >` | `awk @<program>` `Shell` atom |
 //!
 //! Classification is conservative by design: when the input cannot be parsed
 //! safely the result is [`ParseOutcome::Unparseable`], which the engine maps to
@@ -34,9 +35,10 @@
 //! `decoders`, `make` and `options` handle constructs that hide a command or a
 //! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
 //! `text` reads the options of text tools, whose values are data, not files,
-//! and `sed` their scripts;
+//! and `sed` and `awk` their programs;
 //! `tables` holds the program lists that drive all of them.
 
+mod awk;
 mod commands;
 mod cwd;
 mod decoders;
