@@ -1,0 +1,18 @@
+[package]
+name = "moat-proxy"
+description = "Default-deny egress proxy for agentmoat: CONNECT with an SNI check, plain HTTP, its own DNS and an audit record per connection."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+moat-core.workspace = true
+httparse.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
