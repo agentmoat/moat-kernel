@@ -113,9 +113,8 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
         .context("resolving working directory")?;
     let ctx = context::eval_context(Some(&cwd), None)?;
     let snapshot = Snapshot::load(&home.environment_path())?;
-    let paths = FsPathResolver::new(&ctx);
     let mut decision =
-        CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot, &paths);
+        CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot, &FsPathResolver);
     if decision.verdict == Verdict::Ask
         && let moat_core::Action::Shell { command } = action
         && Grants::load(&home.grants_path())?.matches(host.id(), &request.session_id, command)

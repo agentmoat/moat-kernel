@@ -45,7 +45,6 @@ pub fn check(args: &CheckArgs) -> Result<Code> {
     let ctx = context::eval_context(args.cwd.as_deref(), args.project.as_deref())?;
     // Decide the way `guard` would: symlinks resolved on this machine, and
     // programs resolved through the installation snapshot when one exists.
-    let paths = FsPathResolver::new(&ctx);
     let snapshot = Home::locate()
         .ok()
         .and_then(|home| Snapshot::load(&home.environment_path()).ok());
@@ -56,7 +55,7 @@ pub fn check(args: &CheckArgs) -> Result<Code> {
     let decision = CompiledPolicy::compile(&policy, &ctx)?.decide_with(
         &to_action(args.kind, &args.action),
         programs,
-        &paths,
+        &FsPathResolver,
     );
     report(&decision, args.format)
 }

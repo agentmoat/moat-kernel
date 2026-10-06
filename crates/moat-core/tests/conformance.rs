@@ -45,12 +45,18 @@ struct Fixture {
 
 /// `context: { cwd: /Users/me }` is a session in the home directory, which the
 /// CLI never trusts as a project; `project` names one explicitly.
+/// `real_project` and `real_home` are those roots with their symlinks resolved,
+/// as the CLI reports them when a root is reached through a link.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FixtureContext {
     cwd: String,
     #[serde(default)]
     project: Option<String>,
+    #[serde(default)]
+    real_project: Option<String>,
+    #[serde(default)]
+    real_home: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -177,6 +183,8 @@ fn default_policy_conformance() {
     let ctx = EvalContext {
         home: "/Users/me".into(),
         project: Some("/p".into()),
+        real_home: None,
+        real_project: None,
         cwd: "/p".into(),
         case_insensitive_paths: false,
     };
@@ -203,6 +211,8 @@ fn default_policy_conformance() {
                 let ctx = EvalContext {
                     cwd: c.cwd.clone(),
                     project: c.project.clone(),
+                    real_project: c.real_project.clone(),
+                    real_home: c.real_home.clone(),
                     ..ctx.clone()
                 };
                 CompiledPolicy::compile(&policy, &ctx)

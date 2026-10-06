@@ -116,3 +116,55 @@ fn relative_operands_are_resolved_through_symlinks() {
     }
     assert_verdict(&sb, &project, "npm install left-pad", "ask", "installs");
 }
+
+/// `path` with its links resolved, in slash form: on macOS the sandbox sits
+/// under `/var` → `/private/var`, on Windows under a `RUNNER~1` short name.
+fn real(path: &Path) -> String {
+    let real = std::fs::canonicalize(path).unwrap();
+    let real = real.to_string_lossy();
+    real.strip_prefix(r"\\?\")
+        .unwrap_or(&real)
+        .replace('\\', "/")
+}
+
+/// A file in the project is the project's however its path is spelled: as
+/// the session wrote the root, or resolved (POLICY.md §3.2).
+#[test]
+fn the_resolved_project_path_is_the_project() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let project = sb.project();
+    std::fs::write(project.join("a"), "x").unwrap();
+    let file = format!("{}/a", real(&project));
+    assert_verdict(&sb, &project, &format!("cat {file}"), "allow", "project-fs");
+    assert_verdict(&sb, &project, "cat a", "allow", "project-fs");
+}
+
+/// A project reached through a symlinked directory (`~/code` →
+/// `/Volumes/dev/code`) keeps `project-fs` under both spellings, exclusions
+/// included, and a link inside it is still checked where it points.
+#[cfg(unix)]
+#[test]
+fn a_project_under_a_symlinked_directory_is_the_project() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let volume = sb.home.join("../volume/code");
+    std::fs::create_dir_all(volume.join("app/.git")).unwrap();
+    std::os::unix::fs::symlink(&volume, sb.home.join("code")).unwrap();
+    let project = sb.home.join("code/app");
+    let real = real(&project);
+    std::fs::write(project.join("a"), "x").unwrap();
+    for command in [
+        "cat a".to_owned(),
+        format!("cat {real}/a"),
+        format!("echo x > {real}/b"),
+    ] {
+        assert_verdict(&sb, &project, &command, "allow", "project-fs");
+    }
+    let hook = format!("echo x > {real}/.git/hooks/pre-commit");
+    assert_verdict(&sb, &project, &hook, "ask", "default");
+    std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
+    std::fs::write(sb.home.join(".ssh/id_rsa"), "key").unwrap();
+    std::os::unix::fs::symlink(sb.home.join(".ssh"), project.join("s")).unwrap();
+    std::os::unix::fs::symlink("/etc", project.join("e")).unwrap();
+    assert_verdict(&sb, &project, "cat s/id_rsa", "deny", "secrets-paths");
+    assert_verdict(&sb, &project, "cat e/hosts", "ask", "default");
+}

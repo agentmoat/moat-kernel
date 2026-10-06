@@ -92,6 +92,19 @@
   threat: T11
   action: { shell: "ln -s ~/notes ./n && cat ./n/todo.txt" }
   expect: { verdict: ask, rules: [default] }
+# The resolved spelling of a linked project keeps its exclusions, and a link
+# inside it to a place outside still asks
+- id: ask-linked-project-write-git-internals-resolved
+  threat: T9
+  context: { cwd: /tmp/app, project: /tmp/app, real_project: /private/tmp/app }
+  action: { fs_write: "/private/tmp/app/.git/config" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-linked-project-read-through-link-outside
+  threat: T11
+  context: { cwd: /tmp/app, project: /tmp/app, real_project: /private/tmp/app }
+  action: { shell: "cat e/hosts" }
+  links: { /tmp/app/e: /etc }
+  expect: { verdict: ask, rules: [default] }
 # T3: env with arguments sets variables for one command; it is not a dump
 - id: ask-env-assignment-wrapper-is-not-a-dump
   threat: T3

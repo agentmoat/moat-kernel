@@ -59,12 +59,23 @@ pub fn eval_context(cwd: Option<&Path>, project: Option<&Path>) -> Result<EvalCo
         }
         None => project::root_of(&cwd, &home),
     };
+    let home = path_string(&home);
+    let project = project.as_deref().map(path_string);
     Ok(EvalContext {
-        home: path_string(&home),
-        project: project.as_deref().map(path_string),
+        real_home: real_root(&home),
+        real_project: project.as_deref().and_then(real_root),
+        home,
+        project,
         cwd: path_string(&cwd),
         case_insensitive_paths: CASE_INSENSITIVE_PATHS,
     })
+}
+
+/// `root` with its symlinks resolved, when that differs from `root`: the form
+/// the path resolver reports paths under it in (`realpath.rs`).
+fn real_root(root: &str) -> Option<String> {
+    let real = path_string(&fs::canonicalize(root).ok()?);
+    (real != root).then_some(real)
 }
 
 /// Absolute and lexically normalised (`.` and `..` removed) without touching
