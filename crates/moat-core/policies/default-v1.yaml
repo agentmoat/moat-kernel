@@ -1,4 +1,4 @@
-# agentmoat default policy, schema v1 (docs/POLICY.md).
+# OpenMoat default policy, schema v1 (docs/POLICY.md).
 # Evaluation: deny → allow → ask → defaults. Strictest verdict wins across the
 # atomic actions of one tool call. `${project}` is the trusted project root.
 # Deny rules are absolute (allow can never override them), so deny-by-default
@@ -114,7 +114,7 @@ deny:
       - "shutdown *"
       - "reboot"
   - id: kernel-self
-    reason: agentmoat protects its own policy, hooks and binary
+    reason: OpenMoat protects its own policy, hooks and binary
     fs.write:
       # the state and host directories themselves: renaming, deleting or replacing
       # one with a link removes every pinned file and hook inside it at once

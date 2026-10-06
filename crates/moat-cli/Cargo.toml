@@ -1,5 +1,5 @@
 [package]
-name = "moat-kernel"
+name = "openmoat"
 description = "Policy guard for AI coding agents: decides allow, ask or deny for every tool call from Claude Code, Codex and Cursor, and keeps a local audit log. Decides only; it is not an OS sandbox."
 version.workspace = true
 edition.workspace = true
@@ -15,10 +15,10 @@ name = "moat"
 path = "src/main.rs"
 
 [dependencies]
-moat-core.workspace = true
-moat-hosts.workspace = true
-moat-audit.workspace = true
-moat-proxy.workspace = true
+openmoat-core.workspace = true
+openmoat-hosts.workspace = true
+openmoat-audit.workspace = true
+openmoat-proxy.workspace = true
 clap.workspace = true
 anyhow.workspace = true
 serde.workspace = true
@@ -33,7 +33,7 @@ zeroize.workspace = true
 landlock.workspace = true
 
 [dev-dependencies]
-moat-audit = { workspace = true, features = ["test-support"] }
+openmoat-audit = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 
 [lints]

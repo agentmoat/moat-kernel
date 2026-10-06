@@ -1,7 +1,7 @@
 //! The request head a client sends the proxy: `CONNECT host:port` or one
 //! absolute-form plain-HTTP request (`GET http://host/path HTTP/1.1`).
 //!
-//! Hosts come out in the form moat-core's net rules match: lowercase, without
+//! Hosts come out in the form openmoat-core's net rules match: lowercase, without
 //! a trailing dot or IPv6 brackets, IP literals in their canonical spelling.
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};

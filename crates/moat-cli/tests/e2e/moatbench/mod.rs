@@ -4,7 +4,7 @@
 //! audit log, and the host's response must carry that verdict in the host's own
 //! format. A scorecard is printed; any mismatch fails the test.
 //!
-//! `cargo test -p moat-kernel --test e2e moatbench -- --nocapture` shows the
+//! `cargo test -p openmoat --test e2e moatbench -- --nocapture` shows the
 //! scorecard of a passing run.
 
 mod hosts;

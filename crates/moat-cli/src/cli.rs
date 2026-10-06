@@ -3,13 +3,13 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use moat_hosts::Host;
+use openmoat_hosts::Host;
 
 #[derive(Debug, Parser)]
 #[command(
     name = "moat",
     version,
-    about = "agentmoat: the kernel your AI agents run on",
+    about = "OpenMoat: the kernel your AI agents run on",
     long_about = "Decides what AI agents may do on this machine and records every decision.\n\
                   Alpha: decisions are not enforced by the operating system; an allowed\n\
                   command runs with your permissions.\n\
@@ -349,5 +349,5 @@ pub enum Format {
 fn parse_host(value: &str) -> Result<Host, String> {
     value
         .parse()
-        .map_err(|e: moat_hosts::HostError| e.to_string())
+        .map_err(|e: openmoat_hosts::HostError| e.to_string())
 }

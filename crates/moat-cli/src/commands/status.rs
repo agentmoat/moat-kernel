@@ -5,8 +5,8 @@ use std::io::{self, Write as _};
 use std::path::Path;
 
 use anyhow::Result;
-use moat_audit::Store;
-use moat_hosts::Host;
+use openmoat_audit::Store;
+use openmoat_hosts::Host;
 
 use crate::approvals::{GRANT_TTL_MS, Grants};
 use crate::exit::Code;

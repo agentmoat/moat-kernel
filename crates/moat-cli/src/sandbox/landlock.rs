@@ -13,8 +13,8 @@
 //! - Landlock does not restrict UDP or connecting to Unix sockets, which a
 //!   seccomp filter will close.
 
-use moat_core::ir::{Access, Checker, Effect, Enforcement};
-use moat_core::{AtomicAction, Kind};
+use openmoat_core::ir::{Access, Checker, Effect, Enforcement};
+use openmoat_core::{AtomicAction, Kind};
 use serde::Serialize;
 
 use super::patterns::{Spot, literal_tree, push_unique, split, spot};

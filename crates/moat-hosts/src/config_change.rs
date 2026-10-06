@@ -8,7 +8,7 @@
 //! `local_settings`, `policy_settings`, `skills`) and an optional `file_path`;
 //! `change_type` came from earlier builds and is still accepted.
 
-use moat_core::{Action, Decision, Verdict};
+use openmoat_core::{Action, Decision, Verdict};
 use serde::{Deserialize, Serialize};
 
 use crate::{HookEvent, HookRequest, Host, HostError};

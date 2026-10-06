@@ -8,33 +8,33 @@ it defends against is in [THREAT_MODEL.md](THREAT_MODEL.md).
 ## 1. Crates
 
 ```
-moat-cli ──► moat-hosts ──► moat-core
-   │                            ▲
-   ├──► moat-audit ─────────────┤
-   ├──► moat-proxy ─────────────┘
-   └──► moat-core
+openmoat ──► openmoat-hosts ──► openmoat-core
+   │                                ▲
+   ├──► openmoat-audit ─────────────┤
+   ├──► openmoat-proxy ─────────────┘
+   └──► openmoat-core
 ```
 
 | Crate | Role | Rules |
 |---|---|---|
-| `moat-core` | Policy model and lint, POSIX lexer (`lexer/`), shell classifier (`shell/`), URL host parser (`host.rs`), patterns, path normalisation, the engine, the policy compiler (`ir/`), the repository policy merge (`repo.rs`), `ProgramResolver` and `PathResolver` traits | Pure: no I/O, no `unsafe`, depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Builds for `wasm32-unknown-unknown` in CI; `tests/architecture.rs` enforces the dependency allowlist and the 500-line file budget |
-| `moat-hosts` | Host adapters: `pre_tool_use.rs` (Claude Code and Codex `PreToolUse`), `config_change.rs` (Claude Code `ConfigChange`), `cursor.rs`, `mcp.rs` (MCP arguments to paths and URLs), `patch.rs` (Codex `apply_patch` file list) | Translate payload to `Action` and `Decision` to response. Never decide |
-| `moat-audit` | SQLite store, time-window and session queries, redaction | Redact before persisting. Typed `thiserror` errors |
-| `moat-proxy` | The egress proxy behind `moat proxy` (§12): request and `ClientHello` parsers, host decisions through moat-core, the address guard, connection relay, the `Recorder` trait the CLI implements over `moat-audit` | Network I/O only through `std::net`; no async runtime; no storage. Depends on `moat-core`, `httparse`, `thiserror` |
-| `moat-cli` | The `moat` binary (crate `moat-kernel`): commands, hook installation, the policy lock, approvals, the repository policy file, the environment snapshot, the filesystem resolvers, the sandbox backends generated from the IR (§13, §14), rendering, exit codes | The only crate that touches files, the environment and the terminal; the only one that starts processes |
+| `openmoat-core` | Policy model and lint, POSIX lexer (`lexer/`), shell classifier (`shell/`), URL host parser (`host.rs`), patterns, path normalisation, the engine, the policy compiler (`ir/`), the repository policy merge (`repo.rs`), `ProgramResolver` and `PathResolver` traits | Pure: no I/O, no `unsafe`, depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Builds for `wasm32-unknown-unknown` in CI; `tests/architecture.rs` enforces the dependency allowlist and the 500-line file budget |
+| `openmoat-hosts` | Host adapters: `pre_tool_use.rs` (Claude Code and Codex `PreToolUse`), `config_change.rs` (Claude Code `ConfigChange`), `cursor.rs`, `mcp.rs` (MCP arguments to paths and URLs), `patch.rs` (Codex `apply_patch` file list) | Translate payload to `Action` and `Decision` to response. Never decide |
+| `openmoat-audit` | SQLite store, time-window and session queries, redaction | Redact before persisting. Typed `thiserror` errors |
+| `openmoat-proxy` | The egress proxy behind `moat proxy` (§12): request and `ClientHello` parsers, host decisions through openmoat-core, the address guard, connection relay, the `Recorder` trait the CLI implements over `openmoat-audit` | Network I/O only through `std::net`; no async runtime; no storage. Depends on `openmoat-core`, `httparse`, `thiserror` |
+| `openmoat` (`crates/moat-cli`) | The `moat` binary: commands, hook installation, the policy lock, approvals, the repository policy file, the environment snapshot, the filesystem resolvers, the sandbox backends generated from the IR (§13, §14), rendering, exit codes | The only crate that touches files, the environment and the terminal; the only one that starts processes |
 
-No crate depends on `moat-cli`. Planned crates for enforcement are on the
+No crate depends on `openmoat`. Planned crates for enforcement are on the
 [roadmap](ROADMAP.md); none exist yet.
 
 ## 2. One tool call, end to end
 
 ```
 host payload (stdin)
-  └─► adapter (moat-hosts)                 Action, or none for an ungoverned tool
+  └─► adapter (openmoat-hosts)             Action, or none for an ungoverned tool
         └─► policy lock check              drift ⇒ deny [kernel-integrity]
               └─► load policy + overlay    ~/.moat/policy.yaml + policy.d/approved.yaml
                     + repository policy    <project>/.moat/policy.yaml, tightening only
-                    └─► classify (moat-core)    Action ⇒ atomic actions
+                    └─► classify (openmoat-core)  Action ⇒ atomic actions
                           └─► engine            per atom: deny → allow → ask → defaults
                                 └─► combine     strictest wins ⇒ Decision
                                       └─► session grant   ask on a granted shell command ⇒ allow
@@ -65,7 +65,7 @@ exits. There is no daemon.
 6. **Policy.** `~/.moat/policy.yaml` is parsed and linted (1 MiB limit). Rules from
    `policy.d/approved.yaml` are appended to `allow` and the result is linted again.
    When the project has a repository policy (`<project>/.moat/policy.yaml`, ADR-022),
-   `repo.rs` reads it and `moat_core::RepoPolicy::merge`, a pure function, merges it:
+   `repo.rs` reads it and `openmoat_core::RepoPolicy::merge`, a pure function, merges it:
    its deny groups join `deny`, its ask groups go into `repo_ask`, which the engine tries
    between `deny` and `allow`. Its allow groups are appended to `allow` only when
    `~/.moat/trust.json` is pinned by the lock and records the SHA-256 of these exact
@@ -96,7 +96,7 @@ Claude Code treats exit 101 as a non-blocking error.
 
 ## 3. Classification
 
-`moat-core` turns an `Action` into atomic actions (`AtomicAction`): `Shell`,
+`openmoat-core` turns an `Action` into atomic actions (`AtomicAction`): `Shell`,
 `Pipeline`, `FsRead`, `FsWrite`, `Net`, `Fetch`, `EnvRead`, `EnvSet`, `McpTool`.
 
 - **Shell** (ADR-005). The lexer (`lexer/`) reads words, quotes, escapes, operators,
@@ -160,7 +160,7 @@ carries the rule ids that produced the final verdict and weaker matches as conte
 
 ### Resolvers
 
-The engine needs two facts that live on the filesystem. `moat-core` defines a trait
+The engine needs two facts that live on the filesystem. `openmoat-core` defines a trait
 for each and the CLI implements it:
 
 | Trait | ADR | Implementation | What it adds |
@@ -176,7 +176,7 @@ installation exists) and, against the installed policy, the same lock check.
 ### Policy compiler
 
 ADR-019 makes `policy.yaml` the single source for every enforcement point.
-`moat_core::ir::lower(policy, ctx)` derives the `Enforcement` IR from the same policy
+`openmoat_core::ir::lower(policy, ctx)` derives the `Enforcement` IR from the same policy
 and `EvalContext` the engine compiles. The engine is the hook backend. Claude Code's and
 Codex's sandbox settings (§13) and the Lightweight tier's Seatbelt profile and Landlock
 rules (§14) are generated from the IR. The egress proxy decides hosts through the engine
@@ -269,7 +269,7 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
 `~/.moat/audit.db` is SQLite in WAL mode, created with mode 0600, with one `events`
 table (time, host, session, call id, working directory, tool, action, verdict, rules,
 reasons, latency). Every governed and ungoverned call is recorded. Command, path and
-URL fields pass through `moat_audit::redact` first (bearer and basic auth,
+URL fields pass through `openmoat_audit::redact` first (bearer and basic auth,
 `key=value` credentials, common token shapes, URL passwords). `show`, `replay` and
 `report` read it; nothing leaves the machine unless a person runs `moat audit export`.
 
@@ -415,7 +415,7 @@ code on `std::net` and
   change. It writes to the audit log under one session id per run (`proxy-<ms>`).
 - **Brokered secrets** (POLICY.md §2.1). `commands/proxy.rs` has `secrets/` read each
   source (a file, an env var, or a keychain item through the OS tool by absolute path)
-  into a zeroed-on-drop buffer and hand it to `moat_proxy::Broker`. A source that cannot
+  into a zeroed-on-drop buffer and hand it to `openmoat_proxy::Broker`. A source that cannot
   be read stops start-up. Only ids, hosts, headers and placeholders are printed.
 - **Per connection,** in this order:
   1. Read the request head, at most 16 KiB within 10 s. Two forms are served:
@@ -477,7 +477,7 @@ code on `std::net` and
 ## 13. Standard tier: host sandboxes
 
 ADR-018's default tier configures each host's own sandbox from the policy, through the
-one IR of ADR-019 (`moat_core::ir`, `crates/moat-cli/src/sandbox/`).
+one IR of ADR-019 (`openmoat_core::ir`, `crates/moat-cli/src/sandbox/`).
 
 ```
 policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬─► claude::generate ─► settings.json "sandbox"

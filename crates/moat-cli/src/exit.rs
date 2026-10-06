@@ -2,7 +2,7 @@
 
 use std::process::ExitCode;
 
-use moat_core::Verdict;
+use openmoat_core::Verdict;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Code {

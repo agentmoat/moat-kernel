@@ -1,7 +1,7 @@
 # moat-reviewer
 
 `moat-reviewer` is the automated first-pass reviewer for pull requests. It is a GitHub
-App owned by the `agentmoat` organisation that runs `.github/workflows/pr-review.yml`
+App owned by the `crocodile-labs` organisation that runs `.github/workflows/pr-review.yml`
 (Claude Code on GitHub Actions) and posts under its own name and avatar.
 
 What it does:
@@ -25,22 +25,22 @@ triggers the review with `@moat-reviewer` after a first look at the change. That
 
 1. **Create the GitHub App** in the org (prefilled form):
 
-   <https://github.com/organizations/agentmoat/settings/apps/new?name=moat-reviewer&description=Automated%20first-pass%20reviewer%20for%20agentmoat%20pull%20requests&url=https://github.com/agentmoat/moat-kernel&public=false&webhook_active=false&contents=read&pull_requests=write&issues=write&metadata=read>
+   <https://github.com/organizations/crocodile-labs/settings/apps/new?name=moat-reviewer&description=Automated%20first-pass%20reviewer%20for%20OpenMoat%20pull%20requests&url=https://github.com/crocodile-labs/openmoat&public=false&webhook_active=false&contents=read&pull_requests=write&issues=write&metadata=read>
 
    Permissions: Contents read, Pull requests write, Issues write, Metadata read. No
    webhook. After creating it: upload `avatar.png` from this directory as the app
    avatar, note the **App ID**, generate a **private key** (`.pem`), and **install** the
-   app on `agentmoat/moat-kernel`.
+   app on `crocodile-labs/openmoat`.
 
 2. **Secrets and the enable switch** (run as an org admin):
 
    ```bash
-   gh secret set MOAT_REVIEWER_APP_ID      -R agentmoat/moat-kernel -b '<app id>'
-   gh secret set MOAT_REVIEWER_PRIVATE_KEY -R agentmoat/moat-kernel < moat-reviewer.<date>.private-key.pem
+   gh secret set MOAT_REVIEWER_APP_ID      -R crocodile-labs/openmoat -b '<app id>'
+   gh secret set MOAT_REVIEWER_PRIVATE_KEY -R crocodile-labs/openmoat < moat-reviewer.<date>.private-key.pem
    # one of the two model credentials:
-   gh secret set CLAUDE_CODE_OAUTH_TOKEN   -R agentmoat/moat-kernel -b "$(claude setup-token)"   # Claude subscription
-   gh secret set ANTHROPIC_API_KEY         -R agentmoat/moat-kernel -b '<key>'                   # or API key
-   gh variable set MOAT_REVIEWER_ENABLED   -R agentmoat/moat-kernel -b true
+   gh secret set CLAUDE_CODE_OAUTH_TOKEN   -R crocodile-labs/openmoat -b "$(claude setup-token)"   # Claude subscription
+   gh secret set ANTHROPIC_API_KEY         -R crocodile-labs/openmoat -b '<key>'                   # or API key
+   gh variable set MOAT_REVIEWER_ENABLED   -R crocodile-labs/openmoat -b true
    ```
 
    The workflow is a no-op until `MOAT_REVIEWER_ENABLED` is `true`, so the repository

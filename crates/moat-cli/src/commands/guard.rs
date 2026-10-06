@@ -8,9 +8,9 @@ use std::io::{self, Read as _, Write as _};
 use std::time::Instant;
 
 use anyhow::{Context as _, Result, bail};
-use moat_audit::{NewEvent, Store};
-use moat_core::{CompiledPolicy, Decision, Verdict};
-use moat_hosts::{HookEvent, HookRequest, Host};
+use openmoat_audit::{NewEvent, Store};
+use openmoat_core::{CompiledPolicy, Decision, Verdict};
+use openmoat_hosts::{HookEvent, HookRequest, Host};
 
 use crate::approvals::Grants;
 use crate::cli::GuardArgs;
@@ -40,7 +40,7 @@ pub fn run(args: &GuardArgs) -> Code {
     // `println!` would panic again on a closed pipe and exit 101; exit 2 is
     // the deny every host honours whether or not the response arrives.
     let _ = writeln!(io::stdout(), "{response}");
-    eprintln!("{}", moat_hosts::reason_line(&decision));
+    eprintln!("{}", openmoat_hosts::reason_line(&decision));
     Code::Deny
 }
 
@@ -81,7 +81,7 @@ fn decide_and_respond(host: Host) -> Code {
     match decision.verdict {
         Verdict::Allow | Verdict::Ask => Code::Ok,
         Verdict::Deny => {
-            eprintln!("{}", moat_hosts::reason_line(&decision));
+            eprintln!("{}", openmoat_hosts::reason_line(&decision));
             Code::Deny
         }
     }
@@ -122,7 +122,7 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
     let compiled = CompiledPolicy::compile(&policy, &ctx)?;
     let mut decision = compiled.decide_with(action, &snapshot, &FsPathResolver);
     if decision.verdict == Verdict::Ask
-        && let moat_core::Action::Shell { command } = action
+        && let openmoat_core::Action::Shell { command } = action
         && Grants::load(&home.grants_path())?.matches(
             host.id(),
             &request.session_id,
@@ -190,7 +190,7 @@ fn read_stdin() -> Result<String> {
 /// settings and the change is reported. Unpinned files are audited and allowed.
 fn config_change_decision(
     home: &Home,
-    action: Option<&moat_core::Action>,
+    action: Option<&openmoat_core::Action>,
     source: &str,
     change: &str,
 ) -> Result<Decision> {
@@ -200,7 +200,7 @@ fn config_change_decision(
     }
     let lock = Lock::load(&lock_path)?;
     let path = match action {
-        Some(moat_core::Action::FsWrite { path }) => std::path::Path::new(path),
+        Some(openmoat_core::Action::FsWrite { path }) => std::path::Path::new(path),
         Some(_) => bail!("config change for something other than a file"),
         // Claude Code may report a change without naming the file. The veto
         // exists to keep a tampered pinned file out of the session, and the
@@ -215,7 +215,7 @@ fn config_change_decision(
     // Only a person re-pins, and the hook cannot tell an owner's accept in
     // `/settings-review` from an agent's, so any edit of a pinned file is refused.
     let mut decision = Decision::new(Verdict::Allow);
-    if let Some(target) = path.to_str().and_then(moat_hosts::proposal_target)
+    if let Some(target) = path.to_str().and_then(openmoat_hosts::proposal_target)
         && lock.pins(std::path::Path::new(&target))
     {
         if let Some(drift) = lock.verify_proposal(path, std::path::Path::new(&target)) {

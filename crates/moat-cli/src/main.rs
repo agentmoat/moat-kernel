@@ -1,7 +1,7 @@
-//! `moat`: command-line entry point for agentmoat.
+//! `moat`: command-line entry point for OpenMoat.
 //!
 //! The binary owns all I/O (files, environment, terminal); decisions are made
-//! by `moat-core`. Exit codes are a stable contract used by host hooks:
+//! by `openmoat-core`. Exit codes are a stable contract used by host hooks:
 //! see [`exit::Code`].
 
 mod approvals;

@@ -3,9 +3,9 @@
 use std::io::Write as _;
 
 use anyhow::{Result, bail};
-use moat_audit::{ChainReport, Store};
-use moat_core::Policy;
-use moat_hosts::Host;
+use openmoat_audit::{ChainReport, Store};
+use openmoat_core::Policy;
+use openmoat_hosts::Host;
 
 use crate::cli::DoctorArgs;
 use crate::exit::Code;

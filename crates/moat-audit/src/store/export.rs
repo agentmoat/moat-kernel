@@ -8,7 +8,7 @@
 //! nothing unredacted is ever stored, and an export adds nothing the store does
 //! not hold.
 
-use moat_core::{Action, Verdict};
+use openmoat_core::{Action, Verdict};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;

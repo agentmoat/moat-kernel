@@ -1,9 +1,9 @@
 [package]
-name = "moat-fuzz"
+name = "openmoat-fuzz"
 version = "0.0.0"
 edition = "2024"
 publish = false
-description = "Fuzz targets for moat's untrusted-input surfaces"
+description = "Fuzz targets for OpenMoat's untrusted-input surfaces"
 
 [package.metadata]
 cargo-fuzz = true
@@ -14,9 +14,9 @@ members = ["."]
 
 [dependencies]
 libfuzzer-sys = "0.4"
-moat-core = { path = "../crates/moat-core" }
-moat-hosts = { path = "../crates/moat-hosts" }
-moat-proxy = { path = "../crates/moat-proxy" }
+openmoat-core = { path = "../crates/moat-core" }
+openmoat-hosts = { path = "../crates/moat-hosts" }
+openmoat-proxy = { path = "../crates/moat-proxy" }
 
 [[bin]]
 name = "decide_shell"

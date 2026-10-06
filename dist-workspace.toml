@@ -16,7 +16,7 @@ targets = [
 ]
 install-path = "CARGO_HOME"
 install-updater = false
-tap = "agentmoat/homebrew-tap"
+tap = "crocodile-labs/homebrew-tap"
 formula = "moat"
 publish-jobs = ["homebrew"]
 publish-prereleases = true

@@ -144,7 +144,7 @@ fn object_at<'a>(map: &'a mut Map<String, Value>, key: &str) -> Result<&'a mut M
 
 #[cfg(test)]
 mod tests {
-    use moat_core::DEFAULT_POLICY;
+    use openmoat_core::DEFAULT_POLICY;
     use serde_json::{Value, json};
 
     use super::super::tests::generated;

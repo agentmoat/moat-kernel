@@ -9,7 +9,7 @@ host receives.
 ## Run it
 
 ```bash
-cargo test -p moat-kernel --test e2e moatbench -- --nocapture
+cargo test -p openmoat --test e2e moatbench -- --nocapture
 ```
 
 It is part of `scripts/ci/quality-gate.sh` (through `cargo test`), so CI runs it on

@@ -7,7 +7,7 @@ use std::io::Write as _;
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::{Kind, REPO_RULE_PREFIX};
+use openmoat_core::{Kind, REPO_RULE_PREFIX};
 
 use crate::cli::TrustArgs;
 use crate::exit::Code;
@@ -74,7 +74,7 @@ pub fn run(args: &TrustArgs) -> Result<Code> {
 }
 
 /// `shell: a, b; net: c`: what one allow group lets through.
-fn patterns(group: &moat_core::RuleGroup) -> String {
+fn patterns(group: &openmoat_core::RuleGroup) -> String {
     Kind::ALL
         .into_iter()
         .filter(|k| !group.patterns(*k).is_empty())

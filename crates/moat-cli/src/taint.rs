@@ -5,8 +5,8 @@
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::{CompiledPolicy, Decision, Taint, Verdict};
-use moat_hosts::{HookEvent, Host};
+use openmoat_core::{CompiledPolicy, Decision, Taint, Verdict};
+use openmoat_hosts::{HookEvent, Host};
 
 use crate::context;
 use crate::home::Home;

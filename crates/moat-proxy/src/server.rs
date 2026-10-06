@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use moat_core::{CompiledPolicy, Decision, Verdict};
+use openmoat_core::{CompiledPolicy, Decision, Verdict};
 use zeroize::Zeroizing;
 
 use crate::audit::{Connection, Recorder};

@@ -1,4 +1,4 @@
-use moat_core::{EvalContext, Policy};
+use openmoat_core::{EvalContext, Policy};
 
 use super::*;
 
@@ -29,7 +29,7 @@ fn verdicts(yaml: &str, cases: &[(&str, Verdict, &str)]) {
 #[test]
 fn the_default_policy_allows_only_listed_hosts() {
     verdicts(
-        moat_core::DEFAULT_POLICY,
+        openmoat_core::DEFAULT_POLICY,
         &[
             ("api.github.com", Verdict::Allow, "registries"),
             ("crates.io", Verdict::Allow, "registries"),

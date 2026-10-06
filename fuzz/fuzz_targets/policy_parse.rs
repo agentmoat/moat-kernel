@@ -4,7 +4,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use moat_core::{CompiledPolicy, EvalContext, Policy, ir, lint};
+use openmoat_core::{CompiledPolicy, EvalContext, Policy, ir, lint};
 
 fuzz_target!(|data: &[u8]| {
     let Ok(text) = std::str::from_utf8(data) else {

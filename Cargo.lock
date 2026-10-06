@@ -412,51 +412,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "moat-audit"
-version = "0.1.0-alpha.0"
-dependencies = [
- "moat-core",
- "regex",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
-]
+name = "once_cell"
+version = "1.21.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
-name = "moat-core"
-version = "0.1.0-alpha.0"
-dependencies = [
- "globset",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "thiserror",
-]
+name = "once_cell_polyfill"
+version = "1.70.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
-name = "moat-hosts"
-version = "0.1.0-alpha.0"
-dependencies = [
- "moat-core",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "moat-kernel"
+name = "openmoat"
 version = "0.1.0-alpha.0"
 dependencies = [
  "anyhow",
  "clap",
  "landlock",
- "moat-audit",
- "moat-core",
- "moat-hosts",
- "moat-proxy",
+ "openmoat-audit",
+ "openmoat-core",
+ "openmoat-hosts",
+ "openmoat-proxy",
  "serde",
  "serde_json",
  "serde_yaml_ng",
@@ -468,26 +445,49 @@ dependencies = [
 ]
 
 [[package]]
-name = "moat-proxy"
+name = "openmoat-audit"
 version = "0.1.0-alpha.0"
 dependencies = [
- "httparse",
- "moat-core",
+ "openmoat-core",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
  "thiserror",
- "zeroize",
 ]
 
 [[package]]
-name = "once_cell"
-version = "1.21.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+name = "openmoat-core"
+version = "0.1.0-alpha.0"
+dependencies = [
+ "globset",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "thiserror",
+]
 
 [[package]]
-name = "once_cell_polyfill"
-version = "1.70.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+name = "openmoat-hosts"
+version = "0.1.0-alpha.0"
+dependencies = [
+ "openmoat-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "openmoat-proxy"
+version = "0.1.0-alpha.0"
+dependencies = [
+ "httparse",
+ "openmoat-core",
+ "thiserror",
+ "zeroize",
+]
 
 [[package]]
 name = "pkg-config"

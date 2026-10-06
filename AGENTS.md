@@ -5,7 +5,7 @@ purpose; each section links to the detail. `CLAUDE.md` points here.
 
 ## 1. What this is
 
-`moat` is a security kernel for AI agents. It sits between an agent (Claude Code,
+OpenMoat (command `moat`) is a security kernel for AI agents. It sits between an agent (Claude Code,
 Codex, …) and the machine, decides whether each tool call may run, and records it.
 The alpha is decide-only: the operating system does not enforce the decision yet
 (ADR-013). Correctness and fail-closed behaviour outrank features.
@@ -17,6 +17,8 @@ Specs: `docs/ARCHITECTURE.md` (crates, data flow, hooks, self-protection),
 
 ## 2. Layout
 
+Each `crates/moat-<name>` directory holds the package `openmoat-<name>`; `crates/moat-cli` holds `openmoat`, which builds the `moat` binary.
+
 | Path | Contents | Rules |
 |---|---|---|
 | `crates/moat-core` | policy model (`policy.rs`, `lint.rs`, `repo.rs` repository policy merge), lexer (`lexer/`), classifier (`shell/`), patterns (`pattern/`), URL hosts (`host.rs`), paths, engine (session taint in `engine/taint.rs`), policy compiler (`ir/`), executable pins (`programs.rs`, `ProgramResolver`), symlink resolution (`realpath.rs`, `PathResolver`), actions, verdict | **pure**: no I/O, no `unsafe`, no internal deps; builds for `wasm32`; architecture tests enforce it |
@@ -25,7 +27,7 @@ Specs: `docs/ARCHITECTURE.md` (crates, data flow, hooks, self-protection),
 | `crates/moat-proxy` | egress proxy behind `moat proxy`: `request.rs` (HTTP head), `sni.rs` (ClientHello), `decide.rs` (host and address checks), `upstream.rs` (DNS, connect), `server.rs`, `tunnel.rs`, `audit.rs` (`Recorder` trait), `broker.rs` (secret injection and leak blocking) | network through `std::net` only; no async runtime, no storage; a connection that cannot be recorded is refused |
 | `crates/moat-cli` | the `moat` binary: `cli.rs` grammar, `commands/{init,guard,show,status,doctor,allow,trust,replay,report,audit,team,policy,proxy,sandbox,run}.rs`, `commands/run/{macos,linux,unsupported}.rs` (`moat run` per OS), `install/{mod,hook_file,binary}.rs`, `sandbox/` (backends from the IR: Standard tier `claude`, `codex` and `install.rs` file I/O; Lightweight tier `seatbelt`, `landlock`), `home.rs`, `context.rs`, `project.rs`, `repo.rs` (repository policy file), `time.rs`, `environment.rs` (search-path snapshot), `realpath.rs` (symlink resolution), `integrity.rs` (policy lock), `approvals.rs` (grants and overlay), `secrets/` (brokered secret sources), `taint.rs` (session taint from the audit log), `trust.rs` (trusted repository policies), `terminal.rs` (terminal check), `render.rs`, `exit.rs` | the only crate that touches files, env, terminal; `anyhow` allowed; all user output goes through `render.rs` or the command module |
 | `crates/moat-core/policies/default-v1.yaml` | shipped default policy | every change needs a conformance fixture and a CHANGELOG line |
-| `tests/conformance/{attacks,benign,ask}.yaml` | executable security claims | ids unique, one action each, `rules` must appear in the decision; attacks and asks carry `threat: T1…T12`; `docs/COVERAGE.md` is generated from them (`MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`) and every threat needs an attack |
+| `tests/conformance/{attacks,benign,ask}.yaml` | executable security claims | ids unique, one action each, `rules` must appear in the decision; attacks and asks carry `threat: T1…T12`; `docs/COVERAGE.md` is generated from them (`MOAT_UPDATE_COVERAGE=1 cargo test -p openmoat-core --test conformance`) and every threat needs an attack |
 | `tests/fixtures/hosts/<host>/*.json` | real host payloads | golden inputs; never include real tokens or personal paths |
 | `tests/fixtures/sandbox/` | generated host sandbox settings and Seatbelt profile for the default policy | golden outputs; `MOAT_UPDATE_GOLDEN=1` rewrites them, review the diff |
 | `crates/*/tests/` | end-to-end tests of the binary in one target, `crates/moat-cli/tests/e2e/` (one module per area: `cli`, `guard`, `cursor`, `config_change`, `lock`, `install_path`, `approvals`, `allow`, `audit`, `export`, `team`, `paths`, `replay_report`, `sandbox`, `sandbox_sync`, `sandbox_exec`, `run`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
@@ -39,8 +41,8 @@ Specs: `docs/ARCHITECTURE.md` (crates, data flow, hooks, self-protection),
 3. **Unparseable ⇒ ask.** Anything the lexer or classifier cannot understand is `ask`, never `allow`.
 4. **Fail closed.** Every error path in `moat guard` yields a `deny` response and exit 2 (ADR-004).
 5. **Exit codes:** 0 allow/ok, 1 the agent `moat run` started failed, 2 deny, 3 unresolved ask (`policy check`), 64 usage/config. Nothing else may use 2 or 3.
-6. **No secrets in the audit log.** Everything persisted passes `moat_audit::redact`.
-7. **Pure core.** `moat-core` depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Anything that needs the filesystem (program resolution, hashing) is injected from the CLI through a trait (`ProgramResolver`, `PathResolver`).
+6. **No secrets in the audit log.** Everything persisted passes `openmoat_audit::redact`.
+7. **Pure core.** `openmoat-core` depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Anything that needs the filesystem (program resolution, hashing) is injected from the CLI through a trait (`ProgramResolver`, `PathResolver`).
 8. **Idempotent install.** `moat init` never overwrites a policy, never duplicates a hook, always backs up before editing a host file.
 9. **Lock before decide.** `moat guard` verifies `policy.lock` first; drift ⇒ `deny` (`kernel-integrity`). A Claude Code `ConfigChange` for a pinned file that no longer matches the lock is blocked for the session. Only a person may re-pin: `moat init`, or `moat doctor --accept` from an interactive terminal.
 
@@ -50,8 +52,8 @@ Specs: `docs/ARCHITECTURE.md` (crates, data flow, hooks, self-protection),
 - **Size:** files ≤ 500 lines (architecture test), functions ≤ 200 lines, cognitive complexity ≤ 30 (clippy). Split by concern: `mod.rs` + one file per responsibility + `tests.rs`.
 - **Comments** explain *why* and *what the host/OS does*; names and types explain *what the code does*. No commented-out code, no TODO/FIXME on `main` (open an issue).
 - **Platform code** lives in dedicated files/modules selected by `cfg` in one place (`#[cfg(unix)]` helpers in `home.rs`, `commands/run/{macos,linux,unsupported}.rs` chosen in `run.rs`); never scatter `cfg` through business logic. Paths are handled in slash-separated canonical form everywhere (`paths.rs`).
-- **Dependencies:** adding one needs a sentence in the PR on why std or an existing dep does not cover it; `cargo-deny` must stay green; `moat-core` additions need an ADR.
-- **Lints:** workspace `clippy::pedantic`, `unsafe_code = "forbid"`, rustdoc `-D warnings`. Every public item of a library crate has a doc comment (`missing_docs`, enforced in `moat-core`). Do not `#[allow]` to get green; fix or justify in the PR.
+- **Dependencies:** adding one needs a sentence in the PR on why std or an existing dep does not cover it; `cargo-deny` must stay green; `openmoat-core` additions need an ADR.
+- **Lints:** workspace `clippy::pedantic`, `unsafe_code = "forbid"`, rustdoc `-D warnings`. Every public item of a library crate has a doc comment (`missing_docs`, enforced in `openmoat-core`). Do not `#[allow]` to get green; fix or justify in the PR.
 - **Formatting:** `cargo fmt` (max width 100). `.editorconfig` for everything else.
 - **PR-only:** nothing is pushed to `main` directly. Branch `<type>/<topic>`, open a PR, let `pr-standards` label it (`type: …`, `area: …`, `size: …`, `risk: …`), keep it ≤ 500 lines, squash-merge. Conventional Commits title (`feat`, `fix`, `sec`, `policy`, `host(codex)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`), lowercase subject. PR body sections **Testing** and **Security impact** are required (`pr-standards` fails without them); **Release note** is recommended and feeds `CHANGELOG.md`.
 - **Docs are code:** behaviour change ⇒ same PR updates `docs/POLICY.md` / `ARCHITECTURE.md` / `THREAT_MODEL.md` / `CHANGELOG.md` as applicable.

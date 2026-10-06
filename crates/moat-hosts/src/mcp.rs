@@ -7,7 +7,7 @@
 //! verdict stricter, so arguments that cannot be read are an error (the guard
 //! fails closed) rather than silently ignored.
 
-use moat_core::Action;
+use openmoat_core::Action;
 use serde_json::Value;
 
 use crate::HostError;
@@ -140,7 +140,7 @@ fn strings(value: &Value) -> impl Iterator<Item = String> + '_ {
 #[cfg(test)]
 mod tests {
     use super::{MAX_RESOURCES, action};
-    use moat_core::Action;
+    use openmoat_core::Action;
     use serde_json::json;
 
     fn ok(name: &str, input: &serde_json::Value) -> Action {

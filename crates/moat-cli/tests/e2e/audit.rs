@@ -35,7 +35,7 @@ fn concurrent_guards_build_one_chain_that_doctor_verifies() {
     let shown = json(&sb.moat(&["show", "--session", "s1", "--format", "json"]));
     let events = shown.as_array().expect("an array of events");
     assert_eq!(events.len(), 12);
-    assert_eq!(events[0]["prev_hash"], moat_audit::GENESIS);
+    assert_eq!(events[0]["prev_hash"], openmoat_audit::GENESIS);
     for pair in events.windows(2) {
         assert_eq!(pair[1]["prev_hash"], pair[0]["hash"]);
         assert_eq!(pair[1]["hash"].as_str().map(str::len), Some(64));
@@ -46,7 +46,7 @@ fn concurrent_guards_build_one_chain_that_doctor_verifies() {
 fn doctor_reports_an_edited_event_with_exit_64() {
     let sb = Sandbox::installed(&[".claude"]);
     guard_concurrently(&sb, 4);
-    moat_audit::testing::tamper_with_event(
+    openmoat_audit::testing::tamper_with_event(
         &sb.home.join(".moat/audit.db"),
         3,
         "deny",

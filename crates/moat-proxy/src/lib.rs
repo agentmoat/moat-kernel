@@ -1,9 +1,9 @@
-//! `moat-proxy`: the default-deny egress proxy behind `moat proxy` (ADR-020).
+//! `openmoat-proxy`: the default-deny egress proxy behind `moat proxy` (ADR-020).
 //!
 //! It serves HTTP `CONNECT` tunnels and absolute-form plain-HTTP requests on a
 //! loopback port:
 //!
-//! - Hosts are decided by moat-core's [`CompiledPolicy`](moat_core::CompiledPolicy)
+//! - Hosts are decided by openmoat-core's [`CompiledPolicy`](openmoat_core::CompiledPolicy)
 //!   as `moat guard` decides a fetch tool's URL: only an `allow` passes.
 //! - Cloud metadata and link-local addresses are refused whatever the policy
 //!   says, by name and on every address the proxy resolves. Private and CGNAT

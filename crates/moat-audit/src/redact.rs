@@ -122,7 +122,7 @@ mod tests {
     fn ordinary_commands_are_untouched() {
         for cmd in [
             "git status --short",
-            "cargo test -p moat-core",
+            "cargo test -p openmoat-core",
             "echo token",
             "cat ~/.ssh/id_rsa",
         ] {

@@ -1,4 +1,4 @@
-# moat-audit
+# openmoat-audit
 
 Append-only local audit log for kernel decisions.
 

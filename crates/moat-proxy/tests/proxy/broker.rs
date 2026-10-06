@@ -1,4 +1,4 @@
-use moat_core::Policy;
+use openmoat_core::Policy;
 use zeroize::Zeroizing;
 
 use super::*;

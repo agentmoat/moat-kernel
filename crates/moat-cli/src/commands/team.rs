@@ -6,8 +6,8 @@ use std::io::{self, Write as _};
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
-use moat_audit::{Event, ExportedEvent, Summary};
-use moat_core::Verdict;
+use openmoat_audit::{Event, ExportedEvent, Summary};
+use openmoat_core::Verdict;
 use serde::Serialize;
 
 use crate::approvals::OVERLAY_PREFIX;
@@ -96,7 +96,7 @@ pub fn run(args: &TeamReportArgs) -> Result<Code> {
 fn read_export(file: &Path) -> Result<(Source, Vec<ExportedEvent>)> {
     let name = file.display();
     let text = std::fs::read_to_string(file).with_context(|| format!("reading {name}"))?;
-    let check = moat_audit::verify_export(&text, None);
+    let check = openmoat_audit::verify_export(&text, None);
     if let Some(broken) = check.broken {
         bail!(
             "{name}: line {} does not verify ({}); run `moat audit verify` on it",

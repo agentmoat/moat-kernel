@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use moat_core::ir::{Effect, lower};
-use moat_core::{
+use openmoat_core::ir::{Effect, lower};
+use openmoat_core::{
     Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, MapPathResolver, NoResolver, Policy,
     Verdict,
 };

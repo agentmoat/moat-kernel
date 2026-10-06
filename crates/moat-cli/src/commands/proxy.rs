@@ -1,5 +1,5 @@
 //! `moat proxy [--listen 127.0.0.1:<port>]`: the default-deny egress proxy
-//! (ADR-020, `moat-proxy`).
+//! (ADR-020, `openmoat-proxy`).
 //!
 //! Starts only from an intact installation: the policy lock must match, so a
 //! tampered policy is never compiled into a long-running proxy. The policy is
@@ -12,9 +12,9 @@ use std::net::TcpListener;
 use std::sync::Mutex;
 
 use anyhow::{Context as _, Result, bail};
-use moat_audit::{NewEvent, Store};
-use moat_core::{Action, CompiledPolicy, EvalContext, Policy, Secret};
-use moat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, SystemResolver};
+use openmoat_audit::{NewEvent, Store};
+use openmoat_core::{Action, CompiledPolicy, EvalContext, Policy, Secret};
+use openmoat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, SystemResolver};
 
 use crate::cli::ProxyArgs;
 use crate::context;

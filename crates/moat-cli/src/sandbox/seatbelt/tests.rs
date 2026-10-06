@@ -1,4 +1,4 @@
-use moat_core::{DEFAULT_POLICY, EvalContext, Policy};
+use openmoat_core::{DEFAULT_POLICY, EvalContext, Policy};
 
 use super::*;
 use crate::sandbox::assert_golden;
@@ -24,7 +24,7 @@ fn generated_with(yaml: &str, grants: &Grants) -> Generated {
         case_insensitive_paths: true,
     };
     generate(
-        &moat_core::ir::lower(&policy, &ctx).expect("lowers"),
+        &openmoat_core::ir::lower(&policy, &ctx).expect("lowers"),
         grants,
     )
 }

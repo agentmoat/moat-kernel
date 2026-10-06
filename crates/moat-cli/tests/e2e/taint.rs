@@ -131,7 +131,7 @@ fn an_unreadable_session_history_fails_closed() {
     };
     assert_eq!(ls("s1").0, "allow");
     // Rules that are not JSON: the event cannot be read back.
-    moat_audit::testing::tamper_with_event(&sb.home.join(".moat/audit.db"), 1, "allow", "{")
+    openmoat_audit::testing::tamper_with_event(&sb.home.join(".moat/audit.db"), 1, "allow", "{")
         .unwrap();
 
     let (verdict, reason) = ls("s1");

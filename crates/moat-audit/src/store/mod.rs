@@ -5,7 +5,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use moat_core::{Action, Decision, Verdict};
+use openmoat_core::{Action, Decision, Verdict};
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
 };

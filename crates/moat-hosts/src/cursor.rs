@@ -6,7 +6,7 @@
 //! exit 2 also denies. Cursor is fail-open unless the hook entry sets
 //! `failClosed`, which the installer does.
 
-use moat_core::{Action, Decision};
+use openmoat_core::{Action, Decision};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -141,7 +141,7 @@ pub(crate) fn render(decision: &Decision) -> String {
 
 #[cfg(test)]
 mod tests {
-    use moat_core::Verdict;
+    use openmoat_core::Verdict;
 
     use super::*;
 

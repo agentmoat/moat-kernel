@@ -1,7 +1,7 @@
 //! Which hosts and addresses the proxy may reach.
 //!
 //! A host is decided exactly as `moat guard` decides a fetch tool's URL: one
-//! `fetch` atom through moat-core's [`CompiledPolicy`], so `fetch` and `net`
+//! `fetch` atom through openmoat-core's [`CompiledPolicy`], so `fetch` and `net`
 //! lists both apply and deny rules come first. The proxy cannot prompt, so an
 //! `ask` is refused. Cloud metadata and link-local addresses are refused
 //! whatever the policy says, by name and again after DNS resolution. Private
@@ -9,7 +9,7 @@
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use moat_core::{AtomicAction, CompiledPolicy, Decision, Defaults, Kind, Policy, Verdict};
+use openmoat_core::{AtomicAction, CompiledPolicy, Decision, Defaults, Kind, Policy, Verdict};
 
 /// Rule id for a destination refused whatever the policy says.
 pub const RULE_ADDRESS: &str = "proxy-address";
@@ -188,7 +188,7 @@ pub fn address_policy(policy: &Policy) -> Policy {
                     .cloned()
                     .collect::<Vec<_>>()
             };
-            moat_core::RuleGroup {
+            openmoat_core::RuleGroup {
                 id: g.id.clone(),
                 reason: g.reason.clone(),
                 net: keep(g.patterns(Kind::Net)),

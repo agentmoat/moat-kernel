@@ -1,6 +1,6 @@
 [package]
-name = "moat-hosts"
-description = "Host adapters for agentmoat: translate agent hook payloads to actions and decisions back to hook responses."
+name = "openmoat-hosts"
+description = "Host adapters for OpenMoat: translate agent hook payloads to actions and decisions back to hook responses."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-moat-core.workspace = true
+openmoat-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

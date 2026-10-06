@@ -1,10 +1,10 @@
-# moat
+# OpenMoat
 
-**A firewall and seatbelt for AI coding agents.**
+**A firewall and seatbelt for AI coding agents.** By Crocodile Labs; the command is `moat`.
 
 AI coding agents run commands, edit files and call the network on your machine with
 your permissions. One prompt injection in a README, an issue or a web page is enough
-to make an agent read `~/.ssh` and send it somewhere, or wipe a directory. `moat` sits
+to make an agent read `~/.ssh` and send it somewhere, or wipe a directory. OpenMoat sits
 between the agent and your machine and enforces one policy you control, for Claude
 Code, Codex and Cursor alike.
 
@@ -38,31 +38,31 @@ No release has been tagged yet. Until `v0.1.0-alpha.0` is out, build from a clon
 (Rust 1.95, pinned by `rust-toolchain.toml`):
 
 ```bash
-git clone https://github.com/agentmoat/moat-kernel && cd moat-kernel
+git clone https://github.com/crocodile-labs/openmoat && cd openmoat
 cargo install --locked --path crates/moat-cli    # installs the `moat` binary
 ```
 
 From the first release on, builds cover macOS (arm64, x64), Linux (x64, arm64; glibc
 and static musl) and Windows (x64). Every alpha is a GitHub pre-release, so installer
 URLs name the version; take the newest from
-[Releases](https://github.com/agentmoat/moat-kernel/releases).
+[Releases](https://github.com/crocodile-labs/openmoat/releases).
 
 ```bash
 # macOS and Linux: installs moat into ~/.cargo/bin
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/agentmoat/moat-kernel/releases/download/v0.1.0-alpha.0/moat-kernel-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.0/openmoat-installer.sh | sh
 
 # Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/agentmoat/moat-kernel/releases/download/v0.1.0-alpha.0/moat-kernel-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.0/openmoat-installer.ps1 | iex"
 
 # Homebrew (macOS, Linux)
-brew install agentmoat/tap/moat
+brew install crocodile-labs/tap/moat
 
 # From crates.io (Rust 1.95); cargo installs a pre-release only when asked by version
-cargo install moat-kernel --locked --version 0.1.0-alpha.0
+cargo install openmoat --locked --version 0.1.0-alpha.0
 ```
 
 Each release carries `sha256.sum` and GitHub build attestations:
-`gh attestation verify <archive> --repo agentmoat/moat-kernel`.
+`gh attestation verify <archive> --repo crocodile-labs/openmoat`.
 
 ## Quick start
 

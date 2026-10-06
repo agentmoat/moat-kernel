@@ -1,6 +1,6 @@
 //! `moat proxy`: start-up checks, one refused connection recorded in the
 //! audit log, and brokered secrets kept out of replies, output and the log.
-//! Allowed traffic and injection are covered by `moat-proxy`'s own tests,
+//! Allowed traffic and injection are covered by `openmoat-proxy`'s own tests,
 //! which can point a name at a local server; this binary uses the system
 //! resolver.
 

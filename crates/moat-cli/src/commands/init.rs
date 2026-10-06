@@ -3,9 +3,9 @@
 use std::io::Write as _;
 
 use anyhow::Result;
-use moat_audit::Store;
-use moat_core::{DEFAULT_POLICY, Policy};
-use moat_hosts::Host;
+use openmoat_audit::Store;
+use openmoat_core::{DEFAULT_POLICY, Policy};
+use openmoat_hosts::Host;
 
 use crate::cli::InitArgs;
 use crate::environment::Snapshot;

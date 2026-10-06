@@ -158,7 +158,7 @@ something the alpha claims to stop.
   that asks for secret reads can taint a session. An edited or deleted audit event
   clears taint until `moat doctor` reports the broken chain.
 - **The secrets broker (ADR-020) keeps a value from the agent, nothing more.**
-  `moat-proxy` holds the value of each `secrets:` entry. It refuses and records
+  `openmoat-proxy` holds the value of each `secrets:` entry. It refuses and records
   (`proxy-secret`) any request to another host whose head, or plain-HTTP body, carries
   the placeholder or the value. It defends against a prompt-injected agent that sends
   the token it holds to a host of the attacker's choosing, or through an allowed relay.

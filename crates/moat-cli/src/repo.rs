@@ -1,5 +1,5 @@
 //! The repository policy of a session's project (ADR-022): found, read and
-//! hashed here, merged by `moat_core::RepoPolicy`.
+//! hashed here, merged by `openmoat_core::RepoPolicy`.
 //!
 //! The file is attacker-controlled input. One that exists but cannot be read
 //! or parsed is an error, so `guard` denies with `kernel-error` rather than
@@ -11,7 +11,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::{EvalContext, Policy, RepoPolicy};
+use openmoat_core::{EvalContext, Policy, RepoPolicy};
 
 use crate::context;
 use crate::home::Home;

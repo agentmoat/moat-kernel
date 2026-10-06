@@ -1,11 +1,11 @@
-//! Environment and filesystem access: everything `moat-core` must not do itself.
+//! Environment and filesystem access: everything `openmoat-core` must not do itself.
 
 use std::fs;
 use std::io::Read as _;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::{EvalContext, Policy};
+use openmoat_core::{EvalContext, Policy};
 
 use crate::home;
 use crate::project;

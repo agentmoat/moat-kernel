@@ -19,7 +19,7 @@ if [ -z "$bin" ]; then
     done
 fi
 if [ -z "$bin" ] || [ ! -x "$bin" ]; then
-    echo "no moat binary: run 'cargo build -p moat-kernel' or pass its path" >&2
+    echo "no moat binary: run 'cargo build -p openmoat' or pass its path" >&2
     exit 64
 fi
 pace=${DEMO_PACE:-1.5}

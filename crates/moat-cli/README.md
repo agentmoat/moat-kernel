@@ -1,7 +1,7 @@
-# moat-kernel (binary: `moat`)
+# openmoat (binary: `moat`)
 
 The command-line kernel. This crate owns all I/O: files, environment, terminal,
-host configuration. Decisions come from `moat-core`.
+host configuration. Decisions come from `openmoat-core`.
 
 | Command | Purpose |
 |---|---|

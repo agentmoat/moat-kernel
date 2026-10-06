@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::RuleGroup;
+use openmoat_core::RuleGroup;
 use serde::{Deserialize, Serialize};
 
 use crate::home::write_private;
@@ -178,7 +178,7 @@ impl Overlay {
     /// characters in the command are not wildcards in the rule. Shell rules are
     /// prefixes, so extra arguments after the approved command are accepted.
     pub fn allow_command(&mut self, command: &str) -> Result<&RuleGroup> {
-        let pattern = moat_core::literal_shell_pattern(command)
+        let pattern = openmoat_core::literal_shell_pattern(command)
             .with_context(|| format!("cannot approve `{command}`"))?;
         // One past the highest existing number: ids stay unique after a person
         // deletes an earlier rule, and a duplicate id would fail the policy lint.

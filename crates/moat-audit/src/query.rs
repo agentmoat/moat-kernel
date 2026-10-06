@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use moat_core::Verdict;
+use openmoat_core::Verdict;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -171,7 +171,7 @@ impl Summary {
 mod tests {
     use super::*;
     use crate::store::NewEvent;
-    use moat_core::{Action, Decision};
+    use openmoat_core::{Action, Decision};
 
     fn decision(verdict: Verdict, rules: &[&str]) -> Decision {
         let mut d = Decision::new(verdict);

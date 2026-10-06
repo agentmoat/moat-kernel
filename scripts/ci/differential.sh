@@ -24,5 +24,5 @@ echo "▶ differential suite"
 echo "  codex:  ${MOAT_CODEX_BIN:-<none; codex layer skipped>}"
 echo "  claude: ${MOAT_CLAUDE_BIN:-<none; claude layer skipped>}"
 
-cargo test --locked -p moat-kernel --test e2e differential -- --nocapture
+cargo test --locked -p openmoat --test e2e differential -- --nocapture
 echo "✔ differential suite passed"

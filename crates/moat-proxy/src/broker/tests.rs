@@ -1,4 +1,4 @@
-use moat_core::{Policy, Verdict};
+use openmoat_core::{Policy, Verdict};
 use zeroize::Zeroizing;
 
 use super::{Broker, BrokerError, Carried, RULE_SECRET, Watch};

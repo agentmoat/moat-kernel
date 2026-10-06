@@ -4,7 +4,7 @@ use crate::kind::Kind;
 
 /// A tool call as seen from a host, before classification.
 ///
-/// Host adapters (`moat-hosts`) translate each payload into exactly one of
+/// Host adapters (`openmoat-hosts`) translate each payload into exactly one of
 /// these. Adapters never decide.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

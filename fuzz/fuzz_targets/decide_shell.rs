@@ -6,7 +6,7 @@
 use std::sync::OnceLock;
 
 use libfuzzer_sys::fuzz_target;
-use moat_core::{Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, Policy};
+use openmoat_core::{Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, Policy};
 
 /// The default policy, compiled once: compilation dominates a single decision.
 fn compiled() -> &'static CompiledPolicy<'static> {
