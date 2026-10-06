@@ -67,8 +67,12 @@ Claim "done" only after it passes locally. CI runs the same script on macOS (arm
 4. Add a `### Security` or `### Changed` line to `CHANGELOG.md`.
 
 ### Teach the classifier something new (new wrapper, interpreter, write-program, builtin)
+The shell classifier is a triage layer, not the security boundary (ADR-013); OS
+enforcement is. Under the parser freeze, a newly found bypass gets an attack fixture
+and the smallest change that makes it `ask`, not a new grammar or an ADR, unless an
+invariant moves. Put the saved time into enforcement (#119, #126).
 1. Data goes in `crates/moat-core/src/shell/tables.rs`; behaviour in `commands.rs` or `tokens.rs`.
-2. Unit test in `shell/tests.rs` asserting the atomic actions produced.
+2. Unit test in `shell/tests/` asserting the atomic actions produced.
 3. Conformance fixture showing the end-to-end verdict.
 4. Never widen `looks_like_path` or `host_of` without a negative test for the false positive you might introduce.
 

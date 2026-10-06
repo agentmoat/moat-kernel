@@ -59,6 +59,13 @@ label "good first issue"   7057ff "Adapters, docs, examples; never the trusted c
 label breaking           b60205 "Breaking change to policy schema, CLI or exit codes"
 label "help wanted"        008672 "Open for contributors"
 
+# roadmap: the order of work (pinned roadmap issue)
+label "priority: P0"       b60205 "This week: blocks everything after it"
+label "priority: P1"       d93f0b "Needed for the alpha release"
+label "priority: P2"       fbca04 "Beta: enforcement and the team story"
+label "priority: P3"       c5def5 "After beta (v1.0)"
+label "owner task"         5319e7 "Needs the maintainer (credentials, decisions, legal)"
+
 # issues: applied by the issue forms
 label bug                d73a4a "Behaves differently from the docs or policy"
 label "false positive"     fbca04 "A safe action denied or asked by the default policy"
