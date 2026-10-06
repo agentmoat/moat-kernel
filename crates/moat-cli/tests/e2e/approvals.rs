@@ -19,6 +19,80 @@ fn write_state(sb: &Sandbox, relative: &str, contents: &str) {
     std::fs::write(path, contents).unwrap();
 }
 
+/// Milliseconds since the epoch, as `moat` stamps grants.
+fn now_ms() -> i64 {
+    let since = std::time::UNIX_EPOCH.elapsed().unwrap();
+    i64::try_from(since.as_millis()).unwrap()
+}
+
+/// `approvals.json` holding one Claude Code grant for session `s1`, created at
+/// `granted_at_ms` (no timestamp at all when `None`, as files from before expiry).
+fn write_grant(sb: &Sandbox, command: &str, granted_at_ms: Option<i64>) {
+    let mut grant =
+        serde_json::json!({"host": "claude-code", "session_id": "s1", "command": command});
+    if let Some(at) = granted_at_ms {
+        grant["granted_at_ms"] = Value::from(at);
+    }
+    let file = serde_json::json!({"version": 1, "entries": [grant]});
+    write_state(sb, "approvals.json", &file.to_string());
+}
+
+const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+
+#[test]
+fn session_grants_expire_and_are_pruned_on_write() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let command = "npm install left-pad-pro";
+    let mut person = sb.command();
+    person.env("MOAT_ASSUME_TTY", "1");
+
+    write_grant(&sb, command, Some(now_ms() - DAY_MS - 60_000));
+    assert_eq!(sb.moat(&["init"]).status.code(), Some(0), "init re-pins");
+    let d = decide(&sb, "s1", command);
+    assert_eq!(
+        d["permissionDecision"], "ask",
+        "a grant older than 24 h: {d}"
+    );
+    let status = text(&sb.moat(&["status"]));
+    assert!(status.contains("no active session grants"), "{status}");
+
+    write_grant(&sb, command, None);
+    assert_eq!(sb.moat(&["init"]).status.code(), Some(0));
+    let d = decide(&sb, "s1", command);
+    assert_eq!(
+        d["permissionDecision"], "ask",
+        "a grant without a timestamp: {d}"
+    );
+
+    write_grant(&sb, command, Some(now_ms() - DAY_MS + 3_600_000));
+    assert_eq!(sb.moat(&["init"]).status.code(), Some(0));
+    assert_eq!(decide(&sb, "s1", command)["permissionDecision"], "allow");
+    let status = text(&sb.moat(&["status"]));
+    assert!(
+        status.contains("1 active session grant(s), oldest 23h"),
+        "{status}"
+    );
+
+    // Writing approvals.json drops the expired grants it holds.
+    write_grant(&sb, command, Some(now_ms() - 2 * DAY_MS));
+    assert_eq!(sb.moat(&["init"]).status.code(), Some(0));
+    let out = crate::common::output(
+        person.args([
+            "allow",
+            "ls -la",
+            "--host",
+            "claude-code",
+            "--session",
+            "s2",
+        ]),
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    let file = std::fs::read_to_string(sb.home.join(".moat/approvals.json")).unwrap();
+    assert!(!file.contains(command), "expired grant kept: {file}");
+    assert!(file.contains("ls -la"), "{file}");
+}
+
 #[test]
 fn init_pins_grants_and_overlay() {
     let sb = Sandbox::installed(&[".claude"]);
@@ -49,11 +123,7 @@ fn session_grant_turns_ask_into_allow_for_that_session_only() {
         "ask"
     );
 
-    write_state(
-        &sb,
-        "approvals.json",
-        r#"{"version":1,"entries":[{"host":"claude-code","session_id":"s1","command":"npm install left-pad-pro","granted_at_ms":0}]}"#,
-    );
+    write_grant(&sb, "npm install left-pad-pro", Some(now_ms()));
     let tampered = decide(&sb, "s1", "npm install left-pad-pro");
     assert_eq!(
         tampered["permissionDecision"], "deny",

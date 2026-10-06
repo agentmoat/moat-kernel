@@ -253,7 +253,12 @@ moat allow "npm install left-pad" --host claude-code --session 7c1e
 
 Session grants live in `~/.moat/approvals.json` and match the exact command text for
 one host session. A grant applies to any `ask` for that command, including an
-`unparseable` one; it never overrides a `deny`. Permanent rules are appended to
+`unparseable` one; it never overrides a `deny`. Hosts do not report when a session ends,
+so a grant expires 24 hours after `moat allow` wrote it (granting the same command again
+restarts it); `guard` ignores expired grants, every write of `approvals.json` drops them,
+and `moat status` shows how many are active and the age of the oldest. A grant written
+without a creation time (files from before grants expired) counts as expired.
+Permanent rules (`--always`) never expire; they are appended to
 `~/.moat/policy.d/approved.yaml` with ids `approved-1`, `approved-2`, … and a provenance
 comment, and are merged into your policy at load time so `policy.yaml` is never rewritten.
 The command is stored as a literal pattern: glob characters and `$` are escaped (`cat *` is

@@ -119,7 +119,12 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
         CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot, &FsPathResolver);
     if decision.verdict == Verdict::Ask
         && let moat_core::Action::Shell { command } = action
-        && Grants::load(&home.grants_path())?.matches(host.id(), &request.session_id, command)
+        && Grants::load(&home.grants_path())?.matches(
+            host.id(),
+            &request.session_id,
+            command,
+            crate::time::now_ms(),
+        )
     {
         decision = Decision::new(Verdict::Allow);
         decision.rules.push(SESSION_GRANT_RULE.to_owned());

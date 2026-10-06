@@ -7,11 +7,12 @@ use anyhow::Result;
 use moat_audit::Store;
 use moat_hosts::Host;
 
+use crate::approvals::{GRANT_TTL_MS, Grants};
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig};
 use crate::integrity::{self, HookPinGap, Lock};
-use crate::render;
+use crate::{render, time};
 
 pub fn run() -> Result<Code> {
     let home = Home::locate()?;
@@ -80,6 +81,27 @@ pub fn run() -> Result<Code> {
         Err(error) => {
             healthy = false;
             writeln!(out, "lock             ✗ {error:#}")?;
+        }
+    }
+
+    match Grants::load(&home.grants_path()) {
+        Ok(grants) => {
+            let now = time::now_ms();
+            let ages: Vec<i64> = grants.active(now).map(|g| now - g.granted_at_ms).collect();
+            match ages.iter().max() {
+                Some(oldest) => writeln!(
+                    out,
+                    "approvals        {} active session grant(s), oldest {} old (each expires after {})",
+                    ages.len(),
+                    time::duration(*oldest),
+                    time::duration(GRANT_TTL_MS)
+                )?,
+                None => writeln!(out, "approvals        no active session grants")?,
+            }
+        }
+        Err(error) => {
+            healthy = false;
+            writeln!(out, "approvals        ✗ {error:#}")?;
         }
     }
 

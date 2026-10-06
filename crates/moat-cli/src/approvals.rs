@@ -2,7 +2,8 @@
 //!
 //! Two files under `~/.moat`, both pinned by the policy lock so an agent cannot
 //! grant itself anything:
-//! - `approvals.json`: session grants, exact command for one host session;
+//! - `approvals.json`: session grants, exact command for one host session, valid for
+//!   [`GRANT_TTL_MS`] after they are written;
 //! - `policy.d/approved.yaml`: permanent allow rules appended by `moat allow --always`,
 //!   merged into the user policy at load time so `policy.yaml` is never rewritten.
 
@@ -19,13 +20,28 @@ use crate::time;
 const GRANTS_VERSION: u32 = 1;
 const OVERLAY_VERSION: u32 = 1;
 pub const OVERLAY_PREFIX: &str = "approved-";
+/// How long a session grant stays valid. Hosts do not tell moat when a session
+/// ends, so a fixed lifetime is what bounds a grant.
+pub const GRANT_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Grant {
     pub host: String,
     pub session_id: String,
     pub command: String,
+    /// Milliseconds since the epoch. A grant written without one reads as 0,
+    /// long expired: a grant whose age is unknown must not stay valid forever.
+    #[serde(default)]
     pub granted_at_ms: i64,
+}
+
+impl Grant {
+    /// Valid for [`GRANT_TTL_MS`] from its creation. A creation time in the
+    /// future (a clock set back, a hand edit) is not valid either.
+    #[must_use]
+    pub fn active(&self, now_ms: i64) -> bool {
+        (0..GRANT_TTL_MS).contains(&now_ms.saturating_sub(self.granted_at_ms))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,33 +79,42 @@ impl Grants {
         Ok(grants)
     }
 
-    pub fn save(&self, path: &Path) -> Result<()> {
+    /// Write the file, dropping grants that expired by `now_ms` so it does not
+    /// grow without bound.
+    pub fn save(&mut self, path: &Path, now_ms: i64) -> Result<()> {
+        self.entries.retain(|g| g.active(now_ms));
         write_private(
             path,
             (serde_json::to_string_pretty(self)? + "\n").as_bytes(),
         )
     }
 
-    pub fn grant(&mut self, host: &str, session_id: &str, command: &str) {
+    /// Grant `command` to the host session as of `now_ms`; granting it again
+    /// restarts its lifetime.
+    pub fn grant(&mut self, host: &str, session_id: &str, command: &str, now_ms: i64) {
         let command = command.trim();
-        if self.matches(host, session_id, command) {
-            return;
-        }
+        self.entries
+            .retain(|g| !(g.host == host && g.session_id == session_id && g.command == command));
         self.entries.push(Grant {
             host: host.to_owned(),
             session_id: session_id.to_owned(),
             command: command.to_owned(),
-            granted_at_ms: time::now_ms(),
+            granted_at_ms: now_ms,
         });
     }
 
-    /// Exact command match for this host session; no prefix or glob semantics.
+    /// Exact command match for this host session among grants still valid at
+    /// `now_ms`; no prefix or glob semantics.
     #[must_use]
-    pub fn matches(&self, host: &str, session_id: &str, command: &str) -> bool {
+    pub fn matches(&self, host: &str, session_id: &str, command: &str, now_ms: i64) -> bool {
         let command = command.trim();
-        self.entries
-            .iter()
+        self.active(now_ms)
             .any(|g| g.host == host && g.session_id == session_id && g.command == command)
+    }
+
+    /// Grants still valid at `now_ms`.
+    pub fn active(&self, now_ms: i64) -> impl Iterator<Item = &Grant> {
+        self.entries.iter().filter(move |g| g.active(now_ms))
     }
 }
 
@@ -193,16 +218,57 @@ mod tests {
         assert_eq!(ids.len(), o.allow.len());
     }
 
+    /// 2026-10-03 00:00:00 UTC; tests pass time in, they never read the clock.
+    const NOW: i64 = 1_790_985_600_000;
+
     #[test]
     fn grants_match_exactly_per_host_session() {
         let mut g = Grants::default();
-        g.grant("claude-code", "s1", " npm install left-pad ");
-        g.grant("claude-code", "s1", "npm install left-pad");
+        g.grant("claude-code", "s1", " npm install left-pad ", NOW);
+        g.grant("claude-code", "s1", "npm install left-pad", NOW);
         assert_eq!(g.entries.len(), 1, "duplicates collapse");
-        assert!(g.matches("claude-code", "s1", "npm install left-pad"));
-        assert!(!g.matches("claude-code", "s2", "npm install left-pad"));
-        assert!(!g.matches("cursor", "s1", "npm install left-pad"));
-        assert!(!g.matches("claude-code", "s1", "npm install left-pad --save"));
+        assert!(g.matches("claude-code", "s1", "npm install left-pad", NOW));
+        assert!(!g.matches("claude-code", "s2", "npm install left-pad", NOW));
+        assert!(!g.matches("cursor", "s1", "npm install left-pad", NOW));
+        assert!(!g.matches("claude-code", "s1", "npm install left-pad --save", NOW));
+    }
+
+    #[test]
+    fn grants_expire_after_the_ttl() {
+        let mut g = Grants::default();
+        g.grant("codex", "k1", "cargo add serde", NOW);
+        let ok = |g: &Grants, at| g.matches("codex", "k1", "cargo add serde", at);
+        assert!(ok(&g, NOW + GRANT_TTL_MS - 1));
+        assert!(!ok(&g, NOW + GRANT_TTL_MS), "expired at the TTL");
+        assert!(!ok(&g, NOW - 1), "a grant from the future is not valid");
+
+        g.grant("codex", "k1", "cargo add serde", NOW + GRANT_TTL_MS);
+        assert_eq!(g.entries.len(), 1);
+        assert!(ok(&g, NOW + GRANT_TTL_MS + 1), "granting again restarts it");
+    }
+
+    #[test]
+    fn a_grant_without_a_timestamp_is_expired() {
+        let g: Grants = serde_json::from_str(
+            r#"{"version":1,"entries":[{"host":"codex","session_id":"k1","command":"ls"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(g.entries[0].granted_at_ms, 0);
+        assert!(!g.matches("codex", "k1", "ls", NOW));
+    }
+
+    #[test]
+    fn saving_prunes_expired_grants() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("approvals.json");
+        let mut g = Grants::default();
+        g.grant("codex", "old", "ls", NOW - GRANT_TTL_MS);
+        g.grant("codex", "new", "ls", NOW - 1);
+        assert_eq!(g.active(NOW).count(), 1);
+        g.save(&path, NOW).unwrap();
+        let loaded = Grants::load(&path).unwrap();
+        assert_eq!(loaded.entries.len(), 1);
+        assert_eq!(loaded.entries[0].session_id, "new");
     }
 
     #[test]
@@ -210,8 +276,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let grants_path = dir.path().join("approvals.json");
         let mut g = Grants::default();
-        g.grant("codex", "k1", "cargo add serde");
-        g.save(&grants_path).unwrap();
+        g.grant("codex", "k1", "cargo add serde", NOW);
+        g.save(&grants_path, NOW).unwrap();
         assert_eq!(Grants::load(&grants_path).unwrap(), g);
         assert_eq!(
             Grants::load(&dir.path().join("missing.json")).unwrap(),

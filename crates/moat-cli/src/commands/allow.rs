@@ -5,7 +5,7 @@ use std::io::Write as _;
 use anyhow::{Context as _, Result, bail};
 use moat_core::{Action, Verdict};
 
-use crate::approvals::{Grants, Overlay};
+use crate::approvals::{GRANT_TTL_MS, Grants, Overlay};
 use crate::cli::AllowArgs;
 use crate::exit::Code;
 use crate::home::Home;
@@ -53,9 +53,14 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
         let host = host.context("--session needs --host")?;
         let path = home.grants_path();
         let mut grants = Grants::load(&path)?;
-        grants.grant(&host, &session, &command);
-        grants.save(&path)?;
-        writeln!(out, "✔ session {session} on {host} may run \"{command}\"")?;
+        let now = crate::time::now_ms();
+        grants.grant(&host, &session, &command, now);
+        grants.save(&path, now)?;
+        writeln!(
+            out,
+            "✔ session {session} on {host} may run \"{command}\" for {}",
+            crate::time::duration(GRANT_TTL_MS)
+        )?;
     }
 
     let binary = crate::install::hook_binary()?;
