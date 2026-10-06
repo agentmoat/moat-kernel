@@ -20,3 +20,4 @@ mod install_path;
 mod lock;
 mod paths;
 mod replay_report;
+mod sandbox;

@@ -7,12 +7,13 @@ mod init;
 mod policy;
 mod replay;
 mod report;
+mod sandbox;
 mod show;
 mod status;
 
 use anyhow::Result;
 
-use crate::cli::{Cli, Command, PolicyCommand};
+use crate::cli::{Cli, Command, PolicyCommand, SandboxCommand};
 use crate::exit::Code;
 
 pub fn run(cli: Cli) -> Result<Code> {
@@ -29,6 +30,9 @@ pub fn run(cli: Cli) -> Result<Code> {
             PolicyCommand::Lint(args) => policy::lint(&args),
             PolicyCommand::Check(args) => policy::check(&args),
             PolicyCommand::Compile(args) => policy::compile(&args),
+        },
+        Command::Sandbox { command } => match command {
+            SandboxCommand::Show(args) => sandbox::show(&args),
         },
     }
 }

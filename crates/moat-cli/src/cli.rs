@@ -44,6 +44,24 @@ pub enum Command {
         #[command(subcommand)]
         command: PolicyCommand,
     },
+    /// The host sandboxes moat configures from the policy (Standard tier, ADR-018).
+    Sandbox {
+        #[command(subcommand)]
+        command: SandboxCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SandboxCommand {
+    /// Print the sandbox settings the policy compiles to and the translation losses; writes nothing.
+    Show(SandboxShowArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SandboxShowArgs {
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
 }
 
 #[derive(Debug, Args)]
