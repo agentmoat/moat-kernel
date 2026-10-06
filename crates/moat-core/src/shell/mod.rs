@@ -17,6 +17,9 @@
 //! | `python -c`, `node -e`, `perl -e`, … payloads | URL/path scan of the payload |
 //! | `find -exec/-execdir/-ok/-okdir` commands, `--output=FILE` (`options.rs`) | nested classification, `FsWrite` |
 //! | `make --eval`, `-e`, `SHELL=`, `X!=cmd`, `$(shell …)` (`make.rs`) | `make <arg>` `Shell` atom + nested classification |
+//! | text tool options (`text.rs`): `sort -o FILE`, `uniq in out`; an unknown option | `FsWrite`; `<program> @<option>` `Shell` atom |
+//! | `sed` scripts (`sed/`): `r FILE`, `w FILE`; `e`, anything not understood | `FsRead`, `FsWrite`; `sed @<script>` `Shell` atom |
+//! | `awk` programs (`awk.rs`) with `system`, `\|`, `getline`, `ENVIRON`, `ARGV`, `@`, `print … >` | `awk @<program>` `Shell` atom |
 //!
 //! Classification is conservative by design: when the input cannot be parsed
 //! safely the result is [`ParseOutcome::Unparseable`], which the engine maps to
@@ -31,8 +34,11 @@
 //! `operands` decides which plain arguments name files;
 //! `decoders`, `make` and `options` handle constructs that hide a command or a
 //! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
+//! `text` reads the options of text tools, whose values are data, not files,
+//! and `sed` and `awk` their programs;
 //! `tables` holds the program lists that drive all of them.
 
+mod awk;
 mod commands;
 mod cwd;
 mod decoders;
@@ -41,9 +47,11 @@ mod invocation;
 mod make;
 mod operands;
 mod options;
+mod sed;
 pub(crate) mod tables;
 #[cfg(test)]
 mod tests;
+mod text;
 pub(crate) mod tokens;
 
 use crate::action::AtomicAction;

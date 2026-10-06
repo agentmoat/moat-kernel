@@ -418,3 +418,46 @@
   threat: T9
   action: { fs_write: "/p/.github/workflows/ci.yml" }
   expect: { verdict: allow, rules: [project-fs] }
+# Read-only text tools on project files (#212)
+- id: benign-sort-uniq-count
+  action: { shell: "sort data.txt | uniq -c" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-cut-first-field
+  action: { shell: "cut -d, -f1 data.csv" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-cut-slash-delimiter-is-not-a-path
+  action: { shell: "cut -d '/' -f 2 paths.txt" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sort-output-into-project
+  action: { shell: "sort -u -o sorted.txt data.txt" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-text-pipeline
+  action: { shell: "git log --format=%an | sort | uniq -c | sort -rn -k1 | head -5" }
+  expect: { verdict: allow, rules: [text-tools, dev-shell] }
+- id: benign-sed-print-line-range
+  action: { shell: "sed -n 1,20p src/lib.rs" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-substitute-to-stdout
+  action: { shell: "sed 's/foo/bar/g' src/lib.rs" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-regex-range-is-not-a-path
+  action: { shell: "sed -n '/^fn main/,/^}/p' src/main.rs | head -40" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-in-place-in-project
+  action: { shell: "sed -i '' -e 's/0.1.0/0.2.0/' Cargo.toml" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-write-into-project
+  action: { shell: "sed -n '/ERROR/w errors.log' build.log" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-print-field
+  action: { shell: "awk '{print $1}' data.txt" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-comparison-before-print
+  action: { shell: "awk -F, '$3 > 100 {print $1}' data.csv" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-regex-is-not-a-path
+  action: { shell: "awk '/error/ {n++} END {print n}' build.log" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-in-pipeline
+  action: { shell: "cut -d, -f2 data.csv | sort | uniq -c | awk '{print $2}'" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }

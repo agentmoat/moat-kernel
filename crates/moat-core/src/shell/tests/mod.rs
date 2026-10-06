@@ -1,4 +1,5 @@
 mod stdin;
+mod text;
 
 use super::tokens::env_refs;
 use super::{ParseOutcome, ShellContext, classify};
