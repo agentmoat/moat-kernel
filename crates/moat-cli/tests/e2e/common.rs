@@ -5,7 +5,7 @@
 //! `USERPROFILE`, so nothing from the developer's machine (a real `~/.moat`,
 //! `CLAUDE_CONFIG_DIR`, a terminal) leaks into a test.
 
-use std::io::Write as _;
+use std::io::{ErrorKind, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
@@ -93,7 +93,15 @@ pub fn output(cmd: &mut Command, stdin: Option<&str>) -> Output {
         .expect("spawning moat");
     let mut pipe = child.stdin.take().expect("stdin is piped");
     if let Some(input) = stdin {
-        pipe.write_all(input.as_bytes()).unwrap();
+        // A command may exit before reading its input (`guard` refusing its own
+        // arguments); its exit status is what the test checks, not this write.
+        if let Err(error) = pipe.write_all(input.as_bytes()) {
+            assert_eq!(
+                error.kind(),
+                ErrorKind::BrokenPipe,
+                "writing stdin: {error}"
+            );
+        }
     }
     drop(pipe);
     child.wait_with_output().unwrap()
