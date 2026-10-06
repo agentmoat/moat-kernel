@@ -10,7 +10,7 @@ use openmoat_hosts::Host;
 use crate::cli::DoctorArgs;
 use crate::exit::Code;
 use crate::home::Home;
-use crate::install::{HookState, HostConfig, stale_hint};
+use crate::install::{CONTINUE_CLI_WARNING, HookState, HostConfig, stale_hint};
 use crate::integrity::{self, HookPinGap, HookPins, Lock};
 use crate::render::Deferred;
 use crate::sandbox::{Plan, install as host_sandbox};
@@ -188,44 +188,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         ),
     }
 
-    let mut hook_files = Vec::new();
-    for host in Host::ALL {
-        let config = HostConfig::for_host(host)?;
-        let name = host.display_name();
-        match config.state(&binary) {
-            HookState::Installed => {
-                hook_files.push(config.settings_path.clone());
-                report.line(
-                    Area::Hook,
-                    true,
-                    format!(
-                        "{name:<16} hook installed  {}",
-                        config.settings_path.display()
-                    ),
-                );
-            }
-            HookState::Missing if !config.host_present() => {
-                report.note(&format!("{name:<16} host not found"));
-            }
-            HookState::Missing => {
-                report.line(
-                    Area::Hook,
-                    false,
-                    format!("{name:<16} hook missing; run `moat init`"),
-                );
-            }
-            HookState::Stale { command } => {
-                report.line(
-                    Area::Hook,
-                    false,
-                    format!("{name:<16} {}", stale_hint(&command)),
-                );
-            }
-            HookState::Unreadable(e) => {
-                report.line(Area::Hook, false, format!("{name:<16} {e}"));
-            }
-        }
-    }
+    let hook_files = hooks(&mut report, &binary)?;
 
     if let Some(lock) = &lock {
         let gap = HookPinGap::new(lock, &home, &hook_files);
@@ -294,6 +257,57 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
     )?;
     report.out.finish()?;
     Ok(Code::Usage)
+}
+
+/// One line per host's hook, then the Continue CLI warning; returns the
+/// installed hook files.
+fn hooks(report: &mut Report, binary: &std::path::Path) -> Result<Vec<std::path::PathBuf>> {
+    let mut hook_files = Vec::new();
+    for host in Host::ALL {
+        let config = HostConfig::for_host(host)?;
+        let name = host.display_name();
+        match config.state(binary) {
+            HookState::Installed => {
+                hook_files.push(config.settings_path.clone());
+                report.line(
+                    Area::Hook,
+                    true,
+                    format!(
+                        "{name:<16} hook installed  {}",
+                        config.settings_path.display()
+                    ),
+                );
+            }
+            HookState::Missing if !config.host_present() => {
+                report.note(&format!("{name:<16} host not found"));
+            }
+            HookState::Missing => {
+                report.line(
+                    Area::Hook,
+                    false,
+                    format!("{name:<16} hook missing; run `moat init`"),
+                );
+            }
+            HookState::Stale { command } => {
+                report.line(
+                    Area::Hook,
+                    false,
+                    format!("{name:<16} {}", stale_hint(&command)),
+                );
+            }
+            HookState::Unreadable(e) => {
+                report.line(Area::Hook, false, format!("{name:<16} {e}"));
+            }
+        }
+    }
+    if let Some(found) = crate::install::continue_cli()? {
+        let name = Host::Continue.display_name();
+        report.note(&format!(
+            "{name:<16} {CONTINUE_CLI_WARNING}  {}",
+            found.display()
+        ));
+    }
+    Ok(hook_files)
 }
 
 /// The audit log line: event count and whether the hash chain holds.

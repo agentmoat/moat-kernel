@@ -143,6 +143,15 @@ pub fn run() -> Result<Code> {
             config.settings_path.display()
         )?;
     }
+    if let Some(found) = crate::install::continue_cli()? {
+        writeln!(
+            out,
+            "{:<16} · {}  {}",
+            Host::Continue.display_name(),
+            crate::install::CONTINUE_CLI_WARNING,
+            found.display()
+        )?;
+    }
 
     if let Ok(policy) = home.load_policy() {
         healthy &= sandboxes(&mut out, &Plan::new(&policy)?, &lock_path)?;

@@ -190,10 +190,12 @@ something the alpha claims to stop.
   also runs inside `cn`. `guard` recognises `cn` and sends it every `ask` as a deny
   (ARCHITECTURE §5), but `cn` still runs the call when the hook crashes, cannot start,
   times out (600 s by default) or prints bad JSON; only exit 2 or a deny stops it.
-  Released `cn` (1.5.47, continuedev/continue `main` at `5522c6f`) loads hooks but
-  fires no `PreToolUse` event yet (continuedev/continue#11043 closed unmerged), so no
-  `cn` tool call reaches OpenMoat today. Run `cn` under `moat run`. `cn` names some
-  tool arguments differently (`Read` `filepath`); those calls are denied as malformed.
+  The released Continue CLI does not run hooks: `cn` 1.5.47 (continuedev/continue
+  `main` at `5522c6f`) loads them but fires no event (continuedev/continue#11043 closed
+  unmerged), so OpenMoat cannot check its tool calls today. Run `cn` under `moat run`.
+  `moat doctor` and `moat status` warn when `cn` is on the search path or its directory
+  (`~/.continue`, or `CONTINUE_GLOBAL_DIR`) exists. `cn` names some tool arguments
+  differently (`Read` `filepath`); those calls are denied as malformed.
 - **Ungoverned tools.** Claude Code `WebSearch` (server-side), `SendFile` (#137) and
   orchestration tools whose own calls are hooked; Codex web search and hosted tools;
   Cursor `Shell` under `preToolUse` (governed by `beforeShellExecution` instead). Ungoverned calls are
