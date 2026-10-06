@@ -1,0 +1,11 @@
+{
+  "session_id": "codex-9a02",
+  "turn_id": "t-18",
+  "transcript_path": null,
+  "cwd": "/tmp/project",
+  "hook_event_name": "PermissionRequest",
+  "model": "gpt-5-codex",
+  "permission_mode": "default",
+  "tool_name": "Bash",
+  "tool_input": { "command": "git status", "description": "network-access github.com" }
+}
