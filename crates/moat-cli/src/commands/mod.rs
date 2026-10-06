@@ -30,6 +30,7 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Proxy(args) => proxy::run(&args),
         Command::Audit { command } => match command {
             AuditCommand::Export(args) => audit::export(&args),
+            AuditCommand::Verify(args) => audit::verify(&args),
         },
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),

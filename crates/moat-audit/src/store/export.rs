@@ -12,7 +12,7 @@ use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
-use super::chain::{ROWS, Row, read_row};
+use super::chain::{Fields, ROWS, Row, read_row};
 use super::{EventId, Store, StoreError};
 
 /// Which events [`Store::export`] writes. Conditions combine with AND.
@@ -93,6 +93,25 @@ impl ExportedEvent {
             prev_hash: row.prev_hash.unwrap_or_default(),
             hash: row.hash.unwrap_or_default(),
         })
+    }
+
+    /// The cells the chain hashes, linked to this line's own `prev_hash`.
+    pub(super) fn fields(&self) -> Fields<'_> {
+        Fields {
+            id: self.id.0,
+            ts_ms: self.ts_ms,
+            host: &self.host,
+            session_id: &self.session_id,
+            call_id: self.call_id.as_deref(),
+            cwd: self.cwd.as_deref(),
+            tool: &self.tool,
+            action: self.action.get(),
+            verdict: &self.verdict,
+            rules: self.rules.get(),
+            reasons: self.reasons.get(),
+            latency_us: self.latency_us,
+            prev_hash: &self.prev_hash,
+        }
     }
 }
 

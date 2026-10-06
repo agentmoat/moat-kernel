@@ -16,10 +16,12 @@ use crate::{redact, redact_value};
 
 mod chain;
 mod export;
+mod export_verify;
 mod schema;
 
 pub use chain::{BreakKind, ChainBreak, ChainReport, GENESIS};
 pub use export::{ExportFilter, ExportFormat, ExportedEvent};
+pub use export_verify::{ExportBreak, ExportReport, verify_export};
 
 const BUSY_TIMEOUT_MS: u64 = 2000;
 

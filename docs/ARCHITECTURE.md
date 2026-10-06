@@ -273,6 +273,14 @@ line invalid. Cells are already redacted in the store and are not touched again,
 an export holds no more than the database. Events from before the chain have no hash
 and are left out. A new line format gets a new `format` value.
 
+**Verify** (`moat audit verify`, `store/export_verify.rs`). It works without the
+database. Every line must hash to its `hash`, ids must rise, and a line whose id
+follows the previous line's id must carry that line's hash as `prev_hash`. A jump in
+ids is a gap, which is counted and not failed: a filtered export has gaps, and so
+does deleting events. The first failing line is named and the command exits 64. The
+head is the last line's `hash`. `moat doctor` prints the database head. With
+`--anchor <hash>`, verify also fails unless a verified line carries that hash.
+
 The upgrade from schema 1 adds the two columns and records the last existing id as
 `legacy_last_id` in a `meta` table. Existing events are not hashed: they were written
 unprotected, and hashing them during the migration would vouch for whatever they hold

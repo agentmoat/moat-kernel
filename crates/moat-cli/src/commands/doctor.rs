@@ -263,6 +263,11 @@ fn audit_line(report: &mut Report, chain: &ChainReport) {
             chain.events
         ),
     );
+    if let Some(head) = &chain.head {
+        report.note(&format!(
+            "audit log        head {head}; record it elsewhere, then `moat audit verify --anchor` a later export"
+        ));
+    }
     if chain.unchained > 0 {
         report.note(&format!(
             "audit log        {} events written before the hash chain existed are not covered",
