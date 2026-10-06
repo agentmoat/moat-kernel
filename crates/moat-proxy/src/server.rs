@@ -233,12 +233,10 @@ struct Slot<'a>(&'a AtomicUsize);
 
 impl<'a> Slot<'a> {
     fn take(active: &'a AtomicUsize, max: usize) -> Option<Self> {
-        active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < max).then_some(n + 1)
-            })
-            .ok()
-            .map(|_| Self(active))
+        // A slot taken over the cap is given back at once; the count never
+        // stays above `max`.
+        let slot = Self(active);
+        (active.fetch_add(1, Ordering::AcqRel) < max).then_some(slot)
     }
 }
 

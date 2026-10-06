@@ -10,7 +10,8 @@ it defends against is in [THREAT_MODEL.md](THREAT_MODEL.md).
 ```
 moat-cli ──► moat-hosts ──► moat-core
    │                            ▲
-   ├──► moat-audit ─────────────┘
+   ├──► moat-audit ─────────────┤
+   ├──► moat-proxy ─────────────┘
    └──► moat-core
 ```
 
@@ -19,10 +20,11 @@ moat-cli ──► moat-hosts ──► moat-core
 | `moat-core` | Policy model and lint, POSIX lexer (`lexer/`), shell classifier (`shell/`), URL host parser (`host.rs`), patterns, path normalisation, the engine, the policy compiler (`ir/`), `ProgramResolver` and `PathResolver` traits | Pure: no I/O, no `unsafe`, depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Builds for `wasm32-unknown-unknown` in CI; `tests/architecture.rs` enforces the dependency allowlist and the 500-line file budget |
 | `moat-hosts` | Host adapters: `pre_tool_use.rs` (Claude Code and Codex `PreToolUse`), `config_change.rs` (Claude Code `ConfigChange`), `cursor.rs`, `mcp.rs` (MCP arguments to paths and URLs), `patch.rs` (Codex `apply_patch` file list) | Translate payload to `Action` and `Decision` to response. Never decide |
 | `moat-audit` | SQLite store, time-window and session queries, redaction | Redact before persisting. Typed `thiserror` errors |
+| `moat-proxy` | The egress proxy behind `moat proxy` (§12): request and `ClientHello` parsers, host decisions through moat-core, the address guard, connection relay, the `Recorder` trait the CLI implements over `moat-audit` | Network I/O only through `std::net`; no async runtime; no storage. Depends on `moat-core`, `httparse`, `thiserror` |
 | `moat-cli` | The `moat` binary (crate `moat-kernel`): commands, hook installation, the policy lock, approvals, the environment snapshot, the filesystem resolvers, rendering, exit codes | The only crate that touches files, the environment and the terminal |
 
-No crate depends on `moat-cli`. Planned crates for enforcement and proxying are on
-the [roadmap](ROADMAP.md); none exist yet.
+No crate depends on `moat-cli`. Planned crates for enforcement are on the
+[roadmap](ROADMAP.md); none exist yet.
 
 ## 2. One tool call, end to end
 
@@ -295,12 +297,14 @@ hook; the lock is checked before any decision.
 crates/moat-core/              decision core; policies/default-v1.yaml is the shipped policy
 crates/moat-hosts/             host adapters
 crates/moat-audit/             audit store
+crates/moat-proxy/             egress proxy; tests/proxy/ runs it on loopback
 crates/moat-cli/               the moat binary; tests/e2e/ runs it in isolated homes
 tests/conformance/             attacks.yaml, ask.yaml, benign.yaml: one tool call each,
                                with the verdict the default policy must give
 tests/fixtures/hosts/          real host payloads (claude-code, codex, cursor)
 fuzz/                          cargo-fuzz targets: decide_shell, policy_parse,
-                               host_payload, literal_pattern (separate workspace)
+                               host_payload, literal_pattern, proxy_parse
+                               (separate workspace)
 docs/                          this document, POLICY, THREAT_MODEL, ROADMAP,
                                COVERAGE (generated), adr/
 scripts/ci/quality-gate.sh     the one gate CI and the pre-push hook run
@@ -318,9 +322,63 @@ scripts/ci/sync-labels.sh      the repository's label set
 | Policy compiler | `crates/moat-core/tests/ir_consistency.rs` (IR against the engine on the conformance fixtures), `ir_never_widens.rs` (generated policies) | every PR, all OS |
 | Golden host payloads | `tests/fixtures/hosts/` | every PR |
 | End to end | `crates/moat-cli/tests/e2e/` (real binary, isolated `HOME`/`MOAT_HOME`) | every PR, all OS |
+| Proxy | `crates/moat-proxy/tests/proxy/`: a real listener and a local upstream on loopback, names mapped by a test resolver, no external network | every PR, all OS |
 | `wasm32` purity build | CI job | every PR |
 | Fuzz | `fuzz/`, one minute per target on PRs, ten minutes weekly | CI |
 | Guard latency | `scripts/ci/guard-latency.py`: one process per call, end to end and as recorded by guard; warns above the 15 ms p95 budget, fails above 45 ms (about 3 ms deciding and 8 ms end to end on Apple silicon) | every PR, `latency` job (not required) |
 
 CI runs `scripts/ci/quality-gate.sh` on macOS (arm64, x64), Linux and Windows, plus
 `cargo-deny`, the crate packaging check and `actionlint`/`zizmor` on workflows.
+
+## 12. Egress proxy
+
+`moat proxy [--listen 127.0.0.1:18080]` is the default-deny network exit from ADR-020.
+Nothing routes traffic through it yet. The hosts' sandbox settings (`httpProxyPort`,
+Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `std::net` and
+`httparse`, rather than `codex-network-proxy` or `sandbox-runtime`, is in
+[notes/proxy-evaluation.md](notes/proxy-evaluation.md).
+
+- **Start-up.** It refuses a non-loopback listen address, a missing installation and a
+  drifted policy lock (exit 64). It compiles the policy once, so restart it after a policy
+  change. It writes to the audit log under one session id per run (`proxy-<ms>`).
+- **Per connection,** in this order:
+  1. Read the request head, at most 16 KiB within 10 s. Two forms are served:
+     - `CONNECT host:port`
+     - one absolute-form `http://` request
+  2. Decide the host as a `fetch` atom through `CompiledPolicy` (POLICY.md §4). Only
+     `allow` passes. An `ask` is refused, because the proxy cannot prompt.
+     `metadata.google.internal` and `metadata.goog` are refused by name whatever the
+     policy says.
+  3. Resolve the name with the system resolver (IP literals skip it). Refuse the
+     connection when any resolved address is loopback, link-local, a cloud metadata
+     address (`100.100.100.200`, `fd00:ec2::254`, NAT64 and IPv4-mapped forms included)
+     or not unicast. Connect only to an address that was checked.
+  4. For CONNECT:
+     - answer `200`, then read the TLS `ClientHello` (up to 64 KiB, reassembled across
+       records);
+     - its SNI must equal the CONNECT host. For an IP-literal host there must be no SNI.
+     - Anything else, including non-TLS bytes, closes the tunnel before one byte is
+       forwarded.
+  5. For plain HTTP:
+     - rewrite to origin form;
+     - the `Host` header must match the target;
+     - drop hop-by-hop headers (`Connection` and the headers it names, `Proxy-*`, `TE`,
+       `Trailer`, `Upgrade`, `Keep-Alive`) and add `Connection: close`;
+     - refuse `Content-Length` with `Transfer-Encoding`, or more than one `Content-Length`.
+  6. Record one audit row: host `proxy`, the method as the tool, the action
+     `net` `connect://host:port` or `http://host:port` (never the path), and the verdict
+     and rules. If the row cannot be written, the connection is refused.
+  7. Relay bytes both ways. A connection is closed after 120 s with no bytes in either
+     direction.
+- **Rule ids of its own:**
+  - `proxy-address`: refused destination
+  - `proxy-sni`: SNI missing or mismatched, or not TLS
+  - `proxy-request`: unparseable or unsupported request
+  - `proxy-upstream`: DNS or connect failure
+  - `proxy-audit`: written to stderr only, since the audit log is what failed
+- **Limits:**
+  - 256 concurrent connections; the next is answered `503`.
+  - 10 s to connect upstream.
+  - One thread per direction of each connection.
+- **Not yet:** TLS termination for per-host method and path rules (opt-in, ADR-020),
+  the secrets broker and session taint (#172), and a policy reload without restart.

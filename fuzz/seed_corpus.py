@@ -3,7 +3,8 @@
 
 decide_shell and literal_pattern start from every shell command in the
 conformance fixtures; host_payload from the golden host payloads; policy_parse
-from the default policy. Run from the repository root:
+from the default policy; proxy_parse from a few request heads and a
+ClientHello. Run from the repository root:
 
     python3 fuzz/seed_corpus.py
 """
@@ -37,4 +38,16 @@ for path in glob.glob(os.path.join(ROOT, "tests", "fixtures", "hosts", "*", "*.j
         write("host_payload", f.read())
 with open(os.path.join(ROOT, "crates", "moat-core", "policies", "default-v1.yaml"), "rb") as f:
     write("policy_parse", f.read())
+for head in [
+    b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n",
+    b"CONNECT [::1]:443 HTTP/1.1\r\n\r\n",
+    b"GET http://example.com/a?b HTTP/1.1\r\nHost: example.com\r\nConnection: x\r\nX: 1\r\n\r\n",
+    b"POST http://example.com/ HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
+]:
+    write("proxy_parse", head)
+# A TLS 1.3 ClientHello record naming example.com.
+write("proxy_parse", bytes.fromhex(
+    "16030100430100003f03030101010101010101010101010101010101010101010101010101010101"
+    "01010100000213010100001400000010000e00000b6578616d706c652e636f6d"
+))
 print(f"seeded {len(commands)} commands")

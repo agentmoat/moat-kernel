@@ -18,6 +18,7 @@ path = "src/main.rs"
 moat-core.workspace = true
 moat-hosts.workspace = true
 moat-audit.workspace = true
+moat-proxy.workspace = true
 clap.workspace = true
 anyhow.workspace = true
 serde.workspace = true

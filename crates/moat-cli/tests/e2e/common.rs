@@ -1,8 +1,8 @@
 //! The harness every end-to-end module shares: an isolated home and the real
 //! `moat` binary.
 //!
-//! Each command runs with the environment cleared except `PATH`, `HOME` and
-//! `USERPROFILE`, so nothing from the developer's machine (a real `~/.moat`,
+//! Each command runs with the environment cleared except `PATH`, `HOME`,
+//! `USERPROFILE` and (Windows) `SYSTEMROOT`, so nothing from the developer's machine (a real `~/.moat`,
 //! `CLAUDE_CONFIG_DIR`, a terminal) leaks into a test.
 
 use std::io::{ErrorKind, Write as _};
@@ -58,6 +58,10 @@ impl Sandbox {
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("HOME", &self.home)
             .env("USERPROFILE", &self.home);
+        // Windows sockets cannot start without it (`moat proxy` binds one).
+        if let Some(root) = std::env::var_os("SYSTEMROOT") {
+            cmd.env("SYSTEMROOT", root);
+        }
         cmd
     }
 
@@ -85,12 +89,22 @@ impl Sandbox {
 
 /// Run a prepared command (see [`Sandbox::command`]) with optional input.
 pub fn output(cmd: &mut Command, stdin: Option<&str>) -> Output {
-    let mut child = cmd
-        .stdin(Stdio::piped())
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawning moat");
+        .stderr(Stdio::piped());
+    // A binary a test has just copied can be busy for a moment on Linux: a
+    // process forked by another test holds the copy's write handle until it
+    // execs. Retry instead of failing on that race.
+    let mut tries = 0;
+    let mut child = loop {
+        match cmd.spawn() {
+            Err(e) if e.kind() == ErrorKind::ExecutableFileBusy && tries < 50 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            spawned => break spawned.expect("spawning moat"),
+        }
+    };
     let mut pipe = child.stdin.take().expect("stdin is piped");
     if let Some(input) = stdin {
         // A command may exit before reading its input (`guard` refusing its own

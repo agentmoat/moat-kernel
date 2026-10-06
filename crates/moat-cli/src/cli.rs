@@ -39,6 +39,8 @@ pub enum Command {
     Replay(ReplayArgs),
     /// Summarise decisions over a window: verdicts, hosts, top rules, asks per hour.
     Report(ReportArgs),
+    /// Run the default-deny egress proxy: only hosts the policy allows, every connection recorded.
+    Proxy(ProxyArgs),
     /// Inspect and test policy files.
     Policy {
         #[command(subcommand)]
@@ -120,6 +122,13 @@ pub struct DoctorArgs {
     /// Refused unless run from an interactive terminal.
     #[arg(long)]
     pub accept: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ProxyArgs {
+    /// Address to listen on. Must be a loopback address: the proxy serves this machine only.
+    #[arg(long, default_value = "127.0.0.1:18080")]
+    pub listen: std::net::SocketAddr,
 }
 
 #[derive(Debug, Args)]
