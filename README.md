@@ -232,6 +232,7 @@ for. The policy language, the full default policy and recipes are in
 | `moat replay --since today` · `moat report --since 7d` | per-session timeline · summary |
 | `moat audit export [--since …] [--host …] [--session …]` | write events as JSON Lines with their chain hashes |
 | `moat audit verify <file> [--anchor <hash>]` | check an export without the database; print its head hash |
+| `moat audit report <file>…` | one report over verified exports from several machines |
 | `moat allow --last [--always]` | turn an `ask` into a session grant (24 h) or a permanent rule |
 | `moat policy lint` · `moat policy check "<cmd>"` | validate a policy · test an action against it |
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |

@@ -12,6 +12,7 @@ mod report;
 mod sandbox;
 mod show;
 mod status;
+mod team;
 
 use anyhow::Result;
 
@@ -32,6 +33,7 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Audit { command } => match command {
             AuditCommand::Export(args) => audit::export(&args),
             AuditCommand::Verify(args) => audit::verify(&args),
+            AuditCommand::Report(args) => team::run(&args),
         },
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),

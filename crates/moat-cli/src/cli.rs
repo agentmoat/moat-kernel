@@ -193,6 +193,20 @@ pub enum AuditCommand {
     Export(ExportArgs),
     /// Check an export's hash chain without the database and print its head hash.
     Verify(VerifyArgs),
+    /// Report over exports from several machines: per host, per rule, top asks and
+    /// denies, false-positive candidates. Every file must verify first.
+    Report(TeamReportArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct TeamReportArgs {
+    /// Files `moat audit export` wrote; events present in several are counted once.
+    #[arg(required = true)]
+    pub files: Vec<PathBuf>,
+
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
 }
 
 #[derive(Debug, Args)]

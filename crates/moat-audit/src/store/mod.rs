@@ -53,6 +53,14 @@ pub enum StoreError {
     /// The database file could not be created or restricted.
     #[error("audit database file: {0}")]
     Io(std::io::Error),
+    /// A cell of an exported event does not decode (verdict, rules or reasons).
+    #[error("exported event {id}: {reason}")]
+    Decode {
+        /// The event.
+        id: EventId,
+        /// What does not decode.
+        reason: String,
+    },
 }
 
 impl From<rusqlite::Error> for StoreError {

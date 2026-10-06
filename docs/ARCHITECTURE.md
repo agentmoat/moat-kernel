@@ -302,6 +302,15 @@ does deleting events. The first failing line is named and the command exits 64. 
 head is the last line's `hash`. `moat doctor` prints the database head. With
 `--anchor <hash>`, verify also fails unless a verified line carries that hash.
 
+**Team report** (`moat audit report <file>…`, `crates/moat-cli/src/commands/team.rs`).
+It verifies every file first and refuses (exit 64) if one fails. Events with the
+same `hash` are counted once, so overlapping exports do not double-count. The report
+starts with the `moat report` summary (`Summary::of`), then shows each file's head,
+verdicts per host, asks and denies per rule, and the most frequent asked and denied
+actions. False-positive candidates are actions that asked and were also allowed by
+an `approved-…` rule (`moat allow`), which suggests the asking rule is too broad.
+`--format json` gives the same data.
+
 The upgrade from schema 1 adds the two columns and records the last existing id as
 `legacy_last_id` in a `meta` table. Existing events are not hashed: they were written
 unprotected, and hashing them during the migration would vouch for whatever they hold

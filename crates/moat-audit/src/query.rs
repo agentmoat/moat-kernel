@@ -115,11 +115,18 @@ impl Store {
         Ok(sessions)
     }
 
-    /// Aggregate the window. Rules are counted only for `ask` and `deny`
-    /// outcomes, which is what a policy author wants to tune.
+    /// Aggregate the window; see [`Summary::of`].
     pub fn summary(&self, since_ms: i64, host: Option<&str>) -> Result<Summary, StoreError> {
-        let events = self.since(since_ms, host)?;
-        let mut summary = Summary {
+        Ok(Summary::of(since_ms, &self.since(since_ms, host)?))
+    }
+}
+
+impl Summary {
+    /// Aggregate `events` for a window starting at `since_ms`. Rules are counted
+    /// only for `ask` and `deny` outcomes, which is what a policy author wants to tune.
+    #[must_use]
+    pub fn of(since_ms: i64, events: &[Event]) -> Self {
+        let mut summary = Self {
             since_ms,
             total: 0,
             allowed: 0,
@@ -134,7 +141,7 @@ impl Store {
         let mut sessions: std::collections::BTreeSet<(String, String)> =
             std::collections::BTreeSet::new();
         let mut hours: std::collections::BTreeSet<i64> = std::collections::BTreeSet::new();
-        for event in &events {
+        for event in events {
             summary.total += 1;
             match event.verdict {
                 Verdict::Allow => summary.allowed += 1,
@@ -156,7 +163,7 @@ impl Store {
         top.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         top.truncate(TOP_RULES);
         summary.top_rules = top;
-        Ok(summary)
+        summary
     }
 }
 

@@ -260,7 +260,7 @@ fn verdict_mark(verdict: Verdict) -> &'static str {
     }
 }
 
-fn describe(event: &Event) -> String {
+pub fn describe(event: &Event) -> String {
     if event.action_unreadable {
         return format!("{} (action unreadable)", event.tool);
     }
@@ -279,7 +279,7 @@ fn describe(event: &Event) -> String {
     }
 }
 
-fn truncate(text: &str, max: usize) -> String {
+pub fn truncate(text: &str, max: usize) -> String {
     if text.chars().count() <= max {
         return text.to_owned();
     }

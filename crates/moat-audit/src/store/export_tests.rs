@@ -223,3 +223,25 @@ fn filtered_and_truncated_exports_verify_with_gaps_and_a_different_head() {
     };
     assert!(!verify_export(&export_text(&store, &later), None).from_genesis);
 }
+
+#[test]
+fn an_exported_event_reads_back_as_the_stored_event() {
+    let store = seeded();
+    for line in export_text(&store, &ExportFilter::default()).lines() {
+        let exported: ExportedEvent = serde_json::from_str(line).unwrap();
+        let stored = store.get(exported.id).unwrap().unwrap();
+        assert_eq!(exported.to_event().unwrap(), stored);
+    }
+    let mut bad: ExportedEvent = serde_json::from_str(
+        export_text(&store, &ExportFilter::default())
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    bad.verdict = "maybe".to_owned();
+    assert!(matches!(
+        bad.to_event(),
+        Err(StoreError::Decode { id: EventId(1), .. })
+    ));
+}
