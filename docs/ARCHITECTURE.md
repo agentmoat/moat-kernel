@@ -134,19 +134,23 @@ engine turns into `ask`, never `allow`.
 | Claude Code `PowerShell` | `command` | `ForeignShell` |
 | Claude Code `Read`; Cursor `beforeReadFile`, `preToolUse` `Read` | `file_path` | `FsRead` |
 | Claude Code `LSP` | `filePath` | `FsRead` |
-| Claude Code `Glob`, `Grep`; Cursor `preToolUse` `Glob`, `Grep` | `path`, else the working directory; an absolute or `~` Glob `pattern` also reads its directory part (Claude Code searches that instead of `path`) | `FsRead`, `ReadFiles` |
+| Claude Code `Glob`, `Grep` | `path`, else the working directory; an absolute or `~` Glob `pattern` also reads its directory part (Claude Code searches that instead of `path`) | `FsRead`, `ReadFiles` |
+| Cursor `preToolUse` `Grep`, `Glob` | every path in `path`, `file_path`, `target_file`, `target_directory`, `target_directories`, else the working directory | `FsRead`, `ReadFiles` |
+| Cursor `preToolUse`, any other tool that names a path under those keys | every such path | `FsRead`, `ReadFiles` |
 | Claude Code `SendFile` | every path in `files` (the contents go to another session; an empty or non-string list is an adapter error, so `deny`) | `ReadFiles` |
 | Claude Code `Edit`, `Write`, `MultiEdit`; `NotebookEdit` | `file_path`; `notebook_path` | `FsWrite` |
 | Cursor `preToolUse` `Write`, `Edit`, `MultiEdit`, `StrReplace`, `Delete` | `file_path` | `FsWrite` |
 | Claude Code `WebFetch` | `url` | `Fetch` |
 | Codex `apply_patch` | `command` (the patch envelope) | `Patch` |
 | `mcp__<server>__<tool>` (Claude Code, Codex); Cursor `beforeMCPExecution` | tool name and arguments (Cursor: `mcp_server_name`, `tool_name`, `tool_input`) | `McpTool` |
-| anything else (Claude Code `Task`, Codex `update_plan`, Cursor `preToolUse` `Shell`) | — | none: `ungoverned` |
+| anything else (Claude Code `Task`, Codex `update_plan`, Cursor `preToolUse` `Shell`, `Task`, `MCP:<tool>`, and tools that name no path) | — | none: `ungoverned` |
 
 Claude Code calls only reach OpenMoat for tools in the installed matcher
 (`crates/openmoat-cli/src/install/mod.rs`); a tool outside it is never seen.
-Cursor's hook documentation names `Grep` but not `Glob` and gives no file tool's
-arguments, so those keys are unverified (`tests/fixtures/hosts/cursor/README.md`).
+Cursor's hook matcher is empty, so every tool reaches `preToolUse`. Cursor's hook
+documentation names `Grep` but not `Glob` and gives no file tool's arguments. A
+third-party capture shows `Grep` and `Read` send `file_path`; the rest is unverified
+(`tests/fixtures/hosts/cursor/README.md`, #138).
 
 ## 4. Decision
 

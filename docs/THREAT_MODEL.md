@@ -198,7 +198,8 @@ something the alpha claims to stop.
   differently (`Read` `filepath`); those calls are denied as malformed.
 - **Ungoverned tools.** Claude Code `WebSearch` (server-side), `SendFile` (#137) and
   orchestration tools whose own calls are hooked; Codex web search and hosted tools;
-  Cursor `Shell` under `preToolUse` (governed by `beforeShellExecution` instead). Ungoverned calls are
+  Cursor `Shell` and `MCP:<tool>` under `preToolUse` (governed by `beforeShellExecution`
+  and `beforeMCPExecution` instead), `Task`, and any tool that names no path. Ungoverned calls are
   allowed with rule `ungoverned` and recorded.
 - **No settings veto outside Claude Code.** Codex and Cursor have no `ConfigChange`
   event, so a tampered hook file there is caught on the next tool call, not when it
