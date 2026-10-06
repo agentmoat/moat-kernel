@@ -7,7 +7,7 @@ use super::tables::{
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
-use super::{decoders, invocation, make, options};
+use super::{decoders, git, invocation, make, options};
 use crate::action::AtomicAction;
 use crate::host;
 use crate::lexer::{self, Operator, Token, Word};
@@ -153,7 +153,11 @@ fn classify_simple(
     let argv: Vec<String> = words.iter().map(|w| w.text.clone()).collect();
     let program = basename(&argv[0]);
 
-    sink.push(AtomicAction::Shell { argv: argv.clone() })?;
+    if program == "git" {
+        git::push_shell(&argv, ctx, sink)?;
+    } else {
+        sink.push(AtomicAction::Shell { argv: argv.clone() })?;
+    }
 
     if ENV_BUILTINS.contains(&program) {
         for name in argv[1..].iter().filter_map(|w| assignment_name(w)) {

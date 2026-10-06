@@ -154,6 +154,23 @@
   threat: T4
   action: { shell: "dd if=/dev/zero of=/dev/disk2 bs=1m" }
   expect: { verdict: deny, rules: [destructive] }
+# git global options before the subcommand do not hide it
+- id: T4-force-push-after-git-dir-option
+  threat: T4
+  action: { shell: "git -C dir push --force" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-force-push-after-config-option
+  threat: T4
+  action: { shell: "git -c core.sshCommand='ssh -i k' push -f" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-plus-refspec-after-git-dir-and-work-tree
+  threat: T4
+  action: { shell: "git --git-dir=x --work-tree=y push origin +main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-hard-reset-in-parent-repo
+  threat: T4
+  action: { shell: "git -C .. reset --hard" }
+  expect: { verdict: deny, rules: [destructive] }
 
 # T5 supply-chain execution
 - id: T5-curl-pipe-sh

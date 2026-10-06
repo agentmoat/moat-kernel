@@ -5,7 +5,7 @@
 //!
 //! | Source | Atomic action |
 //! |---|---|
-//! | the command itself | `Shell { argv }` |
+//! | the command itself | `Shell { argv }`; for `git`, without its global options (`git.rs`) |
 //! | every pipeline / list suffix with ≥ 2 commands | `Pipeline { argv }` |
 //! | a decoder stage piped into an interpreter reading stdin (`decoders.rs`) | canonical `Pipeline { <decoder> -d \| <interpreter> }` |
 //! | leading `VAR=value`, `export`/`declare`/`set` assignments | `EnvSet` |
@@ -27,12 +27,14 @@
 //! Module layout: `commands` groups tokens and classifies each simple command;
 //! `tokens` recognises assignments and variable references inside one word;
 //! `invocation` parses a shell's own options (`bash -lc`, `sh -ec`, `--login`);
+//! `git` takes git's global options out of the command;
 //! `decoders`, `make` and `options` handle constructs that hide a command or a
 //! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
 //! `tables` holds the program lists that drive all of them.
 
 mod commands;
 mod decoders;
+mod git;
 mod invocation;
 mod make;
 mod options;
