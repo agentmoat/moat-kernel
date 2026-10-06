@@ -1,10 +1,14 @@
 //! `MoatBench` mini: end-to-end attack and benign scenarios run through the real
 //! `moat guard` of every host whose payload shape can express them
-//! (`tests/moatbench/`). The kernel verdict of each step is read back from the
+//! (`docs/MOATBENCH.md`). The kernel verdict of each step is read back from the
 //! audit log, and the host's response must carry that verdict in the host's own
-//! format. Any mismatch fails the test.
+//! format. A scorecard is printed; any mismatch fails the test.
+//!
+//! `cargo test -p moat-kernel --test e2e moatbench -- --nocapture` shows the
+//! scorecard of a passing run.
 
 mod hosts;
+mod score;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -14,6 +18,7 @@ use serde_json::Value;
 
 use crate::common::{Sandbox, json, stderr};
 use hosts::{Host, Place};
+use score::{Outcome, Run, Scorecard};
 
 /// One scenario of `tests/moatbench/<category>.yaml`.
 #[derive(Deserialize)]
@@ -25,6 +30,10 @@ struct Scenario {
     threat: String,
     /// What the agent was steered into doing, and why the verdict is right.
     why: String,
+    /// A tracked bypass or false positive (`"#123"`): `expect` is the secure
+    /// verdict, and a mismatch is reported as a known gap instead of failing.
+    #[serde(default)]
+    gap: Option<String>,
     steps: Vec<Step>,
 }
 
@@ -104,7 +113,7 @@ impl Step {
     }
 }
 
-fn scenarios() -> Vec<Scenario> {
+fn scenarios() -> Vec<(String, Scenario)> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/moatbench");
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
@@ -115,6 +124,7 @@ fn scenarios() -> Vec<Scenario> {
     let mut ids = BTreeSet::new();
     let mut all = Vec::new();
     for file in files {
+        let category = file.file_stem().unwrap().to_string_lossy().into_owned();
         let text = std::fs::read_to_string(&file).unwrap();
         let list: Vec<Scenario> =
             serde_yaml_ng::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
@@ -133,15 +143,14 @@ fn scenarios() -> Vec<Scenario> {
                 "{}: why and steps",
                 s.id
             );
-            all.push(s);
+            all.push((category.clone(), s));
         }
     }
     all
 }
 
-/// Run `scenario` on `host` and list every step that differs from its
-/// expectation; `None` when the host has no tool for one of the steps.
-fn run(sb: &Sandbox, project: &Path, scenario: &Scenario, host: Host) -> Option<Vec<String>> {
+/// Run `scenario` on `host` and compare every step with its expectation.
+fn run(sb: &Sandbox, project: &Path, scenario: &Scenario, host: Host) -> Option<Run> {
     let session = format!("{}@{}", scenario.id, host.id());
     let payloads = scenario
         .steps
@@ -196,7 +205,18 @@ fn run(sb: &Sandbox, project: &Path, scenario: &Scenario, host: Host) -> Option<
             ));
         }
     }
-    Some(problems)
+    Some(Run {
+        strictest: recorded
+            .iter()
+            .map(|(v, _)| *v)
+            .max()
+            .unwrap_or(Verdict::Allow),
+        outcome: match (&scenario.gap, problems.is_empty()) {
+            (_, true) => Outcome::Pass,
+            (Some(issue), false) => Outcome::Gap(issue.clone(), problems),
+            (None, false) => Outcome::Fail(problems),
+        },
+    })
 }
 
 /// The kernel verdict and rules of each event of `session`, oldest first.
@@ -217,22 +237,21 @@ fn recorded(sb: &Sandbox, session: &str) -> Vec<(Verdict, Vec<String>)> {
 fn moatbench_mini() {
     let sb = Sandbox::installed(&[".claude", ".codex", ".cursor"]);
     let project = sb.project();
-    let mut failures = Vec::new();
-    for scenario in scenarios() {
+    let mut card = Scorecard::default();
+    for (category, scenario) in scenarios() {
+        if let Some(issue) = &scenario.gap {
+            card.note_gap(&scenario.id, issue);
+        }
         let mut ran = 0;
         for host in Host::ALL {
-            if let Some(problems) = run(&sb, &project, &scenario, host) {
+            if let Some(result) = run(&sb, &project, &scenario, host) {
+                card.add(&category, &scenario.id, host.id(), result);
                 ran += 1;
-                for problem in problems {
-                    failures.push(format!("{} ({}): {problem}", scenario.id, host.id()));
-                }
             }
         }
         assert!(ran > 0, "{}: no host can run it", scenario.id);
     }
-    assert!(
-        failures.is_empty(),
-        "MoatBench mismatches:\n{}",
-        failures.join("\n")
-    );
+    card.check_gaps();
+    println!("{card}");
+    assert!(card.passed(), "MoatBench mismatches:\n{card}");
 }
