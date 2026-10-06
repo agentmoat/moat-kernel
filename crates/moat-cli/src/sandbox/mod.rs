@@ -8,6 +8,7 @@
 //! Backends only narrow, reported as losses, except where a host cannot run
 //! without a wider grant; those are listed as allowances, never silent.
 
+pub mod claude;
 mod patterns;
 
 use moat_core::ir::{Allowance, Enforcement, Loss};
