@@ -36,7 +36,8 @@ pub fn run() -> Result<Code> {
         }
     }
 
-    match Lock::load(&home.lock_path()) {
+    let lock_path = home.lock_path();
+    match Lock::load(&lock_path) {
         Ok(lock) => {
             let drift = lock.verify();
             if drift.is_empty() {
@@ -50,6 +51,10 @@ pub fn run() -> Result<Code> {
                     println!("lock             ✗ {d} (run `moat doctor`)");
                 }
             }
+        }
+        Err(_) if !lock_path.exists() => {
+            healthy = false;
+            println!("lock             ✗ missing (run `moat init`)");
         }
         Err(error) => {
             healthy = false;

@@ -37,10 +37,12 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
         let rule = overlay.allow_command(&command)?.clone();
         overlay.save(&path)?;
         println!("✔ permanent rule {} allows shell \"{command}\"", rule.id);
+        warn_if_shadowed(&home, &rule.id);
     } else {
-        let host = host.context("--session needs --host (or use --last)")?;
-        let session =
-            session.context("--session <id> is required without --always (or use --last)")?;
+        let session = session.context(
+            "give --host and --session for a session grant, --always for a permanent rule, or --last",
+        )?;
+        let host = host.context("--session needs --host")?;
         let path = home.grants_path();
         let mut grants = Grants::load(&path)?;
         grants.grant(&host, &session, &command);
@@ -52,6 +54,19 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
     let lock = integrity::repin(&home, &binary)?;
     println!("✔ lock re-pinned ({} files)", lock.entries.len());
     Ok(Code::Ok)
+}
+
+/// A rule a deny already covers can never decide anything; say so rather than
+/// let the person believe the command is now allowed.
+fn warn_if_shadowed(home: &Home, id: &str) {
+    let Ok(policy) = home.load_policy() else {
+        return;
+    };
+    for warning in moat_core::lint::warnings(&policy) {
+        if warning.rule == id {
+            println!("warning: {warning}");
+        }
+    }
 }
 
 /// Host, session and command of the most recent `ask` for a shell command.
@@ -66,7 +81,7 @@ fn last_ask(home: &Home) -> Result<(Option<String>, Option<String>, String)> {
         unreachable!("filtered to shell actions");
     };
     println!(
-        "last ask: {} on {} (session {}) ran \"{command}\"",
+        "last ask: {} on {} (session {}) wanted to run \"{command}\"",
         event.id, event.host, event.session_id
     );
     Ok((Some(event.host), Some(event.session_id), command))

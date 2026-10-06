@@ -449,4 +449,5 @@ fn status_reports_missing_installation() {
     let out = sb.moat(&["status"]);
     assert_eq!(out.status.code(), Some(64));
     assert!(stdout(&out).contains("run `moat init`"));
+    assert!(!stdout(&out).contains("os error"), "{}", stdout(&out));
 }
