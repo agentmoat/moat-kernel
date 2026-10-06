@@ -53,7 +53,7 @@ answer from the [roadmap](ROADMAP.md).
 | T9 | Hook and policy tampering by the agent | `kernel-self` denies writes to state, host directories, hook files, and agent runs of `moat allow\|doctor\|init\|policy`; the lock denies everything after drift; Claude Code `ConfigChange` blocks a drifted settings file | Signed policy (1.0) |
 | T10 | Hook supply chain (a trojaned hook binary) | Hooks are exec-form with an absolute, stable path (ADR-016); `kernel-self` denies writes to any `bin/moat`; `doctor` names a missing or different hook binary | Signed releases |
 | T11 | Time of check vs. time of use, symlinks | Literal and resolved paths are both checked (ADR-009) | Sandbox path rules apply at use |
-| T12 | Network to unknown hosts | `default.net` denies shell network to unlisted hosts; `cloud-metadata` denies metadata and link-local services; `local-net` asks for localhost; `WebFetch` of an unlisted host asks (ADR-017) | Egress proxy and session taint |
+| T12 | Network to unknown hosts | `default.net` denies shell network to unlisted hosts; `cloud-metadata` denies metadata and link-local services; `local-net` asks for localhost; `WebFetch` of an unlisted host asks (ADR-017); after a secret read, network and MCP calls in the same session ask (`session-taint`) | Egress proxy for every tier |
 
 ## 4. Out of scope
 
@@ -82,8 +82,18 @@ something the alpha claims to stop.
   that reaches them, so a command that is itself allowed (a project script) or that
   a person approves at the prompt (`curl -X POST https://api.github.com/gists -d
   @file` asks on its `shell` atom only) can send data there. A `WebFetch` GET can
-  carry data in its URL; the prompt shows the URL. Session taint (#127) is planned to
-  make network ask after a secret read.
+  carry data in its URL; the prompt shows the URL. Session taint (POLICY.md §4.1)
+  narrows this. After a secret read, `net`, `fetch` and MCP calls in the same session
+  ask. After a `fetch` or an MCP result, writes to CI, git hooks, build scripts and
+  agent instruction files ask.
+- **Session taint is minimal.** It follows host tool calls only: proxied connections
+  carry no session. It does not count these as untrusted content: shell network to
+  allowed hosts (`gh pr view`, `git pull`), an allowed command that reads secrets at run
+  time (a project script), or a command moat cannot classify. A secret that leaves
+  through an allowed command without a `net` atom (`npm test`) is not seen. With the
+  default policy, `secrets-paths` denies, so only the secrets broker (#172) or a policy
+  that asks for secret reads can taint a session. An edited or deleted audit event
+  clears taint until `moat doctor` reports the broken chain.
 - **Hosts proceed when the hook binary is missing.** Claude Code and Codex treat a
   hook that cannot start as a non-blocking error and run the tool call. Cursor blocks
   because `moat init` sets `failClosed`. `moat status` and `moat doctor` report a
