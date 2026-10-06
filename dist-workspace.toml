@@ -1,0 +1,37 @@
+[workspace]
+members = ["cargo:."]
+
+[dist]
+cargo-dist-version = "0.32.0"
+ci = "github"
+installers = ["shell", "powershell", "homebrew"]
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl",
+    "x86_64-pc-windows-msvc",
+]
+install-path = "CARGO_HOME"
+install-updater = false
+tap = "agentmoat/homebrew-tap"
+formula = "moat"
+publish-jobs = ["homebrew"]
+publish-prereleases = true
+github-attestations = true
+github-attestations-phase = "host"
+pr-run-mode = "plan"
+# release.yml is hardened by hand; see its header.
+allow-dirty = ["ci"]
+
+[dist.github-custom-runners]
+global = "ubuntu-24.04"
+aarch64-apple-darwin = "macos-14"
+x86_64-apple-darwin = "macos-14"
+x86_64-unknown-linux-gnu = "ubuntu-22.04"
+aarch64-unknown-linux-gnu = "ubuntu-22.04-arm"
+x86_64-unknown-linux-musl = "ubuntu-22.04"
+aarch64-unknown-linux-musl = "ubuntu-22.04-arm"
+x86_64-pc-windows-msvc = "windows-2022"

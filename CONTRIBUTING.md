@@ -117,6 +117,40 @@ cd fuzz && cargo fuzz run -O decide_shell corpus/decide_shell   # fuzz/rust-tool
 CI runs each target for a minute on pull requests and ten minutes in the weekly run. A
 crash becomes a unit test or fixture next to the fix.
 
+## Releasing
+
+`.github/workflows/release.yml` is driven by [dist](https://opensource.axo.dev/cargo-dist/)
+(config in `dist-workspace.toml`). A `v*` tag builds the seven targets, writes the shell and
+PowerShell installers, the Homebrew formula and `sha256.sum`, attests every file, creates
+the GitHub release, pushes `Formula/moat.rb` to `agentmoat/homebrew-tap` and, after an owner
+approves the `release` environment, publishes the crates to crates.io. Pull requests that
+touch the manifests or the workflow run `dist plan` only. Running the workflow by hand
+(Actions → release → Run workflow) is a dry run: it builds every target and publishes nothing.
+
+1. Dry-run the workflow on `main` if the build changed since the last release.
+2. In a PR (`build: release vX.Y.Z-alpha.N`): bump `version` in `[workspace.package]` and
+   the three `moat-*` entries of `[workspace.dependencies]` in `Cargo.toml`, run
+   `cargo check` to update `Cargo.lock`, move the `[Unreleased]` entries of `CHANGELOG.md`
+   under `## [X.Y.Z-alpha.N] - YYYY-MM-DD`, and update the version in the README install
+   commands. The release fails without that CHANGELOG section; its text becomes the
+   release notes, after a line saying decisions are not enforced by the OS (ADR-013).
+3. After the merge, tag the merge commit: `git tag -s vX.Y.Z-alpha.N -m vX.Y.Z-alpha.N`
+   and `git push origin vX.Y.Z-alpha.N`.
+4. Check the GitHub release and the tap commit, then approve the `release` environment in
+   the workflow run; `publish-crates` publishes moat-core, then moat-hosts and moat-audit,
+   then moat-kernel.
+
+The first crates.io publish is manual, because trusted publishing can only be configured
+for a crate that exists: reject the `release` deployment, run `cargo publish --locked
+--workspace` from the tag with a short-lived token, then for each of the four crates add a
+trusted publisher on crates.io (GitHub, `agentmoat/moat-kernel`, workflow `release.yml`,
+environment `release`), revoke the token and run `cargo logout`. Later releases need no
+crates.io token.
+
+One-time repository setup: a `release` environment with the maintainer as required
+reviewer and deployments limited to `v*` tags, and `HOMEBREW_TAP_TOKEN`, a fine-grained
+token with contents write on `agentmoat/homebrew-tap` only (the tap needs one commit).
+
 ## Decisions
 
 Non-obvious decisions are recorded as ADRs in `docs/adr/`. Propose one in the PR
