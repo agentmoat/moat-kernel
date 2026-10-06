@@ -74,6 +74,10 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
         "Edit" | "Write" | "MultiEdit" => Action::FsWrite {
             path: field("file_path")?,
         },
+        // `SendFile` copies each file's contents to another Claude Code session.
+        "SendFile" => Action::ReadFiles {
+            paths: send_file(input)?,
+        },
         "NotebookEdit" => Action::FsWrite {
             path: field("notebook_path")?,
         },
@@ -106,6 +110,28 @@ fn monitor(input: &Value) -> Result<Action, HostError> {
             problem: "needs exactly one of `command` or `ws`".to_owned(),
         }),
     }
+}
+
+/// Claude Code `SendFile` `files`: a non-empty list of paths. Claude Code also
+/// accepts a lone string as a one-element list, so that is read the same way.
+fn send_file(input: &Value) -> Result<Vec<String>, HostError> {
+    let malformed = |problem: &str| HostError::MalformedArguments {
+        tool: "SendFile".to_owned(),
+        problem: problem.to_owned(),
+    };
+    let paths = match input.get("files") {
+        Some(Value::String(one)) => vec![one.as_str()],
+        Some(Value::Array(list)) => list
+            .iter()
+            .map(Value::as_str)
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| malformed("`files` holds a value that is not a path"))?,
+        _ => return Err(malformed("`files` is not a list of paths")),
+    };
+    if paths.is_empty() || paths.iter().any(|p| p.is_empty()) {
+        return Err(malformed("`files` is empty or names an empty path"));
+    }
+    Ok(paths.into_iter().map(str::to_owned).collect())
 }
 
 pub(crate) fn render(decision: &Decision) -> String {
@@ -229,6 +255,41 @@ mod tests {
         ] {
             let payload = format!(r#"{{"tool_name":"Monitor","tool_input":{input}}}"#);
             assert!(Host::ClaudeCode.parse_request(&payload).is_err(), "{input}");
+        }
+    }
+
+    #[test]
+    fn claude_code_send_file_reads_every_file() {
+        let req = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "sendfile"))
+            .unwrap();
+        assert_eq!(
+            req.action,
+            Some(Action::ReadFiles {
+                paths: vec!["src/lib.rs".into(), "~/.ssh/id_rsa".into()]
+            })
+        );
+        let one = r#"{"tool_name":"SendFile","tool_input":{"to":"p","files":"a.txt"}}"#;
+        assert_eq!(
+            Host::ClaudeCode.parse_request(one).unwrap().action,
+            Some(Action::ReadFiles {
+                paths: vec!["a.txt".into()]
+            })
+        );
+        for files in [
+            "",
+            r#","files":[]"#,
+            r#","files":[""]"#,
+            r#","files":["a",1]"#,
+        ] {
+            let payload = format!(r#"{{"tool_name":"SendFile","tool_input":{{"to":"p"{files}}}}}"#);
+            assert!(
+                matches!(
+                    Host::ClaudeCode.parse_request(&payload),
+                    Err(HostError::MalformedArguments { .. })
+                ),
+                "{payload}"
+            );
         }
     }
 

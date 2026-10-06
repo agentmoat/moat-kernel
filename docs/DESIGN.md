@@ -174,15 +174,16 @@ its JSON to the kernel's internal `ToolCall`.
 - Config: `~/.claude/settings.json` (user), `.claude/settings.json` (project, committable),
   managed policy settings (org).
 - Event: `PreToolUse`, matcher on `tool_name`; `moat init` installs
-  `Bash|Monitor|PowerShell|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LSP|WebFetch|mcp__.*`.
+  `Bash|Monitor|PowerShell|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LSP|SendFile|WebFetch|mcp__.*`.
 - Input: `session_id`, `cwd`, `permission_mode`, `tool_name`, `tool_input`, `tool_use_id`,
   `transcript_path`. Bash → `tool_input.command`; Monitor → `command` (shell) or `ws.url`
   (network), exactly one; PowerShell → `command`, recorded and always `ask` (`unparseable`:
   moat has no PowerShell parser); Edit/Write → `file_path`; NotebookEdit → `notebook_path`;
   Read → `file_path`; LSP → `filePath` (read); Glob/Grep → `path`, else `cwd` (read);
+  SendFile → every path in `files` (read: the contents go to another session; an empty
+  or non-string list is an adapter error, so `deny`);
   WebFetch → `url` (a `fetch`: a GET the agent cannot attach a body to, ADR-017); MCP tools named `mcp__<server>__<tool>`. Not governed: `WebSearch`
-  (server-side), `SendFile` (sends files to another session; needs a multi-file read
-  action), `Workflow` and other orchestration tools whose own tool calls are hooked.
+  (server-side), `Workflow` and other orchestration tools whose own tool calls are hooked.
 - Output: exit 0 + `{"hookSpecificOutput":{"hookEventName":"PreToolUse",
   "permissionDecision":"allow|deny|ask","permissionDecisionReason":"…",
   "updatedInput":{…}}}`. Exit 2 = block, stderr shown to the model.

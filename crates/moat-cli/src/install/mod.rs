@@ -32,8 +32,7 @@ const CONFIG_HOOK_TIMEOUT_S: u64 = 60;
 
 /// Every Claude Code tool `moat-hosts` maps to an action; a tool missing here
 /// never reaches `moat guard`.
-const TOOL_MATCHER: &str =
-    "Bash|Monitor|PowerShell|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LSP|WebFetch|mcp__.*";
+const TOOL_MATCHER: &str = "Bash|Monitor|PowerShell|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LSP|SendFile|WebFetch|mcp__.*";
 
 const CLAUDE_CODE_HOOKS: &[HookSpec] = &[
     HookSpec {

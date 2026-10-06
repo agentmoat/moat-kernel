@@ -221,6 +221,17 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
                 })
                 .collect(),
         ),
+        Action::ReadFiles { paths } if paths.is_empty() => ParseOutcome::Unparseable {
+            reason: "read names no files".to_owned(),
+        },
+        Action::ReadFiles { paths } => ParseOutcome::Parsed(
+            paths
+                .iter()
+                .map(|p| AtomicAction::FsRead {
+                    path: paths::normalise(p, &ctx.home, ctx.project.as_deref(), &ctx.cwd),
+                })
+                .collect(),
+        ),
         Action::Net { url } => match host::of_url(url) {
             Some(host) => ParseOutcome::Parsed(vec![AtomicAction::Net { host }]),
             None => ParseOutcome::Unparseable {
