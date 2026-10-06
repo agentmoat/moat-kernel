@@ -1285,6 +1285,47 @@
   threat: T9
   action: { shell: "tmux new -d 'moat trust .'" }
   expect: { verdict: deny, rules: [kernel-self] }
+# `moat sandbox sync` re-pins the lock like `moat allow`, so agents may not run it either
+- id: T9-agent-runs-moat-sandbox-sync
+  threat: T9
+  action: { shell: "moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-agent-runs-moat-sandbox-sync-by-path
+  threat: T9
+  action: { shell: "/opt/homebrew/bin/moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "script -q /dev/null moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-c-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "/usr/bin/script -qc 'moat sandbox sync' /dev/null" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-expect-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "expect -c 'spawn moat sandbox sync; interact'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-unbuffer-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "unbuffer -p /usr/local/bin/moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-python-pty-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "python3 -c 'import pty; pty.spawn([\"moat\", \"sandbox\", \"sync\"])'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-tmux-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "tmux new -d 'moat sandbox sync'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-screen-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "screen -dm moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-osascript-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "osascript -e 'tell app \"Terminal\" to do script \"moat sandbox sync\"'" }
+  expect: { verdict: deny, rules: [kernel-self] }
 - id: T9-repo-trusted-allow-moat-trust
   threat: T9
   action: { shell: "moat trust --revoke" }
