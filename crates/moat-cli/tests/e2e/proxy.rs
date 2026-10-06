@@ -48,17 +48,19 @@ fn an_unlisted_host_gets_403_and_an_audit_row() {
         .command()
         .args(["proxy", "--listen", "127.0.0.1:0"])
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
     let mut line = String::new();
     BufReader::new(child.stdout.take().unwrap())
         .read_line(&mut line)
         .unwrap();
-    let addr = line
-        .split_whitespace()
-        .nth(4)
-        .unwrap_or_else(|| panic!("no address in {line:?}"));
+    let Some(addr) = line.split_whitespace().nth(4) else {
+        // No line means the proxy exited; its stderr says why.
+        let mut why = String::new();
+        let _ = child.stderr.take().unwrap().read_to_string(&mut why);
+        panic!("no address in {line:?}; stderr: {why}");
+    };
 
     let mut s = TcpStream::connect(addr).unwrap();
     s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();

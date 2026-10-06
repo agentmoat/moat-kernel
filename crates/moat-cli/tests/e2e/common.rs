@@ -1,8 +1,8 @@
 //! The harness every end-to-end module shares: an isolated home and the real
 //! `moat` binary.
 //!
-//! Each command runs with the environment cleared except `PATH`, `HOME` and
-//! `USERPROFILE`, so nothing from the developer's machine (a real `~/.moat`,
+//! Each command runs with the environment cleared except `PATH`, `HOME`,
+//! `USERPROFILE` and (Windows) `SYSTEMROOT`, so nothing from the developer's machine (a real `~/.moat`,
 //! `CLAUDE_CONFIG_DIR`, a terminal) leaks into a test.
 
 use std::io::{ErrorKind, Write as _};
@@ -58,6 +58,10 @@ impl Sandbox {
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("HOME", &self.home)
             .env("USERPROFILE", &self.home);
+        // Windows sockets cannot start without it (`moat proxy` binds one).
+        if let Some(root) = std::env::var_os("SYSTEMROOT") {
+            cmd.env("SYSTEMROOT", root);
+        }
         cmd
     }
 
