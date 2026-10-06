@@ -137,3 +137,80 @@ fn hooks_without_a_terminal_are_still_refused() {
     assert_ne!(out.status.code(), Some(0));
     assert!(text(&out).contains("must be run by a person in a terminal"));
 }
+
+/// Bytes of the files `moat allow` writes (`None` when absent).
+fn approval_state(sb: &Sandbox) -> Vec<Option<Vec<u8>>> {
+    ["policy.d/approved.yaml", "approvals.json", "policy.lock"]
+        .iter()
+        .map(|f| std::fs::read(sb.home.join(".moat").join(f)).ok())
+        .collect()
+}
+
+/// Append to a pinned file, then check `allow` with `args` refuses and writes nothing.
+fn assert_allow_refuses_after_tampering(pinned: &str, args: &[&str]) {
+    let sb = Sandbox::installed(&[".claude"]);
+    let path = sb.home.join(pinned);
+    let mut tampered = std::fs::read(&path).unwrap();
+    tampered.extend_from_slice(b"\n");
+    std::fs::write(&path, tampered).unwrap();
+    let before = approval_state(&sb);
+
+    let out = sb.moat_as_person(args);
+    let message = text(&out);
+    assert_eq!(out.status.code(), Some(64), "{message}");
+    assert!(
+        message.contains("kernel-integrity") && message.contains("was modified"),
+        "{message}"
+    );
+    assert!(
+        message.contains("`moat doctor`") && message.contains("`moat doctor --accept`"),
+        "{message}"
+    );
+    let file = path.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(message.contains(&file), "names {file}: {message}");
+    assert_eq!(approval_state(&sb), before, "nothing written");
+    assert_eq!(guard(&sb, "s1", INSTALL).0, "deny", "drift still denies");
+}
+
+#[test]
+fn allow_always_refuses_over_a_tampered_hook_file() {
+    assert_allow_refuses_after_tampering(".claude/settings.json", &["allow", INSTALL, "--always"]);
+}
+
+#[test]
+fn allow_always_refuses_over_a_tampered_policy() {
+    assert_allow_refuses_after_tampering(".moat/policy.yaml", &["allow", INSTALL, "--always"]);
+}
+
+#[test]
+fn session_grant_refuses_over_a_drifted_lock() {
+    let args = ["allow", INSTALL, "--host", "claude-code", "--session", "s1"];
+    assert_allow_refuses_after_tampering(".claude/settings.json", &args);
+    assert_allow_refuses_after_tampering(".moat/policy.yaml", &args);
+}
+
+#[test]
+fn allow_on_a_clean_lock_pins_only_the_overlay_it_wrote() {
+    let sb = Sandbox::installed(&[".claude"]);
+    // Every pin but the overlay's, which is the one file `allow --always` writes.
+    let others = |sb: &Sandbox| {
+        let lock = std::fs::read_to_string(sb.home.join(".moat/policy.lock")).unwrap();
+        let mut lock: serde_json::Value = serde_json::from_str(&lock).unwrap();
+        let entries = lock["entries"].as_object_mut().unwrap();
+        let overlay = entries
+            .keys()
+            .find(|k| k.ends_with("approved.yaml"))
+            .cloned();
+        let overlay = overlay.and_then(|k| entries.remove(&k));
+        (entries.clone(), overlay)
+    };
+    let (before, overlay_before) = others(&sb);
+    let out = sb.moat_as_person(&["allow", INSTALL, "--always"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+
+    let (after, overlay_after) = others(&sb);
+    assert_eq!(after, before, "only the overlay's pin changes");
+    assert!(overlay_after.is_some() && overlay_after != overlay_before);
+    let doctor = sb.moat(&["doctor"]);
+    assert!(text(&doctor).contains("all intact"), "{}", text(&doctor));
+}

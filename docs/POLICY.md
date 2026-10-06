@@ -267,6 +267,10 @@ highest existing `approved-N`, so deleting a rule never causes a duplicate id. S
 are prefixes, so a permanently approved `npm install left-pad` also allows extra arguments
 after it; edit the overlay if you want it tighter. Both files are pinned
 by the lock; `moat allow` must be run from a terminal and is denied to agents.
+`moat allow` verifies the lock before writing anything: if a pinned file (policy,
+overlay, approvals, hook file) drifted, it lists each one and exits 64 without changing
+the overlay, the grants or the lock. Review the changes with `moat doctor` and accept them
+with `moat doctor --accept`, then approve again; approving a command never accepts drift.
 
 ## 9. Planned, not yet available
 

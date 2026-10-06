@@ -23,6 +23,18 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
     if !home.exists() {
         bail!("{} does not exist; run `moat init`", home.root().display());
     }
+    // The re-pin below covers every pinned file, so approving one command over a
+    // drifted lock would also accept a tampered policy or hook unseen. Without a
+    // lock there is nothing to accept yet and the re-pin creates one.
+    if home.lock_path().exists()
+        && let Some(deny) = integrity::violation(&home)?
+    {
+        bail!(
+            "refusing to approve while the policy lock shows drift ({}):\n  {}",
+            integrity::INTEGRITY_RULE,
+            deny.reasons.join("\n  ")
+        );
+    }
 
     let mut out = Deferred::default();
     let (host, session, command) = match (&args.command, args.last) {
