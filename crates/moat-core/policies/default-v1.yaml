@@ -141,6 +141,16 @@ deny:
       - "expect * '*moat {allow,doctor,init,policy}*'"
       - "unbuffer * moat {allow,doctor,init,policy}*"
       - "unbuffer * */moat {allow,doctor,init,policy}*"
+      - "*/script * moat {allow,doctor,init,policy}*"
+      - "*/script * */moat {allow,doctor,init,policy}*"
+      - "*/script * '*moat {allow,doctor,init,policy}*'"
+      - "*/expect * '*moat {allow,doctor,init,policy}*'"
+      # Python's pty module, terminal multiplexers and macOS Terminal scripting (ADR-014)
+      - "{python*,*/python*} * '*pty*spawn*(*moat*{allow,doctor,init,policy}*'"
+      - "{tmux,*/tmux,screen,*/screen} * moat {allow,doctor,init,policy}*"
+      - "{tmux,*/tmux,screen,*/screen} * */moat {allow,doctor,init,policy}*"
+      - "{tmux,*/tmux,screen,*/screen} * '*moat {allow,doctor,init,policy}*'"
+      - "{osascript,*/osascript} * '*moat {allow,doctor,init,policy}*'"
   - id: shell-rc
     reason: edits persist into every future shell session
     fs.write: ["~/.zshrc", "~/.bashrc", "~/.bash_profile", "~/.profile", "~/.zprofile", "~/.zshenv"]
