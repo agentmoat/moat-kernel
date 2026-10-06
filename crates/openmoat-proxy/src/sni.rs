@@ -6,6 +6,8 @@
 //! A `ClientHello` may be split over several TLS records; they are reassembled up
 //! to [`MAX_HELLO`] bytes.
 
+use crate::request::normalise_name;
+
 /// Largest `ClientHello` handshake message accepted. Real ones are 0.5–2 KiB,
 /// more with post-quantum key shares; 64 KiB leaves room without letting a
 /// client make the proxy buffer without bound.
@@ -46,13 +48,13 @@ pub fn server_name(buf: &[u8]) -> Result<Hello, HelloError> {
     let mut handshake = Vec::new();
     let mut pos = 0;
     loop {
-        let Some(header) = buf.get(pos..pos + RECORD_HEADER) else {
+        let Some(&[content, major, _, len_hi, len_lo]) = buf.get(pos..pos + RECORD_HEADER) else {
             return Ok(Hello::Incomplete);
         };
-        if header[0] != CONTENT_HANDSHAKE || header[1] != 3 {
+        if content != CONTENT_HANDSHAKE || major != 3 {
             return Err(HelloError::NotTls);
         }
-        let len = usize::from(u16::from_be_bytes([header[3], header[4]]));
+        let len = usize::from(u16::from_be_bytes([len_hi, len_lo]));
         if len == 0 || len > MAX_RECORD {
             return Err(HelloError::Malformed);
         }
@@ -63,13 +65,11 @@ pub fn server_name(buf: &[u8]) -> Result<Hello, HelloError> {
         handshake.extend_from_slice(fragment);
         pos = start + len;
 
-        if handshake.len() >= 4 {
-            if handshake[0] != HANDSHAKE_CLIENT_HELLO {
+        if let Some(&[kind, len0, len1, len2]) = handshake.get(..4) {
+            if kind != HANDSHAKE_CLIENT_HELLO {
                 return Err(HelloError::Malformed);
             }
-            let body_len = usize::from(handshake[1]) << 16
-                | usize::from(handshake[2]) << 8
-                | usize::from(handshake[3]);
+            let body_len = usize::from(len0) << 16 | usize::from(len1) << 8 | usize::from(len2);
             if body_len > MAX_HELLO {
                 return Err(HelloError::TooLarge);
             }
@@ -124,11 +124,16 @@ fn server_name_list(data: &[u8]) -> Result<Option<String>, HelloError> {
         if kind != NAME_TYPE_HOST {
             continue;
         }
-        if host.is_some() || value.is_empty() || !value.is_ascii() {
+        if host.is_some() {
             return Err(HelloError::Malformed);
         }
-        let text = std::str::from_utf8(value).map_err(|_| HelloError::Malformed)?;
-        host = Some(text.strip_suffix('.').unwrap_or(text).to_ascii_lowercase());
+        // The CONNECT host went through the same normalisation, so a name that
+        // is not a valid DNS name (empty, `.`, non-ASCII) could never match it.
+        let name = std::str::from_utf8(value)
+            .ok()
+            .and_then(normalise_name)
+            .ok_or(HelloError::Malformed)?;
+        host = Some(name);
     }
     Ok(host)
 }
@@ -138,21 +143,24 @@ struct Reader<'a>(&'a [u8]);
 
 impl<'a> Reader<'a> {
     fn take(&mut self, n: usize) -> Result<&'a [u8], HelloError> {
-        if n > self.0.len() {
-            return Err(HelloError::Malformed);
-        }
-        let (head, rest) = self.0.split_at(n);
+        let (head, rest) = self.0.split_at_checked(n).ok_or(HelloError::Malformed)?;
         self.0 = rest;
         Ok(head)
     }
 
+    fn array<const N: usize>(&mut self) -> Result<[u8; N], HelloError> {
+        let (head, rest) = self.0.split_first_chunk().ok_or(HelloError::Malformed)?;
+        self.0 = rest;
+        Ok(*head)
+    }
+
     fn u8(&mut self) -> Result<u8, HelloError> {
-        Ok(self.take(1)?[0])
+        let [b] = self.array()?;
+        Ok(b)
     }
 
     fn u16(&mut self) -> Result<u16, HelloError> {
-        let b = self.take(2)?;
-        Ok(u16::from_be_bytes([b[0], b[1]]))
+        self.array().map(u16::from_be_bytes)
     }
 
     fn end(&self) -> Result<(), HelloError> {
