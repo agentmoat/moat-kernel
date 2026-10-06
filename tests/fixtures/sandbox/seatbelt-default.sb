@@ -135,6 +135,10 @@
       (regex "^(.*/)?\\.env\\.example$")
       (regex "^(.*/)?\\.env\\.sample$")
       (regex "^(.*/)?\\.env\\.template$")))))
+; deny destructive (fs.write)
+(deny file-write*
+  (literal "/Users/me")
+  (literal "/"))
 ; deny kernel-self (fs.write)
 (deny file-write*
   (literal "/Users/me/.claude")
