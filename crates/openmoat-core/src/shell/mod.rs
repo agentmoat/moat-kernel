@@ -31,7 +31,8 @@
 //! `tokens` recognises assignments and variable references inside one word;
 //! `invocation` parses a shell's own options (`bash -lc`, `sh -ec`, `--login`);
 //! `git` takes git's global options out of the command;
-//! `operands` decides which plain arguments name files;
+//! `operands` decides which plain arguments name files, and `copy` where a copy
+//! or a move writes (`cp f ~/` writes `~/f`);
 //! `decoders`, `make` and `options` handle constructs that hide a command or a
 //! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
 //! `text` reads the options of text tools, whose values are data, not files,
@@ -40,6 +41,7 @@
 
 mod awk;
 mod commands;
+mod copy;
 mod cwd;
 mod decoders;
 pub(crate) mod git;

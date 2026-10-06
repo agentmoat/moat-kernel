@@ -467,3 +467,14 @@ fn escaped_separator_words_do_not_break_pipelines() {
     }
     assert!(has_shell(&parsed(r"Z;\&;\&"), "&"));
 }
+
+#[test]
+fn copies_into_a_directory_write_the_entry() {
+    let a = parsed("cp -t ~ f");
+    assert!(has_write(&a, "/Users/me/f") && has_read(&a, "/p/f") && !has_write(&a, "/p/f"));
+    let a = parsed("mv f ~/");
+    assert!(has_write(&a, "/p/f") && has_write(&a, "/Users/me/f"));
+    assert!(!has_write(&a, "/Users/me"));
+    assert!(has_write(&parsed("mv ~ /tmp/"), "/Users/me"));
+    assert!(!has_write(&parsed("scp key host:/tmp/"), "/p/key"));
+}

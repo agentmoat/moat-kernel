@@ -3,11 +3,11 @@
 use super::tables::{
     ENV_BUILTINS, INLINE_INTERPRETERS, MAKES, PACKAGE_RUNNERS, SHELLS, SOURCE_BUILTINS,
     WRAPPER_OPTIONS_WITH_VALUE, WRAPPER_SUBCOMMANDS, WRAPPERS, WRAPPERS_WITH_VALUE,
-    WRITE_ALL_PATHS, WRITE_LAST_PATH,
+    WRITE_ALL_PATHS,
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at, word_env_refs};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
-use super::{cwd, decoders, git, invocation, make, operands, options, text};
+use super::{copy, cwd, decoders, git, invocation, make, operands, options, text};
 use crate::action::AtomicAction;
 use crate::host;
 use crate::lexer::{self, Operator, Token, Word};
@@ -360,9 +360,12 @@ fn classify_arguments(
     ctx: &ShellContext<'_>,
     sink: &mut Sink,
 ) -> Result<(), ClassifyError> {
-    // For copy-like programs the destination is the last operand, which may be a
-    // remote spec (`host:/dir`); only a local destination is a write.
-    let destination = (1..argv.len()).rev().find(|&i| !argv[i].starts_with('-'));
+    // A copy or a move writes its destination, or the entries it creates in it
+    // (`copy.rs`); a remote destination (`host:/dir`) is not a local write.
+    let copy = copy::destination(argv, program).filter(|d| {
+        paths::looks_like_path(d.word) || operands::file_operand(d.word, program, true).is_some()
+    });
+    let mut sources = Vec::new();
     let options_end = argv.iter().position(|a| a == "--");
 
     for (i, (tok, word)) in argv.iter().zip(words).enumerate() {
@@ -377,8 +380,13 @@ fn classify_arguments(
                 name: name.to_owned(),
             })?;
         }
-        if i == 0 || text_operands.data.contains(&i) {
+        let is_destination = copy.as_ref().is_some_and(|d| d.index == i);
+        if i == 0 || text_operands.data.contains(&i) || is_destination {
             continue;
+        }
+        let options_ended = options_end.is_some_and(|end| i > end);
+        if options_ended || !tok.starts_with('-') {
+            sources.push(tok.as_str());
         }
         let candidate = strip_at(tok);
         let file = if paths::looks_like_path(candidate) {
@@ -399,17 +407,19 @@ fn classify_arguments(
             sink.push(AtomicAction::Net { host })?;
             continue;
         } else {
-            operands::file_operand(tok, program, options_end.is_some_and(|end| i > end))
+            operands::file_operand(tok, program, options_ended)
         };
         if let Some(file) = file {
-            let is_write = WRITE_ALL_PATHS.contains(&program)
-                || text_operands.writes.contains(&i)
-                || (WRITE_LAST_PATH.contains(&program) && Some(i) == destination);
-            if is_write {
+            if WRITE_ALL_PATHS.contains(&program) || text_operands.writes.contains(&i) {
                 sink.write(ctx, file)?;
             } else {
                 sink.read(ctx, file)?;
             }
+        }
+    }
+    if let Some(dest) = &copy {
+        for path in copy::written(dest, &sources) {
+            sink.write(ctx, &path)?;
         }
     }
     Ok(())
