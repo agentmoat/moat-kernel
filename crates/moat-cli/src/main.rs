@@ -16,6 +16,7 @@ mod integrity;
 mod project;
 mod realpath;
 mod render;
+mod repo;
 mod sandbox;
 mod terminal;
 mod time;

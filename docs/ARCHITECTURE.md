@@ -17,11 +17,11 @@ moat-cli ──► moat-hosts ──► moat-core
 
 | Crate | Role | Rules |
 |---|---|---|
-| `moat-core` | Policy model and lint, POSIX lexer (`lexer/`), shell classifier (`shell/`), URL host parser (`host.rs`), patterns, path normalisation, the engine, the policy compiler (`ir/`), `ProgramResolver` and `PathResolver` traits | Pure: no I/O, no `unsafe`, depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Builds for `wasm32-unknown-unknown` in CI; `tests/architecture.rs` enforces the dependency allowlist and the 500-line file budget |
+| `moat-core` | Policy model and lint, POSIX lexer (`lexer/`), shell classifier (`shell/`), URL host parser (`host.rs`), patterns, path normalisation, the engine, the policy compiler (`ir/`), the repository policy merge (`repo.rs`), `ProgramResolver` and `PathResolver` traits | Pure: no I/O, no `unsafe`, depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Builds for `wasm32-unknown-unknown` in CI; `tests/architecture.rs` enforces the dependency allowlist and the 500-line file budget |
 | `moat-hosts` | Host adapters: `pre_tool_use.rs` (Claude Code and Codex `PreToolUse`), `config_change.rs` (Claude Code `ConfigChange`), `cursor.rs`, `mcp.rs` (MCP arguments to paths and URLs), `patch.rs` (Codex `apply_patch` file list) | Translate payload to `Action` and `Decision` to response. Never decide |
 | `moat-audit` | SQLite store, time-window and session queries, redaction | Redact before persisting. Typed `thiserror` errors |
 | `moat-proxy` | The egress proxy behind `moat proxy` (§12): request and `ClientHello` parsers, host decisions through moat-core, the address guard, connection relay, the `Recorder` trait the CLI implements over `moat-audit` | Network I/O only through `std::net`; no async runtime; no storage. Depends on `moat-core`, `httparse`, `thiserror` |
-| `moat-cli` | The `moat` binary (crate `moat-kernel`): commands, hook installation, the policy lock, approvals, the environment snapshot, the filesystem resolvers, rendering, exit codes | The only crate that touches files, the environment and the terminal |
+| `moat-cli` | The `moat` binary (crate `moat-kernel`): commands, hook installation, the policy lock, approvals, the repository policy file, the environment snapshot, the filesystem resolvers, rendering, exit codes | The only crate that touches files, the environment and the terminal |
 
 No crate depends on `moat-cli`. Planned crates for enforcement are on the
 [roadmap](ROADMAP.md); none exist yet.
@@ -33,6 +33,7 @@ host payload (stdin)
   └─► adapter (moat-hosts)                 Action, or none for an ungoverned tool
         └─► policy lock check              drift ⇒ deny [kernel-integrity]
               └─► load policy + overlay    ~/.moat/policy.yaml + policy.d/approved.yaml
+                    + repository policy    <project>/.moat/policy.yaml, tightening only
                     └─► classify (moat-core)    Action ⇒ atomic actions
                           └─► engine            per atom: deny → allow → ask → defaults
                                 └─► combine     strictest wins ⇒ Decision
@@ -56,12 +57,18 @@ exits. There is no daemon.
    session (§6).
 4. **Lock.** `integrity::violation` recomputes every digest in `policy.lock`. Any drift
    denies the call with `kernel-integrity` before the policy is read.
-5. **Policy.** `~/.moat/policy.yaml` is parsed and linted (1 MiB limit). Rules from
-   `policy.d/approved.yaml` are appended to `allow` and the result is linted again.
-6. **Context.** `EvalContext` carries the home directory, the project root (git root
+5. **Context.** `EvalContext` carries the home directory, the project root (git root
    above the call's working directory, never the home directory, an ancestor of it or
    a filesystem root; `project.rs`), their symlink-resolved spellings, the working
    directory and whether paths compare case-insensitively.
+6. **Policy.** `~/.moat/policy.yaml` is parsed and linted (1 MiB limit). Rules from
+   `policy.d/approved.yaml` are appended to `allow` and the result is linted again.
+   When the project has a repository policy (`<project>/.moat/policy.yaml`, ADR-022),
+   `repo.rs` reads it and `moat_core::RepoPolicy::merge`, a pure function, merges it:
+   its deny groups join `deny`, its ask groups go into `repo_ask`, which the engine tries
+   between `deny` and `allow`, and its allow groups are dropped. Its rule ids get the
+   prefix `repo:`. A repository policy that is not a regular file, cannot be read or
+   does not parse is a `kernel-error` deny.
 7. **Decide.** `CompiledPolicy::compile(policy, ctx).decide_with(action, snapshot,
    FsPathResolver)` classifies and evaluates (§3, §4).
 8. **Grant.** An `ask` for a shell command whose exact text was granted for this host
@@ -134,7 +141,8 @@ arguments, so those keys are unverified (`tests/fixtures/hosts/cursor/README.md`
 ## 4. Decision
 
 For each atomic action, the lists are tried in order `deny → allow → ask`; the first
-list with a match decides that atom. If none matches, `defaults` decides (rule id
+list with a match decides that atom. A repository policy's ask groups (`repo_ask`) are
+tried between `deny` and `allow`. If none matches, `defaults` decides (rule id
 `default.<kind>` or `default`). The verdict for the tool call is the strictest across
 its atoms: `deny > ask > allow`. Deny is absolute (ADR-002). A `fetch` atom also
 matches `net` patterns and falls back to the `net` default (ADR-017). The decision
@@ -285,7 +293,11 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
 ~/.codex/config.toml           Codex [permissions.moat] profile, default_permissions
 <file>.moat-sandbox-backup     each host file before moat's last sandbox edit
 ~/.cursor/hooks.json           Cursor hooks ($CURSOR_CONFIG_DIR overrides)
+<project>/.moat/policy.yaml    repository policy, committed by the team (ADR-022)
 ```
+
+Host sandboxes and `moat proxy` are generated from the user policy only. Repository
+rules apply in the hook.
 
 ## 9. Invariants
 

@@ -109,7 +109,6 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
     if let Some(decision) = integrity::violation(&home)? {
         return Ok((Some(request), decision));
     }
-    let policy = home.load_policy()?;
     let cwd = request
         .cwd
         .as_deref()
@@ -117,6 +116,7 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
         .map_or_else(std::env::current_dir, Ok)
         .context("resolving working directory")?;
     let ctx = context::eval_context(Some(&cwd), None)?;
+    let policy = crate::repo::effective_policy(&home, &ctx)?;
     let snapshot = Snapshot::load(&home.environment_path())?;
     let mut decision =
         CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot, &FsPathResolver);

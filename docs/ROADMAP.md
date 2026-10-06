@@ -110,7 +110,8 @@ A team gets value when one policy and one record cover everyone's agents:
 
 1. **Repo policy** (#128). A committed `.moat/policy.yaml` adds rules for everyone who
    works in the repository, whatever agent they use. A cloned repository must not be
-   able to loosen a person's policy, so it loads only after `moat trust <path>`.
+   able to loosen a person's policy, so by itself it only adds deny and ask rules; its
+   allow rules load only after `moat trust <path>` pins the file by hash (ADR-022).
 2. **Audit export** (#129). Decisions exported in a stable format, plus a team report
    built from them.
 
