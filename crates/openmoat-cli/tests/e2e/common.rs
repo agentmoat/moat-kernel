@@ -101,11 +101,12 @@ impl Sandbox {
             .local_addr()
             .unwrap()
             .port();
+        // Edited as YAML, not as text: a Windows checkout has CRLF line endings.
         let path = self.home.join(".moat/policy.yaml");
-        let policy = std::fs::read_to_string(&path).unwrap();
-        assert!(policy.contains("\nsandbox:\n"), "no sandbox section");
-        let own = format!("\nsandbox:\n  proxy_port: {port}\n");
-        std::fs::write(&path, policy.replacen("\nsandbox:\n", &own, 1)).unwrap();
+        let mut policy: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        policy["sandbox"]["proxy_port"] = port.into();
+        std::fs::write(&path, serde_yaml_ng::to_string(&policy).unwrap()).unwrap();
         let accepted = self.moat_as_person(&["doctor", "--accept"]);
         assert!(text(&accepted).contains("re-pinned"), "{}", text(&accepted));
         let synced = self.moat_as_person(&["sandbox", "sync"]);
