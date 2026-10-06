@@ -233,7 +233,9 @@ its JSON to the kernel's internal `ToolCall`.
 - **Fail-open by default.** `failClosed: true` must be set per hook; `moat init` sets it.
 - No `afterFileEdit` veto (post-hoc only), so file writes are governed via `preToolUse`
   where available, else audited only. `preToolUse` `Grep` and `Glob` read their `path`
-  (else `cwd` or the first workspace root), like Claude Code's.
+  (else `cwd` or the first workspace root), like Claude Code's. Cursor's docs name
+  `Grep` but not `Glob`, and give no file tool's arguments, so these keys are unverified
+  (`tests/fixtures/hosts/cursor/README.md`).
 
 ### 4.4 OpenClaw
 
