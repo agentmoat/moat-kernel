@@ -229,7 +229,8 @@ its JSON to the kernel's internal `ToolCall`.
   Exit 2 = deny.
 - **Fail-open by default.** `failClosed: true` must be set per hook; `moat init` sets it.
 - No `afterFileEdit` veto (post-hoc only), so file writes are governed via `preToolUse`
-  where available, else audited only.
+  where available, else audited only. `preToolUse` `Grep` and `Glob` read their `path`
+  (else `cwd` or the first workspace root), like Claude Code's.
 
 ### 4.4 OpenClaw
 
