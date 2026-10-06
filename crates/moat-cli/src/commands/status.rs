@@ -10,7 +10,7 @@ use moat_hosts::Host;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig};
-use crate::integrity::Lock;
+use crate::integrity::{self, HookPinGap, Lock};
 use crate::render;
 
 pub fn run() -> Result<Code> {
@@ -54,6 +54,23 @@ pub fn run() -> Result<Code> {
                 for d in drift {
                     writeln!(out, "lock             ✗ {d} (run `moat doctor`)")?;
                 }
+            }
+            let installed = integrity::installed_hook_files(&binary)?;
+            let gap = HookPinGap::new(&lock, &home, &installed);
+            for path in gap.unpinned {
+                healthy = false;
+                writeln!(
+                    out,
+                    "lock             ✗ {} is not pinned (run `moat init` to pin it)",
+                    path.display()
+                )?;
+            }
+            for path in gap.elsewhere {
+                writeln!(
+                    out,
+                    "lock             · {} is pinned but not this shell's hook file (CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR differ)",
+                    path.display()
+                )?;
             }
         }
         Err(_) if !lock_path.exists() => {

@@ -250,3 +250,90 @@ fn planted_binary_earlier_on_the_search_path_is_denied() {
     assert!(reason.contains("executables"), "{reason}");
     assert!(reason.contains("early-bin"), "{reason}");
 }
+
+/// #158: the hook file an agent reads depends on the agent's `CLAUDE_CONFIG_DIR`.
+/// A person re-pinning from a shell with another value must not drop it from the
+/// lock, nor quietly adopt the hook file that shell points at.
+#[test]
+fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
+    use std::path::Path;
+
+    use crate::common::output;
+    let sb = Sandbox::bare(&[]);
+    let agent = sb.home.join("agent-claude");
+    let shell = sb.home.join("shell-claude");
+    let run = |dir: &Path, args: &[&str]| {
+        let mut cmd = sb.command();
+        cmd.args(args)
+            .env("CLAUDE_CONFIG_DIR", dir)
+            .env("MOAT_ASSUME_TTY", "1");
+        output(&mut cmd, None)
+    };
+    let pinned = |dir: &Path| {
+        let lock: Value =
+            serde_json::from_str(&std::fs::read_to_string(lock_path(&sb)).unwrap()).unwrap();
+        let suffix = format!(
+            "{}/settings.json",
+            dir.file_name().unwrap().to_string_lossy()
+        );
+        lock["entries"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .any(|k| k.replace('\\', "/").ends_with(&suffix))
+    };
+    std::fs::create_dir_all(&agent).unwrap();
+    std::fs::create_dir_all(&shell).unwrap();
+    assert_eq!(run(&agent, &["init"]).status.code(), Some(0));
+    // The other shell's directory holds a moat hook the lock never pinned.
+    std::fs::copy(agent.join("settings.json"), shell.join("settings.json")).unwrap();
+
+    let mut policy = std::fs::read_to_string(policy_path(&sb)).unwrap();
+    policy.push_str("\n# edited by the owner\n");
+    std::fs::write(policy_path(&sb), policy).unwrap();
+    let out = run(&shell, &["doctor", "--accept"]);
+    let report = text(&out);
+    assert!(report.contains("lock re-pinned"), "{report}");
+    assert!(
+        pinned(&agent),
+        "doctor --accept dropped the agent's hook file"
+    );
+    assert!(
+        !pinned(&shell),
+        "doctor --accept adopted an unpinned hook file"
+    );
+    assert_eq!(out.status.code(), Some(64), "{report}");
+    assert!(report.contains("is not pinned by the lock"), "{report}");
+    assert!(
+        report.contains("is pinned but not this shell's"),
+        "{report}"
+    );
+
+    let out = run(&shell, &["allow", "npm install left-pad", "--always"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(
+        pinned(&agent),
+        "allow --always dropped the agent's hook file"
+    );
+    assert!(
+        !pinned(&shell),
+        "allow --always adopted an unpinned hook file"
+    );
+
+    let out = run(&shell, &["status"]);
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert!(text(&out).contains("is not pinned"), "{}", text(&out));
+    let out = run(&agent, &["status"]);
+    assert!(!text(&out).contains("not pinned"), "{}", text(&out));
+
+    let mut settings = std::fs::read_to_string(agent.join("settings.json")).unwrap();
+    settings.push(' ');
+    std::fs::write(agent.join("settings.json"), settings).unwrap();
+    let d = guard_read_src(&sb);
+    assert_eq!(d["permissionDecision"], "deny", "{d}");
+    let reason = d["permissionDecisionReason"].as_str().unwrap();
+    assert!(reason.contains("settings.json was modified"), "{reason}");
+
+    assert_eq!(run(&shell, &["init"]).status.code(), Some(0));
+    assert!(pinned(&agent) && pinned(&shell), "init keeps and adopts");
+}

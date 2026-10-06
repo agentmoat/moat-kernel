@@ -9,7 +9,7 @@ use crate::approvals::{Grants, Overlay};
 use crate::cli::AllowArgs;
 use crate::exit::Code;
 use crate::home::Home;
-use crate::integrity;
+use crate::integrity::{self, HookPins};
 use crate::render::Deferred;
 
 /// How many recent events `--last` searches for the newest shell `ask`.
@@ -59,7 +59,7 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
     }
 
     let binary = crate::install::hook_binary()?;
-    let lock = integrity::repin(&home, &binary)?;
+    let lock = integrity::repin(&home, &binary, HookPins::Keep)?;
     writeln!(out, "✔ lock re-pinned ({} files)", lock.entries.len())?;
     out.finish()?;
     Ok(Code::Ok)

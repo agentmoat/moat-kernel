@@ -108,7 +108,7 @@ pub fn run(args: &InitArgs) -> Result<Code> {
     if dry_run {
         writeln!(out, "would lock             {}", home.lock_path().display())?;
     } else {
-        let lock = integrity::repin(&home, &binary)?;
+        let lock = integrity::repin(&home, &binary, integrity::HookPins::Adopt)?;
         writeln!(
             out,
             "✔ lock             {} ({} files pinned)",
