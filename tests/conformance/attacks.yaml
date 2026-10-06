@@ -184,6 +184,19 @@
   threat: T4
   action: { shell: "git push -vd origin main" }
   expect: { verdict: deny, rules: [destructive] }
+# git accepts an unambiguous prefix of a long option
+- id: T4-push-abbreviated-delete
+  threat: T4
+  action: { shell: "git push --del origin main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-push-abbreviated-delete-after-remote
+  threat: T4
+  action: { shell: "git push origin --de main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-push-abbreviated-force
+  threat: T4
+  action: { shell: "git push origin main --forc" }
+  expect: { verdict: deny, rules: [destructive] }
 # git global options before the subcommand do not hide it
 - id: T4-force-push-after-git-dir-option
   threat: T4
@@ -751,6 +764,18 @@
   threat: T10
   action: { fs_write: "C:/Users/me/.cargo/bin/moat.exe" }
   expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-file-tool-writes-scoop-current-binary
+  threat: T10
+  action: { fs_write: "C:/Users/me/scoop/apps/moat/current/moat.exe" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-copy-over-scoop-versioned-binary
+  threat: T10
+  action: { shell: "cp /tmp/evil.exe C:/ProgramData/scoop/apps/moat/0.1.0/moat.exe" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-replace-scoop-current-junction
+  threat: T10
+  action: { shell: "rm -rf C:/Users/me/scoop/apps/moat/current" }
+  expect: { verdict: deny, rules: [kernel-self] }
 
 # T12 hosts written in forms a dotted-name heuristic misses
 - id: T12-decimal-encoded-loopback
@@ -856,6 +881,18 @@
 - id: T7-quoted-heredoc-is-the-shell-program
   threat: T7
   action: { shell: "bash <<'EOF'\ncat ~/.ssh/id_rsa\nEOF" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-heredoc-piped-through-cat-is-the-shell-program
+  threat: T7
+  action: { shell: "cat <<'EOF' | sh\ncat ~/.ssh/id_rsa\nEOF" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-echo-piped-into-shell-is-its-program
+  threat: T7
+  action: { shell: "echo 'cat ~/.ssh/id_rsa' | sh" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-dash-heredoc-strips-tabs-before-the-shell-runs-it
+  threat: T7
+  action: { shell: "bash <<-'EOF'\n\tcat <<'X'\n\tdata\n\tX\n\tcat ~/.ssh/id_rsa\n\tEOF" }
   expect: { verdict: deny, rules: [secrets-paths] }
 - id: T12-heredoc-is-the-interpreter-program
   threat: T12

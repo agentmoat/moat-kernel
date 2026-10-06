@@ -88,16 +88,18 @@ deny:
       - "rm -fr ~"
       - "rm -rf ~/[*]"
       - "rm -rf $HOME"
-      - "git push --force*"
+      # git takes an unambiguous prefix of a long option (`--del` is `--delete`), so
+      # `--for*` and `--de*`: no other `git push` option starts with either
+      - "git push --for*"
       - "git push -f*"
       # a `+` refspec, and force flags after the remote or bundled with other short options
       - "git push * +*"
-      - "git push * --force*"
+      - "git push * --for*"
       - "git push * -f*"
       - "git push * -[!o-]*f*"
       # deleting a remote branch: an empty source refspec (`:main`), `--delete`, `-d`
       - "git push * :?*"
-      - "git push * --delete*"
+      - "git push * --de*"
       - "git push * -d*"
       - "git push * -[!o-]*d*"
       - "git reset --hard*"
@@ -136,6 +138,10 @@ deny:
       # the binary every installed hook runs
       - "**/bin/moat"
       - "**/bin/moat.exe"
+      # Scoop: apps/moat/current (the junction hooks run through) and each
+      # apps/moat/<version> it may point at (ADR-016)
+      - "**/apps/moat/current"
+      - "**/apps/moat/*/moat.exe"
     shell:
       - "moat policy *"
       - "moat init*"

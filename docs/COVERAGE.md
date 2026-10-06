@@ -7,16 +7,16 @@ the verdict and rule ids the default policy must produce for it.
 
 | Threat | Class | Attacks | Asks | Benign |
 |---|---|---|---|---|
-| T1 | Secret exfiltration via shell | 25 | 7 | 2 |
+| T1 | Secret exfiltration via shell | 25 | 18 | 3 |
 | T2 | Secret exfiltration via file tools | 18 | 0 | 0 |
 | T3 | Secret exfiltration via environment | 14 | 3 | 0 |
-| T4 | Destructive git / filesystem operations | 25 | 15 | 0 |
+| T4 | Destructive git / filesystem operations | 28 | 17 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
-| T6 | Environment poisoning | 11 | 0 | 0 |
-| T7 | Obfuscation and nested execution | 42 | 31 | 2 |
+| T6 | Environment poisoning | 11 | 2 | 0 |
+| T7 | Obfuscation and nested execution | 45 | 32 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 4 | 0 | 0 |
 | T9 | Hook / policy tampering by the agent | 37 | 9 | 1 |
-| T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
+| T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
 | T11 | Time-of-check / time-of-use, symlinks | 15 | 2 | 0 |
 | T12 | Network to unknown hosts | 18 | 8 | 0 |
 
@@ -29,6 +29,17 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-cd-previous-dir-then-relative-read` (ask): Ask [unparseable]
 - `ask-copy-out-of-project` (ask): Ask [default]
 - `ask-cd-home-then-list` (ask): Ask [default]
+- `ask-recursive-read-grep-home` (ask): Ask [default]
+- `ask-recursive-read-rg-home` (ask): Ask [default]
+- `ask-recursive-read-grep-config` (ask): Ask [default]
+- `ask-recursive-read-rg-config` (ask): Ask [default]
+- `ask-recursive-read-find-home` (ask): Ask [default]
+- `ask-recursive-read-tar-home` (ask): Ask [default]
+- `ask-recursive-read-cp-home` (ask): Ask [default]
+- `ask-recursive-read-zip-home` (ask): Ask [default]
+- `ask-recursive-read-rsync-home` (ask): Ask [default]
+- `ask-recursive-read-grep-cwd-home` (ask): Ask [default]
+- `ask-recursive-read-grep-parent-of-project` (ask): Ask [default]
 - `T1-cat-ssh-key` (attacks): Deny [secrets-paths]
 - `T1-curl-upload-ssh-key` (attacks): Deny [secrets-paths]
 - `T1-substitution-exfil` (attacks): Deny [secrets-paths]
@@ -56,6 +67,7 @@ the verdict and rule ids the default policy must produce for it.
 - `T1-cd-allowed-still-follows-into-secrets` (attacks): Deny [secrets-paths]
 - `benign-cd-src-then-cargo-test` (benign): Allow [dev-shell]
 - `benign-cd-crate-then-ls` (benign): Allow [dev-shell]
+- `benign-recursive-read-of-project-root` (benign): Allow [dev-shell, project-fs]
 
 ## T2: Secret exfiltration via file tools
 
@@ -108,6 +120,8 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-git-push-plus-inside-branch-name` (ask): Ask [push]
 - `ask-git-push-option` (ask): Ask [push]
 - `ask-git-push-follow-tags` (ask): Ask [push]
+- `ask-git-push-dry-run` (ask): Ask [push]
+- `ask-git-push-abbreviated-mirror` (ask): Ask [push]
 - `ask-git-push-refspec-with-source` (ask): Ask [push]
 - `ask-git-push-plain` (ask): Ask [push]
 - `ask-recursive-remove-in-project` (ask): Ask [default]
@@ -126,6 +140,9 @@ the verdict and rule ids the default policy must produce for it.
 - `T4-push-delete-flag-after-remote` (attacks): Deny [destructive]
 - `T4-push-short-delete-flag` (attacks): Deny [destructive]
 - `T4-push-delete-bundled-with-other-flags` (attacks): Deny [destructive]
+- `T4-push-abbreviated-delete` (attacks): Deny [destructive]
+- `T4-push-abbreviated-delete-after-remote` (attacks): Deny [destructive]
+- `T4-push-abbreviated-force` (attacks): Deny [destructive]
 - `T4-force-push-after-git-dir-option` (attacks): Deny [destructive]
 - `T4-force-push-after-config-option` (attacks): Deny [destructive]
 - `T4-plus-refspec-after-git-dir-and-work-tree` (attacks): Deny [destructive]
@@ -158,6 +175,8 @@ the verdict and rule ids the default policy must produce for it.
 
 ## T6: Environment poisoning
 
+- `ask-cdpath-set-before-cd` (ask): Ask [default]
+- `ask-cdpath-exported-before-cd` (ask): Ask [default]
 - `T6-export-path` (attacks): Deny [env-poison]
 - `T6-export-path-unspaced` (attacks): Deny [env-poison]
 - `T6-inline-ld-preload` (attacks): Deny [env-poison]
@@ -176,6 +195,7 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-unbalanced-quote` (ask): Ask [unparseable]
 - `ask-unterminated-substitution` (ask): Ask [unparseable]
 - `ask-unterminated-heredoc` (ask): Ask [unparseable]
+- `ask-heredoc-through-tee-into-shell` (ask): Ask [default]
 - `ask-nesting-too-deep` (ask): Ask [unparseable]
 - `ask-empty-command` (ask): Ask [unparseable]
 - `ask-powershell-is-never-classified` (ask): Ask [unparseable]
@@ -245,6 +265,9 @@ the verdict and rule ids the default policy must produce for it.
 - `T7-here-string-is-the-shell-program` (attacks): Deny [secrets-paths]
 - `T7-here-string-decoded-into-shell` (attacks): Deny [pipe-to-shell]
 - `T7-quoted-heredoc-is-the-shell-program` (attacks): Deny [secrets-paths]
+- `T7-heredoc-piped-through-cat-is-the-shell-program` (attacks): Deny [secrets-paths]
+- `T7-echo-piped-into-shell-is-its-program` (attacks): Deny [secrets-paths]
+- `T7-dash-heredoc-strips-tabs-before-the-shell-runs-it` (attacks): Deny [secrets-paths]
 - `benign-here-string-to-cat` (benign): Allow [dev-shell]
 - `benign-here-string-to-grep` (benign): Allow [dev-shell]
 
@@ -311,6 +334,10 @@ the verdict and rule ids the default policy must produce for it.
 - `T10-download-over-installed-binary` (attacks): Deny [kernel-self]
 - `T10-link-over-installed-binary` (attacks): Deny [kernel-self]
 - `T10-file-tool-writes-windows-binary` (attacks): Deny [kernel-self]
+- `T10-file-tool-writes-scoop-current-binary` (attacks): Deny [kernel-self]
+- `T10-copy-over-scoop-versioned-binary` (attacks): Deny [kernel-self]
+- `T10-replace-scoop-current-junction` (attacks): Deny [kernel-self]
+- `benign-write-monorepo-app-named-moat` (benign): Allow [project-fs]
 
 ## T11: Time-of-check / time-of-use, symlinks
 

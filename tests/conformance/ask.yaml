@@ -43,6 +43,10 @@
   threat: T7
   action: { shell: "cat <<EOF\nno terminator" }
   expect: { verdict: ask, rules: [unparseable] }
+- id: ask-heredoc-through-tee-into-shell
+  threat: T7
+  action: { shell: "cat <<'EOF' | tee log | sh\ncat ~/.ssh/id_rsa\nEOF" }
+  expect: { verdict: ask, rules: [default] }
 - id: ask-nesting-too-deep
   threat: T7
   action: { shell: "bash -c \"eval eval eval eval eval eval true\"" }
@@ -272,6 +276,14 @@
   threat: T4
   action: { shell: "git push origin main --follow-tags" }
   expect: { verdict: ask, rules: [push] }
+- id: ask-git-push-dry-run
+  threat: T4
+  action: { shell: "git push --dry-run origin main" }
+  expect: { verdict: ask, rules: [push] }
+- id: ask-git-push-abbreviated-mirror
+  threat: T4
+  action: { shell: "git push --mirr origin" }
+  expect: { verdict: ask, rules: [push] }
 - id: ask-git-push-refspec-with-source
   threat: T4
   action: { shell: "git push origin HEAD:main" }
@@ -364,3 +376,60 @@
   threat: T12
   action: { fetch: "http://localhost:3000/health" }
   expect: { verdict: ask, rules: [local-net] }
+# T6 a `CDPATH` set on the line can send a relative `cd` elsewhere; the classifier cannot follow it
+- id: ask-cdpath-set-before-cd
+  threat: T6
+  action: { shell: "CDPATH=~ cd .ssh && cat id_rsa" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-cdpath-exported-before-cd
+  threat: T6
+  action: { shell: "export CDPATH=~; cd .ssh && cat id_rsa" }
+  expect: { verdict: ask, rules: [default] }
+# T1 a recursive read of an ancestor of secret directories (`~`, `~/.config`) is checked on
+# the directory itself: no deny rule names it, and no allow rule covers it outside a project
+- id: ask-recursive-read-grep-home
+  threat: T1
+  action: { shell: "grep -r . ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-rg-home
+  threat: T1
+  action: { shell: "rg -uu . ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-grep-config
+  threat: T1
+  action: { shell: "grep -r token ~/.config" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-rg-config
+  threat: T1
+  action: { shell: "rg secret ~/.config" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-find-home
+  threat: T1
+  action: { shell: "find ~ -name '*.pem'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-tar-home
+  threat: T1
+  action: { shell: "tar czf h.tgz ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-cp-home
+  threat: T1
+  action: { shell: "cp -r ~ /tmp/h" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-zip-home
+  threat: T1
+  action: { shell: "zip -r h.zip ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-rsync-home
+  threat: T1
+  action: { shell: "rsync -a ~ /tmp/h" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-grep-cwd-home
+  threat: T1
+  action: { shell: "grep -r token ." }
+  context: { cwd: /Users/me }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-grep-parent-of-project
+  threat: T1
+  action: { shell: "grep -r . .." }
+  context: { cwd: /Users/me/proj, project: /Users/me/proj }
+  expect: { verdict: ask, rules: [default] }
