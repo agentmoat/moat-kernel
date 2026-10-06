@@ -23,9 +23,9 @@ multiple-versions = "warn"
 wildcards = "deny"
 # moat-core must stay free of I/O and runtime crates (REPO_STRUCTURE.md §3).
 deny = [
-    { crate = "tokio", wrappers = ["moat-cli"] },
+    { crate = "tokio", wrappers = ["moat-kernel"] },
     { crate = "rusqlite", wrappers = ["moat-audit"] },
-    { crate = "reqwest", wrappers = ["moat-cli"] },
+    { crate = "reqwest", wrappers = ["moat-kernel"] },
 ]
 
 [sources]
