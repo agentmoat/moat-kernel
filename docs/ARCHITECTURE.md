@@ -21,7 +21,7 @@ moat-cli ──► moat-hosts ──► moat-core
 | `moat-hosts` | Host adapters: `pre_tool_use.rs` (Claude Code and Codex `PreToolUse`), `config_change.rs` (Claude Code `ConfigChange`), `cursor.rs`, `mcp.rs` (MCP arguments to paths and URLs), `patch.rs` (Codex `apply_patch` file list) | Translate payload to `Action` and `Decision` to response. Never decide |
 | `moat-audit` | SQLite store, time-window and session queries, redaction | Redact before persisting. Typed `thiserror` errors |
 | `moat-proxy` | The egress proxy behind `moat proxy` (§12): request and `ClientHello` parsers, host decisions through moat-core, the address guard, connection relay, the `Recorder` trait the CLI implements over `moat-audit` | Network I/O only through `std::net`; no async runtime; no storage. Depends on `moat-core`, `httparse`, `thiserror` |
-| `moat-cli` | The `moat` binary (crate `moat-kernel`): commands, hook installation, the policy lock, approvals, the repository policy file, the environment snapshot, the filesystem resolvers, rendering, exit codes | The only crate that touches files, the environment and the terminal |
+| `moat-cli` | The `moat` binary (crate `moat-kernel`): commands, hook installation, the policy lock, approvals, the repository policy file, the environment snapshot, the filesystem resolvers, the sandbox backends generated from the IR (§13, §14), rendering, exit codes | The only crate that touches files, the environment and the terminal; the only one that starts processes |
 
 No crate depends on `moat-cli`. Planned crates for enforcement are on the
 [roadmap](ROADMAP.md); none exist yet.
@@ -178,8 +178,9 @@ installation exists) and, against the installed policy, the same lock check.
 ADR-019 makes `policy.yaml` the single source for every enforcement point.
 `moat_core::ir::lower(policy, ctx)` derives the `Enforcement` IR from the same policy
 and `EvalContext` the engine compiles. The engine is the hook backend. Claude Code's and
-Codex's sandbox settings are generated from the IR (§13); Seatbelt, Landlock and the
-egress proxy will be (#176).
+Codex's sandbox settings (§13) and the Lightweight tier's Seatbelt profile and Landlock
+rules (§14) are generated from the IR. The egress proxy decides hosts through the engine
+(§12).
 
 | IR part | Contents |
 |---|---|
@@ -231,7 +232,8 @@ event as a wrong event (deny, exit 2, reason on stderr), which Codex reads as a 
 (`tests/fixtures/hosts/codex/permission-request-shell.json`, built from Codex's
 `permission-request.command.input.schema.json`). Exit codes follow
 ADR-004 and ADR-015: 0 allow or ask, 2 deny, 3 unresolved ask from `moat policy
-check`, 64 usage or configuration error. `guard` never exits 64: an argument it cannot
+check`, 64 usage or configuration error. `moat run` exits 1 when the agent it started
+exits non-zero; never 2 or 3. `guard` never exits 64: an argument it cannot
 parse is a deny with exit 2, because Claude Code and Codex proceed on any other
 non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
 `moat init` sets it on every Cursor hook.
@@ -401,8 +403,10 @@ CI runs `scripts/ci/quality-gate.sh` on macOS (arm64, x64), Linux and Windows, p
 ## 12. Egress proxy
 
 `moat proxy [--listen 127.0.0.1:18080]` is the default-deny network exit from ADR-020.
-Nothing routes traffic through it yet. The hosts' sandbox settings (`httpProxyPort`,
-Codex's proxy) will. Why it is our own code on `std::net` and
+`moat run` serves the same proxy, brokered secrets included, from a thread on an
+ephemeral loopback port and makes it the agent's only way out (§14). The hosts' sandbox
+settings (`httpProxyPort`, Codex's proxy) do not route through it yet. Why it is our own
+code on `std::net` and
 `httparse`, rather than `codex-network-proxy` or `sandbox-runtime`, is in
 [notes/proxy-evaluation.md](notes/proxy-evaluation.md).
 
@@ -519,3 +523,73 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
   moat owns (`default_permissions`, `[permissions.moat]`, `features.network_proxy`),
   because Codex writes trusted projects into that file itself. Drift is
   `kernel-integrity`; `doctor` also fails on a weakened or out-of-date setting.
+
+## 14. Lightweight tier: `moat run`
+
+ADR-018's tier for machines without a container or VM runtime puts the whole agent in
+one sandbox generated from the policy. The code is in `crates/moat-cli/src/commands/run.rs`
+(with `run/{macos,linux,unsupported}.rs`, chosen by `cfg` in one place) and
+`crates/moat-cli/src/sandbox/{seatbelt,landlock}.rs`.
+
+```
+policy.yaml ─► ir::lower (this project) ─► Enforcement + Grants ─┬─► seatbelt::generate ─► sandbox-exec -p <profile> <agent>
+                                                                 └─► landlock::generate ─► restricted thread ─► <agent>
+moat run ─► moat proxy (thread, 127.0.0.1:<ephemeral>) ◄── HTTP(S)_PROXY ── agent and its commands
+```
+
+- **Start-up.** `moat run` refuses a missing installation and a drifted policy lock
+  (§6), and a session without a project: the home directory, an ancestor of it or a
+  filesystem root. It resolves the agent's executable through `PATH` and its symlinks,
+  binds a loopback port, and generates the sandbox. It then prints what the user must
+  know: the proxy address and audit session; that the agent's own sandbox must be
+  off, because sandboxes do not nest (Seatbelt refuses a second profile); and every
+  loss and allowance. Then it starts the agent. SIGINT is caught (`signal-hook`) so
+  that Ctrl-C reaches the agent without taking down the proxy under it. The agent
+  exiting non-zero makes `moat run` exit 1.
+- **One lowering per session.** Unlike §13, the IR is lowered for the real project and
+  home in both their spellings. `Grants` adds what the session needs: the proxy port, the
+  temp directory, the agent's executable (a process cannot start from a file it cannot
+  read) and `--write` paths (the agent's state). Each grant is an allowance, and deny
+  rules still win over it.
+- **Network.** Neither sandbox can name a host. The sandbox allows only the proxy's
+  loopback port, and the proxy decides each host by the policy (§12) and refuses
+  loopback destinations, so the open port reaches no other local service.
+  `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` (both cases) point at it, and `NO_PROXY`
+  is removed. A program that ignores them has no network; that is the one loss for the
+  default policy.
+- **Seatbelt (macOS).** `(deny default)`, then:
+  - process basics (exec, fork, signals and process info in the same sandbox, ttys,
+    POSIX shm, the two directory-service lookups `opendirectoryd.libinfo` and
+    `.membership`). Not the keychain, not DNS, not `trustd`.
+  - `file-read-metadata` everywhere.
+  - `/`, the devices and `/private/var/select`.
+  - the IR's allow rules and the grants.
+  - last, the IR's deny rules, because Seatbelt applies the last match. Their `!`
+    exceptions become `require-all`/`require-not`, so a deny with exceptions is exact.
+    A read deny covers `file-read-data` and `file-read-xattr` and leaves `stat`
+    working.
+  - a fixed deny of `com.apple.SecurityServer` and `securityd`.
+
+  Globs become `subpath`/`literal` where they name one place, else anchored regexes
+  with the engine's semantics. Seatbelt compares the resolved, on-disk spelling, so
+  `/tmp` patterns name `/private/tmp`, and a pattern spelled in another case than the
+  disk does not match (listed as `seatbelt.case`). The golden for the default policy
+  is `tests/fixtures/sandbox/seatbelt-default.sb`. Found on macOS 26: the dynamic
+  loader needs to read `/`, a process cannot start from a file it cannot read, and
+  `getconf DARWIN_USER_TEMP_DIR` needs the two directory-service lookups.
+- **Landlock (Linux 6.7+).** Read+execute below the IR's literal allow trees, the read
+  roots, the devices and the agent's executable. Full access below the project's write
+  trees, the temp directory and `--write` paths. `ConnectTcp` to the proxy's port
+  only. File access and TCP are hard requirements at ABI 4; abstract-socket and signal
+  scoping (ABI 6) are added where the kernel has them. The rules are applied to a
+  thread that then starts the agent: Landlock restricts the calling thread and its
+  children, so the proxy thread keeps its audit log and network. Landlock only grants.
+  A deny rule or `!` exception inside a granted tree, the proxy's port on other hosts,
+  and UDP and Unix-socket connections stay open. Each is listed as an allowance
+  (`landlock.inside-grants`, `landlock.tcp-port`, `landlock.sockets`). A grant inside
+  a denied path is not made, and a glob cannot be granted (losses).
+- **Windows** refuses with exit 64; the Standard tier is the answer there.
+- `moat sandbox show` prints both lightweight outputs for the current directory, before
+  the session's grants are added. The executing tests in `tests/e2e/run.rs` run
+  `/bin/sh` payloads under the real sandbox on macOS and Linux.
+- **Not yet:** a seccomp filter on Linux for UDP, raw and Unix sockets.

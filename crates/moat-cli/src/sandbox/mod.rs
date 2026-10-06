@@ -7,13 +7,19 @@
 //! workspace (Claude Code's working directories, Codex `:workspace_roots`).
 //! Backends only narrow, reported as losses, except where a host cannot run
 //! without a wider grant; those are listed as allowances, never silent.
+//!
+//! The Lightweight tier's Seatbelt profile ([`seatbelt`]) and Landlock rules
+//! ([`landlock`]) are lowered per session instead, for the project `moat run`
+//! starts in.
 
 pub mod claude;
 pub mod codex;
 pub mod install;
+pub mod landlock;
 mod patterns;
+pub mod seatbelt;
 
-use moat_core::ir::{Allowance, Enforcement, Loss};
+use moat_core::ir::{Access, Allowance, Effect, Enforcement, Loss};
 use moat_core::{EvalContext, Policy, PolicyError};
 use serde::Serialize;
 
@@ -53,6 +59,68 @@ pub struct Plan {
     pub codex: codex::Generated,
 }
 
+/// `policy`, with the default policy's `sandbox.read_roots` when it has no
+/// `sandbox` key, and whether they were filled in.
+fn with_read_roots(policy: &Policy) -> anyhow::Result<(Policy, bool)> {
+    let mut policy = policy.clone();
+    let filled = policy.sandbox.is_none();
+    if filled {
+        policy.sandbox = Policy::parse(moat_core::DEFAULT_POLICY)?.sandbox;
+    }
+    Ok((policy, filled))
+}
+
+/// What a `moat run` session adds to the IR (Lightweight tier).
+#[derive(Debug, Clone, Default)]
+pub struct Grants {
+    /// The loopback port of moat's egress proxy, the only network destination.
+    pub proxy_port: Option<u16>,
+    /// The temp directory, resolved, which commands may read and write.
+    pub tmpdir: Option<String>,
+    /// The program `moat run` starts, resolved: it must be readable to start.
+    pub program: Option<String>,
+    /// Paths given to `moat run --write`, resolved, which commands may read
+    /// and write (the agent's own state).
+    pub writes: Vec<String>,
+}
+
+/// The IR of a `moat run` session in `ctx`, and `grants` plus this process's
+/// temp directory.
+fn lower_for_session(
+    policy: &Policy,
+    ctx: &EvalContext,
+    grants: Grants,
+) -> anyhow::Result<(Enforcement, Grants)> {
+    let (policy, _) = with_read_roots(policy)?;
+    let tmpdir = std::fs::canonicalize(std::env::temp_dir())
+        .ok()
+        .map(|dir| crate::context::path_string(&dir));
+    Ok((
+        moat_core::ir::lower(&policy, ctx)?,
+        Grants { tmpdir, ..grants },
+    ))
+}
+
+/// The Seatbelt profile `moat run` applies on macOS.
+pub fn seatbelt_profile(
+    policy: &Policy,
+    ctx: &EvalContext,
+    grants: Grants,
+) -> anyhow::Result<seatbelt::Generated> {
+    let (ir, grants) = lower_for_session(policy, ctx, grants)?;
+    Ok(seatbelt::generate(&ir, &grants))
+}
+
+/// The Landlock rules `moat run` applies on Linux.
+pub fn landlock_rules(
+    policy: &Policy,
+    ctx: &EvalContext,
+    grants: Grants,
+) -> anyhow::Result<landlock::Generated> {
+    let (ir, grants) = lower_for_session(policy, ctx, grants)?;
+    landlock::generate(&ir, &grants)
+}
+
 /// Codex's `config.toml`, next to the hook file (`$CODEX_HOME` or `~/.codex`).
 pub fn codex_config_path() -> anyhow::Result<std::path::PathBuf> {
     let hooks = crate::install::HostConfig::for_host(moat_hosts::Host::Codex)?.settings_path;
@@ -62,11 +130,7 @@ pub fn codex_config_path() -> anyhow::Result<std::path::PathBuf> {
 impl Plan {
     /// Generate every backend for `policy` and the current user's home.
     pub fn new(policy: &Policy) -> anyhow::Result<Self> {
-        let mut policy = policy.clone();
-        let default_read_roots = policy.sandbox.is_none();
-        if default_read_roots {
-            policy.sandbox = Policy::parse(moat_core::DEFAULT_POLICY)?.sandbox;
-        }
+        let (policy, default_read_roots) = with_read_roots(policy)?;
         let (home, real_home) = crate::context::home_spellings()?;
         let ir = lower_for_hosts(
             &policy,
@@ -123,6 +187,20 @@ impl Report {
             patterns,
             message: message.to_owned(),
         });
+    }
+
+    /// The Lightweight tier reaches the hosts `net` allows only through moat's
+    /// proxy, so a program that ignores the proxy settings reaches none.
+    fn proxy_only(&mut self, net: &Access) {
+        if net.default == Effect::Allow {
+            let message = "every host is reachable only through moat's proxy";
+            self.loss(moat_core::Kind::Net, "default.net", message.into());
+        }
+        for rule in &net.allow {
+            let message = "these hosts are reachable only through moat's proxy: a program that \
+                           ignores HTTP(S)_PROXY cannot reach them";
+            self.loss(moat_core::Kind::Net, &rule.id, message.into());
+        }
     }
 }
 

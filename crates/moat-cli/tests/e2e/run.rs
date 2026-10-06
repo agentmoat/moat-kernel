@@ -1,0 +1,172 @@
+//! `moat run` (Lightweight tier, ADR-018). On macOS and Linux the payloads
+//! really run under the generated Seatbelt profile or Landlock rules; they are
+//! `/bin/sh` scripts, never an agent, in an isolated home with fake secrets.
+
+use std::path::{Path, PathBuf};
+use std::process::Output;
+
+use crate::common::{Sandbox, output, stderr, text};
+
+/// `moat run -- /bin/sh -c <script>` in the project, with the temp directory
+/// outside the home so that writing the home is not a temp-directory write.
+fn run_sh(sb: &Sandbox, project: &Path, script: &str) -> Output {
+    let tmp = sb.home.with_file_name("tmp");
+    std::fs::create_dir_all(&tmp).unwrap();
+    output(
+        sb.command()
+            .current_dir(project)
+            .env("TMPDIR", &tmp)
+            .args(["run", "--", "/bin/sh", "-c", script]),
+        None,
+    )
+}
+
+fn installed_with_secret() -> (Sandbox, PathBuf) {
+    // Landlock cannot deny inside a granted tree, and `/tmp` is a read root, so
+    // on Linux the home must live elsewhere for its secrets to be out of reach,
+    // as a real home is.
+    let parent = if cfg!(target_os = "linux") {
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+    } else {
+        std::env::temp_dir()
+    };
+    let sb = Sandbox::bare_in(&parent, &[]);
+    let out = sb.moat(&["init"]);
+    assert_eq!(out.status.code(), Some(0), "moat init: {}", text(&out));
+    std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
+    std::fs::write(sb.home.join(".ssh/id_rsa"), "FAKE-SSH-KEY").unwrap();
+    let project = sb.project();
+    (sb, project)
+}
+
+#[test]
+fn refuses_to_start_over_a_drifted_lock() {
+    let (sb, project) = installed_with_secret();
+    let policy = sb.home.join(".moat/policy.yaml");
+    let edited = std::fs::read_to_string(&policy).unwrap() + "\n# edited\n";
+    std::fs::write(&policy, edited).unwrap();
+    let out = run_sh(&sb, &project, "echo ran");
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert!(stderr(&out).contains("drift"), "{}", text(&out));
+    assert!(!text(&out).contains("ran\n"));
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[test]
+fn refuses_where_no_sandbox_can_be_generated() {
+    let (sb, project) = installed_with_secret();
+    // An agent that exists everywhere: this binary, which would print its version.
+    let agent = env!("CARGO_BIN_EXE_moat");
+    let out = output(
+        sb.command()
+            .current_dir(&project)
+            .args(["run", "--", agent, "--version"]),
+        None,
+    );
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert!(
+        stderr(&out).contains("needs an operating-system sandbox"),
+        "{}",
+        text(&out)
+    );
+    assert!(
+        out.stdout.is_empty(),
+        "the agent did not run: {}",
+        text(&out)
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod confined {
+    use std::io::ErrorKind;
+    use std::net::TcpListener;
+    use std::process::Command;
+
+    use super::*;
+    use crate::common::stdout;
+
+    /// False, saying so, on a Linux kernel without Landlock ABI 4: `moat run`
+    /// refuses there, which `refuses_*` cases cover; CI kernels have it.
+    fn ran(out: &Output) -> bool {
+        let unsupported = stderr(out).contains("needs Landlock ABI 4");
+        if unsupported {
+            eprintln!("skipped: this kernel has no Landlock ABI 4");
+        }
+        !unsupported
+    }
+
+    #[test]
+    fn secrets_and_writes_outside_the_project_are_refused_and_work_goes_on() {
+        let (sb, project) = installed_with_secret();
+        let git_init = Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&project)
+            .status();
+        assert!(git_init.is_ok_and(|s| s.success()));
+        let out = run_sh(
+            &sb,
+            &project,
+            "cat \"$HOME/.ssh/id_rsa\"; echo \"read=$?\"
+             echo x > \"$HOME/outside.txt\"; echo \"write=$?\"
+             echo y > inside.txt; echo \"project=$?\"
+             git status --short > /dev/null; echo \"git=$?\"",
+        );
+        if !ran(&out) {
+            return;
+        }
+        let shown = text(&out);
+        assert_eq!(out.status.code(), Some(0), "{shown}");
+        for expected in ["read=1", "project=0", "git=0"] {
+            assert!(stdout(&out).contains(expected), "{expected}: {shown}");
+        }
+        // A failed redirection is 1 in bash (macOS `sh`) and 2 in dash (Debian `sh`).
+        assert!(!stdout(&out).contains("write=0"), "{shown}");
+        assert!(
+            shown.contains("Operation not permitted") || shown.contains("Permission denied"),
+            "EPERM or EACCES: {shown}"
+        );
+        assert!(!shown.contains("FAKE-SSH-KEY"), "{shown}");
+        assert!(!sb.home.join("outside.txt").exists());
+        assert!(project.join("inside.txt").exists());
+        assert!(
+            stderr(&out).contains("turn the agent's own sandbox off"),
+            "{shown}"
+        );
+    }
+
+    #[test]
+    fn network_goes_only_to_the_proxy_which_refuses_loopback() {
+        let (sb, project) = installed_with_secret();
+        let local = TcpListener::bind("127.0.0.1:0").unwrap();
+        local.set_nonblocking(true).unwrap();
+        let url = format!("http://127.0.0.1:{}/", local.local_addr().unwrap().port());
+        let out = run_sh(
+            &sb,
+            &project,
+            &format!(
+                "curl -s -m 5 --noproxy '*' {url}; echo \"direct=$?\"
+                 curl -s -m 5 -o /dev/null -w 'proxy=%{{http_code}}\\n' {url}"
+            ),
+        );
+        if !ran(&out) {
+            return;
+        }
+        let shown = text(&out);
+        assert!(stdout(&out).contains("direct=7"), "{shown}");
+        assert!(stdout(&out).contains("proxy=403"), "{shown}");
+        assert_eq!(
+            local.accept().map(drop).map_err(|e| e.kind()),
+            Err(ErrorKind::WouldBlock),
+            "nothing reached the local service"
+        );
+    }
+
+    #[test]
+    fn a_failing_agent_exits_1() {
+        let (sb, project) = installed_with_secret();
+        let out = run_sh(&sb, &project, "exit 2");
+        if ran(&out) {
+            assert_eq!(out.status.code(), Some(1), "{}", text(&out));
+        }
+    }
+}

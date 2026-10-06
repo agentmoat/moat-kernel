@@ -25,6 +25,7 @@ mod paths;
 mod proxy;
 mod replay_report;
 mod repo_policy;
+mod run;
 mod sandbox;
 #[cfg(unix)]
 mod sandbox_exec;

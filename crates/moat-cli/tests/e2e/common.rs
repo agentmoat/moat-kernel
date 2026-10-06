@@ -22,7 +22,12 @@ impl Sandbox {
     /// A home containing the given host configuration directories
     /// (`.claude`, `.codex`, `.cursor`); nothing is installed.
     pub fn bare(host_dirs: &[&str]) -> Self {
-        let dir = tempfile::tempdir().unwrap();
+        Self::bare_in(&std::env::temp_dir(), host_dirs)
+    }
+
+    /// [`Sandbox::bare`] in a temporary directory below `parent`.
+    pub fn bare_in(parent: &Path, host_dirs: &[&str]) -> Self {
+        let dir = tempfile::tempdir_in(parent).unwrap();
         let home = dir.path().join("home");
         std::fs::create_dir_all(&home).unwrap();
         for host_dir in host_dirs {

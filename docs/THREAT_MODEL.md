@@ -69,8 +69,9 @@ answer from the [roadmap](ROADMAP.md).
 These hold for the current code. Each is a design consequence or a tracked gap, not
 something the alpha claims to stop.
 
-- **Decide-only, except the Standard tier.** `moat` itself enforces nothing; the
-  hook decides. Since the Standard tier (ADR-018), `moat init` also configures the
+- **Decide-only, except the Standard and Lightweight tiers.** The hook decides;
+  `moat run` (below) is the one place `moat` applies a sandbox itself. Since the
+  Standard tier (ADR-018), `moat init` also configures the
   agent's own sandbox from the policy, so commands Claude Code runs through `Bash`,
   `PowerShell` and `Monitor`, and every command Codex runs, are confined by the
   operating system: no reads of `secrets-paths`, no reads outside the project and
@@ -103,13 +104,42 @@ something the alpha claims to stop.
   can show), write a rebase todo that a person later continues, or write a `.git`
   *file* (`gitdir: …`) below the project, which the hook allows as well. The hook
   still asks for file-tool writes to the project's `.git`.
+- **The Lightweight tier (`moat run`) is weaker per command than the Standard tier.**
+  It confines the agent process and everything it starts in one sandbox
+  ([ARCHITECTURE.md](ARCHITECTURE.md) §14). What the agent needs, every script it runs
+  gets too:
+  - its executable and `--write` state directory;
+  - its API host through the proxy;
+  - credentials in its environment (`ANTHROPIC_API_KEY`).
+
+  The keychain is never granted, so a project script cannot read the agent's OAuth
+  token from it. The agent's own sandbox must be off inside, because sandboxes do not
+  nest, so there is no per-command boundary below moat's. Unlike the Standard tier,
+  the agent's in-process tools (file tools, `WebFetch`, the MCP servers it starts) are
+  inside the sandbox too.
+
+  Other limits:
+  - Network is the proxy alone: a tool that ignores `HTTP(S)_PROXY` has none, and
+    any allowlisted host stays a relay.
+  - On macOS it uses `sandbox-exec`, which Apple has deprecated (Codex, Claude Code
+    and Chromium still use it).
+  - The profile leaves every file's existence, size and times visible.
+  - On Linux, Landlock only grants. Secrets inside a granted tree stay readable and
+    writable for the agent's commands: `.env` in the project, `~/.cargo/credentials.toml`
+    in a read root, the project's `.git`. The hook still denies them for the agent's
+    tool calls.
+  - Also on Linux, the proxy's port is reachable on any host, and UDP and Unix-socket
+    connections are not restricted until a seccomp filter lands. A script can reach
+    the user's D-Bus session bus and start a process outside the sandbox.
+
+  `moat run` prints each of these as an allowance before the agent starts.
 - **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
   `cargo run`, `make test`, `pytest` and similar are allowed by `dev-shell`. They run
   whatever the project's scripts, build files and test files say, and `moat` sees
   only the command line. An agent that can write into the project can therefore run
   any code through an allowed command. In the Standard tier that code runs inside the
-  host's sandbox, with the bounds above; without a host sandbox (Cursor), it runs with
-  the user's permissions.
+  host's sandbox, and under `moat run` inside moat's, with the bounds above. Without
+  either (Cursor), it runs with the user's permissions.
 - **Allowed hosts are relays.** `registries` allows network to `api.github.com`,
   `github.com` and the package registries. The host check passes for any command
   that reaches them, so a command that is itself allowed (a project script) or that
