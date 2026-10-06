@@ -16,6 +16,11 @@ const MAX_POLICY_BYTES: u64 = 1024 * 1024;
 
 /// Read and lint a policy file.
 pub fn load_policy(path: &Path) -> Result<Policy> {
+    Policy::parse(&read_policy(path)?).with_context(|| format!("invalid policy {}", path.display()))
+}
+
+/// The text of a policy file, at most [`MAX_POLICY_BYTES`] of UTF-8.
+pub fn read_policy(path: &Path) -> Result<String> {
     let file =
         fs::File::open(path).with_context(|| format!("opening policy {}", path.display()))?;
     let size = file
@@ -32,7 +37,7 @@ pub fn load_policy(path: &Path) -> Result<Policy> {
     file.take(MAX_POLICY_BYTES)
         .read_to_string(&mut text)
         .with_context(|| format!("reading policy {} (must be UTF-8)", path.display()))?;
-    Policy::parse(&text).with_context(|| format!("invalid policy {}", path.display()))
+    Ok(text)
 }
 
 /// Build the evaluation context from explicit flags and the process environment.

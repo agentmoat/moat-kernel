@@ -222,6 +222,15 @@ moat: deny [kernel-integrity] — /Users/you/.moat/policy.yaml was modified;
 for. The policy language, the full default policy and recipes are in
 [docs/POLICY.md](docs/POLICY.md).
 
+### Share rules with your team
+
+Commit `.moat/policy.yaml` at the root of a repository. Its `deny` and `ask` rules
+apply to everyone who works there, whatever agent they use, and show up as
+`repo:<id>`. A repository is untrusted input, so it can only make your policy
+stricter: its `allow` rules are ignored, and a file that does not parse denies every
+call in the project until it is fixed. Repository rules apply in the hook, not in
+the host sandboxes ([docs/POLICY.md](docs/POLICY.md) §10).
+
 ## Commands
 
 | Command | Use it to |

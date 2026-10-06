@@ -45,8 +45,12 @@ pub fn check(args: &CheckArgs) -> Result<Code> {
     {
         return report(&decision, args.format);
     }
-    let (policy, _) = load(args.policy.clone())?;
     let ctx = context::eval_context(args.cwd.as_deref(), args.project.as_deref())?;
+    // The installed policy decides with the project's repository policy, as in `guard`.
+    let policy = match &args.policy {
+        Some(path) => context::load_policy(path)?,
+        None => crate::repo::effective_policy(&Home::locate()?, &ctx)?,
+    };
     // Decide the way `guard` would: symlinks resolved on this machine, and
     // programs resolved through the installation snapshot when one exists.
     let snapshot = Home::locate()
