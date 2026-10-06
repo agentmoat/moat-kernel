@@ -135,10 +135,13 @@ something the alpha claims to stop.
   bypass becomes a fixture before its fix is published.
 - **End-to-end tests** run the real binary as a hook in isolated homes: lock drift,
   `ConfigChange`, approvals, install paths, every host's payloads.
+- **MoatBench mini** ([MOATBENCH.md](MOATBENCH.md)): multi-step attack and benign
+  scenarios sent as Claude Code, Codex and Cursor payloads to the real binary, with a
+  scorecard of verdicts, false positives and known gaps.
 - **Fuzzing.** `cargo fuzz` targets for the shell path through the engine, policy
   parsing, host payloads and `moat allow --always` patterns run in CI on every pull
   request and weekly.
 - **Planned:** differential testing of the lexer against real `bash`, executing
-  fixtures under OS enforcement, and MoatBench, which measures attack success with and
-  without `moat` across agents ([ROADMAP.md](ROADMAP.md)). Prompt fatigue is measured
+  fixtures under OS enforcement, and the full MoatBench, which measures attack success
+  with and without `moat` across live agents ([ROADMAP.md](ROADMAP.md)). Prompt fatigue is measured
   today only by `moat report` (asks per active hour).
