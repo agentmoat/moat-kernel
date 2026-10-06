@@ -1,0 +1,2 @@
+# Golden files are compared byte for byte; keep them LF on every OS.
+tests/fixtures/sandbox/* text eol=lf

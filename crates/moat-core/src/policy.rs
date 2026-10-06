@@ -247,6 +247,22 @@ pub struct Policy {
     /// Basename → allowed absolute paths (defeats PATH poisoning).
     #[serde(default)]
     pub executables: BTreeMap<String, Vec<String>>,
+    /// What the operating-system layers moat configures need beyond the rules
+    /// (ADR-018). Absent in policies written before it existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<SandboxSettings>,
+}
+
+/// The `sandbox:` section (ADR-018, ADR-019).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SandboxSettings {
+    /// Paths (directories or files) the OS layers let commands read although no
+    /// allow rule covers them: system and toolchain directories every build
+    /// reads. The hook decision ignores them, and deny rules win over them in
+    /// every layer. Absolute or `~/…`, never a glob.
+    #[serde(default)]
+    pub read_roots: Vec<String>,
 }
 
 fn default_verdict() -> Defaults {
@@ -308,6 +324,9 @@ impl Policy {
                 });
             }
         }
+        for root in self.sandbox.iter().flat_map(|s| &s.read_roots) {
+            lint_read_root(root)?;
+        }
         Ok(())
     }
 
@@ -316,6 +335,29 @@ impl Policy {
     pub fn rule_count(&self) -> (usize, usize, usize) {
         (self.deny.len(), self.allow.len(), self.ask.len())
     }
+}
+
+/// An OS layer takes a read root literally, and a root that is the disk or the
+/// home directory would undo every default deny.
+fn lint_read_root(root: &str) -> Result<(), PolicyError> {
+    let trimmed = root.trim_end_matches(['/', '\\']);
+    let problem = if !(crate::paths::is_absolute(root) || root.starts_with("~/")) {
+        "must be absolute or start with `~/`"
+    } else if root.contains(['*', '?', '[', ']', '{', '}', '!', '$']) {
+        "must be a plain path, not a glob or a variable"
+    } else if root.split(['/', '\\']).any(|s| s == "." || s == "..") {
+        "must not contain `.` or `..` segments"
+    } else if trimmed == "~" {
+        "must not be the home directory"
+    } else if trimmed.is_empty() || (trimmed.len() == 2 && trimmed.ends_with(':')) {
+        "must not be a filesystem root"
+    } else {
+        return Ok(());
+    };
+    Err(PolicyError::Rule {
+        rule: "sandbox.read_roots".to_owned(),
+        problem: format!("`{root}` {problem}"),
+    })
 }
 
 fn rule_err(rule: &str, e: &PolicyError) -> PolicyError {
@@ -398,6 +440,30 @@ mod tests {
         assert!(Policy::parse(ok).is_ok());
         let rel = "version: 1\nexecutables:\n  git: ['bin/git']\n";
         assert!(matches!(Policy::parse(rel), Err(PolicyError::Rule { .. })));
+    }
+
+    #[test]
+    fn read_roots_must_be_plain_paths_below_a_root() {
+        let ok = "version: 1\nsandbox:\n  read_roots: ['/usr', '~/.cargo', 'C:/tools']\n";
+        assert!(Policy::parse(ok).is_ok());
+        for bad in [
+            "usr",
+            "~",
+            "~/",
+            "/",
+            "C:/",
+            "/usr/**",
+            "~/../x",
+            "${project}/x",
+            "!/usr",
+        ] {
+            let yaml = format!("version: 1\nsandbox:\n  read_roots: ['{bad}']\n");
+            assert!(
+                matches!(Policy::parse(&yaml), Err(PolicyError::Rule { rule, .. }) if rule == "sandbox.read_roots"),
+                "{bad} must be rejected"
+            );
+        }
+        assert!(Policy::parse("version: 1\nsandbox: { bogus: 1 }\n").is_err());
     }
 
     #[test]

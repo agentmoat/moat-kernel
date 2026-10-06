@@ -337,3 +337,35 @@ ask:
     net: ["localhost", "127.0.0.1", "::1"]
 
 executables: {}
+
+# What the host sandboxes moat configures (ADR-018) may read beyond the project:
+# system and toolchain locations every build reads. Only OS layers use this list;
+# the hook still applies the rules above to these reads (ask), and secrets-paths
+# still wins inside them. Writes stay project-only. Missing paths are harmless.
+sandbox:
+  read_roots:
+    - /usr
+    - /bin
+    - /sbin
+    - /lib
+    - /lib64
+    - /etc
+    - /opt
+    - /nix
+    - /snap
+    - /System
+    - /Library
+    - /Applications/Xcode.app
+    - /private/etc
+    - /tmp
+    - /private/tmp
+    - /var/folders
+    - /private/var/folders
+    - ~/.gitconfig
+    - ~/.cargo
+    - ~/.rustup
+    - ~/.npm
+    - ~/.nvm
+    - ~/.pyenv
+    - ~/.local/bin
+    - ~/go

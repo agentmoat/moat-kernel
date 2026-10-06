@@ -71,6 +71,14 @@ pub fn eval_context(cwd: Option<&Path>, project: Option<&Path>) -> Result<EvalCo
     })
 }
 
+/// The home directory as written and with its symlinks resolved (when that
+/// differs), the spellings host-wide sandbox settings must cover.
+pub fn home_spellings() -> Result<(String, Option<String>)> {
+    let home = path_string(&home::user_home()?);
+    let real = real_root(&home);
+    Ok((home, real))
+}
+
 /// `root` with its symlinks resolved, when that differs from `root`: the form
 /// the path resolver reports paths under it in (`realpath.rs`).
 fn real_root(root: &str) -> Option<String> {
