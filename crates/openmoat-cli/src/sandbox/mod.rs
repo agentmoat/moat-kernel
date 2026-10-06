@@ -10,7 +10,8 @@
 //!
 //! The Lightweight tier's Seatbelt profile ([`seatbelt`]) and Landlock rules
 //! ([`landlock`]) are lowered per session instead, for the project `moat run`
-//! starts in.
+//! starts in; on Linux a seccomp filter (`seccomp`) closes the sockets Landlock
+//! leaves open.
 
 pub mod claude;
 pub mod codex;
@@ -18,6 +19,8 @@ pub mod install;
 pub mod landlock;
 mod patterns;
 pub mod seatbelt;
+#[cfg(any(target_os = "linux", test))]
+pub mod seccomp;
 
 use openmoat_core::ir::{Access, Allowance, Effect, Enforcement, Loss};
 use openmoat_core::{EvalContext, Policy, PolicyError};

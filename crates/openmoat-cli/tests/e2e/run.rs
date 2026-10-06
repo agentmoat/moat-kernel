@@ -161,6 +161,39 @@ mod confined {
         );
     }
 
+    /// Landlock alone leaves Unix sockets (the user's D-Bus session bus) and
+    /// UDP open; the seccomp filter closes them, and `io_uring` around them.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn unix_udp_and_io_uring_fail_with_eperm_and_tcp_to_the_proxy_works() {
+        let (sb, project) = installed_with_secret();
+        let out = run_sh(
+            &sb,
+            &project,
+            r#"python3 -c '
+import ctypes, socket
+for name, family, kind in (("unix", socket.AF_UNIX, socket.SOCK_STREAM),
+                           ("udp", socket.AF_INET, socket.SOCK_DGRAM)):
+    try:
+        socket.socket(family, kind).close()
+        print(name + "=open")
+    except OSError as e:
+        print(name + "=" + str(e.errno))
+libc = ctypes.CDLL(None, use_errno=True)
+libc.syscall(425, 1, None)  # io_uring_setup
+print("io_uring=" + str(ctypes.get_errno()))
+'
+             curl -s -m 5 -o /dev/null -w 'proxy=%{http_code}\n' http://127.0.0.1:9/"#,
+        );
+        if !ran(&out) {
+            return;
+        }
+        let shown = text(&out);
+        for expected in ["unix=1\n", "udp=1\n", "io_uring=1\n", "proxy=403"] {
+            assert!(stdout(&out).contains(expected), "{expected}: {shown}");
+        }
+    }
+
     #[test]
     fn a_failing_agent_exits_1() {
         let (sb, project) = installed_with_secret();

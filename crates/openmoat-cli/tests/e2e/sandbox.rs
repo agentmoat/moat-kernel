@@ -107,9 +107,9 @@ fn show_prints_the_landlock_rules_and_what_they_leave_open() {
         .flatten()
         .filter_map(|a| a["rule"].as_str())
         .collect();
-    for rule in ["landlock.inside-grants", "landlock.sockets"] {
-        assert!(rules.contains(&rule), "{rule}: {landlock}");
-    }
+    assert!(rules.contains(&"landlock.inside-grants"), "{landlock}");
+    // The seccomp filter closes UDP and Unix sockets.
+    assert!(!rules.contains(&"landlock.sockets"), "{landlock}");
 }
 
 #[test]

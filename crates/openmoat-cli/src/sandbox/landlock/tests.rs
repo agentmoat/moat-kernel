@@ -82,9 +82,11 @@ fn denies_inside_grants_are_listed_as_allowances() {
         !write.contains(&"/home/me/.zshrc".to_owned()),
         "outside every grant: enforced"
     );
-    for rule in ["landlock.tcp-port", "landlock.sockets"] {
-        assert!(allowance(&out, Kind::Net, rule).is_some(), "{rule}");
-    }
+    assert!(allowance(&out, Kind::Net, "landlock.tcp-port").is_some());
+    assert!(
+        allowance(&out, Kind::Net, "landlock.sockets").is_none(),
+        "the seccomp filter closes UDP and Unix sockets"
+    );
     assert!(out.report.losses.iter().any(|l| l.rule == "registries"));
 }
 

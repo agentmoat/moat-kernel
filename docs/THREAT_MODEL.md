@@ -128,11 +128,16 @@ something the alpha claims to stop.
     writable for the agent's commands: `.env` in the project, `~/.cargo/credentials.toml`
     in a read root, the project's `.git`. The hook still denies them for the agent's
     tool calls.
-  - Also on Linux, the proxy's port is reachable on any host, and UDP and Unix-socket
-    connections are not restricted until a seccomp filter lands. A script can reach
-    the user's D-Bus session bus and start a process outside the sandbox.
+  - Also on Linux, the proxy's port is reachable on any host.
+  - On Linux a seccomp filter allows only IPv4 and IPv6 TCP sockets, so the user's
+    D-Bus session bus, other Unix sockets, UDP, raw, netlink and packet sockets are
+    closed (`EPERM`), and `io_uring`, which could create sockets around the filter, is
+    refused. So are `ptrace` and `process_vm_readv`/`writev`: a command cannot read
+    the agent's memory, and debuggers do not work. Names resolve only through the
+    proxy: a tool that ignores `HTTP(S)_PROXY` cannot resolve them. `socketpair()`
+    stays allowed; its sockets reach only each other.
 
-  `moat run` prints each of these as an allowance before the agent starts.
+  `moat run` prints each allowance before the agent starts.
 - **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
   `cargo run`, `make test`, `pytest` and similar are allowed by `dev-shell`. They run
   whatever the project's scripts, build files and test files say, and OpenMoat sees
