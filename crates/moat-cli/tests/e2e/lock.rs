@@ -67,6 +67,14 @@ fn edited_policy_makes_guard_fail_closed_until_repinned() {
     assert!(reason.contains("kernel-integrity"), "{reason}");
     assert!(reason.contains("policy.yaml"), "{reason}");
 
+    let check = sb.moat(&["policy", "check", "git status"]);
+    assert_eq!(check.status.code(), Some(2), "{}", text(&check));
+    assert!(
+        text(&check).contains("kernel-integrity"),
+        "{}",
+        text(&check)
+    );
+
     assert_eq!(sb.moat(&["init"]).status.code(), Some(0), "init re-pins");
     assert_eq!(guard_read_src(&sb)["permissionDecision"], "allow");
 }

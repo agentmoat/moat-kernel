@@ -227,7 +227,9 @@ On Windows the snapshot also records `PATHEXT`; a bare program name resolves as 
 when `~/.moat/environment.json` exists and resolves symlinks in checked paths. Without an
 installation, installation pins are not consulted and a program pinned under `executables:`
 is reported as "not found on the kernel search path" unless the command names it by
-absolute path.
+absolute path. Checked against the installed policy (no `--policy`), it also verifies
+`policy.lock` first and, when a pinned file changed, reports the `kernel-integrity` deny
+(exit 2) that `guard` answers instead of the policy's verdict.
 
 ## 8.2 Approvals
 
