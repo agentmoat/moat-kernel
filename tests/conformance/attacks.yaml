@@ -755,7 +755,7 @@
 - id: T12-ipv6-metadata-endpoint
   threat: T12
   action: { shell: "curl http://[fd00:ec2::254]/latest/meta-data/" }
-  expect: { verdict: deny, rules: [default.net] }
+  expect: { verdict: deny, rules: [cloud-metadata] }
 - id: T12-webfetch-single-label-host
   threat: T12
   action: { net: "http://intranet:8080/secrets" }
@@ -936,3 +936,23 @@
   threat: T12
   action: { shell: "curl https://docs.rs/serde/latest/serde/" }
   expect: { verdict: deny, rules: [default.net] }
+
+# Cloud metadata and link-local services hand out credentials: denied for shell
+# network and for a host fetch tool alike
+- id: T12-fetch-aws-metadata-credentials
+  threat: T12
+  action: { fetch: "http://169.254.169.254/latest/meta-data/iam/security-credentials/" }
+  expect: { verdict: deny, rules: [cloud-metadata] }
+- id: T12-fetch-gcp-metadata
+  threat: T12
+  action: { fetch: "http://metadata.google.internal/computeMetadata/v1/" }
+  expect: { verdict: deny, rules: [cloud-metadata] }
+- id: T12-curl-ecs-task-credentials
+  threat: T12
+  action: { shell: "curl http://169.254.170.2/v2/credentials" }
+  expect: { verdict: deny, rules: [cloud-metadata] }
+- id: T12-fetch-ipv6-link-local
+  threat: T12
+  action: { fetch: "http://[fe80::1]/" }
+  expect: { verdict: deny, rules: [cloud-metadata] }
+

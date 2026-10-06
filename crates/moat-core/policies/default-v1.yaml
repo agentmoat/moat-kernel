@@ -165,6 +165,10 @@ deny:
   - id: shell-rc
     reason: edits persist into every future shell session
     fs.write: ["~/.zshrc", "~/.bashrc", "~/.bash_profile", "~/.profile", "~/.zprofile", "~/.zshenv"]
+  - id: cloud-metadata
+    reason: instance metadata and link-local services hand out cloud credentials
+    # a `net` deny also covers `fetch` (ADR-017), so a fetch tool cannot read them either
+    net: ["169.254.*", "fe80:*", "fd00:ec2::254", "100.100.100.200", "metadata.google.internal", "metadata.goog"]
 
 allow:
   - id: project-fs
