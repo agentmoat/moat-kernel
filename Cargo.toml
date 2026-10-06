@@ -48,3 +48,7 @@ missing_panics_doc = "allow"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# Release archives (dist) build with the release profile.
+[profile.dist]
+inherits = "release"

@@ -30,3 +30,9 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+# Release archives carry the repository README (install, status) rather than this
+# crate's command reference.
+[package.metadata.dist]
+auto-includes = false
+include = ["../../README.md", "../../CHANGELOG.md", "../../LICENSE-MIT", "../../LICENSE-APACHE"]

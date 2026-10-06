@@ -23,15 +23,36 @@ the hook files and `moat`'s own state are pinned by a lock checked on every call
 
 ## Install
 
-Build from a clone (Rust 1.95, pinned by `rust-toolchain.toml`):
+No release has been tagged yet. Until `v0.1.0-alpha.0` is out, build from a clone
+(Rust 1.95, pinned by `rust-toolchain.toml`):
 
 ```bash
 git clone https://github.com/agentmoat/moat-kernel && cd moat-kernel
 cargo install --locked --path crates/moat-cli    # installs the `moat` binary
 ```
 
-Release installers and a Homebrew tap are being built in
-[#89](https://github.com/agentmoat/moat-kernel/issues/89).
+From the first release on, builds cover macOS (arm64, x64), Linux (x64, arm64; glibc
+and static musl) and Windows (x64). Every alpha is a GitHub pre-release, so installer
+URLs name the version; take the newest from
+[Releases](https://github.com/agentmoat/moat-kernel/releases).
+
+```bash
+# macOS and Linux: installs moat into ~/.cargo/bin
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/agentmoat/moat-kernel/releases/download/v0.1.0-alpha.0/moat-kernel-installer.sh | sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/agentmoat/moat-kernel/releases/download/v0.1.0-alpha.0/moat-kernel-installer.ps1 | iex"
+
+# Homebrew (macOS, Linux)
+brew install agentmoat/tap/moat
+
+# From crates.io (Rust 1.95); cargo installs a pre-release only when asked by version
+cargo install moat-kernel --locked --version 0.1.0-alpha.0
+```
+
+Crate names may change before the first crates.io publish (#122); the binary stays
+`moat`. Each release carries `sha256.sum` and GitHub build attestations:
+`gh attestation verify <archive> --repo agentmoat/moat-kernel`.
 
 ## Quick start
 
