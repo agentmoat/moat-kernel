@@ -180,6 +180,12 @@ something the alpha claims to stop.
   hook that cannot start as a non-blocking error and run the tool call. Cursor blocks
   because `moat init` sets `failClosed`. `moat status` and `moat doctor` report a
   missing hook binary.
+- **Continue CLI reads Claude Code's hooks but ignores `ask`.** `cn` loads hooks from
+  `~/.claude/settings.json` and `.claude/settings.json`, so OpenMoat's Claude Code hook
+  also runs inside `cn`. Going by its source, `cn` treats `permissionDecision: "ask"` as
+  allow, and it runs the call when the hook crashes, times out or prints bad JSON. A
+  deny still blocks. Until a `cn` adapter exists (#264), run `cn` under `moat run` or
+  do not use it with OpenMoat.
 - **Ungoverned tools.** Claude Code `WebSearch` (server-side), `SendFile` (#137) and
   orchestration tools whose own calls are hooked; Codex web search and hosted tools;
   Cursor `Shell` under `preToolUse` (governed by `beforeShellExecution` instead). Ungoverned calls are
