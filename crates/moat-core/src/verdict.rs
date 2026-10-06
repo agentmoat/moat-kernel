@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Outcome of evaluating one or more atomic actions.
 ///
 /// Ordering is by strictness: `Allow < Ask < Deny`. When several atomic
-/// actions are combined, the strictest wins (DESIGN.md §6.3).
+/// actions are combined, the strictest wins (docs/POLICY.md §4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Verdict {

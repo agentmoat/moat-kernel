@@ -1,4 +1,4 @@
-# Attack fixtures, grouped by DESIGN.md §3.3 threat class (T1–T12).
+# Attack fixtures, grouped by docs/THREAT_MODEL.md §3 threat class (T1–T12).
 # Evaluation context: home=/Users/me, project=/p, cwd=/p.
 # Every id listed under `rules` must appear in the decision.
 

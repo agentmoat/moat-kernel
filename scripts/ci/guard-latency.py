@@ -8,7 +8,7 @@ payload `runs` times each, and reports median/p95/p99 end to end (spawn to
 exit, what the agent waits for) and as recorded in the audit log's
 `latency_us` (guard's own time, before the audit write).
 
-DESIGN.md budgets p95 at 15 ms. CI runners are shared and noisy, so the end
+The 15 ms p95 budget is in docs/ARCHITECTURE.md (testing layers). CI runners are shared and noisy, so the end
 to end p95 only warns above the budget and fails above three times it: the
 check exists to catch a regression of the kind fixed in #95 (a policy load
 that grew to most of the budget), not to measure the laptop number.

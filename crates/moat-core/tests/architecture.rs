@@ -1,4 +1,4 @@
-//! Architecture invariants for the trusted core (`REPO_STRUCTURE.md` §3).
+//! Architecture invariants for the trusted core (`docs/ARCHITECTURE.md` §1).
 //!
 //! `moat-core` must stay pure: no internal crates, no I/O or runtime crates.
 //! The wasm32 build in CI catches most OS calls; `std::fs`/`std::env` still

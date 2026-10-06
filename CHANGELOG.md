@@ -126,3 +126,6 @@ All notable changes to this project are documented here. The format follows
 ### Security
 - Exit code 2 is reserved for `deny`; usage errors use 64 so a host never mistakes a crash for a block.
 - Secret paths are protected against writes as well as reads.
+
+### Docs
+- Documentation restructured for the decide-only alpha (#94). New `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md` and an ADR index (`docs/adr/README.md`). `docs/OVERVIEW.md`, `DESIGN.md`, `STRENGTH.md`, `PROGRESS.md`, `TECH_STACK.md` and `REPO_STRUCTURE.md` are retired; what was still true moved into the new documents. README: `git clone` install step, `CLAUDE_CONFIG_DIR`, examples checked against the default policy. SECURITY.md: supported versions (latest alpha only). `moat --help` says decisions are not enforced by the operating system.

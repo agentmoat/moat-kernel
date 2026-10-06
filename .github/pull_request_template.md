@@ -11,7 +11,7 @@ Labels (`type: …`, `area: …`, `size: …`, `risk: …`) are applied automati
 
 ## Why
 
-<!-- Issue link, DESIGN.md section, or the incident/bug it addresses. -->
+<!-- Issue link, ADR or doc section, or the incident/bug it addresses. -->
 
 ## Testing
 

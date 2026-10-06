@@ -1,4 +1,4 @@
-//! Pattern matching helpers shared by all rule kinds (DESIGN.md §6.2).
+//! Pattern matching helpers shared by all rule kinds (docs/POLICY.md §3).
 
 use globset::GlobBuilder;
 
@@ -54,7 +54,7 @@ pub struct GlobPattern {
     matcher: LazyGlob,
     /// Matcher for `dir` when the pattern is `dir/**`.
     dir: Option<LazyGlob>,
-    /// `!pattern` inside an allow list excludes matches (DESIGN.md §6.2).
+    /// `!pattern` inside an allow list excludes matches (docs/POLICY.md §3).
     pub negated: bool,
 }
 
@@ -143,7 +143,7 @@ enum Token {
 
 /// Shell rule: an ordered token sequence matched as a **prefix** of argv.
 ///
-/// Semantics (DESIGN.md §6.2):
+/// Semantics (docs/POLICY.md §3.1):
 /// - a bare `*` token matches any number of argv tokens (including none);
 /// - any other token is a glob matched against exactly one argv token
 ///   (`--force*` matches `--force-with-lease`);

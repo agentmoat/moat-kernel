@@ -1,4 +1,4 @@
-//! Policy file model, loading and linting (DESIGN.md §6).
+//! Policy file model, loading and linting (docs/POLICY.md).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// `env.read`, `env.set`, `mcp`, or `"*"`) to a verdict; a `fetch` without its
 /// own entry takes the `net` one. This is how "outbound network is
 /// deny-by-default" is expressed, because deny rules are absolute and cannot
-/// be punched through by allow rules (DESIGN.md §6.3).
+/// be punched through by allow rules (ADR-002).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Defaults {

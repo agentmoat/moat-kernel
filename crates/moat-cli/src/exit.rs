@@ -1,4 +1,4 @@
-//! Process exit codes (DESIGN.md §10.3). Hosts depend on these values.
+//! Process exit codes (ADR-004, ADR-015). Hosts depend on these values.
 
 use std::process::ExitCode;
 

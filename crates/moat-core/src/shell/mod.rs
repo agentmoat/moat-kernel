@@ -1,4 +1,4 @@
-//! Shell command classification (DESIGN.md §7.2).
+//! Shell command classification (docs/ARCHITECTURE.md §3, docs/POLICY.md §3.1).
 //!
 //! A command line is lexed ([`crate::lexer`]), grouped into simple commands,
 //! and each simple command is decomposed into [`AtomicAction`]s:

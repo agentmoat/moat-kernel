@@ -105,7 +105,7 @@ pub fn absolute(path: &Path) -> Result<PathBuf> {
 /// `~/.SSH/id_rsa` names the same file as `~/.ssh/id_rsa` there.
 pub const CASE_INSENSITIVE_PATHS: bool = cfg!(any(target_os = "macos", windows));
 
-/// The slash-separated canonical form the core works in (`DESIGN.md` §7.3).
+/// The slash-separated canonical form the core works in (`docs/POLICY.md` §3.2).
 pub fn path_string(path: &Path) -> String {
     slash_form(&path.to_string_lossy(), cfg!(windows))
 }

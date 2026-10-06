@@ -1,4 +1,4 @@
-# agentmoat default policy, schema v1 (DESIGN.md §6.1).
+# agentmoat default policy, schema v1 (docs/POLICY.md).
 # Evaluation: deny → allow → ask → defaults. Strictest verdict wins across the
 # atomic actions of one tool call. `${project}` is the trusted project root.
 # Deny rules are absolute (allow can never override them), so deny-by-default

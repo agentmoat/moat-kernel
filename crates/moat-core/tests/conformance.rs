@@ -2,7 +2,7 @@
 //! against the shipped default policy (`moat_core::DEFAULT_POLICY`). A fixture passes when the verdict matches
 //! and every expected rule id is present in the decision.
 //!
-//! The suite is the executable form of the security claims in DESIGN.md §3.3,
+//! The suite is the executable form of the security claims in `docs/THREAT_MODEL.md` §3,
 //! so it is strict about its own inputs: unknown keys, duplicate ids and
 //! fixtures with zero or several actions are rejected.
 
@@ -23,7 +23,7 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 struct Fixture {
     id: String,
-    /// Threat class from DESIGN.md §3.3 (`T1`…`T12`). Required for attack and
+    /// Threat class from `docs/THREAT_MODEL.md` §3 (`T1`…`T12`). Required for attack and
     /// ask fixtures; benign fixtures may name the threat whose rule they keep
     /// from over-matching.
     #[serde(default)]
@@ -247,7 +247,7 @@ fn default_policy_conformance() {
     );
 }
 
-/// Threat classes of DESIGN.md §3.3, as listed in `docs/COVERAGE.md`.
+/// Threat classes of `docs/THREAT_MODEL.md` §3, as listed in `docs/COVERAGE.md`.
 const THREATS: [(&str, &str); 12] = [
     ("T1", "Secret exfiltration via shell"),
     ("T2", "Secret exfiltration via file tools"),
@@ -303,7 +303,7 @@ fn threat_coverage_is_complete_and_documented() {
         "# Threat coverage\n\n\
          Generated from `tests/conformance/*.yaml` by the conformance suite; do not edit.\n\
          Regenerate with `MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`.\n\
-         Threat classes are defined in `docs/DESIGN.md` §3.3. A fixture is one tool call and\n\
+         Threat classes are defined in `docs/THREAT_MODEL.md` §3. A fixture is one tool call and\n\
          the verdict and rule ids the default policy must produce for it.\n\n\
          | Threat | Class | Attacks | Asks | Benign |\n|---|---|---|---|---|\n",
     );

@@ -61,8 +61,8 @@ pub struct Summary {
 }
 
 impl Summary {
-    /// Prompts per hour of agent activity, in hundredths; the fatigue metric from
-    /// STRENGTH.md §4.2 (`250` means 2.50 asks per active hour).
+    /// Prompts per hour of agent activity, in hundredths; the prompt-fatigue
+    /// metric `moat report` shows (`250` means 2.50 asks per active hour).
     #[must_use]
     pub fn asks_per_active_hour_centi(&self) -> u64 {
         if self.active_hours == 0 {

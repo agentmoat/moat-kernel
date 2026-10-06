@@ -115,7 +115,7 @@ jobs:
             6. Error handling: typed `thiserror` errors in libraries, `bail!`/`ensure!` in the
                CLI, no `unwrap`/`expect` outside tests without a comment, messages that name
                the file or rule and the fix.
-            7. Docs in the same PR: `docs/POLICY.md`, `DESIGN.md`, `PROGRESS.md`, `CHANGELOG.md`,
+            7. Docs in the same PR: `docs/POLICY.md`, `ARCHITECTURE.md`, `THREAT_MODEL.md`, `CHANGELOG.md`,
                crate READMEs and `AGENTS.md` where behaviour, commands or layout changed.
             8. Structure: files ≤ 500 lines, functions ≤ 200, one concern per file, names
                that say what, comments that say why, no dead code or TODOs.

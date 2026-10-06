@@ -5,7 +5,7 @@
 //! `ln -s ~/.ssh ./s`, `cat ./s/id_rsa` reads the private key while its literal
 //! path is inside the project. The core cannot look at the filesystem, so the
 //! caller resolves each normalised path and the engine checks the literal and
-//! the resolved path; the strictest verdict wins (DESIGN.md §7.3).
+//! the resolved path; the strictest verdict wins (ADR-009).
 
 use std::collections::BTreeMap;
 

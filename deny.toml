@@ -21,7 +21,7 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
-# moat-core must stay free of I/O and runtime crates (REPO_STRUCTURE.md §3).
+# moat-core must stay free of I/O and runtime crates (docs/ARCHITECTURE.md §1).
 deny = [
     { crate = "tokio", wrappers = ["moat-kernel"] },
     { crate = "rusqlite", wrappers = ["moat-audit"] },

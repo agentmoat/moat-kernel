@@ -1,4 +1,4 @@
-//! The decision engine (DESIGN.md §6.3, §7.1).
+//! The decision engine (docs/POLICY.md §4, docs/ARCHITECTURE.md §4).
 //!
 //! Per atomic action: `deny → allow → ask → defaults`. Across the atomic
 //! actions of one tool call: strictest verdict wins. Deny rules are absolute;
