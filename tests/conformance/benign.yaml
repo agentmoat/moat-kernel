@@ -397,3 +397,24 @@
   threat: T1
   action: { shell: "grep -r TODO ." }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+
+# Session taint (ADR-020) tightens only what the chain needs.
+- id: benign-taint-webfetch-then-source-edit
+  threat: T9
+  session: [{ fetch: "https://docs.rs/serde" }]
+  action: { fs_write: "/p/src/main.rs" }
+  expect: { verdict: allow, rules: [project-fs] }
+- id: benign-taint-secret-read-then-project-edit
+  threat: T2
+  session: [{ fs_read: "~/.ssh/id_rsa" }]
+  action: { fs_write: "/p/src/lib.rs" }
+  expect: { verdict: allow, rules: [project-fs] }
+- id: benign-taint-project-read-then-github-api
+  threat: T12
+  session: [{ fs_read: "/p/README.md" }, { shell: "cat .env.example" }]
+  action: { net: "https://api.github.com/repos/x/y" }
+  expect: { verdict: allow, rules: [registries] }
+- id: benign-ci-workflow-edit-in-a-clean-session
+  threat: T9
+  action: { fs_write: "/p/.github/workflows/ci.yml" }
+  expect: { verdict: allow, rules: [project-fs] }
