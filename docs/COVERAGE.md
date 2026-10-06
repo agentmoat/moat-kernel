@@ -12,7 +12,7 @@ the verdict and rule ids the default policy must produce for it.
 | T3 | Secret exfiltration via environment | 14 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 28 | 17 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
-| T6 | Environment poisoning | 11 | 0 | 0 |
+| T6 | Environment poisoning | 11 | 2 | 0 |
 | T7 | Obfuscation and nested execution | 45 | 32 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 4 | 0 | 0 |
 | T9 | Hook / policy tampering by the agent | 37 | 9 | 1 |
@@ -163,6 +163,8 @@ the verdict and rule ids the default policy must produce for it.
 
 ## T6: Environment poisoning
 
+- `ask-cdpath-set-before-cd` (ask): Ask [default]
+- `ask-cdpath-exported-before-cd` (ask): Ask [default]
 - `T6-export-path` (attacks): Deny [env-poison]
 - `T6-export-path-unspaced` (attacks): Deny [env-poison]
 - `T6-inline-ld-preload` (attacks): Deny [env-poison]

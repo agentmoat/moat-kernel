@@ -376,3 +376,12 @@
   threat: T12
   action: { fetch: "http://localhost:3000/health" }
   expect: { verdict: ask, rules: [local-net] }
+# T6 a `CDPATH` set on the line can send a relative `cd` elsewhere; the classifier cannot follow it
+- id: ask-cdpath-set-before-cd
+  threat: T6
+  action: { shell: "CDPATH=~ cd .ssh && cat id_rsa" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-cdpath-exported-before-cd
+  threat: T6
+  action: { shell: "export CDPATH=~; cd .ssh && cat id_rsa" }
+  expect: { verdict: ask, rules: [default] }
