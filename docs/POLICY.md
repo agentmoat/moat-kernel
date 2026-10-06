@@ -141,6 +141,23 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | `config-change` | allow | a Claude Code `ConfigChange` for a settings file that is not pinned, or still matches the lock; a change that names no file is allowed only while every pinned file matches the lock; recorded |
 | `approved-session` | allow | an `ask` for a shell command that a person granted with `moat allow` for this host session (§8.2) |
 | `approved-<n>` | allow | a permanent rule in `~/.moat/policy.d/approved.yaml` written by `moat allow --always` |
+| `proxy-address`, `proxy-sni`, `proxy-request`, `proxy-upstream` | deny | `moat proxy` refused a connection: a loopback, link-local or metadata destination, a TLS server name that does not match the CONNECT host, a request it does not serve, or a destination it could not reach (§5.2) |
+
+### 5.2 `moat proxy`
+
+`moat proxy` decides each connection's host with the same policy and matcher as a fetch
+tool's URL. Each host is one `fetch` atom, so `fetch` and `net` lists both apply, deny rules
+first. Differences from the hook:
+
+- The proxy cannot prompt. A host whose verdict is `ask` is refused, and so is a host with
+  no rule under the default policy (`defaults: fetch: ask`). To open a host to the proxy,
+  allow it in a `net` or `fetch` list.
+- A `fetch` allow opens the host to every method through the proxy, including requests with a
+  body. Inside a CONNECT tunnel the method cannot be seen until TLS termination exists.
+- Loopback, link-local, cloud metadata (`metadata.google.internal`, `metadata.goog`,
+  `100.100.100.200`, `fd00:ec2::254`) and non-unicast destinations are refused whatever the
+  policy allows. This applies to the name as written and to every address it resolves to.
+  `local-net` and an allow for `localhost` do not reach this machine through the proxy.
 
 ### 5.2 What an operating-system layer can enforce
 
