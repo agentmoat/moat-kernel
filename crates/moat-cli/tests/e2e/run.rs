@@ -45,10 +45,25 @@ fn refuses_to_start_over_a_drifted_lock() {
 #[test]
 fn refuses_where_no_sandbox_can_be_generated() {
     let (sb, project) = installed_with_secret();
-    let out = run_sh(&sb, &project, "echo ran");
+    // An agent that exists everywhere: this binary, which would print its version.
+    let agent = env!("CARGO_BIN_EXE_moat");
+    let out = output(
+        sb.command()
+            .current_dir(&project)
+            .args(["run", "--", agent, "--version"]),
+        None,
+    );
     assert_eq!(out.status.code(), Some(64), "{}", text(&out));
-    assert!(stderr(&out).contains("needs an operating-system sandbox"));
-    assert!(!text(&out).contains("ran\n"));
+    assert!(
+        stderr(&out).contains("needs an operating-system sandbox"),
+        "{}",
+        text(&out)
+    );
+    assert!(
+        out.stdout.is_empty(),
+        "the agent did not run: {}",
+        text(&out)
+    );
 }
 
 #[cfg(target_os = "macos")]
