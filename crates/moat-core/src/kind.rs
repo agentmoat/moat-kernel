@@ -18,6 +18,9 @@ pub enum Kind {
     FsWrite,
     /// A network host.
     Net,
+    /// A host a read-only fetch tool (`WebFetch`) requests a URL from: a
+    /// narrower kind of `net`, so `net` rules apply to it as well (ADR-017).
+    Fetch,
     /// An environment variable read.
     EnvRead,
     /// An environment variable set.
@@ -28,11 +31,12 @@ pub enum Kind {
 
 impl Kind {
     /// Every kind, in policy-file order.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Shell,
         Self::FsRead,
         Self::FsWrite,
         Self::Net,
+        Self::Fetch,
         Self::EnvRead,
         Self::EnvSet,
         Self::Mcp,
@@ -46,9 +50,27 @@ impl Kind {
             Self::FsRead => "fs.read",
             Self::FsWrite => "fs.write",
             Self::Net => "net",
+            Self::Fetch => "fetch",
             Self::EnvRead => "env.read",
             Self::EnvSet => "env.set",
             Self::Mcp => "mcp",
+        }
+    }
+
+    /// The rule-list and `defaults` keys that apply to an atom of this kind,
+    /// most specific first: a fetch is also network access, so `net` lists
+    /// match it and `defaults.net` is its fallback when `defaults.fetch` is unset.
+    #[must_use]
+    pub fn rule_kinds(self) -> &'static [Self] {
+        match self {
+            Self::Fetch => &[Self::Fetch, Self::Net],
+            Self::Shell => &[Self::Shell],
+            Self::FsRead => &[Self::FsRead],
+            Self::FsWrite => &[Self::FsWrite],
+            Self::Net => &[Self::Net],
+            Self::EnvRead => &[Self::EnvRead],
+            Self::EnvSet => &[Self::EnvSet],
+            Self::Mcp => &[Self::Mcp],
         }
     }
 }
@@ -88,5 +110,13 @@ mod tests {
             "network".parse::<Kind>(),
             Err(UnknownKind("network".into()))
         );
+    }
+
+    #[test]
+    fn only_fetch_borrows_another_kinds_rules() {
+        assert_eq!(Kind::Fetch.rule_kinds(), &[Kind::Fetch, Kind::Net]);
+        for kind in Kind::ALL.into_iter().filter(|k| *k != Kind::Fetch) {
+            assert_eq!(kind.rule_kinds(), &[kind]);
+        }
     }
 }

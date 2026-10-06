@@ -35,9 +35,16 @@ pub enum Action {
         /// Path as the tool gave it; normalised during classification.
         path: String,
     },
-    /// A direct network request through a host tool (e.g. `WebFetch`).
-    /// A URL fetched by a host tool (`WebFetch`).
+    /// A network connection a host tool opens and may send data over
+    /// (Claude Code `Monitor` WebSocket).
     Net {
+        /// The URL as the tool gave it.
+        url: String,
+    },
+    /// A URL read by a host's own fetch tool (Claude Code `WebFetch`): a
+    /// request the agent cannot attach a body to, judged by `fetch` and `net`
+    /// rules (ADR-017).
+    Fetch {
         /// The URL as the tool gave it.
         url: String,
     },
@@ -75,6 +82,7 @@ impl Action {
             Self::FsRead { .. } => Kind::FsRead,
             Self::FsWrite { .. } | Self::Patch { .. } => Kind::FsWrite,
             Self::Net { .. } => Kind::Net,
+            Self::Fetch { .. } => Kind::Fetch,
             Self::McpTool { .. } => Kind::Mcp,
         }
     }
@@ -126,6 +134,11 @@ pub enum AtomicAction {
         /// Lowercase host name.
         host: String,
     },
+    /// The host of a URL a fetch tool reads; matched by `fetch` and `net` rules.
+    Fetch {
+        /// Lowercase host name.
+        host: String,
+    },
     /// An environment variable read (`$NAME`, `printenv NAME`).
     EnvRead {
         /// Variable name.
@@ -152,6 +165,7 @@ impl AtomicAction {
             Self::FsRead { .. } => Kind::FsRead,
             Self::FsWrite { .. } => Kind::FsWrite,
             Self::Net { .. } => Kind::Net,
+            Self::Fetch { .. } => Kind::Fetch,
             Self::EnvRead { .. } => Kind::EnvRead,
             Self::EnvSet { .. } => Kind::EnvSet,
             Self::McpTool { .. } => Kind::Mcp,
@@ -164,7 +178,7 @@ impl AtomicAction {
         match self {
             Self::Shell { .. } | Self::Pipeline { .. } => None,
             Self::FsRead { path } | Self::FsWrite { path } => Some(path),
-            Self::Net { host } => Some(host),
+            Self::Net { host } | Self::Fetch { host } => Some(host),
             Self::EnvRead { name } | Self::EnvSet { name } | Self::McpTool { name } => Some(name),
         }
     }
@@ -178,6 +192,7 @@ impl AtomicAction {
             Self::FsRead { path } => format!("read {path}"),
             Self::FsWrite { path } => format!("write {path}"),
             Self::Net { host } => format!("net {host}"),
+            Self::Fetch { host } => format!("fetch {host}"),
             Self::EnvRead { name } => format!("env read {name}"),
             Self::EnvSet { name } => format!("env set {name}"),
             Self::McpTool { name } => format!("mcp {name}"),

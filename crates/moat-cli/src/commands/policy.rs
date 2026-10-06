@@ -84,6 +84,7 @@ fn to_action(kind: ActionKind, value: &str) -> Action {
         ActionKind::FsRead => Action::FsRead { path: value },
         ActionKind::FsWrite => Action::FsWrite { path: value },
         ActionKind::Net => Action::Net { url: value },
+        ActionKind::Fetch => Action::Fetch { url: value },
         ActionKind::Mcp => Action::mcp(value),
     }
 }

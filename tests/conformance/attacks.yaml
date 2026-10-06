@@ -931,3 +931,8 @@
   action: { shell: "cd ~/.aws && cp credentials ~/proj-copy" }
   expect: { verdict: deny, rules: [secrets-paths] }
 
+# ADR-017 only the fetch tool asks; a shell client to the same host stays denied
+- id: T12-curl-host-webfetch-may-read
+  threat: T12
+  action: { shell: "curl https://docs.rs/serde/latest/serde/" }
+  expect: { verdict: deny, rules: [default.net] }

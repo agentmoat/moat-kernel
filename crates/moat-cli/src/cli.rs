@@ -196,6 +196,8 @@ pub enum ActionKind {
     FsRead,
     FsWrite,
     Net,
+    /// A URL read by a host fetch tool (`WebFetch`).
+    Fetch,
     Mcp,
 }
 

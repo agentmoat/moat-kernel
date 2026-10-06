@@ -120,7 +120,7 @@ impl<'p> CompiledGroup<'p> {
         for kind in Kind::ALL.into_iter().filter(|k| *k != Kind::Shell) {
             let case_insensitive = match kind {
                 Kind::FsRead | Kind::FsWrite => ctx.case_insensitive_paths,
-                Kind::Net => true,
+                Kind::Net | Kind::Fetch => true,
                 _ => false,
             };
             globs[kind as usize] = group
@@ -142,7 +142,11 @@ impl<'p> CompiledGroup<'p> {
             (AtomicAction::Shell { argv } | AtomicAction::Pipeline { argv }, _) => {
                 any_match(&self.shell, argv.as_slice())
             }
-            (_, Some(subject)) => any_match(&self.globs[action.kind() as usize], subject),
+            (_, Some(subject)) => action
+                .kind()
+                .rule_kinds()
+                .iter()
+                .any(|k| any_match(&self.globs[*k as usize], subject)),
             (_, None) => false,
         }
     }
@@ -182,6 +186,12 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
         ),
         Action::Net { url } => match host::of_url(url) {
             Some(host) => ParseOutcome::Parsed(vec![AtomicAction::Net { host }]),
+            None => ParseOutcome::Unparseable {
+                reason: format!("no host in url `{url}`"),
+            },
+        },
+        Action::Fetch { url } => match host::of_url(url) {
+            Some(host) => ParseOutcome::Parsed(vec![AtomicAction::Fetch { host }]),
             None => ParseOutcome::Unparseable {
                 reason: format!("no host in url `{url}`"),
             },

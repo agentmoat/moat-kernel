@@ -220,6 +220,15 @@ fn non_shell_kinds() {
             .code(),
         Some(0)
     );
+    for (kind, code) in [("fetch", 3), ("net", 2)] {
+        assert_eq!(
+            check(&sb, "https://docs.rs/serde", &["--kind", kind])
+                .status
+                .code(),
+            Some(code),
+            "{kind}"
+        );
+    }
     assert_eq!(
         check(&sb, "mcp__shell__run", &["--kind", "mcp"])
             .status

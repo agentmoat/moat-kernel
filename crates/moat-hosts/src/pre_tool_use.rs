@@ -77,7 +77,8 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
         "NotebookEdit" => Action::FsWrite {
             path: field("notebook_path")?,
         },
-        "WebFetch" => Action::Net { url: field("url")? },
+        // `WebFetch` only GETs `url`; the agent cannot attach a body (ADR-017).
+        "WebFetch" => Action::Fetch { url: field("url")? },
         // Codex file edits: the patch text names every file it touches.
         "apply_patch" => Action::Patch {
             writes: crate::patch::writes(&field("command")?),
@@ -173,9 +174,24 @@ mod tests {
             .unwrap();
         assert_eq!(
             fetch.action,
-            Some(Action::Net {
+            Some(Action::Fetch {
                 url: "https://api.github.com/repos/x/y".into()
             })
+        );
+        let docs = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "webfetch-docs"))
+            .unwrap();
+        assert_eq!(
+            docs.action,
+            Some(Action::Fetch {
+                url: "https://docs.rs/serde/latest/serde/".into()
+            })
+        );
+        assert!(
+            Host::ClaudeCode
+                .parse_request(r#"{"tool_name":"WebFetch","tool_input":{"prompt":"x"}}"#)
+                .is_err(),
+            "a WebFetch without a url is malformed"
         );
         let mcp = Host::ClaudeCode
             .parse_request(&fixture("claude-code", "mcp"))
