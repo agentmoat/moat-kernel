@@ -20,9 +20,12 @@ pub fn literal_shell_pattern(command: &str) -> Result<String, PolicyError> {
     let bad = || PolicyError::BadShellPattern {
         pattern: command.to_owned(),
     };
-    let tokens = lexer::lex(command.trim()).map_err(|_| bad())?;
+    let mut tokens = lexer::lex(command.trim()).map_err(|_| bad())?;
     if tokens.is_empty() {
         return Err(PolicyError::EmptyPattern);
+    }
+    if let Some(subcommand) = git_subcommand(&tokens) {
+        tokens = subcommand;
     }
     tokens
         .iter()
@@ -33,6 +36,31 @@ pub fn literal_shell_pattern(command: &str) -> Result<String, PolicyError> {
         })
         .collect::<Result<Vec<_>, _>>()
         .map(|parts| parts.join(" "))
+}
+
+/// The classifier reports `git -C dir status` as `git status` (and reads `dir`),
+/// so an approval of a plain git command line names the subcommand the same way;
+/// otherwise the approved rule could never match. When an option can run a
+/// program the command line as written is judged too, so it stays as written.
+fn git_subcommand(tokens: &[Token]) -> Option<Vec<Token>> {
+    let argv = tokens
+        .iter()
+        .map(|t| match t {
+            Token::Word(w) => Some(w.text.clone()),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    if argv.first().map(|p| crate::shell::tokens::basename(p)) != Some("git") {
+        return None;
+    }
+    let git = crate::shell::git::parse(&argv);
+    if git.keep_original || git.subcommand.len() == argv.len() {
+        return None;
+    }
+    let keep = git.subcommand.len();
+    let mut out = tokens[..1].to_vec();
+    out.extend_from_slice(&tokens[tokens.len() - (keep - 1)..]);
+    Some(out)
 }
 
 fn literal_word(text: &str) -> String {
@@ -110,6 +138,32 @@ mod tests {
                 .collect();
             assert!(compiled.is_match(&words), "{command:?} -> {pattern:?}");
         }
+    }
+
+    /// The classifier strips git's global options (`shell/git.rs`); an approval
+    /// that kept them could never match (found by the `literal_pattern` fuzz target).
+    #[test]
+    fn git_global_options_are_approved_the_way_they_are_classified() {
+        assert_eq!(
+            literal_shell_pattern("git -C crates/x status").unwrap(),
+            "git status"
+        );
+        assert_eq!(
+            literal_shell_pattern("/usr/bin/git --no-pager log -1").unwrap(),
+            "/usr/bin/git log -1"
+        );
+        assert!(compiled("git -C crates/x status").is_match(&argv(&["git", "status"])));
+        // An option that can run a program keeps the command line as written,
+        // which the classifier also reports.
+        assert_eq!(
+            literal_shell_pattern("git -c core.fsmonitor=x status").unwrap(),
+            "git -c core.fsmonitor=x status"
+        );
+        // Not plain words: left alone.
+        assert_eq!(
+            literal_shell_pattern("git -C x status | head").unwrap(),
+            "git -C x status | head"
+        );
     }
 
     #[test]

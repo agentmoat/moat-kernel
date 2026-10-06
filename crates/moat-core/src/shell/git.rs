@@ -46,11 +46,20 @@ const INERT_CONFIG: &[&str] = &[
     "pull.rebase",
 ];
 
-pub(super) fn push_shell(
-    argv: &[String],
-    ctx: &ShellContext<'_>,
-    sink: &mut Sink,
-) -> Result<(), ClassifyError> {
+/// git's argv with its global options taken apart.
+pub(crate) struct GitCommand<'a> {
+    /// `git` as written, then the subcommand and its arguments.
+    pub subcommand: Vec<String>,
+    /// Values of `-C`, `--git-dir` and `--work-tree`.
+    pub directories: Vec<&'a str>,
+    /// True when an option can run a program or is not understood: the command
+    /// line as written must be judged too.
+    pub keep_original: bool,
+}
+
+/// Split `argv` (`argv[0]` is git) into its global options and the subcommand.
+pub(crate) fn parse(argv: &[String]) -> GitCommand<'_> {
+    let mut directories = Vec::new();
     let mut keep_original = false;
     let mut i = 1;
     while let Some(arg) = argv.get(i).filter(|a| a.starts_with('-')) {
@@ -75,7 +84,7 @@ pub(super) fn push_shell(
         };
         i += usize::from(inline.is_none());
         if DIRECTORIES.contains(&name) {
-            sink.read(ctx, value)?;
+            directories.push(value);
         } else if CONFIG.contains(&name) {
             let key = value
                 .split_once('=')
@@ -86,9 +95,26 @@ pub(super) fn push_shell(
                 .any(|k| key == *k || (k.ends_with('.') && key.starts_with(k)));
         }
     }
-    let subcommand = argv[..1].iter().chain(&argv[i..]).cloned().collect();
-    sink.push(AtomicAction::Shell { argv: subcommand })?;
-    if keep_original {
+    GitCommand {
+        subcommand: argv[..1].iter().chain(&argv[i..]).cloned().collect(),
+        directories,
+        keep_original,
+    }
+}
+
+pub(super) fn push_shell(
+    argv: &[String],
+    ctx: &ShellContext<'_>,
+    sink: &mut Sink,
+) -> Result<(), ClassifyError> {
+    let git = parse(argv);
+    for dir in git.directories {
+        sink.read(ctx, dir)?;
+    }
+    sink.push(AtomicAction::Shell {
+        argv: git.subcommand,
+    })?;
+    if git.keep_original {
         sink.push(AtomicAction::Shell {
             argv: argv.to_vec(),
         })?;
