@@ -105,7 +105,7 @@ command). It is a separate workspace built with nightly:
 ```bash
 cargo install cargo-fuzz --version 0.13.1 --locked
 python3 fuzz/seed_corpus.py          # seeds from the conformance fixtures and host payloads
-cd fuzz && cargo +nightly fuzz run -O decide_shell corpus/decide_shell
+cd fuzz && cargo fuzz run -O decide_shell corpus/decide_shell   # fuzz/rust-toolchain.toml selects the pinned nightly
 ```
 
 CI runs each target for a minute on pull requests and ten minutes in the weekly run. A
