@@ -2,7 +2,8 @@
 //! `secrets:` list, and where they may go.
 //!
 //! A brokered secret's placeholder and value may be sent to its own host only.
-//! Any other request that carries either, in its head or its plain-HTTP body,
+//! A plain-HTTP request to that host gets the value in the secret's header
+//! ([`Broker::inject`]); the agent never needs it. Any other request that carries either, in its head or its plain-HTTP body,
 //! is refused and recorded. The check matches exact bytes: it catches a token
 //! sent by mistake or by a naive script, not one that was encoded or split
 //! across requests (`docs/THREAT_MODEL.md`). What keeps a secret safe is that
@@ -140,6 +141,47 @@ impl Broker {
             })
     }
 
+    /// `head` (a request head the proxy wrote, lines ending in CRLF) with the
+    /// secrets of `host` put in: in each header a secret names, the
+    /// placeholder becomes the value; a secret whose header is absent is
+    /// added. `None` when `host` owns no secret.
+    pub(crate) fn inject(&self, host: &str, head: &[u8]) -> Option<Zeroizing<Vec<u8>>> {
+        let owned: Vec<&Held> = self.held.iter().filter(|h| h.secret.host == host).collect();
+        // Each line keeps its `\r`; only the `\n`s are split on and re-added.
+        let lines = head.strip_suffix(b"\n\r\n")?;
+        if owned.is_empty() {
+            return None;
+        }
+        let mut out = Zeroizing::new(Vec::with_capacity(head.len() + 256));
+        let mut present = vec![false; owned.len()];
+        // The first line is the request line; the rest are `Name: value`.
+        let mut lines = lines.split(|b| *b == b'\n');
+        out.extend_from_slice(lines.next().unwrap_or_default());
+        for line in lines {
+            out.extend_from_slice(b"\n");
+            let name = line.split(|b| *b == b':').next().unwrap_or_default();
+            match owned
+                .iter()
+                .position(|h| name.eq_ignore_ascii_case(h.secret.header.as_bytes()))
+            {
+                Some(i) => {
+                    present[i] = true;
+                    let h = owned[i];
+                    replace(line, h.placeholder.as_bytes(), h.value.as_bytes(), &mut out);
+                }
+                None => out.extend_from_slice(line),
+            }
+        }
+        out.extend_from_slice(b"\n");
+        for (h, _) in owned.iter().zip(&present).filter(|(_, p)| !**p) {
+            out.extend_from_slice(format!("{}: ", h.secret.header).as_bytes());
+            out.extend_from_slice(h.value.as_bytes());
+            out.extend_from_slice(b"\r\n");
+        }
+        out.extend_from_slice(b"\r\n");
+        Some(out)
+    }
+
     /// Length of the longest placeholder or value: a stream watched in chunks
     /// keeps one byte less than this from the previous chunk, so a secret
     /// split across two reads is still found.
@@ -183,6 +225,16 @@ impl<'a> Watch<'a> {
         self.tail.extend_from_slice(&window[window.len() - keep..]);
         self.broker.leak(self.host, &window)
     }
+}
+
+/// Append `line` to `out` with every `from` replaced by `to`.
+fn replace(mut line: &[u8], from: &[u8], to: &[u8], out: &mut Vec<u8>) {
+    while let Some(at) = line.windows(from.len()).position(|w| w == from) {
+        out.extend_from_slice(&line[..at]);
+        out.extend_from_slice(to);
+        line = &line[at + from.len()..];
+    }
+    out.extend_from_slice(line);
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {

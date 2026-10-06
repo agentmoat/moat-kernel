@@ -115,12 +115,29 @@ fn a_secret_later_in_a_streamed_body_closes_the_connection() {
 }
 
 #[test]
-fn the_owner_host_may_receive_the_placeholder() {
+fn the_owner_host_gets_the_value_and_the_client_never_sees_it() {
     let h = brokered();
     let port = h.port();
-    let reply = h.exchange(&format!(
-        "GET http://owner.test:{port}/ HTTP/1.1\r\nX-Api-Key: {PLACEHOLDER}\r\n\r\n"
-    ));
+    let cases = [
+        (
+            format!("x-api-key: k={PLACEHOLDER}\r\n"),
+            format!("x-api-key: k={VALUE}\r\n"),
+        ),
+        (String::new(), format!("X-Api-Key: {VALUE}\r\n")),
+    ];
+    for (sent, expected) in cases {
+        let reply = h.exchange(&format!(
+            "GET http://owner.test:{port}/ HTTP/1.1\r\n{sent}\r\n"
+        ));
+        assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
+        assert_no_value(&h, &reply);
+        let head = String::from_utf8(h.received.recv_timeout(WAIT).unwrap()).unwrap();
+        assert!(head.contains(&expected), "{head}");
+        assert!(!head.contains(PLACEHOLDER), "{head}");
+    }
+    assert!(h.rows().iter().all(|r| r.rules == ["test-hosts"]));
+    let reply = h.exchange(&format!("GET http://allowed.test:{port}/ HTTP/1.1\r\n\r\n"));
     assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
-    assert_eq!(h.rows()[0].rules, ["test-hosts"]);
+    let head = String::from_utf8(h.received.recv_timeout(WAIT).unwrap()).unwrap();
+    assert!(!head.to_ascii_lowercase().contains("x-api-key"), "{head}");
 }
