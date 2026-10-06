@@ -132,6 +132,22 @@ fn unparseable_is_never_allowed() {
     );
 }
 
+/// An approval cannot make an unparseable command run: `sh -ee.a` has an option
+/// cluster the shell grammar does not know, so even a literal allow of exactly
+/// that command asks (found by the `literal_pattern` fuzz target).
+#[test]
+fn an_approved_unparseable_command_still_asks() {
+    let pattern = crate::literal_shell_pattern("sh -ee.a").unwrap();
+    let p = policy(&format!(
+        "version: 1\ndefaults: deny\nallow:\n  - id: approved\n    shell: [\"{pattern}\"]\n"
+    ));
+    let d = evaluate(&p, &ctx(), &shell("sh -ee.a")).unwrap();
+    assert_eq!(
+        (d.verdict, d.rules),
+        (Verdict::Ask, vec!["unparseable".to_owned()])
+    );
+}
+
 #[test]
 fn pinned_executables_are_enforced_through_the_resolver() {
     use crate::programs::MapResolver;

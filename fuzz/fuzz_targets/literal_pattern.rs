@@ -57,7 +57,10 @@ fuzz_target!(|data: &[u8]| {
     let plain = command.chars().all(|c| {
         c.is_ascii_alphanumeric() || " -_./:,+@%*?[]{}!".contains(c)
     }) && command.split_whitespace().next().is_some_and(|w| !w.contains('='));
-    if plain {
+    // A command the classifier cannot parse asks before any rule is consulted
+    // (unparseable ⇒ ask), so its approval cannot take part (`sh -ee.a`).
+    let unparseable = decision.rules.iter().any(|r| r == "unparseable");
+    if plain && !unparseable {
         let mentioned = decision
             .reasons
             .iter()
