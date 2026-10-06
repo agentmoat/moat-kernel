@@ -243,3 +243,6 @@ pub(crate) fn normalise_name(raw: &str) -> Option<String> {
         });
     valid.then_some(name)
 }
+
+#[cfg(test)]
+mod tests;
