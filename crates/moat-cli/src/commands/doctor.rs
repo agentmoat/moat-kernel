@@ -10,7 +10,7 @@ use crate::cli::DoctorArgs;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig, stale_hint};
-use crate::integrity::{self, Lock};
+use crate::integrity::{self, HookPinGap, HookPins, Lock};
 use crate::render::Deferred;
 
 /// What a check is about, so accepting changes clears exactly the problems a
@@ -176,6 +176,26 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         }
     }
 
+    if let Some(lock) = &lock {
+        let gap = HookPinGap::new(lock, &home, &hook_files);
+        for path in gap.unpinned {
+            report.line(
+                Area::Hook,
+                false,
+                format!(
+                    "hook file        {} is not pinned by the lock; run `moat init` to pin it",
+                    path.display()
+                ),
+            );
+        }
+        for path in gap.elsewhere {
+            report.note(&format!(
+                "hook file        {} is pinned but not this shell's (CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR differ); re-pinning keeps it",
+                path.display()
+            ));
+        }
+    }
+
     match Store::open_read_only(&home.audit_path()) {
         Ok(store) => {
             report.line(
@@ -203,7 +223,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         if drift.is_empty() && lock.is_some() {
             writeln!(report.out, "nothing to accept: lock is intact")?;
         } else {
-            let lock = integrity::repin(&home, &binary)?;
+            let lock = integrity::repin(&home, &binary, HookPins::Keep)?;
             writeln!(
                 report.out,
                 "✔ lock re-pinned for {} files",

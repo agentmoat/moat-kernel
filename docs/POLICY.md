@@ -218,7 +218,7 @@ warning does not prove a rule is reachable.
 installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
 pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
 until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
-by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
+by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. Which hook files are pinned is decided only by `moat init`: it keeps the ones already in the lock and adds those installed under its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR`. `moat doctor --accept` and `moat allow` re-pin exactly the files already in the lock, so running them from a shell where those variables differ from the agent's never drops the agent's hook file; `moat doctor` and `moat status` name a hook file installed under the current environment that the lock does not pin, and a pinned one outside it. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
 
 ### 8.1 Executable pinning and the environment snapshot
 
@@ -253,7 +253,12 @@ moat allow "npm install left-pad" --host claude-code --session 7c1e
 
 Session grants live in `~/.moat/approvals.json` and match the exact command text for
 one host session. A grant applies to any `ask` for that command, including an
-`unparseable` one; it never overrides a `deny`. Permanent rules are appended to
+`unparseable` one; it never overrides a `deny`. Hosts do not report when a session ends,
+so a grant expires 24 hours after `moat allow` wrote it (granting the same command again
+restarts it); `guard` ignores expired grants, every write of `approvals.json` drops them,
+and `moat status` shows how many are active and the age of the oldest. A grant written
+without a creation time (files from before grants expired) counts as expired.
+Permanent rules (`--always`) never expire; they are appended to
 `~/.moat/policy.d/approved.yaml` with ids `approved-1`, `approved-2`, … and a provenance
 comment, and are merged into your policy at load time so `policy.yaml` is never rewritten.
 The command is stored as a literal pattern: glob characters and `$` are escaped (`cat *` is

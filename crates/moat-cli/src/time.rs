@@ -38,6 +38,17 @@ pub fn timestamp(ts_ms: i64) -> String {
     )
 }
 
+/// A span as `24h`, `2h 5m` or `45m`, rounded down to the minute.
+#[must_use]
+pub fn duration(ms: i64) -> String {
+    let minutes = ms.max(0) / 60_000;
+    match (minutes / 60, minutes % 60) {
+        (0, m) => format!("{m}m"),
+        (h, 0) => format!("{h}h"),
+        (h, m) => format!("{h}h {m}m"),
+    }
+}
+
 /// Parse a window start: `all`, `today`, `yesterday`, `<n>h`, `<n>d`, `<n>w`,
 /// or a UTC date `YYYY-MM-DD`. Returns milliseconds since the epoch.
 pub fn parse_since(text: &str, now_ms: i64) -> Result<i64> {
@@ -116,6 +127,14 @@ mod tests {
         assert_eq!(timestamp(0), "1970-01-01 00:00:00 UTC");
         assert_eq!(timestamp(OCT_3_2026), "2026-10-03 00:00:00 UTC");
         assert_eq!(clock(90_061_000), "01:01:01");
+    }
+
+    #[test]
+    fn formats_durations() {
+        assert_eq!(duration(MS_PER_DAY), "24h");
+        assert_eq!(duration(2 * MS_PER_HOUR + 5 * 60_000 + 59_999), "2h 5m");
+        assert_eq!(duration(59_999), "0m");
+        assert_eq!(duration(-1), "0m");
     }
 
     #[test]

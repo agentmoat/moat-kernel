@@ -64,7 +64,8 @@ exits. There is no daemon.
    FsPathResolver)` classifies and evaluates (§3, §4).
 8. **Grant.** An `ask` for a shell command whose exact text was granted for this host
    session with `moat allow` becomes `allow` with rule `approved-session`. A grant
-   never touches a `deny`.
+   never touches a `deny` and expires 24 h after it was given; expired grants are
+   ignored and pruned.
 9. **Record.** The event is written to the audit log. If it cannot be written, the
    decision becomes a `kernel-error` deny: an unrecorded call is not allowed.
 10. **Respond.** The adapter renders the host's response document. `deny` also prints
@@ -205,7 +206,7 @@ URL fields pass through `moat_audit::redact` first (bearer and basic auth,
 ~/.moat/                       ($MOAT_HOME overrides; directory 0700, files 0600)
   policy.yaml                  user policy (moat init writes the default once)
   policy.d/approved.yaml       permanent approvals from `moat allow --always`
-  approvals.json               session grants from `moat allow`
+  approvals.json               session grants from `moat allow` (24 h each)
   environment.json             search path and program locations recorded at init
   policy.lock                  digests of the files above and of installed hook files
   audit.db                     audit log

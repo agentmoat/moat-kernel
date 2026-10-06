@@ -33,25 +33,94 @@ pub struct Lock {
     pub entries: BTreeMap<String, String>,
 }
 
+/// Which hook files a re-pin covers, besides moat's own state files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookPins {
+    /// `moat init`: the hook files already pinned plus every hook file installed
+    /// under this shell's environment.
+    Adopt,
+    /// `moat allow`, `moat doctor --accept`: the hook files already pinned. The
+    /// hook file an agent reads depends on the agent's environment
+    /// (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CURSOR_CONFIG_DIR`), which need not be
+    /// this shell's, so a re-pin must not decide again which files those are.
+    Keep,
+}
+
 /// Pin everything the kernel trusts: policy, environment snapshot, approval
-/// files and every installed host hook file. Used by `init`, `doctor --accept`
-/// and `allow`, which are the only human paths that may re-pin.
-pub fn repin(home: &Home, binary: &Path) -> Result<Lock> {
-    let mut paths = vec![
+/// files and the host hook files `hooks` selects. Used by `init`,
+/// `doctor --accept` and `allow`, which are the only human paths that may re-pin.
+pub fn repin(home: &Home, binary: &Path, hooks: HookPins) -> Result<Lock> {
+    let mut paths = state_files(home);
+    let lock_path = home.lock_path();
+    let had_lock = lock_path.exists();
+    if had_lock {
+        match (Lock::load(&lock_path), hooks) {
+            (Ok(old), _) => paths.extend(old.entries.into_keys().map(PathBuf::from)),
+            (Err(e), HookPins::Keep) => {
+                return Err(e.context("cannot tell which hook files are pinned; run `moat init`"));
+            }
+            // `init` is how a person recovers from an unreadable lock.
+            (Err(_), HookPins::Adopt) => {}
+        }
+    }
+    // Without a lock there is nothing to keep, so this environment's hooks it is.
+    if hooks == HookPins::Adopt || !had_lock {
+        paths.extend(installed_hook_files(binary)?);
+    }
+    let lock = Lock::pin(binary, &paths)?;
+    lock.save(&lock_path)?;
+    Ok(lock)
+}
+
+/// moat's own files, pinned by every lock whatever the environment.
+fn state_files(home: &Home) -> Vec<PathBuf> {
+    vec![
         home.policy_path(),
         home.environment_path(),
         home.grants_path(),
         home.overlay_path(),
-    ];
+    ]
+}
+
+/// Hook files with a current `moat` hook under this shell's environment.
+pub fn installed_hook_files(binary: &Path) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
     for host in moat_hosts::Host::ALL {
         let config = HostConfig::for_host(host)?;
         if config.state(binary) == HookState::Installed {
             paths.push(config.settings_path);
         }
     }
-    let lock = Lock::pin(binary, &paths)?;
-    lock.save(&home.lock_path())?;
-    Ok(lock)
+    Ok(paths)
+}
+
+/// How this shell's hook files differ from the ones the lock pins.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct HookPinGap {
+    /// Installed here but not pinned: changes to them go unseen until `moat init`.
+    pub unpinned: Vec<PathBuf>,
+    /// Pinned but not this shell's: another environment's hook files, still verified.
+    pub elsewhere: Vec<PathBuf>,
+}
+
+impl HookPinGap {
+    pub fn new(lock: &Lock, home: &Home, installed: &[PathBuf]) -> Self {
+        let state: Vec<String> = state_files(home).iter().map(|p| key(p)).collect();
+        let here: Vec<String> = installed.iter().map(|p| key(p)).collect();
+        Self {
+            unpinned: installed
+                .iter()
+                .filter(|p| !lock.pins(p))
+                .cloned()
+                .collect(),
+            elsewhere: lock
+                .entries
+                .keys()
+                .filter(|k| !state.contains(k) && !here.contains(k))
+                .map(PathBuf::from)
+                .collect(),
+        }
+    }
 }
 
 /// `Some(deny)` when the pinned policy or hook files changed since `moat init`.

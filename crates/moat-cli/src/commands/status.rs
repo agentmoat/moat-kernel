@@ -7,11 +7,12 @@ use anyhow::Result;
 use moat_audit::Store;
 use moat_hosts::Host;
 
+use crate::approvals::{GRANT_TTL_MS, Grants};
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig};
-use crate::integrity::Lock;
-use crate::render;
+use crate::integrity::{self, HookPinGap, Lock};
+use crate::{render, time};
 
 pub fn run() -> Result<Code> {
     let home = Home::locate()?;
@@ -55,6 +56,23 @@ pub fn run() -> Result<Code> {
                     writeln!(out, "lock             ✗ {d} (run `moat doctor`)")?;
                 }
             }
+            let installed = integrity::installed_hook_files(&binary)?;
+            let gap = HookPinGap::new(&lock, &home, &installed);
+            for path in gap.unpinned {
+                healthy = false;
+                writeln!(
+                    out,
+                    "lock             ✗ {} is not pinned (run `moat init` to pin it)",
+                    path.display()
+                )?;
+            }
+            for path in gap.elsewhere {
+                writeln!(
+                    out,
+                    "lock             · {} is pinned but not this shell's hook file (CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR differ)",
+                    path.display()
+                )?;
+            }
         }
         Err(_) if !lock_path.exists() => {
             healthy = false;
@@ -63,6 +81,27 @@ pub fn run() -> Result<Code> {
         Err(error) => {
             healthy = false;
             writeln!(out, "lock             ✗ {error:#}")?;
+        }
+    }
+
+    match Grants::load(&home.grants_path()) {
+        Ok(grants) => {
+            let now = time::now_ms();
+            let ages: Vec<i64> = grants.active(now).map(|g| now - g.granted_at_ms).collect();
+            match ages.iter().max() {
+                Some(oldest) => writeln!(
+                    out,
+                    "approvals        {} active session grant(s), oldest {} old (each expires after {})",
+                    ages.len(),
+                    time::duration(*oldest),
+                    time::duration(GRANT_TTL_MS)
+                )?,
+                None => writeln!(out, "approvals        no active session grants")?,
+            }
+        }
+        Err(error) => {
+            healthy = false;
+            writeln!(out, "approvals        ✗ {error:#}")?;
         }
     }
 

@@ -105,7 +105,7 @@ impl Home {
     /// Create empty approval files so the lock covers them from the first run.
     pub fn ensure_approval_files(&self) -> Result<()> {
         if !self.grants_path().exists() {
-            crate::approvals::Grants::default().save(&self.grants_path())?;
+            crate::approvals::Grants::default().save(&self.grants_path(), crate::time::now_ms())?;
         }
         if !self.overlay_path().exists() {
             crate::approvals::Overlay::default().save(&self.overlay_path())?;

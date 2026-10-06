@@ -110,10 +110,10 @@ something the alpha claims to stop.
   re-pinning or granting itself anything.
 - **The binary is pinned by path, not digest** (ADR-006, ADR-016). Whoever can replace
   the file the stable link points at decides what the hooks run.
-- **`CLAUDE_CONFIG_DIR` must match.** `moat init`, `status`, `doctor` and `allow` look
-  for Claude Code's settings in the directory their own environment names. Re-pinning
-  from a shell with a different `CLAUDE_CONFIG_DIR` drops that hook file from the
-  lock.
+- **`CLAUDE_CONFIG_DIR` must match for `init`.** `moat init` installs hooks where its
+  own environment points. Re-pinning (`allow`, `doctor --accept`) keeps every hook file
+  the lock already pins, whatever the shell's environment, and `doctor`/`status` report
+  an installed hook file the lock does not pin (#158).
 
 ## 6. How the claims are tested
 
