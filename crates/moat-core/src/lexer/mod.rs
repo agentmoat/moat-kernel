@@ -13,6 +13,8 @@
 //!   leading file-descriptor digits (`2>&1`, `3<file`);
 //! - here-documents `<<` / `<<-`: the body (up to the delimiter line) is consumed
 //!   as data and exposed on the token so callers can treat it as content, never as code;
+//! - here-strings `<<<`: a redirect operator whose following word is stdin data; the
+//!   word is lexed like any other, so its `$( … )` substitutions are still captured;
 //! - command substitution `$( … )` (nesting aware) and backticks; the inner text is
 //!   attached to the containing word so it can be classified as its own command.
 //!
@@ -39,6 +41,8 @@ pub enum Operator {
     RedirectReadWrite,
     /// `<&` / `>&`: duplicates a descriptor; the target is a descriptor or `-`.
     DuplicateDescriptor,
+    /// `<<<`: the following word is the command's stdin, not a file.
+    HereString,
 }
 
 impl Operator {
@@ -64,6 +68,7 @@ impl Operator {
                 | Self::RedirectAppend
                 | Self::RedirectReadWrite
                 | Self::DuplicateDescriptor
+                | Self::HereString
         )
     }
 
@@ -82,6 +87,7 @@ impl Operator {
             Self::RedirectAppend => ">>",
             Self::RedirectReadWrite => "<>",
             Self::DuplicateDescriptor => ">&",
+            Self::HereString => "<<<",
         }
     }
 }
@@ -305,6 +311,10 @@ impl Lexer {
             }
             ('(', _) => Operator::OpenParen,
             (')', _) => Operator::CloseParen,
+            ('<', Some('<')) if self.peek_at(1) == Some('<') => {
+                self.pos += 2;
+                Operator::HereString
+            }
             ('<', Some('<')) => {
                 self.bump();
                 let strip_tabs = if self.peek() == Some('-') {
