@@ -1,6 +1,6 @@
 # ADR-021: OS layers may be wider than the hook only by listed allowances
 
-Status: proposed · Date: 2026-10-06 · Refines ADR-019
+Status: accepted · Date: 2026-10-06 · Refines ADR-019
 
 ## Context
 
