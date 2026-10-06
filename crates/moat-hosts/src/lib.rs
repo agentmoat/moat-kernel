@@ -17,12 +17,16 @@ pub use config_change::proposal_target;
 use std::fmt;
 use std::str::FromStr;
 
-use moat_core::{Action, Decision};
+use moat_core::{Action, Decision, Verdict};
 use serde_json::Value;
 use thiserror::Error;
 
 /// Session id recorded when a host omits it.
 const UNKNOWN_SESSION: &str = "unknown";
+
+/// Appended to an `ask` that Codex receives as a `deny` ([`Host::answer`]).
+const CODEX_ASK: &str = "this needs your approval and Codex hooks cannot ask: run \
+     `moat allow --last` (this session) or `moat allow --last --always`, then retry";
 
 /// One line the model can act on: verdict, rule ids, then the reasons.
 #[must_use]
@@ -183,6 +187,23 @@ impl Host {
             }
             _ => HookEvent::PreToolUse,
         }
+    }
+
+    /// The decision as this host has to receive it. Codex's `PreToolUse` rejects
+    /// `permissionDecision: "ask"` as unsupported and then runs the call, so an
+    /// `ask` reaches Codex as a `deny` that says how to approve it; the audit log
+    /// keeps the `ask`, which is what `moat allow --last` looks for.
+    #[must_use]
+    pub fn answer(self, event: &HookEvent, decision: &Decision) -> Decision {
+        let mut answer = decision.clone();
+        if self == Self::Codex
+            && matches!(event, HookEvent::PreToolUse)
+            && decision.verdict == Verdict::Ask
+        {
+            answer.verdict = Verdict::Deny;
+            answer.reasons.push(CODEX_ASK.to_owned());
+        }
+        answer
     }
 
     /// Render the response document the host expects on stdout for `event`.

@@ -432,6 +432,20 @@ mod tests {
     }
 
     #[test]
+    fn codex_receives_an_ask_as_a_deny_that_says_how_to_approve() {
+        let mut ask = Decision::new(Verdict::Ask);
+        ask.rules.push("installs".into());
+        let codex = Host::Codex.answer(&HookEvent::PreToolUse, &ask);
+        assert_eq!(codex.verdict, Verdict::Deny);
+        assert_eq!(codex.rules, ask.rules);
+        assert!(crate::reason_line(&codex).contains("moat allow --last"));
+        assert_eq!(Host::ClaudeCode.answer(&HookEvent::PreToolUse, &ask), ask);
+        assert_eq!(Host::Cursor.answer(&HookEvent::PreToolUse, &ask), ask);
+        let allow = Decision::new(Verdict::Allow);
+        assert_eq!(Host::Codex.answer(&HookEvent::PreToolUse, &allow), allow);
+    }
+
+    #[test]
     fn response_document_shape() {
         let mut decision = Decision::new(Verdict::Deny);
         decision.rules.push("secrets-paths".into());
