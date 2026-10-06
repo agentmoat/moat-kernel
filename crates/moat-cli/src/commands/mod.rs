@@ -1,6 +1,7 @@
 //! Command dispatch.
 
 mod allow;
+mod audit;
 mod doctor;
 mod guard;
 mod init;
@@ -13,7 +14,7 @@ mod status;
 
 use anyhow::Result;
 
-use crate::cli::{Cli, Command, PolicyCommand};
+use crate::cli::{AuditCommand, Cli, Command, PolicyCommand};
 use crate::exit::Code;
 
 pub fn run(cli: Cli) -> Result<Code> {
@@ -27,6 +28,9 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Replay(args) => replay::run(&args),
         Command::Report(args) => report::run(&args),
         Command::Proxy(args) => proxy::run(&args),
+        Command::Audit { command } => match command {
+            AuditCommand::Export(args) => audit::export(&args),
+        },
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),
             PolicyCommand::Check(args) => policy::check(&args),

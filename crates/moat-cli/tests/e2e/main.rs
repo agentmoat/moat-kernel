@@ -14,6 +14,7 @@ mod closed_pipe;
 mod codex;
 mod config_change;
 mod cursor;
+mod export;
 mod guard;
 #[cfg(unix)]
 mod install_path;

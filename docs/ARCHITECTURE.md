@@ -237,7 +237,7 @@ table (time, host, session, call id, working directory, tool, action, verdict, r
 reasons, latency). Every governed and ungoverned call is recorded. Command, path and
 URL fields pass through `moat_audit::redact` first (bearer and basic auth,
 `key=value` credentials, common token shapes, URL passwords). `show`, `replay` and
-`report` read it; nothing leaves the machine.
+`report` read it; nothing leaves the machine unless a person runs `moat audit export`.
 
 **Hash chain** (schema 2, `crates/moat-audit/src/store/chain.rs`). Each event also
 stores `prev_hash`, the `hash` of the event before it, and `hash`, the lowercase hex
@@ -261,6 +261,17 @@ transaction adds about 0.1 ms to a guard call. `moat doctor` re-hashes the whole
 oldest first (about 0.15 s per 100 000 events) and reports the first event that was
 edited (contents do not match its hash), unlinked (an event before it was deleted or
 inserted, or events were reordered) or unhashed, and exits 64.
+
+**Export** (`moat audit export`, `crates/moat-audit/src/store/export.rs`). JSON Lines,
+oldest first, one object per chained event with the filters `--since`, `--host` and
+`--session`. Every line has `"format": "moat-audit-export-v1"` and the fields `id`
+(hex), `ts_ms`, `host`, `session_id`, `call_id`, `cwd`, `tool`, `action`, `verdict`,
+`rules`, `reasons`, `latency_us`, `prev_hash` and `hash`. `action`, `rules` and
+`reasons` are the stored JSON text embedded byte for byte, not re-serialised, so the
+line holds exactly the cells the chain hashed; a field outside this list makes the
+line invalid. Cells are already redacted in the store and are not touched again, so
+an export holds no more than the database. Events from before the chain have no hash
+and are left out. A new line format gets a new `format` value.
 
 The upgrade from schema 1 adds the two columns and records the last existing id as
 `legacy_last_id` in a `meta` table. Existing events are not hashed: they were written

@@ -16,5 +16,6 @@ pub mod testing;
 pub use query::{SessionSummary, Summary};
 pub use redact::{redact, redact_value};
 pub use store::{
-    BreakKind, ChainBreak, ChainReport, Event, EventId, GENESIS, NewEvent, Store, StoreError,
+    BreakKind, ChainBreak, ChainReport, Event, EventId, ExportFilter, ExportFormat, ExportedEvent,
+    GENESIS, NewEvent, Store, StoreError,
 };

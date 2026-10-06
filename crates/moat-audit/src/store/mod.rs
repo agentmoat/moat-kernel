@@ -15,9 +15,11 @@ use thiserror::Error;
 use crate::{redact, redact_value};
 
 mod chain;
+mod export;
 mod schema;
 
 pub use chain::{BreakKind, ChainBreak, ChainReport, GENESIS};
+pub use export::{ExportFilter, ExportFormat, ExportedEvent};
 
 const BUSY_TIMEOUT_MS: u64 = 2000;
 
@@ -422,3 +424,6 @@ mod tests;
 
 #[cfg(test)]
 mod chain_tests;
+
+#[cfg(test)]
+mod export_tests;
