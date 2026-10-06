@@ -184,6 +184,19 @@
   threat: T4
   action: { shell: "git push -vd origin main" }
   expect: { verdict: deny, rules: [destructive] }
+# git accepts an unambiguous prefix of a long option
+- id: T4-push-abbreviated-delete
+  threat: T4
+  action: { shell: "git push --del origin main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-push-abbreviated-delete-after-remote
+  threat: T4
+  action: { shell: "git push origin --de main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-push-abbreviated-force
+  threat: T4
+  action: { shell: "git push origin main --forc" }
+  expect: { verdict: deny, rules: [destructive] }
 # git global options before the subcommand do not hide it
 - id: T4-force-push-after-git-dir-option
   threat: T4
