@@ -74,6 +74,10 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
         "Edit" | "Write" | "MultiEdit" => Action::FsWrite {
             path: field("file_path")?,
         },
+        // `SendFile` copies each file's contents to another Claude Code session.
+        "SendFile" => Action::ReadFiles {
+            paths: send_file(input)?,
+        },
         "NotebookEdit" => Action::FsWrite {
             path: field("notebook_path")?,
         },
@@ -83,7 +87,8 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
         "apply_patch" => Action::Patch {
             writes: crate::patch::writes(&field("command")?),
         },
-        "Glob" | "Grep" => crate::search_root(input, cwd),
+        "Glob" => crate::glob_roots(input, cwd),
+        "Grep" => crate::search_root(input, cwd),
         name if name.starts_with("mcp__") => crate::mcp::action(name, input)?,
         _ => return Ok(None),
     };
@@ -106,6 +111,28 @@ fn monitor(input: &Value) -> Result<Action, HostError> {
             problem: "needs exactly one of `command` or `ws`".to_owned(),
         }),
     }
+}
+
+/// Claude Code `SendFile` `files`: a non-empty list of paths. Claude Code also
+/// accepts a lone string as a one-element list, so that is read the same way.
+fn send_file(input: &Value) -> Result<Vec<String>, HostError> {
+    let malformed = |problem: &str| HostError::MalformedArguments {
+        tool: "SendFile".to_owned(),
+        problem: problem.to_owned(),
+    };
+    let paths = match input.get("files") {
+        Some(Value::String(one)) => vec![one.as_str()],
+        Some(Value::Array(list)) => list
+            .iter()
+            .map(Value::as_str)
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| malformed("`files` holds a value that is not a path"))?,
+        _ => return Err(malformed("`files` is not a list of paths")),
+    };
+    if paths.is_empty() || paths.iter().any(|p| p.is_empty()) {
+        return Err(malformed("`files` is empty or names an empty path"));
+    }
+    Ok(paths.into_iter().map(str::to_owned).collect())
 }
 
 pub(crate) fn render(decision: &Decision) -> String {
@@ -233,6 +260,41 @@ mod tests {
     }
 
     #[test]
+    fn claude_code_send_file_reads_every_file() {
+        let req = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "sendfile"))
+            .unwrap();
+        assert_eq!(
+            req.action,
+            Some(Action::ReadFiles {
+                paths: vec!["src/lib.rs".into(), "~/.ssh/id_rsa".into()]
+            })
+        );
+        let one = r#"{"tool_name":"SendFile","tool_input":{"to":"p","files":"a.txt"}}"#;
+        assert_eq!(
+            Host::ClaudeCode.parse_request(one).unwrap().action,
+            Some(Action::ReadFiles {
+                paths: vec!["a.txt".into()]
+            })
+        );
+        for files in [
+            "",
+            r#","files":[]"#,
+            r#","files":[""]"#,
+            r#","files":["a",1]"#,
+        ] {
+            let payload = format!(r#"{{"tool_name":"SendFile","tool_input":{{"to":"p"{files}}}}}"#);
+            assert!(
+                matches!(
+                    Host::ClaudeCode.parse_request(&payload),
+                    Err(HostError::MalformedArguments { .. })
+                ),
+                "{payload}"
+            );
+        }
+    }
+
+    #[test]
     fn claude_code_powershell_and_lsp() {
         let ps = Host::ClaudeCode
             .parse_request(&fixture("claude-code", "powershell"))
@@ -269,6 +331,36 @@ mod tests {
         let payload = r#"{"tool_name":"Grep","tool_input":{"pattern":"x"},"cwd":"/p"}"#;
         let req = Host::ClaudeCode.parse_request(payload).unwrap();
         assert_eq!(req.action, Some(Action::FsRead { path: "/p".into() }));
+    }
+
+    #[test]
+    fn glob_reads_the_directory_an_absolute_pattern_names() {
+        let req = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "glob-absolute"))
+            .unwrap();
+        assert_eq!(
+            req.action,
+            Some(Action::ReadFiles {
+                paths: vec!["/p/src".into(), "/Users/me/.ssh".into()]
+            })
+        );
+        let glob = |pattern: &str| {
+            let payload = serde_json::json!({
+                "tool_name": "Glob", "tool_input": {"pattern": pattern}, "cwd": "/p"
+            });
+            Host::ClaudeCode
+                .parse_request(&payload.to_string())
+                .unwrap()
+                .action
+        };
+        let read = |path: &str| Some(Action::FsRead { path: path.into() });
+        assert_eq!(glob("~/.aws/**/cred*"), read("~/.aws"));
+        assert_eq!(glob("/etc/passwd"), read("/etc"));
+        assert_eq!(glob("/*"), read("/"));
+        assert_eq!(glob(r"C:\Users\me\.ssh\*"), read(r"C:\Users\me\.ssh"));
+        assert_eq!(glob("C:/*"), read("C:/"));
+        assert_eq!(glob("src/**/*.rs"), read("/p"));
+        assert_eq!(glob("**/.ssh/*"), read("/p"));
     }
 
     #[test]

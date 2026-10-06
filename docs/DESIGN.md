@@ -174,15 +174,18 @@ its JSON to the kernel's internal `ToolCall`.
 - Config: `~/.claude/settings.json` (user), `.claude/settings.json` (project, committable),
   managed policy settings (org).
 - Event: `PreToolUse`, matcher on `tool_name`; `moat init` installs
-  `Bash|Monitor|PowerShell|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LSP|WebFetch|mcp__.*`.
+  `Bash|Monitor|PowerShell|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LSP|SendFile|WebFetch|mcp__.*`.
 - Input: `session_id`, `cwd`, `permission_mode`, `tool_name`, `tool_input`, `tool_use_id`,
   `transcript_path`. Bash → `tool_input.command`; Monitor → `command` (shell) or `ws.url`
   (network), exactly one; PowerShell → `command`, recorded and always `ask` (`unparseable`:
   moat has no PowerShell parser); Edit/Write → `file_path`; NotebookEdit → `notebook_path`;
-  Read → `file_path`; LSP → `filePath` (read); Glob/Grep → `path`, else `cwd` (read);
+  Read → `file_path`; LSP → `filePath` (read); Glob/Grep → `path`, else `cwd` (read); an absolute or `~` Glob
+  `pattern` also reads its directory part before the first `*?[{` (Claude Code searches that
+  instead of `path`);
+  SendFile → every path in `files` (read: the contents go to another session; an empty
+  or non-string list is an adapter error, so `deny`);
   WebFetch → `url` (a `fetch`: a GET the agent cannot attach a body to, ADR-017); MCP tools named `mcp__<server>__<tool>`. Not governed: `WebSearch`
-  (server-side), `SendFile` (sends files to another session; needs a multi-file read
-  action), `Workflow` and other orchestration tools whose own tool calls are hooked.
+  (server-side), `Workflow` and other orchestration tools whose own tool calls are hooked.
 - Output: exit 0 + `{"hookSpecificOutput":{"hookEventName":"PreToolUse",
   "permissionDecision":"allow|deny|ask","permissionDecisionReason":"…",
   "updatedInput":{…}}}`. Exit 2 = block, stderr shown to the model.
@@ -195,7 +198,12 @@ its JSON to the kernel's internal `ToolCall`.
   `change_type`, still accepted). A pinned settings file that no longer matches the lock is
   refused for the session (`{"decision":"block"}`), unpinned files load and are audited. A
   change without a `file_path` is checked against every pinned file: blocked if any drifted,
-  loaded otherwise. A `ConfigChange` payload that cannot be parsed is blocked in the same
+  loaded otherwise. A `/settings-review` accept writes the new contents to
+  `<file>.proposed-<8 hex>` next to the settings file, fires `ConfigChange` for that copy, and
+  renames it over the file only if no hook blocks; when `<file>` is pinned, the copy is
+  blocked unless the file still matches the lock and the copy's bytes equal the pinned ones.
+  The lock pins whole files, and only a person re-pins, so the hook cannot let a reviewed
+  edit of a pinned file through. A `ConfigChange` payload that cannot be parsed is blocked in the same
   `{"decision":"block"}` shape, exit 2. `PermissionDenied`, `PostToolUse` remain available for audit enrichment.
 - Install form: exec form with `args` (no shell), `command: "/abs/path/moat"`,
   `args: ["guard","--host","claude-code"]`, `timeout: 600`.
@@ -230,7 +238,9 @@ its JSON to the kernel's internal `ToolCall`.
 - **Fail-open by default.** `failClosed: true` must be set per hook; `moat init` sets it.
 - No `afterFileEdit` veto (post-hoc only), so file writes are governed via `preToolUse`
   where available, else audited only. `preToolUse` `Grep` and `Glob` read their `path`
-  (else `cwd` or the first workspace root), like Claude Code's.
+  (else `cwd` or the first workspace root), like Claude Code's. Cursor's docs name
+  `Grep` but not `Glob`, and give no file tool's arguments, so these keys are unverified
+  (`tests/fixtures/hosts/cursor/README.md`).
 
 ### 4.4 OpenClaw
 

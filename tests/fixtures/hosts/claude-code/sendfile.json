@@ -1,0 +1,12 @@
+{
+  "session_id": "7c1e4b2a",
+  "cwd": "/p",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "SendFile",
+  "tool_input": {
+    "to": "peer-session",
+    "files": ["src/lib.rs", "~/.ssh/id_rsa"],
+    "message": "here you go"
+  },
+  "tool_use_id": "toolu_11CDE"
+}

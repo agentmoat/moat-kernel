@@ -189,13 +189,18 @@ fn claude_code_command_tools_are_hooked_and_governed() {
         .as_str()
         .unwrap()
         .to_owned();
-    for tool in ["Bash", "Monitor", "PowerShell", "LSP"] {
+    for tool in ["Bash", "Monitor", "PowerShell", "LSP", "SendFile"] {
         assert!(matcher.split('|').any(|m| m == tool), "{tool} in {matcher}");
     }
 
-    let monitor = sb.guard("claude-code", &fixture("claude-code/monitor.json"));
-    assert_eq!(monitor.status.code(), Some(2));
-    assert_eq!(decision(&monitor)["permissionDecision"], "deny");
+    for name in ["monitor", "sendfile"] {
+        let out = sb.guard("claude-code", &fixture(&format!("claude-code/{name}.json")));
+        assert_eq!(out.status.code(), Some(2), "{name}");
+        let d = decision(&out);
+        assert_eq!(d["permissionDecision"], "deny", "{name}");
+        let reason = d["permissionDecisionReason"].as_str().unwrap();
+        assert!(reason.contains("secrets-paths"), "{name}: {reason}");
+    }
 
     let ps = sb.guard("claude-code", &fixture("claude-code/powershell.json"));
     assert_eq!(ps.status.code(), Some(0));

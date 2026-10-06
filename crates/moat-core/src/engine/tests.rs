@@ -245,6 +245,26 @@ fn patches_write_every_file_and_ask_when_empty() {
 }
 
 #[test]
+fn read_files_reads_every_file_and_asks_when_empty() {
+    let p = policy(
+        "version: 1\ndefaults: ask\ndeny:\n  - id: ssh\n    fs.read: ['~/.ssh/**']\n\
+         allow:\n  - id: proj\n    fs.read: ['${project}/**']\n",
+    );
+    let read = |r: &[&str]| Action::ReadFiles {
+        paths: r.iter().map(|s| (*s).to_owned()).collect(),
+    };
+    let d = evaluate(&p, &ctx(), &read(&["src/a.rs", "src/b.rs"])).unwrap();
+    assert_eq!(d.verdict, Verdict::Allow);
+    let d = evaluate(&p, &ctx(), &read(&["src/a.rs", "~/.ssh/id_rsa"])).unwrap();
+    assert_eq!(
+        (d.verdict, d.rules.as_slice()),
+        (Verdict::Deny, &["ssh".to_owned()][..])
+    );
+    let d = evaluate(&p, &ctx(), &read(&[])).unwrap();
+    assert_eq!(d.verdict, Verdict::Ask);
+}
+
+#[test]
 fn compiled_policy_is_reusable() {
     let p = policy("version: 1\ndefaults: ask\nallow:\n  - id: ls\n    shell: ['ls*']\n");
     let compiled = CompiledPolicy::compile(&p, &ctx()).unwrap();

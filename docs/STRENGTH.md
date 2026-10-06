@@ -107,7 +107,7 @@ not pinned. Planned: signed policy bundles (Phase 2). Details: ADR-006.
 
 | Host | Shell | File read/write | Web fetch | MCP tools | Enforce (L2) | Fail-closed if moat missing |
 |---|---|---|---|---|---|---|
-| Claude Code | `PreToolUse` (`Bash`, `Monitor`; `PowerShell` always asks, no parser) | `PreToolUse` (`Read`, `Glob`, `Grep`, `LSP`; `Edit`, `Write`, `MultiEdit`, `NotebookEdit`) | `PreToolUse` (`WebFetch`, `Monitor` WebSockets; `WebSearch` is not in the matcher) | `PreToolUse` (`mcp__*`, arguments mapped to paths/hosts since #36) | planned | no (host limitation) |
+| Claude Code | `PreToolUse` (`Bash`, `Monitor`; `PowerShell` always asks, no parser) | `PreToolUse` (`Read`, `Glob`, `Grep`, `LSP`, `SendFile`; `Edit`, `Write`, `MultiEdit`, `NotebookEdit`) | `PreToolUse` (`WebFetch`, `Monitor` WebSockets; `WebSearch` is not in the matcher) | `PreToolUse` (`mcp__*`, arguments mapped to paths/hosts since #36) | planned | no (host limitation) |
 | Codex | `PreToolUse` (`Bash`) | `PreToolUse` (`apply_patch`: every added, updated, deleted or moved-to file) | via shell | `PreToolUse` (`mcp__*`, arguments mapped to paths/hosts) | planned | no |
 | Cursor | `beforeShellExecution` | `beforeReadFile`; `Grep`/`Glob` and writes via `preToolUse` | via shell | `beforeMCPExecution` (arguments mapped to paths/hosts since #36) | planned | **yes** (`failClosed`, set by `init`) |
 | OpenClaw | planned (plugin) | planned (`derivedPaths`) | planned | planned (MCP proxy) | planned | no |

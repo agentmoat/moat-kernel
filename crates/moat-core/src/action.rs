@@ -55,6 +55,12 @@ pub enum Action {
         /// Every file the patch adds, updates, deletes or moves to.
         writes: Vec<String>,
     },
+    /// Files one tool call reads together (Claude Code `SendFile`, which sends
+    /// their contents to another session): every path is read.
+    ReadFiles {
+        /// Every file the call reads.
+        paths: Vec<String>,
+    },
     /// An MCP tool call, `mcp__<server>__<tool>`. Adapters that understand a
     /// server's arguments add the paths and hosts the call touches so the
     /// usual `fs.*` and `net` rules apply to it as well.
@@ -79,7 +85,7 @@ impl Action {
     pub fn kind(&self) -> Kind {
         match self {
             Self::Shell { .. } | Self::ForeignShell { .. } => Kind::Shell,
-            Self::FsRead { .. } => Kind::FsRead,
+            Self::FsRead { .. } | Self::ReadFiles { .. } => Kind::FsRead,
             Self::FsWrite { .. } | Self::Patch { .. } => Kind::FsWrite,
             Self::Net { .. } => Kind::Net,
             Self::Fetch { .. } => Kind::Fetch,

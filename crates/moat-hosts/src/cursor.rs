@@ -106,6 +106,10 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
 
 /// Shell commands are governed by `beforeShellExecution`, so `Shell` here is
 /// deliberately ungoverned to avoid deciding and auditing the same command twice.
+///
+/// Cursor documents the tool names `Shell`, `Read`, `Write`, `Grep`, `Delete` and
+/// `Task` but no file tool's arguments; the keys below are Claude Code's and are
+/// unverified (`tests/fixtures/hosts/cursor/README.md`, #138).
 fn pre_tool_action(
     tool: &str,
     input: &Value,
@@ -204,6 +208,14 @@ mod tests {
             .parse_request(&fixture("preToolUse-shell"))
             .unwrap();
         assert_eq!(shell.action, None);
+        // Cursor 3.13 sends an empty top-level `cwd`; the workspace root stands in.
+        let real = Host::Cursor
+            .parse_request(&fixture("preToolUse-shell-3.13"))
+            .unwrap();
+        assert_eq!(
+            (real.action, real.cwd.as_deref(), real.session_id.as_str()),
+            (None, Some("/p"), "conv-43")
+        );
     }
 
     #[test]

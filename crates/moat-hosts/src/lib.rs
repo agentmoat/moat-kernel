@@ -12,6 +12,8 @@ mod mcp;
 mod patch;
 mod pre_tool_use;
 
+pub use config_change::proposal_target;
+
 use std::fmt;
 use std::str::FromStr;
 
@@ -52,15 +54,53 @@ fn input_str(input: &Value, tool: &str, field: &'static str) -> Result<String, H
 /// The directory a search tool (`Glob`, `Grep`) reads: its `path`, else the
 /// working directory.
 fn search_root(input: &Value, cwd: Option<&str>) -> Action {
-    let path = input
-        .get("path")
-        .and_then(Value::as_str)
-        .filter(|s| !s.is_empty())
-        .or(cwd)
-        .unwrap_or(".");
+    let path = search_path(input).or(cwd).unwrap_or(".");
     Action::FsRead {
         path: path.to_owned(),
     }
+}
+
+fn search_path(input: &Value) -> Option<&str> {
+    input
+        .get("path")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+}
+
+/// The directories a Claude Code `Glob` reads. An absolute or `~` `pattern`
+/// carries its own directory, which Claude Code searches instead of `path`
+/// (its Glob tool splits the pattern with `isAbsolute`); `path` is read too
+/// when given, so either spelling is checked.
+fn glob_roots(input: &Value, cwd: Option<&str>) -> Action {
+    let from_pattern = input
+        .get("pattern")
+        .and_then(Value::as_str)
+        .and_then(pattern_dir);
+    match (from_pattern, search_path(input)) {
+        (Some(dir), Some(path)) => Action::ReadFiles {
+            paths: vec![path.to_owned(), dir],
+        },
+        (Some(dir), None) => Action::FsRead { path: dir },
+        (None, _) => search_root(input, cwd),
+    }
+}
+
+/// The static directory of an absolute or `~` glob pattern, as Claude Code
+/// takes it: everything before the last separator ahead of the first glob
+/// metacharacter (`*?[{`), `/` at the root. `None` for a relative pattern.
+fn pattern_dir(pattern: &str) -> Option<String> {
+    let bytes = pattern.as_bytes();
+    let drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+    if !(drive || pattern.starts_with(['/', '\\', '~'])) {
+        return None;
+    }
+    let stem = &pattern[..pattern.find(['*', '?', '[', '{']).unwrap_or(pattern.len())];
+    let dir = &stem[..stem.rfind(['/', '\\'])?];
+    Some(match dir {
+        "" => "/".to_owned(),
+        d if drive && d.len() == 2 => format!("{d}/"),
+        d => d.to_owned(),
+    })
 }
 
 /// The host's session id, or a placeholder when it sent none.

@@ -1,0 +1,8 @@
+{
+  "session_id": "7c1e4b2a",
+  "transcript_path": "/Users/me/.claude/projects/-p/7c1e4b2a.jsonl",
+  "cwd": "/p",
+  "hook_event_name": "ConfigChange",
+  "source": "user_settings",
+  "file_path": "/Users/me/.claude/settings.json.proposed-0a1b2c3d"
+}

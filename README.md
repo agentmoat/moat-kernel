@@ -55,7 +55,7 @@ never duplicates a hook, so it is safe to run again.
 
 | Agent | What is hooked | Where |
 |---|---|---|
-| Claude Code | shell (`Bash`, `Monitor`; `PowerShell` always asks), file tools (`Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Glob`, `Grep`, `LSP`), `WebFetch` and MCP tools (`PreToolUse`); settings changes (`ConfigChange`) | `~/.claude/settings.json` |
+| Claude Code | shell (`Bash`, `Monitor`; `PowerShell` always asks), file tools (`Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Glob`, `Grep`, `LSP`, `SendFile`), `WebFetch` and MCP tools (`PreToolUse`); settings changes (`ConfigChange`) | `~/.claude/settings.json` |
 | Codex | shell commands, `apply_patch` file edits (every file the patch names) and MCP tools (`PreToolUse`, matcher `Bash\|apply_patch\|mcp__.*`); Codex does not hook web search or hosted tools | `~/.codex/hooks.json` |
 | Cursor | shell, MCP, file reads, tool calls; fail-closed | `~/.cursor/hooks.json` |
 

@@ -1,0 +1,9 @@
+{
+  "conversation_id": "conv-43", "generation_id": "gen-20", "model": "grok-4.5",
+  "tool_name": "Shell",
+  "tool_input": { "command": "bun test", "cwd": "", "timeout": 30000 },
+  "tool_use_id": "tu-4", "cwd": "", "session_id": "sess-43",
+  "hook_event_name": "preToolUse", "cursor_version": "3.13.25",
+  "workspace_roots": ["/p"], "user_email": "dev@example.com",
+  "transcript_path": "/p/.cursor/agent-transcripts/t.jsonl"
+}

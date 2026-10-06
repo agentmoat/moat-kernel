@@ -195,7 +195,28 @@ fn config_change_decision(
         // protecting nothing the lock does not already cover.
         None => return Ok(unnamed_config_change(&lock, source, change)),
     };
+    // A settings-review copy holds exactly what its target will become, so the
+    // target's pin decides: block unless the copy leaves the pinned file as is.
+    // Only a person re-pins, and the hook cannot tell an owner's accept in
+    // `/settings-review` from an agent's, so any edit of a pinned file is refused.
     let mut decision = Decision::new(Verdict::Allow);
+    if let Some(target) = path.to_str().and_then(moat_hosts::proposal_target)
+        && lock.pins(std::path::Path::new(&target))
+    {
+        if let Some(drift) = lock.verify_proposal(path, std::path::Path::new(&target)) {
+            decision = Decision::new(Verdict::Deny);
+            decision.rules.push(INTEGRITY_RULE.to_owned());
+            decision.reasons.push(format!(
+                "{drift}; moat pinned {target}, so the proposal is not applied. Edit the file yourself and run `moat doctor --accept` to change it"
+            ));
+        } else {
+            decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
+            decision
+                .reasons
+                .push(format!("{} leaves {target} as pinned", path.display()));
+        }
+        return Ok(decision);
+    }
     if !lock.pins(path) {
         decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
         decision

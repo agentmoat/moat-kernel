@@ -166,7 +166,7 @@ fn verdict_glyph(verdict: Verdict) -> &'static str {
 fn kind_of(action: &Action) -> &'static str {
     match action {
         Action::Shell { .. } | Action::ForeignShell { .. } => "shell",
-        Action::FsRead { .. } => "fs.read",
+        Action::FsRead { .. } | Action::ReadFiles { .. } => "fs.read",
         Action::FsWrite { .. } | Action::Patch { .. } => "fs.write",
         Action::Net { .. } => "net",
         Action::Fetch { .. } => "fetch",
@@ -220,6 +220,7 @@ fn describe(event: &Event) -> String {
         Some(Action::Net { url }) => format!("net {url}"),
         Some(Action::Fetch { url }) => format!("fetch {url}"),
         Some(Action::Patch { writes }) => format!("patch {}", writes.join(", ")),
+        Some(Action::ReadFiles { paths }) => format!("read {}", paths.join(", ")),
         Some(Action::McpTool { name, .. }) => name.clone(),
         None => format!("{tool} (ungoverned)"),
     }
