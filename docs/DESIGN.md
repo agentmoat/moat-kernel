@@ -519,6 +519,9 @@ Rules:
   otherwise against a *kernel-controlled* PATH snapshot taken at `moat init`
   (never the hook's inherited PATH). Mismatch → deny with reason "unpinned executable".
 - Redirections `> file`, `>> file`, `< file`, `tee file` → implied `fs.write`/`fs.read`.
+- Relative operands → implied `fs.read`/`fs.write`: words containing `/` for any program,
+  every operand of file programs (`cat k`, `grep -r . s/`), so symlinks are resolved
+  (`shell/operands.rs`).
 - URL-like tokens (`https://…`, `host:port`, `user@host`) → implied `net` action.
 - A decoder (`base64 -d/-D/--decode`, `base32`/`basenc -d`, `openssl … -d`, `xxd -r`,
   `uudecode`, `gunzip`/`zcat`/`gzip -d` and friends) piped, possibly through filters, into

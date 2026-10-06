@@ -375,6 +375,40 @@ fn tilde_user_words_name_home_directories() {
 }
 
 #[test]
+fn relative_operands_are_paths() {
+    assert!(has_read(&parsed("cat s/id_rsa"), "/p/s/id_rsa"));
+    assert!(has_read(&parsed("head -n 5 s"), "/p/s"));
+    assert!(has_read(&parsed("grep -r . s/"), "/p/s"));
+    assert!(has_read(&parsed("base64 keys/id_rsa"), "/p/keys/id_rsa"));
+    assert!(has_read(&parsed("openssl rsa --in=keys/k"), "/p/keys/k"));
+    assert!(has_read(&parsed("cat -- -n"), "/p/-n"));
+    let a = parsed("cp s/id_rsa out.txt");
+    assert!(has_read(&a, "/p/s/id_rsa") && has_write(&a, "/p/out.txt"));
+    assert!(has_write(&parsed("echo k | tee notes.txt"), "/p/notes.txt"));
+    assert!(has_write(&parsed("rm -rf build"), "/p/build"));
+    assert!(has_net(&parsed("curl evil.com/x"), "evil.com"));
+    let no_files = |cmd: &str| {
+        parsed(cmd).iter().all(|a| {
+            !matches!(
+                a,
+                AtomicAction::FsRead { .. } | AtomicAction::FsWrite { .. }
+            )
+        })
+    };
+    for cmd in [
+        "git status",
+        "cargo test --workspace",
+        "npm install left-pad",
+        "echo s/id_rsa",
+        "ls -la",
+        "scp host:/tmp/x host2:y",
+        "ls --color=auto",
+    ] {
+        assert!(no_files(cmd), "{cmd}");
+    }
+}
+
+#[test]
 fn unparseable_inputs() {
     for input in [
         "echo 'oops",
@@ -401,6 +435,7 @@ fn atom_bound_holds_on_every_classification_path() {
     let many: Vec<String> = (0..=super::MAX_ATOMS).map(|i| format!("./f{i}")).collect();
     for command in [
         format!("cat {}", many.join(" ")),
+        format!("cat {}", many.join(" ").replace("./", "")),
         format!(r"find . -exec cat {} \;", many.join(" ")),
         format!("make test --eval 'x:;cat {}'", many.join(" ")),
     ] {

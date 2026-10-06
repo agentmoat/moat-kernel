@@ -7,7 +7,7 @@ use super::tables::{
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
-use super::{decoders, git, invocation, make, options};
+use super::{decoders, git, invocation, make, operands, options};
 use crate::action::AtomicAction;
 use crate::host;
 use crate::lexer::{self, Operator, Token, Word};
@@ -310,6 +310,7 @@ fn classify_arguments(
     // remote spec (`host:/dir`); only a local destination is a write.
     let destination = (1..argv.len()).rev().find(|&i| !argv[i].starts_with('-'));
     let in_place_edit = program == "sed" && argv.iter().any(|a| a.starts_with("-i"));
+    let options_end = argv.iter().position(|a| a == "--");
 
     for (i, (tok, word)) in argv.iter().zip(words).enumerate() {
         for name in env_refs(tok) {
@@ -327,19 +328,9 @@ fn classify_arguments(
             continue;
         }
         let candidate = strip_at(tok);
-        if paths::looks_like_path(candidate) {
-            let is_write = WRITE_ALL_PATHS.contains(&program)
-                || in_place_edit
-                || (WRITE_LAST_PATH.contains(&program) && Some(i) == destination);
-            let path = ctx.path(candidate)?;
-            sink.push(if is_write {
-                AtomicAction::FsWrite { path }
-            } else {
-                AtomicAction::FsRead { path }
-            })?;
-            continue;
-        }
-        if program == "dd"
+        let file = if paths::looks_like_path(candidate) {
+            Some(candidate)
+        } else if program == "dd"
             && let Some((key, value)) = tok.split_once('=')
         {
             let path = ctx.path(value)?;
@@ -349,12 +340,25 @@ fn classify_arguments(
                 _ => {}
             }
             continue;
-        }
-        // Quoted prose ("see example.com") is not a host unless it is a full URL.
-        if (!word.quoted || tok.contains("://"))
+        } else if (!word.quoted || tok.contains("://"))
             && let Some(host) = host::of_word(tok)
         {
+            // Quoted prose ("see example.com") is not a host unless it is a full URL.
             sink.push(AtomicAction::Net { host })?;
+            continue;
+        } else {
+            operands::file_operand(tok, program, options_end.is_some_and(|end| i > end))
+        };
+        if let Some(file) = file {
+            let is_write = WRITE_ALL_PATHS.contains(&program)
+                || in_place_edit
+                || (WRITE_LAST_PATH.contains(&program) && Some(i) == destination);
+            let path = ctx.path(file)?;
+            sink.push(if is_write {
+                AtomicAction::FsWrite { path }
+            } else {
+                AtomicAction::FsRead { path }
+            })?;
         }
     }
     Ok(())
