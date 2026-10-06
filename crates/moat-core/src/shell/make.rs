@@ -65,9 +65,7 @@ pub(super) fn classify(
                 classify_into(call, ctx, sink, depth + 1)?;
             }
         } else if let Some(path) = PATH_OPTIONS.iter().find_map(|p| arg.strip_prefix(p)) {
-            sink.push(AtomicAction::FsRead {
-                path: ctx.path(path)?,
-            })?;
+            sink.read(ctx, path)?;
         }
     }
     Ok(())

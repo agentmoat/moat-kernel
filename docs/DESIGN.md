@@ -522,6 +522,10 @@ Rules:
 - Relative operands → implied `fs.read`/`fs.write`: words containing `/` for any program,
   every operand of file programs (`cat k`, `grep -r . s/`), so symlinks are resolved
   (`shell/operands.rs`).
+- `cd`/`pushd` move the base of later relative paths in the same line: every directory the
+  line may be in is kept and each relative path is checked in all of them; `( … )` restores
+  the set; an unknown target (`cd "$X"`, `cd -`, `popd`, `source`, `eval`) makes later
+  relative paths unparseable (`shell/cwd.rs`).
 - URL-like tokens (`https://…`, `host:port`, `user@host`) → implied `net` action.
 - A decoder (`base64 -d/-D/--decode`, `base32`/`basenc -d`, `openssl … -d`, `xxd -r`,
   `uudecode`, `gunzip`/`zcat`/`gzip -d` and friends) piped, possibly through filters, into

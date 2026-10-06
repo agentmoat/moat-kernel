@@ -157,7 +157,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
             &ShellContext {
                 home: &ctx.home,
                 project: ctx.project.as_deref(),
-                cwd: &ctx.cwd,
+                cwd: &[Some(ctx.cwd.clone())],
             },
         ),
         Action::ForeignShell { shell, .. } => ParseOutcome::Unparseable {

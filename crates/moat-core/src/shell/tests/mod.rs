@@ -8,7 +8,7 @@ fn ctx() -> ShellContext<'static> {
     ShellContext {
         home: "/Users/me",
         project: Some("/p"),
-        cwd: "/p",
+        cwd: Vec::leak(vec![Some("/p".to_owned())]),
     }
 }
 
@@ -329,7 +329,7 @@ fn drive_letter_paths_are_recognised() {
     let ctx = ShellContext {
         home: "C:/Users/me",
         project: Some("C:/p"),
-        cwd: "C:/p",
+        cwd: Vec::leak(vec![Some("C:/p".to_owned())]),
     };
     let ParseOutcome::Parsed(a) = classify("type C:/Users/me/.ssh/id_rsa", &ctx) else {
         panic!("parseable");

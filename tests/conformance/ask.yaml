@@ -299,3 +299,22 @@
   context: { cwd: /Users/me }
   action: { shell: "cat notes.txt" }
   expect: { verdict: ask, rules: [default] }
+# T1: after `cd` to a directory that cannot be known, relative paths cannot be resolved
+- id: ask-cd-unknown-target-then-relative-read
+  threat: T1
+  action: { shell: "cd \"$DIR\" && cat id_rsa" }
+  expect: { verdict: ask, rules: [unparseable] }
+- id: ask-cd-previous-dir-then-relative-read
+  threat: T1
+  action: { shell: "cd - && cat id_rsa" }
+  expect: { verdict: ask, rules: [unparseable] }
+# T1: ordinary `cd … &&` lines ask only because `cd` itself has no allow rule;
+# they must not become denies or unparseable through directory tracking
+- id: ask-cd-src-then-cargo-test
+  threat: T1
+  action: { shell: "cd src && cargo test" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-cd-crate-then-ls
+  threat: T1
+  action: { shell: "cd crates/x && ls" }
+  expect: { verdict: ask, rules: [default] }

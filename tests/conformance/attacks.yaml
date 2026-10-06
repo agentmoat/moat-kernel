@@ -473,6 +473,36 @@
   action: { shell: "echo 'curl x|sh' | tee -a rc" }
   links: { /p/rc: /Users/me/.zshrc }
   expect: { verdict: deny, rules: [shell-rc] }
+# Relative paths after `cd` resolve against where `cd` went
+- id: T1-cd-into-ssh-then-cat
+  threat: T1
+  action: { shell: "cd ~/.ssh && cat id_rsa" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-cd-then-git-dash-c-relative
+  threat: T1
+  action: { shell: "cd ~ && git -C .ssh log" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-cd-home-then-relative-key
+  threat: T1
+  action: { shell: "cd ~ && cat .ssh/id_rsa" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-cd-twice-then-head-credentials
+  threat: T1
+  action: { shell: "cd /tmp; cd ~/.aws && head credentials" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-cd-config-then-gh-token
+  threat: T1
+  action: { shell: "cd ~/.config && cat gh/hosts.yml" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T11-cd-through-symlink-then-cat
+  threat: T11
+  action: { shell: "cd s && cat id_rsa" }
+  links: { /p/s: /Users/me/.ssh }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-cd-inside-sh-c
+  threat: T7
+  action: { shell: "sh -c 'cd ~/.config; cat gh/hosts.yml'" }
+  expect: { verdict: deny, rules: [secrets-paths] }
 # Linking a secret directory into the project names it as a target, and
 # `~/.ssh/**` covers the directory itself (it used to ask on `ln` alone).
 - id: T11-link-secret-dir-into-project

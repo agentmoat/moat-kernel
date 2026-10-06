@@ -252,3 +252,42 @@ fn path_case_sensitivity_comes_from_the_context() {
     );
     assert_eq!(evaluate(&p, &ctx(), &read).unwrap().verdict, Verdict::Allow);
 }
+
+/// Once `cd` is allowed, a relative read after it is checked where `cd` went,
+/// and ordinary `cd … && build` lines keep the verdict they have without `cd`.
+#[test]
+fn reads_after_cd_are_checked_where_cd_went() {
+    let p = policy(
+        "version: 1\ndefaults: ask\ndeny:\n  - id: secret\n    fs.read: ['~/.ssh/**', '~/.aws/**']\n\
+         allow:\n  - id: proj\n    fs.read: ['${project}/**']\n  - id: dev\n    \
+         shell: ['cd *', 'cat *', 'head *', 'ls*', 'cargo test*']\n",
+    );
+    let compiled = CompiledPolicy::compile(&p, &ctx()).unwrap();
+    for command in [
+        "cd /h/.config && cat ../.ssh/id_rsa",
+        "cd /h && cat .ssh/id_rsa",
+        "cd /tmp; cd /h && head .aws/credentials",
+    ] {
+        let d = compiled.decide(&shell(command));
+        assert_eq!(
+            (d.verdict, d.rules),
+            (Verdict::Deny, vec!["secret".to_owned()]),
+            "{command}"
+        );
+    }
+    for command in [
+        "cd src && cargo test",
+        "cd crates/x && ls",
+        "cd src && cat main.rs",
+    ] {
+        assert_eq!(
+            compiled.decide(&shell(command)).verdict,
+            Verdict::Allow,
+            "{command}"
+        );
+    }
+    assert_eq!(
+        compiled.decide(&shell("cd \"$DIR\" && cat id_rsa")).rules,
+        ["unparseable"]
+    );
+}

@@ -11,7 +11,6 @@
 
 use super::{ClassifyError, ShellContext, Sink};
 use crate::action::AtomicAction;
-use crate::paths;
 
 const FLAGS: &[&str] = &[
     "-p",
@@ -76,9 +75,7 @@ pub(super) fn push_shell(
         };
         i += usize::from(inline.is_none());
         if DIRECTORIES.contains(&name) {
-            sink.push(AtomicAction::FsRead {
-                path: paths::normalise(value, ctx.home, ctx.project, ctx.cwd),
-            })?;
+            sink.read(ctx, value)?;
         } else if CONFIG.contains(&name) {
             let key = value
                 .split_once('=')
