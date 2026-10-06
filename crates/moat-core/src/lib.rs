@@ -9,13 +9,15 @@
 //! action is evaluated `deny → allow → ask → defaults` by a [`CompiledPolicy`],
 //! and the strictest verdict across them becomes the [`Decision`]. Facts that
 //! need the filesystem reach the engine through [`ProgramResolver`] and
-//! [`PathResolver`].
+//! [`PathResolver`]. The policy compiler ([`ir::lower()`]) derives from the same
+//! policy what an operating-system layer can enforce (ADR-019).
 
 #![warn(missing_docs)]
 
 mod action;
 mod engine;
 mod host;
+pub mod ir;
 mod kind;
 mod lexer;
 pub mod lint;
