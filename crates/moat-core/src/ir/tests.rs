@@ -1,0 +1,209 @@
+use super::*;
+use crate::action::AtomicAction;
+use crate::engine::EvalContext;
+use crate::policy::Policy;
+
+fn ctx() -> EvalContext {
+    EvalContext {
+        home: "/h".into(),
+        project: Some("/p".into()),
+        real_home: None,
+        real_project: None,
+        cwd: "/p".into(),
+        case_insensitive_paths: false,
+    }
+}
+
+fn lowered(yaml: &str) -> Enforcement {
+    lower(&Policy::parse(yaml).expect("test policy must lint"), &ctx()).expect("must lower")
+}
+
+fn ids(rules: &[Rule]) -> Vec<&str> {
+    rules.iter().map(|r| r.id.as_str()).collect()
+}
+
+fn read(path: &str) -> AtomicAction {
+    AtomicAction::FsRead { path: path.into() }
+}
+
+#[test]
+fn default_policy_lowers_paths_and_hosts() {
+    let ir = lower(
+        &Policy::parse(crate::DEFAULT_POLICY).unwrap(),
+        &EvalContext {
+            home: "/Users/me".into(),
+            ..ctx()
+        },
+    )
+    .unwrap();
+    assert_eq!(ir.fs.read.default, Effect::Deny);
+    assert_eq!(ids(&ir.fs.read.deny), ["secrets-paths"]);
+    assert_eq!(ids(&ir.fs.read.allow), ["project-fs"]);
+    let secrets = &ir.fs.read.deny[0].patterns;
+    assert!(secrets.contains(&"/Users/me/.ssh/**".to_owned()));
+    assert!(
+        secrets.contains(&"!**/.env.example".to_owned()),
+        "exclusions kept"
+    );
+    assert_eq!(
+        ir.fs.write.allow[0].patterns,
+        ["/p/**", "!/p/.git/**", "!/p/.moat/**"]
+    );
+    assert_eq!(
+        ids(&ir.fs.write.deny),
+        ["secrets-paths", "kernel-self", "shell-rc"]
+    );
+    assert_eq!(ir.egress.net.default, Effect::Deny);
+    assert_eq!(
+        ids(&ir.egress.net.deny),
+        ["cloud-metadata", CLOUD_METADATA_RULE]
+    );
+    assert_eq!(ids(&ir.egress.net.allow), ["registries"]);
+    assert_eq!(
+        ir.egress.fetch.default,
+        Effect::Deny,
+        "fetch: ask lowers to deny"
+    );
+    assert!(ir.secrets.is_empty() && ir.limits.is_empty());
+    let kinds: Vec<&str> = ir.decide_only.iter().map(|d| d.kind.as_str()).collect();
+    assert_eq!(kinds, ["shell", "env.read", "env.set", "mcp"]);
+}
+
+#[test]
+fn every_ask_is_reported_as_a_loss() {
+    let ir = lowered(crate::DEFAULT_POLICY);
+    let losses: Vec<String> = ir.losses.iter().map(ToString::to_string).collect();
+    for expected in [
+        "fs.read `default`: no rule matches: the hook asks, OS layers deny",
+        "fs.write `default`: no rule matches: the hook asks, OS layers deny",
+        "fetch `default.fetch`: no rule matches: the hook asks, OS layers deny",
+        "net `local-net`: the hook asks; OS layers deny unless an allow rule matches",
+        "fetch `local-net`: the hook asks; OS layers deny unless an allow rule matches",
+    ] {
+        assert!(losses.contains(&expected.to_owned()), "{losses:#?}");
+    }
+    assert_eq!(losses.len(), 5, "{losses:#?}");
+}
+
+#[test]
+fn ask_under_an_allow_default_becomes_a_deny_rule() {
+    let ir = lowered(
+        "version: 1\ndefaults: allow\nallow:\n  - id: a\n    fs.read: ['/x/**']\n\
+         ask:\n  - id: q\n    fs.read: ['/x/secret']\n",
+    );
+    assert_eq!(ir.fs.read.default, Effect::Allow);
+    assert_eq!(ids(&ir.fs.read.deny), ["q"]);
+    let check = ir.checker().unwrap();
+    assert_eq!(check.check(&read("/x/secret")), Some(Effect::Deny));
+    assert_eq!(check.check(&read("/x/other")), Some(Effect::Allow));
+    assert_eq!(ir.losses[0].rule, "q");
+}
+
+#[test]
+fn net_rules_govern_fetch_with_their_own_exclusions() {
+    let ir = lowered(
+        "version: 1\ndefaults: deny\nallow:\n  - id: a\n    fetch: ['*.org', '!b.org']\n    net: ['b.org']\n",
+    );
+    assert_eq!(ir.egress.fetch.allow.len(), 2);
+    let check = ir.checker().unwrap();
+    let fetch = |host: &str| AtomicAction::Fetch { host: host.into() };
+    assert_eq!(check.check(&fetch("B.org")), Some(Effect::Allow));
+    assert_eq!(check.check(&fetch("a.org")), Some(Effect::Allow));
+    let net = AtomicAction::Net {
+        host: "a.org".into(),
+    };
+    assert_eq!(check.check(&net), Some(Effect::Deny));
+}
+
+#[test]
+fn cloud_metadata_is_denied_even_when_allowed() {
+    let ir = lowered("version: 1\ndefaults: allow\n");
+    let check = ir.checker().unwrap();
+    for host in ["169.254.169.254", "metadata.google.internal"] {
+        for atom in [
+            AtomicAction::Net { host: host.into() },
+            AtomicAction::Fetch { host: host.into() },
+        ] {
+            assert_eq!(check.check(&atom), Some(Effect::Deny), "{atom:?}");
+        }
+    }
+}
+
+#[test]
+fn builtin_metadata_hosts_match_the_default_policy() {
+    let policy = Policy::parse(crate::DEFAULT_POLICY).unwrap();
+    let group = policy.deny.iter().find(|g| g.id == "cloud-metadata");
+    assert_eq!(
+        group.map(|g| g.net.as_slice()),
+        Some(&CLOUD_METADATA.map(String::from)[..])
+    );
+}
+
+#[test]
+fn project_rules_need_a_project_and_cover_every_spelling() {
+    let yaml =
+        "version: 1\nallow:\n  - id: p\n    fs.read: ['${project}/**', '!${project}/.git/**']\n";
+    let policy = Policy::parse(yaml).unwrap();
+    let none = lower(
+        &policy,
+        &EvalContext {
+            project: None,
+            ..ctx()
+        },
+    )
+    .unwrap();
+    assert!(none.fs.read.allow.is_empty());
+    let linked = lower(
+        &policy,
+        &EvalContext {
+            real_project: Some("/private/p".into()),
+            ..ctx()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        linked.fs.read.allow[0].patterns,
+        [
+            "/p/**",
+            "/private/p/**",
+            "!/p/.git/**",
+            "!/private/p/.git/**"
+        ]
+    );
+}
+
+#[test]
+fn decide_only_lists_rules_and_executables() {
+    let ir = lowered(
+        "version: 1\ndeny:\n  - id: s\n    shell: ['sudo *']\n    fs.read: ['/k']\n\
+         executables:\n  git: ['/usr/bin/git']\n",
+    );
+    assert_eq!(
+        ir.decide_only,
+        [
+            DecideOnly {
+                kind: "shell".into(),
+                rules: vec!["s".into()]
+            },
+            DecideOnly {
+                kind: "executables".into(),
+                rules: vec!["git".into()]
+            },
+        ]
+    );
+    assert_eq!(ir.checker().unwrap().check(&read("/k")), Some(Effect::Deny));
+    let shell = AtomicAction::Shell {
+        argv: vec!["sudo".into()],
+    };
+    assert_eq!(ir.checker().unwrap().check(&shell), None);
+}
+
+#[test]
+fn lowering_is_deterministic_and_serialises_kinds_by_name() {
+    let a = lowered(crate::DEFAULT_POLICY);
+    assert_eq!(a, lowered(crate::DEFAULT_POLICY));
+    let json = serde_json::to_string(&a).unwrap();
+    assert!(json.contains(r#""list":"fs.read""#), "{json}");
+    assert!(json.contains(r#""default":"deny""#), "{json}");
+    assert!(json.contains(r#""secrets":[]"#), "{json}");
+}

@@ -18,8 +18,10 @@ use serde::Serialize;
 
 use crate::kind::Kind;
 
+mod check;
 mod lower;
 
+pub use check::Checker;
 pub use lower::{CLOUD_METADATA, CLOUD_METADATA_RULE, lower};
 
 /// What an OS layer may enforce for one policy in one context.
@@ -134,3 +136,6 @@ pub enum BrokeredSecret {}
 /// A process limit. No value exists until the policy schema defines one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ProcessLimit {}
+
+#[cfg(test)]
+mod tests;
