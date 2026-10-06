@@ -14,7 +14,7 @@ use crate::home::Home;
 use crate::install::HostConfig;
 use crate::integrity::{self, HookPins};
 use crate::render::{self, Deferred};
-use crate::sandbox::{Plan, Report, claude, codex, codex_config_path, install};
+use crate::sandbox::{Plan, Report, claude, codex, codex_config_path, install, seatbelt_profile};
 
 /// One host's generated settings, ready to print.
 struct Shown<'a> {
@@ -26,7 +26,9 @@ struct Shown<'a> {
 }
 
 pub fn show(args: &SandboxShowArgs) -> Result<Code> {
-    let plan = Plan::new(&Home::locate()?.load_policy()?)?;
+    let policy = Home::locate()?.load_policy()?;
+    let plan = Plan::new(&policy)?;
+    let seatbelt = seatbelt_profile(&policy, None)?;
     let mut codex_doc = DocumentMut::new();
     codex::apply(&mut codex_doc, &plan.codex)?;
     let hosts = [
@@ -51,7 +53,12 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
                 (s.host.id().to_owned(), entry)
             })
             .collect();
-        render::json(&json!({ "default_read_roots": plan.default_read_roots, "hosts": doc }))?;
+        let seatbelt = json!({ "profile": seatbelt.profile, "report": seatbelt.report });
+        render::json(&json!({
+            "default_read_roots": plan.default_read_roots,
+            "hosts": doc,
+            "lightweight": { "seatbelt": seatbelt },
+        }))?;
         return Ok(Code::Ok);
     }
     let mut out = io::stdout().lock();
@@ -71,6 +78,12 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
         writeln!(out, "{}", shown.text.trim_end())?;
         write_report(&mut out, shown.report)?;
     }
+    writeln!(
+        out,
+        "Seatbelt  Lightweight tier (macOS), for the project in this directory"
+    )?;
+    writeln!(out, "{}", seatbelt.profile.trim_end())?;
+    write_report(&mut out, &seatbelt.report)?;
     writeln!(out, "dry run: nothing was written")?;
     Ok(Code::Ok)
 }
