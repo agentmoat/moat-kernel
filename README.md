@@ -266,6 +266,7 @@ The full list, with the reasons: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | what is defended, how, and the known limitations |
 | [docs/COVERAGE.md](docs/COVERAGE.md) | conformance fixtures per threat class (generated) |
 | [docs/MOATBENCH.md](docs/MOATBENCH.md) | end-to-end attack and benign scenarios per host, and the scorecard |
+| [docs/DEMO.md](docs/DEMO.md) | the launch demo: a prompt-injected exfiltration blocked for two agents, in a throwaway home |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | crates, data flow, self-protection, file layout |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | alpha, beta, 1.0 |
 | [docs/adr/](docs/adr/README.md) | decisions that constrain the code |
