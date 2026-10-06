@@ -10,6 +10,8 @@
 //!   addresses are refused unless an allow rule names the address.
 //! - A tunnel's TLS `ClientHello` must name the CONNECT host (SNI); nothing is
 //!   decrypted.
+//! - A request that carries a brokered secret's placeholder or value to a host
+//!   other than the secret's own is refused ([`Broker`]).
 //! - Every decision is recorded through a [`Recorder`]; a failed record is a
 //!   refused connection.
 //!
@@ -19,6 +21,7 @@
 #![warn(missing_docs)]
 
 mod audit;
+mod broker;
 mod decide;
 mod request;
 mod server;
@@ -27,6 +30,7 @@ mod tunnel;
 mod upstream;
 
 pub use audit::{Connection, RecordError, Recorder};
+pub use broker::{Broker, BrokerError, Carried, Leak, RULE_SECRET};
 pub use decide::{
     Forbidden, RULE_ADDRESS, RULE_AUDIT, RULE_REQUEST, RULE_SNI, RULE_UPSTREAM, address_policy,
     forbidden, host as decide_host, named as address_named,

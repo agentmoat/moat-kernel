@@ -10,14 +10,14 @@ use std::thread;
 use std::time::Duration;
 
 use moat_core::{CompiledPolicy, EvalContext, Policy, Verdict};
-use moat_proxy::{Connection, Limits, Proxy, RecordError, Recorder, Resolve};
+use moat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, Resolve};
 
 const POLICY: &str = r#"
 version: 1
 defaults: { "*": deny, fetch: ask }
 allow:
   - id: test-hosts
-    net: ["allowed.test", "rebind.test", "mixed.test", "loop.test", "169.254.169.254"]
+    net: ["allowed.test", "rebind.test", "mixed.test", "loop.test", "169.254.169.254", "owner.test"]
   - id: lan-names
     net: ["lan.test", "mixed-lan.test", "*.wild.test"]
 "#;
@@ -100,7 +100,15 @@ struct Harness {
 }
 
 fn start(recorder: Option<&'static dyn Recorder>, limits: Limits) -> Harness {
-    let (upstream, received) = upstream();
+    launch(recorder, limits, Broker::default(), upstream())
+}
+
+fn launch(
+    recorder: Option<&'static dyn Recorder>,
+    limits: Limits,
+    broker: Broker,
+    (upstream, received): (SocketAddr, Receiver<Vec<u8>>),
+) -> Harness {
     let rows: &'static MemoryRecorder = Box::leak(Box::default());
     let recorder = recorder.unwrap_or(rows);
     let local = IpAddr::V4(Ipv4Addr::LOCALHOST);
@@ -118,6 +126,7 @@ fn start(recorder: Option<&'static dyn Recorder>, limits: Limits) -> Harness {
             vec![ip("93.184.215.14"), ip("::ffff:192.168.1.1")],
         ),
         ("x.wild.test", vec![ip("fd12::1")]),
+        ("owner.test", vec![local]),
     ]));
     let policy: &'static Policy = Box::leak(Box::new(Policy::parse(POLICY).unwrap()));
     let ctx = EvalContext {
@@ -134,6 +143,7 @@ fn start(recorder: Option<&'static dyn Recorder>, limits: Limits) -> Harness {
         recorder,
         limits: Box::leak(Box::new(limits)),
         loopback_ok: Box::leak(Box::new([upstream])),
+        broker: Box::leak(Box::new(broker)),
     };
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
@@ -223,6 +233,7 @@ fn tunnel(h: &Harness, host: &str, sni: &str) -> (TcpStream, String) {
     (s, rest)
 }
 
+mod broker;
 mod http;
 mod limits;
 mod private;
