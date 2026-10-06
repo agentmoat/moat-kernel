@@ -183,6 +183,12 @@ impl Proxy<'_> {
                 }
             }
             Target::Http { head, host, .. } => {
+                let mut decision = decision.clone();
+                decision
+                    .reasons
+                    .extend(self.broker.withheld(host).iter().map(|id| {
+                        format!("secret `{id}` not injected: plain HTTP needs `plain_http: true`")
+                    }));
                 if !self.record(Some(&request), &decision, started) {
                     refuse(client, 403, "audit log unavailable");
                     return;

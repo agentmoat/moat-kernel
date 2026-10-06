@@ -141,12 +141,26 @@ impl Broker {
             })
     }
 
-    /// `head` (a request head the proxy wrote, lines ending in CRLF) with the
-    /// secrets of `host` put in: in each header a secret names, the
-    /// placeholder becomes the value; a secret whose header is absent is
-    /// added. `None` when `host` owns no secret.
+    /// Ids of the secrets `host` owns that are not put into plain-HTTP
+    /// requests, because their policy entry does not set `plain_http`.
+    pub(crate) fn withheld(&self, host: &str) -> Vec<&str> {
+        self.held
+            .iter()
+            .filter(|h| h.secret.host == host && !h.secret.plain_http)
+            .map(|h| h.secret.id.as_str())
+            .collect()
+    }
+
+    /// `head` (a plain-HTTP request head the proxy wrote, lines ending in
+    /// CRLF) with the secrets of `host` that allow `plain_http` put in: in
+    /// each header a secret names, the placeholder becomes the value; a secret
+    /// whose header is absent is added. `None` when there is no such secret.
     pub(crate) fn inject(&self, host: &str, head: &[u8]) -> Option<Zeroizing<Vec<u8>>> {
-        let owned: Vec<&Held> = self.held.iter().filter(|h| h.secret.host == host).collect();
+        let owned: Vec<&Held> = self
+            .held
+            .iter()
+            .filter(|h| h.secret.host == host && h.secret.plain_http)
+            .collect();
         // Each line keeps its `\r`; only the `\n`s are split on and re-added.
         let lines = head.strip_suffix(b"\n\r\n")?;
         if owned.is_empty() {

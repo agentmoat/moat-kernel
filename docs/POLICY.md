@@ -101,13 +101,17 @@ value from `source` and is the only component that uses it.
 
 What the proxy does with them:
 
-- **Injection, plain HTTP only.** In a plain-HTTP request to `host` (any port), every
-  `header` line has the placeholder replaced by the value. When the request has no such
-  header, `header: <value>` is added. The placeholder elsewhere (the path, other headers)
-  is left as it is. The value then crosses the network in clear text, so use it only
-  where that is acceptable. HTTPS (CONNECT) is not decrypted, so a request there carries
-  the placeholder and the server rejects it. Injection into HTTPS needs opt-in TLS
-  termination, which is not built (#172).
+- **Injection, plain HTTP with `plain_http: true` only.** In a plain-HTTP request to
+  `host` (any port), every `header` line has the placeholder replaced by the value. When
+  the request has no such header, `header: <value>` is added. The placeholder elsewhere
+  (the path, other headers) is left as it is. The value then crosses the network in clear
+  text.
+- **Without `plain_http`** the request is forwarded unchanged, still carrying the
+  placeholder, and the server rejects it. The audit row says
+  ``secret `<id>` not injected``.
+- **HTTPS (CONNECT)** is not decrypted, so a request there carries the placeholder and
+  the server rejects it. Injection into HTTPS needs opt-in TLS termination, which is not
+  built (#172).
 - **Leak blocking.** The proxy refuses a request to any other host that carries the
   placeholder or the value, in its head or plain-HTTP body (`proxy-secret`, §5.1).
 

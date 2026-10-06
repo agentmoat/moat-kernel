@@ -423,7 +423,9 @@ Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `st
        `Trailer`, `Upgrade`, `Keep-Alive`) and add `Connection: close`;
      - refuse `Content-Length` with `Transfer-Encoding`, or more than one `Content-Length`;
      - after the row is recorded, put the value of each brokered secret the host owns
-       into the head (POLICY.md §2.1). The head is zeroed once it is written.
+       and that sets `plain_http` into the head (POLICY.md §2.1). The head is zeroed once
+       it is written. A secret without `plain_http` is not injected, and the row's reasons
+       say so.
   6. Record one audit row: host `proxy`, the method as the tool, the action
      `net` `connect://host:port` or `http://host:port` (never the path), and the verdict
      and rules. If the row cannot be written, the connection is refused.
