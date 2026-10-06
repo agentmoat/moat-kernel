@@ -35,3 +35,28 @@
     - { shell: "grep -rn 'TODO' src | head -20", expect: allow, rule: dev-shell }
     - { shell: "find . -name '*.rs' -newer Cargo.toml", expect: allow, rule: dev-shell }
 
+- id: read-a-pull-request
+  threat: T8
+  why: >-
+    A read-only GitHub MCP tool on the safe list.
+  steps:
+    - { mcp: { server: github, tool: get_pull_request, args: { owner: acme, repo: app, number: 42 } }, expect: allow, rule: safe-mcp }
+
+- id: build-and-lint
+  threat: T5
+  why: >-
+    Project scripts and linters run without prompts (their limits are in
+    docs/THREAT_MODEL.md §5).
+  steps:
+    - { shell: "npm run build && npm test", expect: allow, rule: dev-shell }
+    - { shell: "cargo clippy --all-targets -- -D warnings", expect: allow, rule: dev-shell }
+
+- id: read-with-text-tools
+  threat: T7
+  gap: "#212"
+  why: >-
+    Agents read file ranges with `sed -n` and summarise with `sort | uniq`. Both only
+    read project files, but no allow rule covers them yet, so they ask.
+  steps:
+    - { shell: "sed -n 1,40p src/lib.rs", expect: allow }
+    - { shell: "sort data.txt | uniq -c", expect: allow }
