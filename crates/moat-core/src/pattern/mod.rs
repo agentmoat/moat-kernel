@@ -39,10 +39,17 @@ pub(crate) fn any_match<C: ?Sized, M: Matcher<C>>(patterns: &[M], candidate: &C)
 }
 
 /// A compiled glob for paths, hosts, env names and MCP tool names.
+///
+/// `dir/**` also matches `dir` itself: a recursive read of a directory reads
+/// everything under it, and removing, renaming or replacing the directory
+/// writes everything under it, so the rule that guards the contents guards the
+/// directory as a target too (`grep -r . ~/.ssh` meets `~/.ssh/**`).
 #[derive(Debug, Clone)]
 pub struct GlobPattern {
     source: String,
     matcher: GlobMatcher,
+    /// Matcher for `dir` when the pattern is `dir/**`.
+    dir: Option<GlobMatcher>,
     /// `!pattern` inside an allow list excludes matches (DESIGN.md §6.2).
     pub negated: bool,
 }
@@ -73,24 +80,32 @@ impl GlobPattern {
         if body.is_empty() {
             return Err(PolicyError::EmptyPattern);
         }
-        let glob: Glob = GlobBuilder::new(body)
-            .literal_separator(true)
-            .case_insensitive(case_insensitive)
-            .build()
-            .map_err(|e| PolicyError::BadGlob {
-                pattern: raw.to_owned(),
-                source: e,
-            })?;
+        let build = |glob: &str| -> Result<GlobMatcher, PolicyError> {
+            let glob: Glob = GlobBuilder::new(glob)
+                .literal_separator(true)
+                .case_insensitive(case_insensitive)
+                .build()
+                .map_err(|e| PolicyError::BadGlob {
+                    pattern: raw.to_owned(),
+                    source: e,
+                })?;
+            Ok(glob.compile_matcher())
+        };
+        let dir = match body.strip_suffix("/**") {
+            Some(dir) if !dir.is_empty() => Some(build(dir)?),
+            _ => None,
+        };
         Ok(Self {
             source: raw.to_owned(),
-            matcher: glob.compile_matcher(),
+            matcher: build(body)?,
+            dir,
             negated,
         })
     }
 
     #[must_use]
     pub fn is_match(&self, candidate: &str) -> bool {
-        self.matcher.is_match(candidate)
+        self.matcher.is_match(candidate) || self.dir.as_ref().is_some_and(|d| d.is_match(candidate))
     }
 
     /// True when every candidate `other` matches is also matched by `self`.
@@ -438,6 +453,16 @@ mod tests {
         assert!(!any_match(&list, &argv("find . -name x -execdir rm {} ;")));
         assert!(!any_match(&list[1..], &argv("find . -exec x")));
         assert!(!list[0].covers(&list[1]) && !list[1].covers(&list[0]));
+    }
+
+    #[test]
+    fn recursive_glob_matches_its_directory() {
+        let g = GlobPattern::compile("/h/.ssh/**", true).unwrap();
+        assert!(g.is_match("/h/.ssh") && g.is_match("/h/.SSH/id_rsa"));
+        assert!(!g.is_match("/h/.sshx") && !g.is_match("/h"));
+        let any = GlobPattern::compile("**/.git/**", false).unwrap();
+        assert!(any.is_match("/p/.git") && !any.is_match("/p/.github"));
+        assert!(GlobPattern::compile("**", false).unwrap().is_match("/x"));
     }
 
     #[test]
