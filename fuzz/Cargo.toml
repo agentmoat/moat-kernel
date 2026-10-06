@@ -16,6 +16,7 @@ members = ["."]
 libfuzzer-sys = "0.4"
 moat-core = { path = "../crates/moat-core" }
 moat-hosts = { path = "../crates/moat-hosts" }
+moat-proxy = { path = "../crates/moat-proxy" }
 
 [[bin]]
 name = "decide_shell"
@@ -41,6 +42,13 @@ bench = false
 [[bin]]
 name = "literal_pattern"
 path = "fuzz_targets/literal_pattern.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "proxy_parse"
+path = "fuzz_targets/proxy_parse.rs"
 test = false
 doc = false
 bench = false
