@@ -17,8 +17,13 @@
 
 #![warn(missing_docs)]
 
+mod decide;
 mod request;
 mod sni;
 
+pub use decide::{
+    Forbidden, RULE_ADDRESS, RULE_AUDIT, RULE_REQUEST, RULE_SNI, RULE_UPSTREAM, forbidden,
+    host as decide_host,
+};
 pub use request::{MAX_HEADERS, Request, RequestError, Target, parse as parse_request};
 pub use sni::{Hello, HelloError, MAX_HELLO, server_name};
