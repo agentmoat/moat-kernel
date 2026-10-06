@@ -24,8 +24,15 @@ use std::process::ExitCode;
 use clap::Parser;
 
 fn main() -> ExitCode {
-    // clap exits with 2 on usage errors, which hosts would read as `deny`.
-    // Parse explicitly so usage errors use the dedicated code instead.
+    // A host runs `moat guard` and blocks the tool call only on exit 2; any other
+    // failure lets the call through. So a `guard` that cannot even parse its
+    // arguments denies (ADR-015), and every other command reports usage errors
+    // with the dedicated code, never 2.
+    let failed = if invoked_as_hook() {
+        exit::Code::Deny
+    } else {
+        exit::Code::Usage
+    };
     let cli = match cli::Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => {
@@ -34,7 +41,7 @@ fn main() -> ExitCode {
             return if informational {
                 exit::Code::Ok
             } else {
-                exit::Code::Usage
+                failed
             }
             .into();
         }
@@ -43,7 +50,12 @@ fn main() -> ExitCode {
         Ok(code) => code.into(),
         Err(error) => {
             eprintln!("moat: {error:#}");
-            exit::Code::Usage.into()
+            failed.into()
         }
     }
+}
+
+/// True when the first argument is `guard`, the subcommand host hooks run.
+fn invoked_as_hook() -> bool {
+    std::env::args_os().nth(1).is_some_and(|arg| arg == "guard")
 }

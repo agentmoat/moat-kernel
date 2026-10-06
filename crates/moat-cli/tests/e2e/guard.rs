@@ -230,9 +230,33 @@ fn guard_fails_closed() {
             Some(true)
         );
     }
+}
 
-    let out = sb.moat_stdin(&["guard", "--host", "windsurf"], "{}");
-    assert_eq!(out.status.code(), Some(64));
+/// Hosts block a call only on exit 2, so a hook command line `guard` cannot
+/// parse (an unknown host, a missing or misspelt flag after an upgrade) must
+/// deny rather than fail open with the usage code (ADR-015).
+#[test]
+fn unparseable_guard_arguments_deny() {
+    let sb = Sandbox::bare(&[".claude"]);
+    sb.moat(&["init"]);
+    for args in [
+        &["guard", "--host", "windsurf"][..],
+        &["guard"],
+        &["guard", "--hots", "claude-code"],
+        &["guard", "--host", "claude-code", "extra"],
+    ] {
+        let out = sb.moat_stdin(args, "{}");
+        assert_eq!(out.status.code(), Some(2), "{args:?}: {}", stderr(&out));
+        assert!(!stderr(&out).is_empty(), "{args:?} must say why");
+    }
+    let help = sb.moat(&["guard", "--help"]);
+    assert_eq!(help.status.code(), Some(0), "help is not a failure");
+    let other = sb.moat(&["show", "--since", "soon"]);
+    assert_eq!(
+        other.status.code(),
+        Some(64),
+        "other commands keep the usage code"
+    );
 }
 
 #[test]

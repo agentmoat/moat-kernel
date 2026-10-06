@@ -10,8 +10,9 @@ use moat_hosts::Host;
     name = "moat",
     version,
     about = "agentmoat: the kernel your AI agents run on",
-    long_about = "Decides what AI agents may do on this machine, enforces it, and records it.\n\
-                  Exit codes: 0 allow/ok, 2 deny, 3 ask (unresolved), 64 usage or configuration error."
+    long_about = "Decides what AI agents may do on this machine and records every decision.\n\
+                  Exit codes: 0 allow/ok, 2 deny, 3 ask (unresolved), 64 usage or configuration error\n\
+                  (`guard` exits 2 instead, so a broken hook blocks rather than fails open)."
 )]
 pub struct Cli {
     #[command(subcommand)]

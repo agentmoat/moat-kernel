@@ -784,7 +784,8 @@ moat mcp-proxy --upstream "<cmd…>" [--name <server>]
 ```
 
 Exit codes: `0` ok/allow, `2` deny (hooks), `3` ask-unresolved (treated as deny by
-adapters), `64+` usage/config errors (fail closed: adapters map to deny with reason).
+adapters), `64+` usage/config errors (fail closed: adapters map to deny with reason). `guard` never
+exits 64: it denies with exit 2 even when it cannot parse its own arguments (ADR-015).
 
 ### 10.4 Hook payload fixtures (golden tests)
 
