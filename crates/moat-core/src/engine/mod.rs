@@ -284,6 +284,20 @@ impl CompiledPolicy<'_> {
         self.decide_with(action, &NoResolver, &NoResolver)
     }
 
+    /// The atomic actions [`Self::decide_with`] evaluates for `action`, with an
+    /// extra atom for every read or write `paths` resolves through a symlink;
+    /// `Err` with the reason when the action cannot be classified (`ask`).
+    pub fn atoms(
+        &self,
+        action: &Action,
+        paths: &dyn PathResolver,
+    ) -> Result<Vec<AtomicAction>, String> {
+        match classify_action(action, &self.ctx) {
+            ParseOutcome::Parsed(atoms) => Ok(with_resolved_paths(atoms, paths)),
+            ParseOutcome::Unparseable { reason } => Err(reason),
+        }
+    }
+
     /// Decide one host action, resolving shell programs through `resolver` so
     /// that `executables` pins and installation pins are enforced, and paths
     /// through `paths` so a symlink cannot move a read or write past a rule.
@@ -294,9 +308,9 @@ impl CompiledPolicy<'_> {
         resolver: &dyn ProgramResolver,
         paths: &dyn PathResolver,
     ) -> Decision {
-        let atoms = match classify_action(action, &self.ctx) {
-            ParseOutcome::Parsed(atoms) => with_resolved_paths(atoms, paths),
-            ParseOutcome::Unparseable { reason } => {
+        let atoms = match self.atoms(action, paths) {
+            Ok(atoms) => atoms,
+            Err(reason) => {
                 return unparseable(format!("could not parse action safely: {reason}"));
             }
         };
