@@ -7,7 +7,7 @@ the verdict and rule ids the default policy must produce for it.
 
 | Threat | Class | Attacks | Asks | Benign |
 |---|---|---|---|---|
-| T1 | Secret exfiltration via shell | 25 | 7 | 2 |
+| T1 | Secret exfiltration via shell | 25 | 18 | 3 |
 | T2 | Secret exfiltration via file tools | 18 | 0 | 0 |
 | T3 | Secret exfiltration via environment | 14 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 28 | 17 | 0 |
@@ -29,6 +29,17 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-cd-previous-dir-then-relative-read` (ask): Ask [unparseable]
 - `ask-copy-out-of-project` (ask): Ask [default]
 - `ask-cd-home-then-list` (ask): Ask [default]
+- `ask-recursive-read-grep-home` (ask): Ask [default]
+- `ask-recursive-read-rg-home` (ask): Ask [default]
+- `ask-recursive-read-grep-config` (ask): Ask [default]
+- `ask-recursive-read-rg-config` (ask): Ask [default]
+- `ask-recursive-read-find-home` (ask): Ask [default]
+- `ask-recursive-read-tar-home` (ask): Ask [default]
+- `ask-recursive-read-cp-home` (ask): Ask [default]
+- `ask-recursive-read-zip-home` (ask): Ask [default]
+- `ask-recursive-read-rsync-home` (ask): Ask [default]
+- `ask-recursive-read-grep-cwd-home` (ask): Ask [default]
+- `ask-recursive-read-grep-parent-of-project` (ask): Ask [default]
 - `T1-cat-ssh-key` (attacks): Deny [secrets-paths]
 - `T1-curl-upload-ssh-key` (attacks): Deny [secrets-paths]
 - `T1-substitution-exfil` (attacks): Deny [secrets-paths]
@@ -56,6 +67,7 @@ the verdict and rule ids the default policy must produce for it.
 - `T1-cd-allowed-still-follows-into-secrets` (attacks): Deny [secrets-paths]
 - `benign-cd-src-then-cargo-test` (benign): Allow [dev-shell]
 - `benign-cd-crate-then-ls` (benign): Allow [dev-shell]
+- `benign-recursive-read-of-project-root` (benign): Allow [dev-shell, project-fs]
 
 ## T2: Secret exfiltration via file tools
 

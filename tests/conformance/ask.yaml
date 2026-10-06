@@ -385,3 +385,51 @@
   threat: T6
   action: { shell: "export CDPATH=~; cd .ssh && cat id_rsa" }
   expect: { verdict: ask, rules: [default] }
+# T1 a recursive read of an ancestor of secret directories (`~`, `~/.config`) is checked on
+# the directory itself: no deny rule names it, and no allow rule covers it outside a project
+- id: ask-recursive-read-grep-home
+  threat: T1
+  action: { shell: "grep -r . ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-rg-home
+  threat: T1
+  action: { shell: "rg -uu . ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-grep-config
+  threat: T1
+  action: { shell: "grep -r token ~/.config" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-rg-config
+  threat: T1
+  action: { shell: "rg secret ~/.config" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-find-home
+  threat: T1
+  action: { shell: "find ~ -name '*.pem'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-tar-home
+  threat: T1
+  action: { shell: "tar czf h.tgz ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-cp-home
+  threat: T1
+  action: { shell: "cp -r ~ /tmp/h" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-zip-home
+  threat: T1
+  action: { shell: "zip -r h.zip ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-rsync-home
+  threat: T1
+  action: { shell: "rsync -a ~ /tmp/h" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-grep-cwd-home
+  threat: T1
+  action: { shell: "grep -r token ." }
+  context: { cwd: /Users/me }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-read-grep-parent-of-project
+  threat: T1
+  action: { shell: "grep -r . .." }
+  context: { cwd: /Users/me/proj, project: /Users/me/proj }
+  expect: { verdict: ask, rules: [default] }

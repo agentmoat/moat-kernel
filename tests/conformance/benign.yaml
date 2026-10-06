@@ -393,3 +393,7 @@
 - id: benign-webfetch-registry
   action: { fetch: "https://crates.io/crates/serde" }
   expect: { verdict: allow, rules: [registries] }
+- id: benign-recursive-read-of-project-root
+  threat: T1
+  action: { shell: "grep -r TODO ." }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
