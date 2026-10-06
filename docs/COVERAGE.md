@@ -8,7 +8,7 @@ the verdict and rule ids the default policy must produce for it.
 | Threat | Class | Attacks | Asks | Benign |
 |---|---|---|---|---|
 | T1 | Secret exfiltration via shell | 25 | 18 | 3 |
-| T2 | Secret exfiltration via file tools | 18 | 0 | 0 |
+| T2 | Secret exfiltration via file tools | 18 | 1 | 0 |
 | T3 | Secret exfiltration via environment | 14 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 28 | 17 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
@@ -71,6 +71,7 @@ the verdict and rule ids the default policy must produce for it.
 
 ## T2: Secret exfiltration via file tools
 
+- `ask-read-under-a-sandbox-read-root` (ask): Ask [default]
 - `T2-read-aws-credentials` (attacks): Deny [secrets-paths]
 - `T2-read-dotenv-in-project` (attacks): Deny [secrets-paths]
 - `T2-read-dotenv-variant` (attacks): Deny [secrets-paths]

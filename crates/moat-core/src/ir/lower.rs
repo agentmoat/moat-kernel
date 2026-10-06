@@ -1,10 +1,13 @@
 //! Lowering `policy.yaml` to the [`Enforcement`] IR.
 
-use super::{Access, DecideOnly, Effect, Egress, Enforcement, Filesystem, Loss, Rule};
+use super::{Access, Allowance, DecideOnly, Effect, Egress, Enforcement, Filesystem, Loss, Rule};
 use crate::engine::{CompiledPolicy, EvalContext};
 use crate::kind::Kind;
 use crate::policy::{Policy, PolicyError, RuleGroup};
 use crate::verdict::Verdict;
+
+/// Id of the allowance `sandbox.read_roots` lowers to.
+pub const READ_ROOTS_RULE: &str = "sandbox.read_roots";
 
 /// Id of the deny rule every lowering adds to `net` and `fetch`.
 pub const CLOUD_METADATA_RULE: &str = "moat.cloud-metadata";
@@ -56,7 +59,34 @@ pub fn lower(policy: &Policy, ctx: &EvalContext) -> Result<Enforcement, PolicyEr
         limits: Vec::new(),
         decide_only: decide_only(policy),
         losses,
+        allowances: read_roots(policy, ctx),
     })
+}
+
+/// `sandbox.read_roots` as one allowance: each root and everything below it,
+/// in every spelling of the home directory. Lint guarantees plain paths.
+fn read_roots(policy: &Policy, ctx: &EvalContext) -> Vec<Allowance> {
+    let patterns: Vec<String> = policy
+        .sandbox
+        .iter()
+        .flat_map(|s| &s.read_roots)
+        .flat_map(|root| {
+            let root = root.trim_end_matches('/');
+            [root.to_owned(), format!("{root}/**")]
+        })
+        .flat_map(|p| ctx.spellings(&p))
+        .collect();
+    if patterns.is_empty() {
+        return Vec::new();
+    }
+    vec![Allowance {
+        kind: Kind::FsRead,
+        rule: READ_ROOTS_RULE.to_owned(),
+        patterns,
+        message: "the hook decides these reads by the rules (ask by default); OS layers allow \
+                  them so commands can run, and deny rules still win"
+            .to_owned(),
+    }]
 }
 
 /// The engine's `deny → allow → ask → default` for one kind, with `ask` read as deny.

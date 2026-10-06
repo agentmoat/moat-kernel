@@ -433,3 +433,8 @@
   action: { shell: "grep -r . .." }
   context: { cwd: /Users/me/proj, project: /Users/me/proj }
   expect: { verdict: ask, rules: [default] }
+# sandbox.read_roots only widens OS layers: the hook still asks for a read there
+- id: ask-read-under-a-sandbox-read-root
+  threat: T2
+  action: { fs_read: "~/.cargo/registry/src/index/serde-1.0.0/src/lib.rs" }
+  expect: { verdict: ask, rules: [default] }

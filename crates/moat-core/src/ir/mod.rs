@@ -22,7 +22,7 @@ mod check;
 mod lower;
 
 pub use check::Checker;
-pub use lower::{CLOUD_METADATA, CLOUD_METADATA_RULE, lower};
+pub use lower::{CLOUD_METADATA, CLOUD_METADATA_RULE, READ_ROOTS_RULE, lower};
 
 /// What an OS layer may enforce for one policy in one context.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -43,6 +43,11 @@ pub struct Enforcement {
     pub decide_only: Vec<DecideOnly>,
     /// Where the IR is stricter than the hook decision, with the reason.
     pub losses: Vec<Loss>,
+    /// Where OS layers may be wider than the hook decision, listed in the
+    /// policy (`sandbox.read_roots`). The hook keeps deciding these accesses;
+    /// deny rules still win over them. Not part of [`Filesystem`], so the IR's
+    /// own verdicts stay the hook's or stricter.
+    pub allowances: Vec<Allowance>,
 }
 
 /// File access rules. Paths are absolute, slash-separated globs with `~` and
@@ -123,6 +128,26 @@ pub struct Loss {
 }
 
 impl fmt::Display for Loss {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} `{}`: {}", self.kind, self.rule, self.message)
+    }
+}
+
+/// Accesses OS layers allow although the hook would not (ADR-019: the only
+/// way an OS layer may be wider than the hook, and always listed).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Allowance {
+    /// The access the allowance applies to.
+    pub kind: Kind,
+    /// Where it comes from (`sandbox.read_roots`).
+    pub rule: String,
+    /// Expanded globs: each root and everything below it.
+    pub patterns: Vec<String>,
+    /// What the hook does and what OS layers do instead.
+    pub message: String,
+}
+
+impl fmt::Display for Allowance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} `{}`: {}", self.kind, self.rule, self.message)
     }
