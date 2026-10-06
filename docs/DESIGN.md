@@ -179,7 +179,9 @@ its JSON to the kernel's internal `ToolCall`.
   `transcript_path`. Bash → `tool_input.command`; Monitor → `command` (shell) or `ws.url`
   (network), exactly one; PowerShell → `command`, recorded and always `ask` (`unparseable`:
   moat has no PowerShell parser); Edit/Write → `file_path`; NotebookEdit → `notebook_path`;
-  Read → `file_path`; LSP → `filePath` (read); Glob/Grep → `path`, else `cwd` (read);
+  Read → `file_path`; LSP → `filePath` (read); Glob/Grep → `path`, else `cwd` (read); an absolute or `~` Glob
+  `pattern` also reads its directory part before the first `*?[{` (Claude Code searches that
+  instead of `path`);
   SendFile → every path in `files` (read: the contents go to another session; an empty
   or non-string list is an adapter error, so `deny`);
   WebFetch → `url` (a `fetch`: a GET the agent cannot attach a body to, ADR-017); MCP tools named `mcp__<server>__<tool>`. Not governed: `WebSearch`

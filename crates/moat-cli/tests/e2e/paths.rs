@@ -168,3 +168,31 @@ fn a_project_under_a_symlinked_directory_is_the_project() {
     assert_verdict(&sb, &project, "cat s/id_rsa", "deny", "secrets-paths");
     assert_verdict(&sb, &project, "cat e/hosts", "ask", "default");
 }
+
+/// A Claude Code `Glob` whose pattern is absolute searches the pattern's own
+/// directory, whatever `path` says; that directory is what gets checked.
+#[test]
+fn an_absolute_glob_pattern_is_a_read_of_its_directory() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let project = sb.project();
+    let home = sb.home.to_string_lossy().replace('\\', "/");
+    let glob = |pattern: &str| {
+        let payload = serde_json::json!({
+            "session_id": "s-glob", "cwd": project.to_string_lossy(),
+            "hook_event_name": "PreToolUse", "tool_name": "Glob",
+            "tool_input": {"pattern": pattern, "path": project.to_string_lossy()}
+        });
+        let d = hook_output(&sb.guard("claude-code", &payload.to_string()));
+        (
+            d["permissionDecision"].clone(),
+            d["permissionDecisionReason"].to_string(),
+        )
+    };
+    for pattern in [format!("{home}/.ssh/id_*"), "~/.aws/**/cred*".to_owned()] {
+        let (verdict, reason) = glob(&pattern);
+        assert_eq!(verdict, "deny", "{pattern}: {reason}");
+        assert!(reason.contains("secrets-paths"), "{pattern}: {reason}");
+    }
+    let (verdict, reason) = glob(&format!("{home}/proj/src/**/*.rs"));
+    assert_eq!(verdict, "allow", "{reason}");
+}

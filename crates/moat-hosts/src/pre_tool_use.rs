@@ -87,7 +87,8 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
         "apply_patch" => Action::Patch {
             writes: crate::patch::writes(&field("command")?),
         },
-        "Glob" | "Grep" => crate::search_root(input, cwd),
+        "Glob" => crate::glob_roots(input, cwd),
+        "Grep" => crate::search_root(input, cwd),
         name if name.starts_with("mcp__") => crate::mcp::action(name, input)?,
         _ => return Ok(None),
     };
@@ -330,6 +331,36 @@ mod tests {
         let payload = r#"{"tool_name":"Grep","tool_input":{"pattern":"x"},"cwd":"/p"}"#;
         let req = Host::ClaudeCode.parse_request(payload).unwrap();
         assert_eq!(req.action, Some(Action::FsRead { path: "/p".into() }));
+    }
+
+    #[test]
+    fn glob_reads_the_directory_an_absolute_pattern_names() {
+        let req = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "glob-absolute"))
+            .unwrap();
+        assert_eq!(
+            req.action,
+            Some(Action::ReadFiles {
+                paths: vec!["/p/src".into(), "/Users/me/.ssh".into()]
+            })
+        );
+        let glob = |pattern: &str| {
+            let payload = serde_json::json!({
+                "tool_name": "Glob", "tool_input": {"pattern": pattern}, "cwd": "/p"
+            });
+            Host::ClaudeCode
+                .parse_request(&payload.to_string())
+                .unwrap()
+                .action
+        };
+        let read = |path: &str| Some(Action::FsRead { path: path.into() });
+        assert_eq!(glob("~/.aws/**/cred*"), read("~/.aws"));
+        assert_eq!(glob("/etc/passwd"), read("/etc"));
+        assert_eq!(glob("/*"), read("/"));
+        assert_eq!(glob(r"C:\Users\me\.ssh\*"), read(r"C:\Users\me\.ssh"));
+        assert_eq!(glob("C:/*"), read("C:/"));
+        assert_eq!(glob("src/**/*.rs"), read("/p"));
+        assert_eq!(glob("**/.ssh/*"), read("/p"));
     }
 
     #[test]
