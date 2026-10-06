@@ -7,10 +7,14 @@ use super::{Broker, BrokerError, Carried, RULE_SECRET, Watch};
 const VALUE: &str = "fake-0123456789abcdef";
 
 fn broker(value: &str) -> Result<Broker, BrokerError> {
-    let policy = Policy::parse(
+    broker_with(value, false)
+}
+
+fn broker_with(value: &str, plain_http: bool) -> Result<Broker, BrokerError> {
+    let policy = Policy::parse(&format!(
         "version: 1\nsecrets:\n  - id: gh\n    host: api.github.com\n    header: Authorization\n    \
-         source: { env: FAKE_TOKEN }\n",
-    )
+         source: {{ env: FAKE_TOKEN }}\n    plain_http: {plain_http}\n",
+    ))
     .unwrap();
     let secrets = policy
         .secrets
@@ -87,7 +91,7 @@ fn debug_names_ids_and_hosts_never_values() {
 
 #[test]
 fn the_owner_head_gets_the_value_in_place_of_the_placeholder() {
-    let b = broker(VALUE).unwrap();
+    let b = broker_with(VALUE, true).unwrap();
     let head = b"GET /moat-secret:gh:placeholder HTTP/1.1\r\nHost: api.github.com\r\n\
                  authorization: Bearer moat-secret:gh:placeholder\r\n\
                  X-Other: moat-secret:gh:placeholder\r\nConnection: close\r\n\r\n";
@@ -104,11 +108,21 @@ fn the_owner_head_gets_the_value_in_place_of_the_placeholder() {
 
 #[test]
 fn a_missing_header_is_added_and_other_hosts_get_nothing() {
-    let b = broker(VALUE).unwrap();
+    let b = broker_with(VALUE, true).unwrap();
     let head = b"GET / HTTP/1.1\r\nHost: api.github.com\r\nConnection: close\r\n\r\n";
     let out = b.inject("api.github.com", head).unwrap();
     let added = format!("Connection: close\r\nAuthorization: {VALUE}\r\n\r\n");
     assert!(out.ends_with(added.as_bytes()));
     assert!(b.inject("github.com", head).is_none());
     assert!(Broker::default().inject("api.github.com", head).is_none());
+    assert!(b.withheld("api.github.com").is_empty());
+}
+
+#[test]
+fn without_plain_http_the_owner_head_is_left_alone() {
+    let b = broker(VALUE).unwrap();
+    let head = b"GET / HTTP/1.1\r\nAuthorization: moat-secret:gh:placeholder\r\n\r\n";
+    assert!(b.inject("api.github.com", head).is_none());
+    assert_eq!(b.withheld("api.github.com"), ["gh"]);
+    assert!(b.withheld("github.com").is_empty());
 }

@@ -8,7 +8,7 @@ const VALUE: &str = "fake-brokered-7c1e9a40d2b35f68";
 const PLACEHOLDER: &str = "moat-secret:svc:placeholder";
 
 fn brokered() -> Harness {
-    brokered_to(upstream())
+    brokered_to(upstream(), false)
 }
 
 /// An upstream that reports everything it received once the connection ends.
@@ -28,11 +28,11 @@ fn sink() -> (SocketAddr, Receiver<Vec<u8>>) {
     (addr, rx)
 }
 
-fn brokered_to(upstream: (SocketAddr, Receiver<Vec<u8>>)) -> Harness {
-    let policy = Policy::parse(
+fn brokered_to(upstream: (SocketAddr, Receiver<Vec<u8>>), plain_http: bool) -> Harness {
+    let policy = Policy::parse(&format!(
         "version: 1\nsecrets:\n  - id: svc\n    host: owner.test\n    header: X-Api-Key\n    \
-         source: { env: FAKE_SVC_KEY }\n",
-    )
+         source: {{ env: FAKE_SVC_KEY }}\n    plain_http: {plain_http}\n",
+    ))
     .unwrap();
     let secrets = policy
         .secrets
@@ -85,7 +85,7 @@ fn a_secret_bound_elsewhere_is_refused_in_any_part_of_the_head() {
 
 #[test]
 fn a_secret_later_in_a_streamed_body_closes_the_connection() {
-    let h = brokered_to(sink());
+    let h = brokered_to(sink(), false);
     let port = h.port();
     let mut s = h.connect();
     write!(
@@ -115,8 +115,34 @@ fn a_secret_later_in_a_streamed_body_closes_the_connection() {
 }
 
 #[test]
-fn the_owner_host_gets_the_value_and_the_client_never_sees_it() {
+fn without_plain_http_the_owner_host_keeps_the_placeholder() {
     let h = brokered();
+    let port = h.port();
+    let reply = h.exchange(&format!(
+        "GET http://owner.test:{port}/ HTTP/1.1\r\nX-Api-Key: {PLACEHOLDER}\r\n\r\n"
+    ));
+    assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
+    let head = String::from_utf8(h.received.recv_timeout(WAIT).unwrap()).unwrap();
+    assert!(!head.contains(VALUE), "{head}");
+    assert!(
+        head.contains(&format!("X-Api-Key: {PLACEHOLDER}\r\n")),
+        "{head}"
+    );
+    assert_no_value(&h, &reply);
+    let rows = h.rows();
+    assert_eq!(rows[0].rules, ["test-hosts"]);
+    assert!(
+        rows[0]
+            .reasons
+            .iter()
+            .any(|r| r == "secret `svc` not injected: plain HTTP needs `plain_http: true`"),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn with_plain_http_the_owner_host_gets_the_value_and_the_client_never_sees_it() {
+    let h = brokered_to(upstream(), true);
     let port = h.port();
     let cases = [
         (
