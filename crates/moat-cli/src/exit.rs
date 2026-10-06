@@ -13,8 +13,9 @@ pub enum Code {
     /// Verdict `ask` that was not resolved; adapters treat it as deny.
     Ask = 3,
     /// Usage or configuration error from a command a person ran. `guard` never
-    /// returns it: Claude Code treats any exit other than 0 or 2 as a
-    /// non-blocking hook failure, so `guard` answers `deny` + 2 instead.
+    /// returns it, not even for arguments it cannot parse: Claude Code and Codex
+    /// treat any exit other than 0 or 2 as a non-blocking hook failure, so
+    /// `guard` answers `deny` + 2 instead (ADR-015).
     Usage = 64,
 }
 
