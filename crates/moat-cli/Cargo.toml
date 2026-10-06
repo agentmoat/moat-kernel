@@ -1,6 +1,6 @@
 [package]
 name = "moat-kernel"
-description = "agentmoat: the kernel your AI agents run on. Policy, OS enforcement and audit for Claude Code, Codex, Cursor, OpenClaw and any MCP host."
+description = "Policy guard for AI coding agents: decides allow, ask or deny for every tool call from Claude Code, Codex and Cursor, and keeps a local audit log. Decides only; it is not an OS sandbox."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

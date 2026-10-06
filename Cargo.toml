@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/agentmoat/moat-kernel"
 homepage = "https://github.com/agentmoat/moat-kernel"
 authors = ["agentmoat contributors"]
-keywords = ["ai-agents", "security", "sandbox", "policy", "mcp"]
+keywords = ["ai-agents", "security", "policy", "mcp", "guardrails"]
 categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
