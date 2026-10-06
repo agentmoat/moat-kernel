@@ -222,3 +222,41 @@
   threat: T7
   action: { shell: "bash -o pipefail build.sh" }
   expect: { verdict: ask, rules: [default] }
+# T9: pty and terminal tools that do not reach `moat allow|doctor|init|policy` are not kernel-self
+- id: ask-python-pty-spawn-ordinary-shell
+  threat: T9
+  action: { shell: "python3 -c 'import pty; pty.spawn([\"bash\"])'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-tmux-ordinary-command
+  threat: T9
+  action: { shell: "tmux new -d 'cargo test'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-osascript-mentions-moat
+  threat: T9
+  action: { shell: "osascript -e 'display notification \"moat build done\"'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-absolute-script-recording-ordinary-command
+  threat: T9
+  action: { shell: "/usr/bin/script -q build.log make test" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-python-test-file-named-after-moat
+  threat: T9
+  action: { shell: "python3 tests/test_pty_spawn_moat_allow.py" }
+  expect: { verdict: ask, rules: [default] }
+# T4: ordinary pushes stay at ask, not the force-push deny
+- id: ask-git-push-set-upstream
+  threat: T4
+  action: { shell: "git push -u origin main" }
+  expect: { verdict: ask, rules: [push] }
+- id: ask-git-push-plus-inside-branch-name
+  threat: T4
+  action: { shell: "git push origin feature+fix" }
+  expect: { verdict: ask, rules: [push] }
+- id: ask-git-push-option
+  threat: T4
+  action: { shell: "git push -o ci.skip origin main" }
+  expect: { verdict: ask, rules: [push] }
+- id: ask-git-push-follow-tags
+  threat: T4
+  action: { shell: "git push origin main --follow-tags" }
+  expect: { verdict: ask, rules: [push] }
