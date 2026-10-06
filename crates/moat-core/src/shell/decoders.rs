@@ -9,7 +9,7 @@
 
 use super::tables::{INLINE_INTERPRETERS, SHELLS};
 use super::tokens::basename;
-use super::{ClassifyError, Sink};
+use super::{ClassifyError, Sink, invocation};
 use crate::action::AtomicAction;
 use crate::lexer::{Operator, Token};
 
@@ -115,8 +115,13 @@ fn decoder<'a>(stage: &[&'a str]) -> Option<&'a str> {
 /// or language runtime with no script argument (or `-`) and no inline code.
 fn stdin_interpreter<'a>(stage: &[&'a str]) -> Option<&'a str> {
     let program = basename(stage.first()?);
-    let shell = SHELLS.contains(&program);
-    if !shell && !STDIN_INTERPRETERS.contains(&program) && !program.starts_with("python3.") {
+    if SHELLS.contains(&program) {
+        // Options the parser cannot read make the whole command unparseable
+        // before this runs, so `Err` never decides a verdict here.
+        let run = invocation::parse(program, stage).ok()?;
+        return run.reads_stdin.then_some(program);
+    }
+    if !STDIN_INTERPRETERS.contains(&program) && !program.starts_with("python3.") {
         return None;
     }
     let inline: &[&str] = INLINE_INTERPRETERS
@@ -124,10 +129,7 @@ fn stdin_interpreter<'a>(stage: &[&'a str]) -> Option<&'a str> {
         .find(|(name, _)| *name == program)
         .map_or(&["-c"], |(_, flags)| flags);
     let args = &stage[1..];
-    if args
-        .iter()
-        .any(|a| inline.contains(a) || (shell && *a == "-c"))
-    {
+    if args.iter().any(|a| inline.contains(a)) {
         return None;
     }
     let script = args.iter().find(|a| !a.starts_with('-') || **a == "-");
@@ -169,6 +171,8 @@ mod tests {
         for stage in [
             &["sh"][..],
             &["bash", "-s", "--"],
+            &["bash", "-o", "pipefail"],
+            &["sh", "-s", "arg"],
             &["python3", "-"],
             &["python3.12"],
             &["node"],
@@ -179,6 +183,7 @@ mod tests {
         for stage in [
             &["bash", "build.sh"][..],
             &["sh", "-c", "echo"],
+            &["bash", "-lc", "echo"],
             &["python3", "-c", "print(1)"],
             &["tar", "x"],
             &["grep", "sh"],

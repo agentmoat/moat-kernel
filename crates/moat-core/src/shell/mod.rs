@@ -13,7 +13,7 @@
 //! | path-looking arguments, `<` targets, `source`/`.` files | `FsRead` |
 //! | `>`/`>>`/`&>` targets, `tee`, destructive/destination args | `FsWrite` |
 //! | URLs with any host, bare dotted names under a known TLD, IPv4 literals (`crate::host`) | `Net` |
-//! | `$( … )`, backticks, `sh -c`, `eval`, `xargs`, `sudo`, `env`, … | nested classification |
+//! | `$( … )`, backticks, `sh -c` (any option spelling, `invocation.rs`), `eval`, `xargs`, `sudo`, `env`, … | nested classification |
 //! | `python -c`, `node -e`, `perl -e`, … payloads | URL/path scan of the payload |
 //! | `find -exec/-execdir/-ok/-okdir` commands, `--output=FILE` (`options.rs`) | nested classification, `FsWrite` |
 //! | `make --eval`, `-e`, `SHELL=`, `X!=cmd`, `$(shell …)` (`make.rs`) | `make <arg>` `Shell` atom + nested classification |
@@ -24,12 +24,14 @@
 //!
 //! Module layout: `commands` groups tokens and classifies each simple command;
 //! `tokens` recognises assignments and variable references inside one word;
+//! `invocation` parses a shell's own options (`bash -lc`, `sh -ec`, `--login`);
 //! `decoders`, `make` and `options` handle constructs that hide a command or a
 //! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
 //! `tables` holds the program lists that drive all of them.
 
 mod commands;
 mod decoders;
+mod invocation;
 mod make;
 mod options;
 pub(crate) mod tables;
@@ -84,6 +86,8 @@ pub(crate) enum ClassifyError {
     TooDeep,
     #[error("command expands to more than {MAX_ATOMS} actions")]
     TooManyActions,
+    #[error("cannot interpret `{option}` for `{program}`")]
+    ShellOption { program: String, option: String },
 }
 
 /// Accumulates atomic actions with de-duplication and a hard size bound.

@@ -81,6 +81,17 @@ fn nested_commands_are_classified() {
     assert!(has_read(&parsed("echo `cat ~/.ssh/id_rsa`"), ssh));
     assert!(has_read(&parsed("eval cat ~/.ssh/id_rsa"), ssh));
     assert!(has_read(&parsed("(cd /tmp && cat ~/.ssh/id_rsa)"), ssh));
+    for cmd in [
+        "bash -lc 'cat ~/.ssh/id_rsa'",
+        "zsh -ic 'cat ~/.ssh/id_rsa'",
+        "/bin/sh -ec 'cat ~/.ssh/id_rsa'",
+        "bash --login -c -- 'cat ~/.ssh/id_rsa'",
+        "env bash -o pipefail -lc 'cat ~/.ssh/id_rsa'",
+    ] {
+        assert!(has_read(&parsed(cmd), ssh), "{cmd}");
+    }
+    assert!(has_shell(&parsed("bash -lc 'cargo test'"), "cargo test"));
+    assert!(has_read(&parsed("bash -o errexit build.sh"), "/p/build.sh"));
 }
 
 #[test]
@@ -333,6 +344,8 @@ fn unparseable_inputs() {
         "",
         "   # only a comment",
         "echo $(unterminated",
+        "bash --frobnicate -c 'cat x'",
+        "nohup dash --login -c 'cat x'",
     ] {
         assert!(
             matches!(classify(input, &ctx()), ParseOutcome::Unparseable { .. }),
