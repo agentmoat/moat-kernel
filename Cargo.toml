@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/moat-core", "crates/moat-hosts", "crates/moat-audit", "crates/moat-cli"]
+members = [
+    "crates/moat-core",
+    "crates/moat-hosts",
+    "crates/moat-audit",
+    "crates/moat-proxy",
+    "crates/moat-cli",
+]
 # Fuzz targets build with nightly and `cargo fuzz`; they are their own workspace.
 exclude = ["fuzz"]
 
@@ -19,6 +25,7 @@ categories = ["command-line-utilities", "development-tools"]
 moat-core = { path = "crates/moat-core", version = "0.1.0-alpha.0" }
 moat-hosts = { path = "crates/moat-hosts", version = "0.1.0-alpha.0" }
 moat-audit = { path = "crates/moat-audit", version = "0.1.0-alpha.0" }
+moat-proxy = { path = "crates/moat-proxy", version = "0.1.0-alpha.0" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml_ng = "0.10"
 serde_json = "1"
@@ -30,6 +37,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 regex = "1"
 sha2 = "0.11"
 tempfile = "3"
+httparse = "1.10"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
