@@ -83,6 +83,22 @@ fn sed_script_files() {
 }
 
 #[test]
+fn sed_in_place_writes_operands_and_backups() {
+    let a = parsed("sed -ni.bak 's/a/b/p' x y");
+    assert!(has_write(&a, "/p/x") && has_write(&a, "/p/y"));
+    assert!(has_write(&a, "/p/x.bak"));
+    assert!(!has_unproven(&a));
+    // GNU: the empty word is the script and `s/a/b/` a file; BSD: the reverse
+    let a = parsed("sed -i '' 's/a/b/' x");
+    assert!(has_write(&a, "/p/x") && has_write(&a, "/p/s/a/b"));
+    assert!(!has_unproven(&a));
+    // BSD takes `-e` as the suffix
+    assert!(has_write(&parsed("sed -i -e p x"), "/p/x-e"));
+    assert!(has_write(&parsed("sed --in-place s/a/b/ x"), "/p/x"));
+    assert!(has_write(&parsed("sed s/a/b/ x -i"), "/p/x"));
+}
+
+#[test]
 fn sed_forms_that_may_do_more_are_reported() {
     for cmd in [
         "sed -n '1e id' x",

@@ -414,3 +414,18 @@
 - id: benign-text-pipeline
   action: { shell: "git log --format=%an | sort | uniq -c | sort -rn -k1 | head -5" }
   expect: { verdict: allow, rules: [text-tools, dev-shell] }
+- id: benign-sed-print-line-range
+  action: { shell: "sed -n 1,20p src/lib.rs" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-substitute-to-stdout
+  action: { shell: "sed 's/foo/bar/g' src/lib.rs" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-regex-range-is-not-a-path
+  action: { shell: "sed -n '/^fn main/,/^}/p' src/main.rs | head -40" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-in-place-in-project
+  action: { shell: "sed -i '' -e 's/0.1.0/0.2.0/' Cargo.toml" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-write-into-project
+  action: { shell: "sed -n '/ERROR/w errors.log' build.log" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }

@@ -463,3 +463,11 @@
   threat: T7
   action: { shell: "sed p -e 'e id' src/lib.rs" }
   expect: { verdict: ask, rules: [default] }
+- id: ask-sed-bare-in-place-suffix-is-ambiguous
+  threat: T7
+  action: { shell: "sed -i 's/a/b/' 'e id'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-sed-in-place-outside-project
+  threat: T4
+  action: { shell: "sed -i.bak -e 's/a/b/' /tmp/notes.txt" }
+  expect: { verdict: ask, rules: [default] }
