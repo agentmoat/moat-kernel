@@ -13,4 +13,6 @@ mod store;
 
 pub use query::{SessionSummary, Summary};
 pub use redact::{redact, redact_value};
-pub use store::{Event, EventId, GENESIS, NewEvent, Store, StoreError};
+pub use store::{
+    BreakKind, ChainBreak, ChainReport, Event, EventId, GENESIS, NewEvent, Store, StoreError,
+};

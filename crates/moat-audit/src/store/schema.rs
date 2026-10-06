@@ -74,3 +74,11 @@ pub(super) fn migrate(conn: &Connection) -> Result<(), StoreError> {
     tx.commit()?;
     Ok(())
 }
+
+/// The version-1 schema, for tests that open a database an older build wrote.
+#[cfg(test)]
+pub(super) fn create_v1(conn: &Connection) -> Result<(), StoreError> {
+    conn.execute_batch(V1)?;
+    conn.pragma_update(None, "user_version", 1)?;
+    Ok(())
+}

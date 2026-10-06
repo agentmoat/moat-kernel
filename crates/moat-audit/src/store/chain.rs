@@ -3,7 +3,7 @@
 //! Each event stores `prev_hash` (the `hash` of the event before it) and `hash`,
 //! the lowercase hex SHA-256 of the event's canonical encoding (below). Editing,
 //! deleting or reordering an event in the middle of the log breaks a link that
-//! verification reports. The chain is unkeyed: someone who can write
+//! [`Store::verify_chain`] reports. The chain is unkeyed: someone who can write
 //! the file can recompute every hash after an edit, and deleting the newest
 //! events leaves a valid shorter chain. Detecting either needs the head hash
 //! recorded outside the file (`docs/THREAT_MODEL.md`).
@@ -31,9 +31,10 @@
 //! needs a new domain tag; events already written keep verifying under v1.
 
 use rusqlite::{OptionalExtension, params};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use super::StoreError;
+use super::{Store, StoreError};
 
 /// `prev_hash` of the first chained event: 64 zeros.
 pub const GENESIS: &str = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -110,6 +111,180 @@ impl Fields<'_> {
                 hex
             })
     }
+}
+
+/// Why the chain breaks at an event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BreakKind {
+    /// The event's contents no longer match its hash: it was edited.
+    Edited,
+    /// The event's `prev_hash` is not the previous event's hash: an event before
+    /// it was deleted or inserted, or events were reordered.
+    Unlinked,
+    /// The event has no hash although it was written after the chain started.
+    Unhashed,
+    /// A cell does not have the type the schema gives it.
+    Unreadable,
+}
+
+impl BreakKind {
+    /// A short explanation for people.
+    #[must_use]
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::Edited => "its contents do not match its hash (edited)",
+            Self::Unlinked => {
+                "it does not link to the event before it (an event was deleted, inserted or reordered)"
+            }
+            Self::Unhashed => "it has no hash although it was written after the chain started",
+            Self::Unreadable => "a cell has the wrong type (edited)",
+        }
+    }
+}
+
+/// The first broken link.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChainBreak {
+    /// Row id of the first event that fails verification.
+    pub id: super::EventId,
+    /// Why it fails.
+    pub kind: BreakKind,
+}
+
+/// The outcome of [`Store::verify_chain`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChainReport {
+    /// Events read, up to and including the first broken one.
+    pub events: u64,
+    /// Events written before the chain existed (by a build without it). They are
+    /// not protected.
+    pub unchained: u64,
+    /// Hash of the last verified event; record it elsewhere to detect a later
+    /// truncation or rewrite.
+    pub head: Option<String>,
+    /// The first broken link, if any.
+    pub broken: Option<ChainBreak>,
+}
+
+const ROWS: &str = "SELECT id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us, prev_hash, hash FROM events ORDER BY id";
+
+struct Row {
+    id: i64,
+    ts_ms: i64,
+    cells: [String; 7],
+    call_id: Option<String>,
+    cwd: Option<String>,
+    latency_us: i64,
+    prev_hash: Option<String>,
+    hash: Option<String>,
+}
+
+fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
+    Ok(Row {
+        id: row.get(0)?,
+        ts_ms: row.get(1)?,
+        cells: [
+            row.get(2)?,
+            row.get(3)?,
+            row.get(6)?,
+            row.get(7)?,
+            row.get(8)?,
+            row.get(9)?,
+            row.get(10)?,
+        ],
+        call_id: row.get(4)?,
+        cwd: row.get(5)?,
+        latency_us: row.get(11)?,
+        prev_hash: row.get(12)?,
+        hash: row.get(13)?,
+    })
+}
+
+impl Row {
+    fn fields<'a>(&'a self, prev_hash: &'a str) -> Fields<'a> {
+        let [host, session_id, tool, action, verdict, rules, reasons] = &self.cells;
+        Fields {
+            id: self.id,
+            ts_ms: self.ts_ms,
+            host,
+            session_id,
+            call_id: self.call_id.as_deref(),
+            cwd: self.cwd.as_deref(),
+            tool,
+            action,
+            verdict,
+            rules,
+            reasons,
+            latency_us: self.latency_us,
+            prev_hash,
+        }
+    }
+}
+
+impl Store {
+    /// Verify the whole chain, oldest event first, and stop at the first broken
+    /// link. Events from before the chain existed are counted, not verified.
+    pub fn verify_chain(&self) -> Result<ChainReport, StoreError> {
+        let mut report = ChainReport {
+            events: 0,
+            unchained: 0,
+            head: None,
+            broken: None,
+        };
+        if !self.chained {
+            report.events = self.count()?;
+            report.unchained = report.events;
+            return Ok(report);
+        }
+        let legacy_last_id: i64 = self
+            .conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'legacy_last_id'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?
+            .unwrap_or(0);
+        let mut stmt = self.conn.prepare(ROWS)?;
+        let mut rows = stmt.query([])?;
+        while let Some(raw) = rows.next()? {
+            report.events += 1;
+            let id: i64 = raw.get(0)?;
+            let kind = match read_row(raw) {
+                Err(_) => Some(BreakKind::Unreadable),
+                Ok(row) => check(&row, &mut report, legacy_last_id),
+            };
+            if let Some(kind) = kind {
+                report.broken = Some(ChainBreak {
+                    id: super::EventId(id),
+                    kind,
+                });
+                break;
+            }
+        }
+        Ok(report)
+    }
+}
+
+/// Check one row against the chain so far; advance `report.head` when it holds.
+fn check(row: &Row, report: &mut ChainReport, legacy_last_id: i64) -> Option<BreakKind> {
+    let Some(hash) = &row.hash else {
+        if report.head.is_none() && row.id <= legacy_last_id {
+            report.unchained += 1;
+            return None;
+        }
+        return Some(BreakKind::Unhashed);
+    };
+    let expected_prev = report.head.as_deref().unwrap_or(GENESIS);
+    if row.prev_hash.as_deref() != Some(expected_prev) {
+        return Some(BreakKind::Unlinked);
+    }
+    if row.fields(expected_prev).hash() != *hash {
+        return Some(BreakKind::Edited);
+    }
+    report.head = Some(hash.clone());
+    None
 }
 
 /// The `id` and `prev_hash` the next event gets: one past the newest row, linked

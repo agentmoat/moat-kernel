@@ -1,4 +1,5 @@
 use moat_core::{Action, Decision, Verdict};
+use rusqlite::{Connection, params};
 
 use super::chain::Fields;
 use super::*;
@@ -93,12 +94,168 @@ fn chain_of(n: usize) -> Store {
     store
 }
 
+fn broken(store: &Store) -> Option<ChainBreak> {
+    store.verify_chain().unwrap().broken
+}
+
 #[test]
-fn each_event_links_to_the_one_before() {
+fn an_untouched_chain_verifies_and_links() {
     let store = chain_of(4);
+    let report = store.verify_chain().unwrap();
+    assert_eq!(report.events, 4);
+    assert_eq!(report.unchained, 0);
+    assert_eq!(report.broken, None);
     let events = store.session("s1").unwrap();
     assert_eq!(events[0].prev_hash.as_deref(), Some(GENESIS));
     for pair in events.windows(2) {
         assert_eq!(pair[1].prev_hash, pair[0].hash);
     }
+    assert_eq!(report.head, events[3].hash);
+    let empty = Store::open_in_memory().unwrap().verify_chain().unwrap();
+    assert_eq!((empty.events, empty.head, empty.broken), (0, None, None));
+}
+
+#[test]
+fn an_edited_field_is_detected_at_its_event() {
+    for edit in [
+        "UPDATE events SET verdict = 'deny' WHERE id = 2",
+        "UPDATE events SET action = '{\"shell\":{\"command\":\"echo x\"}}' WHERE id = 2",
+        "UPDATE events SET ts_ms = ts_ms + 1 WHERE id = 2",
+        "UPDATE events SET cwd = NULL WHERE id = 2",
+    ] {
+        let store = chain_of(3);
+        store.conn.execute(edit, []).unwrap();
+        let expected = ChainBreak {
+            id: EventId(2),
+            kind: BreakKind::Edited,
+        };
+        assert_eq!(broken(&store), Some(expected), "{edit}");
+    }
+}
+
+#[test]
+fn a_cell_of_the_wrong_type_is_detected() {
+    let store = chain_of(3);
+    store
+        .conn
+        .execute("UPDATE events SET ts_ms = 'yesterday' WHERE id = 2", [])
+        .unwrap();
+    assert_eq!(broken(&store).unwrap().kind, BreakKind::Unreadable);
+}
+
+#[test]
+fn a_deleted_middle_event_is_detected_at_the_next() {
+    let store = chain_of(4);
+    store
+        .conn
+        .execute("DELETE FROM events WHERE id = 2", [])
+        .unwrap();
+    let expected = ChainBreak {
+        id: EventId(3),
+        kind: BreakKind::Unlinked,
+    };
+    assert_eq!(broken(&store), Some(expected));
+}
+
+#[test]
+fn reordered_events_are_detected() {
+    let store = chain_of(4);
+    store
+        .conn
+        .execute_batch(
+            "UPDATE events SET id = 100 WHERE id = 2;
+             UPDATE events SET id = 2 WHERE id = 3;
+             UPDATE events SET id = 3 WHERE id = 100;",
+        )
+        .unwrap();
+    assert_eq!(broken(&store).unwrap().id, EventId(2));
+}
+
+#[test]
+fn a_removed_hash_does_not_pass_as_an_old_event() {
+    let store = chain_of(3);
+    store
+        .conn
+        .execute("UPDATE events SET hash = NULL, prev_hash = NULL", [])
+        .unwrap();
+    let expected = ChainBreak {
+        id: EventId(1),
+        kind: BreakKind::Unhashed,
+    };
+    assert_eq!(broken(&store), Some(expected));
+}
+
+#[test]
+fn a_version_1_database_is_migrated_without_vouching_for_old_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("audit.db");
+    {
+        let conn = Connection::open(&path).unwrap();
+        schema::create_v1(&conn).unwrap();
+        for id in 1..=2 {
+            conn.execute(
+                "INSERT INTO events (id, ts_ms, host, session_id, tool, action, verdict, rules, reasons, latency_us)
+                 VALUES (?1, 0, 'codex', 'old', 'shell', 'null', 'allow', '[]', '[]', 5)",
+                params![id],
+            )
+            .unwrap();
+        }
+    }
+    // A read-only handle (`moat show` before any guard ran) reads it unchanged.
+    let old = Store::open_read_only(&path).unwrap();
+    assert_eq!(old.recent(5).unwrap()[0].hash, None);
+    let report = old.verify_chain().unwrap();
+    assert_eq!((report.events, report.unchained), (2, 2));
+    drop(old);
+
+    let store = Store::open(&path).unwrap();
+    let id = record(&store, "git status");
+    assert_eq!(id, EventId(3));
+    let event = store.get(id).unwrap().unwrap();
+    assert_eq!(event.prev_hash.as_deref(), Some(GENESIS));
+    assert_eq!(store.session("old").unwrap()[1].hash, None);
+    let report = store.verify_chain().unwrap();
+    assert_eq!(report.events, 3);
+    assert_eq!(report.unchained, 2);
+    assert_eq!(report.broken, None);
+    assert_eq!(report.head, event.hash);
+    drop(store);
+    // Reopening does not migrate twice.
+    assert!(
+        Store::open(&path)
+            .unwrap()
+            .verify_chain()
+            .unwrap()
+            .broken
+            .is_none()
+    );
+}
+
+#[test]
+fn concurrent_writers_build_one_chain() {
+    const THREADS: usize = 8;
+    const EACH: usize = 25;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("audit.db");
+    drop(Store::open(&path).unwrap());
+    let writers: Vec<_> = (0..THREADS)
+        .map(|t| {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                let store = Store::open_existing(&path).unwrap();
+                for i in 0..EACH {
+                    record(&store, &format!("echo {t}-{i}"));
+                }
+            })
+        })
+        .collect();
+    for writer in writers {
+        writer.join().unwrap();
+    }
+    let report = Store::open_read_only(&path)
+        .unwrap()
+        .verify_chain()
+        .unwrap();
+    assert_eq!(report.events, (THREADS * EACH) as u64);
+    assert_eq!(report.broken, None);
 }
