@@ -20,6 +20,7 @@ use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity::{self, INTEGRITY_RULE, Lock};
 use crate::realpath::FsPathResolver;
+use crate::taint;
 
 const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024;
 const UNGOVERNED_RULE: &str = "ungoverned";
@@ -118,8 +119,8 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
         .context("resolving working directory")?;
     let ctx = context::eval_context(Some(&cwd), None)?;
     let snapshot = Snapshot::load(&home.environment_path())?;
-    let mut decision =
-        CompiledPolicy::compile(&policy, &ctx)?.decide_with(action, &snapshot, &FsPathResolver);
+    let compiled = CompiledPolicy::compile(&policy, &ctx)?;
+    let mut decision = compiled.decide_with(action, &snapshot, &FsPathResolver);
     if decision.verdict == Verdict::Ask
         && let moat_core::Action::Shell { command } = action
         && Grants::load(&home.grants_path())?.matches(
@@ -135,6 +136,10 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
             .reasons
             .push("approved for this session with `moat allow`".to_owned());
     }
+    // After the grant: taint only tightens, and a grant made before the
+    // session read a secret did not approve sending that secret anywhere.
+    let taint = taint::of_session(&home, host, &request.session_id, &compiled, &ctx.cwd)?;
+    let decision = compiled.with_taint(decision, action, &FsPathResolver, &taint);
     Ok((Some(request), decision))
 }
 

@@ -141,6 +141,11 @@ other atomic action, so an `allow` becomes `ask` and a `deny` stays `deny`.
   `.cursorrules`, `.mcp.json`), at any depth.
 - Shell network to an allowed host (`git fetch`, `gh pr view`) is not counted as untrusted
   content, and a command moat cannot classify taints nothing it can name.
+- `moat guard` reads the history from the audit log: the earlier events of the same host
+  session that may have run. Those are allowed calls, and asks on a host that can ask. A
+  declined ask is not recorded, so it counts as run. Codex turns an ask into a deny, so
+  an ask under Codex never taints. The agent cannot reset its session's taint, and a log
+  that cannot be read denies the call (`kernel-error`).
 - Conformance fixtures express a chain with `session:`, the earlier calls that ran.
 
 ## 5. Verdicts and what the host does
