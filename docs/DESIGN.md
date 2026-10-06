@@ -543,9 +543,11 @@ Rules:
 `cwd`; `..` collapsed lexically in the core.
 `moat guard` then resolves symlinks through a caller-supplied `PathResolver` (ADR-009):
 an existing path is canonicalised, a path that does not exist yet resolves through its
-deepest existing ancestor, a dangling link through its target (at most 8 hops). A result
-under the canonical project or home is rewritten onto the `${project}`/`~` prefix the
-policy uses, so a project under macOS `/tmp` → `/private/tmp` stays inside `${project}`.
+deepest existing ancestor, a dangling link through its target (at most 8 hops). The CLI
+also passes the resolved project and home roots (`EvalContext::real_project`,
+`real_home`), and patterns naming `${project}` or `~` are compiled for both spellings, so
+a project under macOS `/tmp` → `/private/tmp` stays inside `${project}` whether a path is
+written `/tmp/x/a` or `/private/tmp/x/a`.
 Both the literal and the resolved path are evaluated and the strictest verdict wins (a
 symlink from the project to `~/.ssh` hits the deny rule). `moat policy check` resolves
 the same way. Case-insensitive comparison on macOS/Windows volumes that are

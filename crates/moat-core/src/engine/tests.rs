@@ -4,6 +4,8 @@ fn ctx() -> EvalContext {
     EvalContext {
         home: "/h".into(),
         project: Some("/p".into()),
+        real_home: None,
+        real_project: None,
         cwd: "/p".into(),
         case_insensitive_paths: false,
     }
@@ -386,5 +388,60 @@ fn fetch_defaults_fall_back_to_net() {
     assert_eq!(
         verdict_and_rules(&p, &fetch("https://")),
         (Verdict::Ask, vec!["unparseable".to_owned()])
+    );
+}
+
+/// A project and home reached through links (macOS `/tmp` → `/private/tmp`)
+/// are matched under both spellings, exclusions included; a link inside the
+/// project is still checked where it points.
+#[test]
+fn roots_match_under_their_resolved_spelling_too() {
+    use crate::realpath::MapPathResolver;
+
+    let p = policy(
+        "version: 1\ndefaults: ask\ndeny:\n  - id: keys\n    fs.read: ['~/.ssh/**']\n\
+         allow:\n  - id: proj\n    fs.read: ['${project}/**']\n\
+         \x20   fs.write: ['${project}/**', '!${project}/.git/**']\n",
+    );
+    let linked = EvalContext {
+        real_home: Some("/vol/h".into()),
+        real_project: Some("/private/p".into()),
+        ..ctx()
+    };
+    let links = MapPathResolver {
+        links: [("/p", "/private/p"), ("/h", "/vol/h"), ("/p/e", "/etc")]
+            .into_iter()
+            .map(|(l, t)| (l.to_owned(), t.to_owned()))
+            .collect(),
+    };
+    let compiled = CompiledPolicy::compile(&p, &linked).unwrap();
+    let decide = |a: Action| {
+        let d = compiled.decide_with(&a, &NoResolver, &links);
+        (d.verdict, d.rules)
+    };
+    let read = |path: &str| Action::FsRead { path: path.into() };
+    let write = |path: &str| Action::FsWrite { path: path.into() };
+    let verdict = |v: Verdict, rule: &str| (v, vec![rule.to_owned()]);
+    assert_eq!(decide(read("/p/a")), verdict(Verdict::Allow, "proj"));
+    assert_eq!(
+        decide(read("/private/p/a")),
+        verdict(Verdict::Allow, "proj")
+    );
+    assert_eq!(
+        decide(write("/private/p/a")),
+        verdict(Verdict::Allow, "proj")
+    );
+    let git = verdict(Verdict::Ask, "default");
+    assert_eq!(decide(write("/private/p/.git/config")), git);
+    assert_eq!(decide(write("/p/.git/config")), git);
+    let keys = verdict(Verdict::Deny, "keys");
+    assert_eq!(decide(read("/vol/h/.ssh/id_rsa")), keys);
+    assert_eq!(decide(read("/h/.ssh/id_rsa")), keys);
+    assert_eq!(decide(read("/p/e/hosts")), verdict(Verdict::Ask, "default"));
+    let unlinked = CompiledPolicy::compile(&p, &ctx()).unwrap();
+    assert_eq!(
+        unlinked.decide(&read("/private/p/a")).verdict,
+        Verdict::Ask,
+        "the resolved spelling is a fact the caller supplies"
     );
 }

@@ -342,6 +342,18 @@
   action: { shell: "cat docs/latest.md" }
   links: { /p/docs/latest.md: /p/docs/v2.md }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+# A project reached through a link (macOS /tmp -> /private/tmp) is the project
+# under both spellings of its root (POLICY.md §3.2)
+- id: benign-linked-project-read-resolved-spelling
+  context: { cwd: /tmp/app, project: /tmp/app, real_project: /private/tmp/app }
+  action: { fs_read: "/private/tmp/app/src/main.rs" }
+  links: { /tmp/app: /private/tmp/app }
+  expect: { verdict: allow, rules: [project-fs] }
+- id: benign-linked-project-relative-read
+  context: { cwd: /tmp/app, project: /tmp/app, real_project: /private/tmp/app }
+  action: { shell: "cat src/main.rs" }
+  links: { /tmp/app: /private/tmp/app }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
 # Moving around and everyday file operations inside the project (dev-shell)
 - id: benign-cd-src-then-cargo-test
   threat: T1

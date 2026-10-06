@@ -442,6 +442,19 @@
   action: { fs_write: "/p/profile.sh" }
   links: { /p/profile.sh: /Users/me/.zshrc }
   expect: { verdict: deny, rules: [shell-rc] }
+# A linked project or home root widens nothing: links inside still resolve to secrets
+- id: T11-linked-project-read-key-through-symlink
+  threat: T11
+  context: { cwd: /tmp/app, project: /tmp/app, real_project: /private/tmp/app }
+  action: { shell: "cat s/id_rsa" }
+  links: { /tmp/app/s: /Users/me/.ssh }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T11-linked-home-read-key-through-symlink
+  threat: T11
+  context: { cwd: /p, project: /p, real_home: /Volumes/u/me }
+  action: { shell: "cat s/id_rsa" }
+  links: { /p/s: /Volumes/u/me/.ssh }
+  expect: { verdict: deny, rules: [secrets-paths] }
 # Relative operands are paths too, so the link is resolved without `./`
 - id: T11-cat-relative-through-symlinked-dir
   threat: T11

@@ -25,6 +25,16 @@ pub struct EvalContext {
     /// one of its ancestors or a filesystem root): every pattern naming
     /// `${project}` then matches nothing, so project-scoped allows do not apply.
     pub project: Option<String>,
+    /// `home` with its symlinks resolved, when that differs (a home on a linked
+    /// volume, a Windows 8.3 short name). Patterns naming `~` match under both
+    /// spellings, since the caller's [`PathResolver`] reports paths in this one.
+    pub real_home: Option<String>,
+    /// `project` with its symlinks resolved, when that differs (macOS `/tmp` →
+    /// `/private/tmp`, `~/code` → `/Volumes/dev/code`). Patterns naming
+    /// `${project}` match under both spellings, exclusions included, so a file
+    /// in the project is the project's however its path is written. A link
+    /// *inside* the project changes nothing here: its target is checked as is.
+    pub real_project: Option<String>,
     /// The directory relative paths are taken from.
     pub cwd: String,
     /// Whether file paths compare case-insensitively, as on the default macOS
@@ -126,7 +136,7 @@ impl<'p> CompiledGroup<'p> {
             globs[kind as usize] = group
                 .patterns(kind)
                 .iter()
-                .filter_map(|p| paths::expand_pattern(p, &ctx.home, ctx.project.as_deref()))
+                .flat_map(|p| ctx.spellings(p))
                 .map(|p| GlobPattern::compile(&p, case_insensitive))
                 .collect::<Result<_, _>>()?;
         }
@@ -149,6 +159,33 @@ impl<'p> CompiledGroup<'p> {
                 .any(|k| any_match(&self.globs[*k as usize], subject)),
             (_, None) => false,
         }
+    }
+}
+
+impl EvalContext {
+    /// `raw` expanded once per spelling of the home directory and project root
+    /// it names ([`paths::expand_pattern`]); empty when it names no location.
+    fn spellings(&self, raw: &str) -> Vec<String> {
+        let projects: Vec<Option<&str>> = match &self.project {
+            Some(p) => [Some(p), self.real_project.as_ref()]
+                .into_iter()
+                .flatten()
+                .map(|p| Some(p.as_str()))
+                .collect(),
+            None => vec![None],
+        };
+        let mut out: Vec<String> = [Some(&self.home), self.real_home.as_ref()]
+            .into_iter()
+            .flatten()
+            .flat_map(|h| {
+                projects
+                    .iter()
+                    .filter_map(move |p| paths::expand_pattern(raw, h, *p))
+            })
+            .collect();
+        out.sort();
+        out.dedup();
+        out
     }
 }
 
