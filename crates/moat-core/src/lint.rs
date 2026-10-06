@@ -87,6 +87,13 @@ fn secrets(policy: &Policy, out: &mut Vec<Warning>) {
         if let Some(message) = exposed {
             warn(message);
         }
+        if secret.plain_http && !secret.is_loopback() {
+            warn(format!(
+                "`plain_http: true` sends the value to {} in clear text, readable by anyone \
+                 on the network path",
+                secret.host
+            ));
+        }
     }
 }
 
@@ -280,5 +287,21 @@ mod tests {
              env.read: ['*']\nallow:\n  - id: n\n    net: ['*', '!api.github.com']\n{secrets}"
         ));
         assert_eq!(excluded.len(), 2, "{excluded:?}");
+    }
+
+    #[test]
+    fn plain_http_injection_off_this_machine_is_reported() {
+        let policy = |host: &str| {
+            format!(
+                "version: 1\ndeny:\n  - id: s\n    env.read: ['*']\nallow:\n  - id: n\n    net: ['*']\n\
+                 secrets:\n  - id: s\n    host: {host}\n    header: X-K\n    source: {{ env: K }}\n    \
+                 plain_http: true\n"
+            )
+        };
+        let w = warn(&policy("api.example.com"));
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].contains("in clear text"), "{w:?}");
+        assert!(warn(&policy("localhost")).is_empty());
+        assert!(warn(&policy("127.0.0.1")).is_empty());
     }
 }

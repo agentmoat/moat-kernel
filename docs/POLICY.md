@@ -71,6 +71,7 @@ secrets:
     host: api.github.com            # one host, exact: lowercase DNS name or IPv4, no pattern or port
     header: Authorization           # the request header the value goes in
     source: { env: GITHUB_TOKEN }   # or { file: ~/.config/moat/gh } or { keychain: { service: moat, account: gh } }
+    plain_http: false               # optional; true also injects into plain-HTTP (clear-text) requests
 ```
 
 A brokered secret is kept by moat, not by the agent (ADR-020). The agent holds the
@@ -83,11 +84,17 @@ value from `source` and is the only component that uses it.
 - **`header`** must be an HTTP header name. Headers that frame the request or the
   connection (`Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Proxy-*`, …)
   are refused. Two secrets cannot set the same header for the same host.
+- **`plain_http`** is off unless set. A plain-HTTP request carries the value in clear text,
+  readable by anyone on the network path, so moat injects into one only for a secret
+  that says `plain_http: true`.
 - **Never wider.** A secret opens nothing: its host still needs a `net` or `fetch` allow
   rule, or the proxy refuses it.
-- **Lint.** `moat policy lint` warns when no allow rule names the host, and when no deny
-  rule covers a `file` source (`fs.read`) or an `env` source (`env.read`), since the agent
-  could then read the value itself.
+- **Lint.** `moat policy lint` warns in three cases:
+  - no allow rule names the host;
+  - no deny rule covers a `file` source (`fs.read`) or an `env` source (`env.read`), so
+    the agent could read the value itself;
+  - `plain_http: true` is set for a host that is not loopback (`localhost`, `*.localhost`,
+    `127.0.0.0/8`).
 
 The proxy does not use `secrets:` yet; #172 tracks injection and leak blocking.
 
