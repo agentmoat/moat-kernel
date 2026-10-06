@@ -51,6 +51,7 @@ pub struct CompiledPolicy<'p> {
     policy: &'p Policy,
     ctx: EvalContext,
     deny: Vec<CompiledGroup<'p>>,
+    repo_ask: Vec<CompiledGroup<'p>>,
     allow: Vec<CompiledGroup<'p>>,
     ask: Vec<CompiledGroup<'p>>,
 }
@@ -76,6 +77,7 @@ impl<'p> CompiledPolicy<'p> {
             policy,
             ctx: ctx.clone(),
             deny: compile_list(&policy.deny)?,
+            repo_ask: compile_list(&policy.repo_ask)?,
             allow: compile_list(&policy.allow)?,
             ask: compile_list(&policy.ask)?,
         })
@@ -93,7 +95,8 @@ impl<'p> CompiledPolicy<'p> {
         &self.ctx
     }
 
-    /// Evaluate one atomic action: deny → allow → ask → default.
+    /// Evaluate one atomic action: deny → allow → ask → default, with a
+    /// repository policy's ask rules ([`Policy::repo_ask`]) tried before allow.
     ///
     /// Returns `None` for a whole-pipeline atom that no rule mentions: pipelines
     /// are only there so rules like `curl * | sh` can see across `|`; the
@@ -102,6 +105,7 @@ impl<'p> CompiledPolicy<'p> {
     pub fn evaluate_atomic(&self, action: &AtomicAction) -> Option<Decision> {
         for (groups, verdict) in [
             (&self.deny, Verdict::Deny),
+            (&self.repo_ask, Verdict::Ask),
             (&self.allow, Verdict::Allow),
             (&self.ask, Verdict::Ask),
         ] {

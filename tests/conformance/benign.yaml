@@ -397,3 +397,15 @@
   threat: T1
   action: { shell: "grep -r TODO ." }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+
+# a repository policy (ADR-022): a trusted file's allow rules apply; deny rules
+# for one command leave the rest as the user policy decides
+- id: benign-repo-trusted-allow
+  action: { shell: "make deploy" }
+  repo: { policy: "version: 1\nallow:\n  - id: deploy\n    shell: ['make deploy']\n", trusted: true }
+  expect: { verdict: allow, rules: ["repo:deploy"] }
+- id: benign-repo-deny-leaves-other-commands
+  threat: T4
+  action: { shell: "cargo test" }
+  repo: { policy: "version: 1\ndeny:\n  - id: no-publish\n    shell: ['cargo publish']\n" }
+  expect: { verdict: allow, rules: [dev-shell] }

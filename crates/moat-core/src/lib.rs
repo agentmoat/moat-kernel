@@ -26,6 +26,7 @@ mod pattern;
 mod policy;
 mod programs;
 mod realpath;
+mod repo;
 mod shell;
 mod verdict;
 
@@ -36,6 +37,7 @@ pub use pattern::literal_shell_pattern;
 pub use policy::{Defaults, Policy, PolicyError, RuleGroup, SandboxSettings};
 pub use programs::{MapResolver, NoResolver, ProgramResolver};
 pub use realpath::{MapPathResolver, PathResolver};
+pub use repo::{REPO_RULE_PREFIX, RepoPolicy};
 pub use verdict::{Decision, UnknownVerdict, Verdict};
 
 /// The shipped default policy, as YAML: what `moat init` installs and what the

@@ -251,6 +251,12 @@ pub struct Policy {
     /// (ADR-018). Absent in policies written before it existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sandbox: Option<SandboxSettings>,
+    /// Ask rules merged in from a repository policy ([`crate::RepoPolicy`],
+    /// ADR-022). Tried after `deny` and before `allow`, so a repository can make
+    /// an action the user allows ask. Never read from or written to a file, and
+    /// not lowered to OS layers, which are generated from the user policy alone.
+    #[serde(skip)]
+    pub repo_ask: Vec<RuleGroup>,
 }
 
 /// The `sandbox:` section (ADR-018, ADR-019).
@@ -286,7 +292,8 @@ impl Policy {
             });
         }
         let mut ids = BTreeSet::new();
-        for group in self.deny.iter().chain(&self.allow).chain(&self.ask) {
+        let groups = self.deny.iter().chain(&self.repo_ask);
+        for group in groups.chain(&self.allow).chain(&self.ask) {
             if group.id.trim().is_empty() {
                 return Err(PolicyError::Rule {
                     rule: "<unnamed>".into(),

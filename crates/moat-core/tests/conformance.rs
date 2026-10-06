@@ -1,6 +1,7 @@
 //! Conformance suite: every fixture in `tests/conformance/*.yaml` is evaluated
-//! against the shipped default policy (`moat_core::DEFAULT_POLICY`). A fixture passes when the verdict matches
-//! and every expected rule id is present in the decision.
+//! against the shipped default policy (`moat_core::DEFAULT_POLICY`), with the
+//! fixture's repository policy merged in when it names one. A fixture passes
+//! when the verdict matches and every expected rule id is present in the decision.
 //!
 //! The suite is the executable form of the security claims in `docs/THREAT_MODEL.md` §3,
 //! so it is strict about its own inputs: unknown keys, duplicate ids and
@@ -15,7 +16,7 @@ use std::collections::BTreeMap;
 
 use moat_core::{
     Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, MapPathResolver, MapResolver, Policy,
-    Verdict,
+    RepoPolicy, Verdict,
 };
 use serde::Deserialize;
 
@@ -41,6 +42,18 @@ struct Fixture {
     links: BTreeMap<String, String>,
     /// Working directory and project for this fixture instead of `/p` and `/p`.
     context: Option<FixtureContext>,
+    /// A repository policy merged into the default policy (ADR-022).
+    repo: Option<RepoFixture>,
+}
+
+/// `repo: { policy: "<yaml>", trusted: true }`: the project's
+/// `.moat/policy.yaml`, and whether a person trusted it with `moat trust`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepoFixture {
+    policy: String,
+    #[serde(default)]
+    trusted: bool,
 }
 
 /// `context: { cwd: /Users/me }` is a session in the home directory, which the
@@ -205,17 +218,25 @@ fn default_policy_conformance() {
         let links = MapPathResolver {
             links: fixture.links.clone(),
         };
-        let decision = match &fixture.context {
-            None => compiled.decide_with(&action, &resolver, &links),
-            Some(c) => {
-                let ctx = EvalContext {
-                    cwd: c.cwd.clone(),
-                    project: c.project.clone(),
-                    real_project: c.real_project.clone(),
-                    real_home: c.real_home.clone(),
-                    ..ctx.clone()
-                };
-                CompiledPolicy::compile(&policy, &ctx)
+        let decision = match (&fixture.context, &fixture.repo) {
+            (None, None) => compiled.decide_with(&action, &resolver, &links),
+            (context, repo) => {
+                let ctx = context.as_ref().map_or_else(
+                    || ctx.clone(),
+                    |c| EvalContext {
+                        cwd: c.cwd.clone(),
+                        project: c.project.clone(),
+                        real_project: c.real_project.clone(),
+                        real_home: c.real_home.clone(),
+                        ..ctx.clone()
+                    },
+                );
+                let merged = repo.as_ref().map(|r| {
+                    RepoPolicy::parse(&r.policy)
+                        .and_then(|repo| repo.merge(&policy, r.trusted))
+                        .unwrap_or_else(|e| panic!("{}: repo policy: {e}", fixture.id))
+                });
+                CompiledPolicy::compile(merged.as_ref().unwrap_or(&policy), &ctx)
                     .expect("default policy must compile")
                     .decide_with(&action, &resolver, &links)
             }
