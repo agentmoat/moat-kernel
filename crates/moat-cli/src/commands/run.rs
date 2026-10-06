@@ -6,8 +6,15 @@
 //! port alone, and the proxy refuses loopback destinations, so no other local
 //! service is reachable through it either.
 
+/// `confine(policy, ctx, grants, program) -> Confined`, whose `command()`
+/// takes the agent's arguments and environment, `report()` lists the losses
+/// and allowances, and `status()` runs the agent in its sandbox.
 #[cfg_attr(target_os = "macos", path = "run/macos.rs")]
-#[cfg_attr(not(target_os = "macos"), path = "run/unsupported.rs")]
+#[cfg_attr(target_os = "linux", path = "run/linux.rs")]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "linux")),
+    path = "run/unsupported.rs"
+)]
 mod platform;
 
 use std::ffi::OsStr;
@@ -25,7 +32,8 @@ use crate::cli::RunArgs;
 use crate::context::{self, path_string};
 use crate::environment::find_in;
 use crate::exit::Code;
-use crate::sandbox::{Grants, Report};
+use crate::sandbox::Grants;
+use crate::sandbox::Report;
 
 /// What a proxy-aware program reads to find its proxy.
 const PROXY_VARS: [&str; 6] = [
@@ -59,10 +67,10 @@ pub fn run(args: &RunArgs) -> Result<Code> {
         writes: args.writes.iter().map(|w| resolved(w)).collect(),
     };
     let policy = home.load_policy()?;
-    let (mut agent, report) = platform::confine(&policy, &ctx, grants)?;
-    agent.arg(&program).args(rest);
+    let mut agent = platform::confine(&policy, &ctx, grants, &program)?;
+    agent.command().args(rest);
     let exit = Exit::open(&home, policy, ctx)?;
-    notice(&program, port, exit.session(), &report)?;
+    notice(&program, port, exit.session(), agent.report())?;
     std::thread::spawn(move || {
         if let Err(error) = exit.serve(&listener) {
             eprintln!("moat run: the proxy stopped, so the agent has no network: {error:#}");
@@ -70,9 +78,12 @@ pub fn run(args: &RunArgs) -> Result<Code> {
     });
     let url = format!("http://127.0.0.1:{port}");
     for var in PROXY_VARS {
-        agent.env(var, &url);
+        agent.command().env(var, &url);
     }
-    agent.env_remove("NO_PROXY").env_remove("no_proxy");
+    agent
+        .command()
+        .env_remove("NO_PROXY")
+        .env_remove("no_proxy");
     // Ctrl-C at the terminal reaches the agent and moat alike. The agent decides
     // what it means; moat keeps running, or the proxy would die under the agent.
     signal_hook::flag::register(

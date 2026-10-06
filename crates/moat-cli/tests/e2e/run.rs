@@ -1,6 +1,6 @@
-//! `moat run` (Lightweight tier, ADR-018). On macOS the payloads really run
-//! under the generated Seatbelt profile; they are `/bin/sh` scripts, never an
-//! agent, in an isolated home with fake secrets.
+//! `moat run` (Lightweight tier, ADR-018). On macOS and Linux the payloads
+//! really run under the generated Seatbelt profile or Landlock rules; they are
+//! `/bin/sh` scripts, never an agent, in an isolated home with fake secrets.
 
 use std::path::{Path, PathBuf};
 use std::process::Output;
@@ -22,7 +22,17 @@ fn run_sh(sb: &Sandbox, project: &Path, script: &str) -> Output {
 }
 
 fn installed_with_secret() -> (Sandbox, PathBuf) {
-    let sb = Sandbox::installed(&[]);
+    // Landlock cannot deny inside a granted tree, and `/tmp` is a read root, so
+    // on Linux the home must live elsewhere for its secrets to be out of reach,
+    // as a real home is.
+    let parent = if cfg!(target_os = "linux") {
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+    } else {
+        std::env::temp_dir()
+    };
+    let sb = Sandbox::bare_in(&parent, &[]);
+    let out = sb.moat(&["init"]);
+    assert_eq!(out.status.code(), Some(0), "moat init: {}", text(&out));
     std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
     std::fs::write(sb.home.join(".ssh/id_rsa"), "FAKE-SSH-KEY").unwrap();
     let project = sb.project();
@@ -41,7 +51,7 @@ fn refuses_to_start_over_a_drifted_lock() {
     assert!(!text(&out).contains("ran\n"));
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 #[test]
 fn refuses_where_no_sandbox_can_be_generated() {
     let (sb, project) = installed_with_secret();
@@ -66,14 +76,24 @@ fn refuses_where_no_sandbox_can_be_generated() {
     );
 }
 
-#[cfg(target_os = "macos")]
-mod macos {
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod confined {
     use std::io::ErrorKind;
     use std::net::TcpListener;
     use std::process::Command;
 
     use super::*;
     use crate::common::stdout;
+
+    /// False, saying so, on a Linux kernel without Landlock ABI 4: `moat run`
+    /// refuses there, which `refuses_*` cases cover; CI kernels have it.
+    fn ran(out: &Output) -> bool {
+        let unsupported = stderr(out).contains("needs Landlock ABI 4");
+        if unsupported {
+            eprintln!("skipped: this kernel has no Landlock ABI 4");
+        }
+        !unsupported
+    }
 
     #[test]
     fn secrets_and_writes_outside_the_project_are_refused_and_work_goes_on() {
@@ -91,12 +111,18 @@ mod macos {
              echo y > inside.txt; echo \"project=$?\"
              git status --short > /dev/null; echo \"git=$?\"",
         );
+        if !ran(&out) {
+            return;
+        }
         let shown = text(&out);
         assert_eq!(out.status.code(), Some(0), "{shown}");
         for expected in ["read=1", "write=1", "project=0", "git=0"] {
             assert!(stdout(&out).contains(expected), "{expected}: {shown}");
         }
-        assert!(shown.contains("Operation not permitted"), "EPERM: {shown}");
+        assert!(
+            shown.contains("Operation not permitted") || shown.contains("Permission denied"),
+            "EPERM or EACCES: {shown}"
+        );
         assert!(!shown.contains("FAKE-SSH-KEY"), "{shown}");
         assert!(!sb.home.join("outside.txt").exists());
         assert!(project.join("inside.txt").exists());
@@ -120,6 +146,9 @@ mod macos {
                  curl -s -m 5 -o /dev/null -w 'proxy=%{{http_code}}\\n' {url}"
             ),
         );
+        if !ran(&out) {
+            return;
+        }
         let shown = text(&out);
         assert!(stdout(&out).contains("direct=7"), "{shown}");
         assert!(stdout(&out).contains("proxy=403"), "{shown}");
@@ -134,6 +163,8 @@ mod macos {
     fn a_failing_agent_exits_1() {
         let (sb, project) = installed_with_secret();
         let out = run_sh(&sb, &project, "exit 2");
-        assert_eq!(out.status.code(), Some(1), "{}", text(&out));
+        if ran(&out) {
+            assert_eq!(out.status.code(), Some(1), "{}", text(&out));
+        }
     }
 }
