@@ -121,6 +121,10 @@ crash becomes a unit test or fixture next to the fix.
 Non-obvious decisions are recorded as ADRs in `docs/adr/`. Propose one in the PR
 when you change an invariant (policy semantics, exit codes, crate boundaries).
 
+A shell-classifier bypass is not such a decision. The classifier triages; OS
+enforcement is the boundary (ADR-013). Report the bypass, add an attack fixture, and
+make the smallest change that turns it into `ask`.
+
 ## Governance
 
 Single maintainer during v0.x. CODEOWNERS routes review; the trusted core, the
