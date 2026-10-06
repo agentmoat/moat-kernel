@@ -1,0 +1,31 @@
+//! One record per connection decision.
+//!
+//! As with `moat guard`, the record is part of the decision: a connection that
+//! cannot be recorded is not made. The CLI records into the moat audit log;
+//! this crate stays free of storage.
+
+use moat_core::Decision;
+
+/// One connection decision.
+#[derive(Debug, Clone, Copy)]
+pub struct Connection<'a> {
+    /// Request method (`CONNECT`, `GET`, …); `None` when the head was unreadable.
+    pub method: Option<&'a str>,
+    /// Destination host and port; `None` when the head was unreadable.
+    pub destination: Option<(&'a str, u16)>,
+    /// The verdict and the rules behind it.
+    pub decision: &'a Decision,
+    /// Time from accepting the connection to this decision, in microseconds.
+    pub latency_us: u64,
+}
+
+/// Where connection decisions go. An error refuses the connection.
+pub trait Recorder: Send + Sync {
+    /// Record one decision.
+    fn record(&self, connection: &Connection<'_>) -> Result<(), RecordError>;
+}
+
+/// A decision could not be recorded.
+#[derive(Debug, thiserror::Error)]
+#[error("audit log unavailable: {0}")]
+pub struct RecordError(pub String);
