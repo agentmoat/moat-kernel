@@ -194,11 +194,6 @@
   threat: T4
   action: { shell: "gh run view 3 --log -o out.txt" }
   expect: { verdict: ask, rules: [default] }
-# T9: moving ordinary project files is not kernel-self
-- id: ask-move-project-file
-  threat: T9
-  action: { shell: "mv src/a.rs src/b.rs" }
-  expect: { verdict: ask, rules: [default] }
 # A patch that names no file cannot be checked
 - id: ask-patch-without-files
   threat: T7
@@ -308,13 +303,37 @@
   threat: T1
   action: { shell: "cd - && cat id_rsa" }
   expect: { verdict: ask, rules: [unparseable] }
-# T1: ordinary `cd … &&` lines ask only because `cd` itself has no allow rule;
-# they must not become denies or unparseable through directory tracking
-- id: ask-cd-src-then-cargo-test
-  threat: T1
-  action: { shell: "cd src && cargo test" }
+# Everyday file operations leave the project only by asking, and the destructive
+# spellings excluded from dev-shell keep asking
+- id: ask-recursive-remove-in-project
+  threat: T4
+  action: { shell: "rm -rf node_modules" }
   expect: { verdict: ask, rules: [default] }
-- id: ask-cd-crate-then-ls
+- id: ask-recursive-remove-capital-r
+  threat: T4
+  action: { shell: "rm -Rf dist" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-checkout-discards-changes
+  threat: T4
+  action: { shell: "git checkout -- ." }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-checkout-dot-discards-changes
+  threat: T4
+  action: { shell: "git checkout ." }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-force-checkout
+  threat: T4
+  action: { shell: "git checkout -f main" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-mkdir-outside-project
+  threat: T9
+  action: { shell: "mkdir -p ~/scratch" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-copy-out-of-project
   threat: T1
-  action: { shell: "cd crates/x && ls" }
+  action: { shell: "cp src/main.rs /tmp/main.rs" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-cd-home-then-list
+  threat: T1
+  action: { shell: "cd ~ && ls" }
   expect: { verdict: ask, rules: [default] }

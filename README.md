@@ -75,11 +75,9 @@ Nothing to do. That is the kernel working.
 
 ### 2 · The agent needs something the policy does not cover
 
-The agent runs `npm install left-pad`. `npm`, `pip`, `brew` and `gem` installs are `ask`
-by default, so your agent's normal permission prompt appears, tagged `moat: ask [installs]`.
-(`pnpm`, `yarn` and `cargo` installs are currently allowed by the broad `dev-shell` rule;
-the `installs` entries for them take effect once that rule is split into explicit
-subcommands.) Approve it there as usual. If you will keep saying yes to this command,
+The agent runs `npm install left-pad`. Package installs (`npm`, `pnpm`, `yarn`, `pip`,
+`cargo add`/`install`, `brew`, `gem`) are `ask` by default, so your agent's normal permission
+prompt appears, tagged `moat: ask [installs]`. Approve it there as usual. If you will keep saying yes to this command,
 make it stick:
 
 ```bash

@@ -912,3 +912,22 @@
   threat: T4
   action: { shell: "bash -lc 'git push origin +main'" }
   expect: { verdict: deny, rules: [destructive] }
+
+# Allowed file programs still meet the deny rules through their operands
+- id: T1-move-key-into-authorized-keys
+  threat: T1
+  action: { shell: "mv src/key.pub ~/.ssh/authorized_keys" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T9-remove-shell-rc
+  threat: T9
+  action: { shell: "rm ~/.zshrc" }
+  expect: { verdict: deny, rules: [shell-rc] }
+- id: T9-touch-moat-state
+  threat: T9
+  action: { shell: "touch ~/.moat/policy.yaml" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T1-cd-allowed-still-follows-into-secrets
+  threat: T1
+  action: { shell: "cd ~/.aws && cp credentials ~/proj-copy" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+
