@@ -1,0 +1,77 @@
+use super::*;
+
+#[test]
+fn an_allowed_host_is_forwarded_over_plain_http() {
+    let h = start(None, Limits::default());
+    let port = h.port();
+    let reply = h.exchange(&format!(
+        "GET http://allowed.test:{port}/x?y=1 HTTP/1.1\r\nHost: allowed.test:{port}\r\n\
+         Proxy-Authorization: Basic c2VjcmV0\r\nUser-Agent: t\r\n\r\n"
+    ));
+    assert!(
+        reply.starts_with("HTTP/1.1 200 OK") && reply.ends_with("ok"),
+        "{reply}"
+    );
+    let head = String::from_utf8(h.received.recv_timeout(WAIT).unwrap()).unwrap();
+    assert_eq!(
+        head,
+        format!(
+            "GET /x?y=1 HTTP/1.1\r\nHost: allowed.test:{port}\r\nUser-Agent: t\r\n\
+             Connection: close\r\n\r\n"
+        )
+    );
+    let rows = h.rows();
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert_eq!(row.tool.as_deref(), Some("GET"));
+    assert_eq!(
+        (row.verdict, row.rules.as_slice()),
+        (Verdict::Allow, &["test-hosts".to_owned()][..])
+    );
+    assert_eq!(row.dest, Some(("allowed.test".to_owned(), port)));
+}
+
+#[test]
+fn an_unknown_host_is_refused_with_403_and_recorded() {
+    let h = start(None, Limits::default());
+    let reply = h.exchange("GET http://unknown.test/ HTTP/1.1\r\n\r\n");
+    assert!(reply.starts_with("HTTP/1.1 403 Forbidden"), "{reply}");
+    assert!(reply.contains("default.fetch"), "{reply}");
+    assert!(h.nothing_forwarded());
+    let reply = h.exchange("CONNECT unknown.test:443 HTTP/1.1\r\n\r\n");
+    assert!(reply.starts_with("HTTP/1.1 403 Forbidden"), "{reply}");
+    let rows = h.rows();
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows.iter()
+            .all(|r| r.verdict == Verdict::Deny && r.rules == ["default.fetch"])
+    );
+    assert!(rows.iter().any(|r| r.tool.as_deref() == Some("CONNECT")
+        && r.dest == Some(("unknown.test".to_owned(), 443))));
+}
+
+#[test]
+fn metadata_is_refused_even_through_an_allowed_name() {
+    let h = start(None, Limits::default());
+    for host in ["rebind.test", "mixed.test", "169.254.169.254"] {
+        let reply = h.exchange(&format!(
+            "GET http://{host}:{}/latest/meta-data/ HTTP/1.1\r\n\r\n",
+            h.port()
+        ));
+        assert!(reply.starts_with("HTTP/1.1 403"), "{host}: {reply}");
+        assert!(reply.contains("link-local"), "{host}: {reply}");
+    }
+    assert!(h.nothing_forwarded());
+    assert!(h.rows().iter().all(|r| r.rules == ["proxy-address"]));
+}
+
+#[test]
+fn loopback_is_refused_unless_it_is_the_listed_server() {
+    let h = start(None, Limits::default());
+    // loop.test resolves to 127.0.0.1 too, but on a port nobody listed
+    let reply = h.exchange("GET http://loop.test:1/ HTTP/1.1\r\n\r\n");
+    assert!(
+        reply.starts_with("HTTP/1.1 403") && reply.contains("loopback"),
+        "{reply}"
+    );
+}
