@@ -29,6 +29,9 @@ signal-hook.workspace = true
 toml_edit.workspace = true
 zeroize.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock.workspace = true
+
 [dev-dependencies]
 moat-audit = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
