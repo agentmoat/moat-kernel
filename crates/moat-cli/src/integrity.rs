@@ -31,6 +31,10 @@ pub struct Lock {
     pub binary: String,
     /// Canonical path → lowercase hex SHA-256 of the file contents.
     pub entries: BTreeMap<String, String>,
+    /// Codex `config.toml` → SHA-256 of the part moat owns (its permissions
+    /// profile, ADR-018). Codex edits the rest of that file itself.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub codex_profiles: BTreeMap<String, String>,
 }
 
 /// Which hook files a re-pin covers, besides moat's own state files.
@@ -50,12 +54,29 @@ pub enum HookPins {
 /// files and the host hook files `hooks` selects. Used by `init`,
 /// `doctor --accept` and `allow`, which are the only human paths that may re-pin.
 pub fn repin(home: &Home, binary: &Path, hooks: HookPins) -> Result<Lock> {
+    repin_with(home, binary, hooks, &[], &[])
+}
+
+/// [`repin`], also pinning `files` whole and the Codex profiles in
+/// `codex_configs`: the files `moat sandbox sync` just wrote.
+pub fn repin_with(
+    home: &Home,
+    binary: &Path,
+    hooks: HookPins,
+    files: &[PathBuf],
+    codex_configs: &[PathBuf],
+) -> Result<Lock> {
     let mut paths = state_files(home);
+    paths.extend_from_slice(files);
+    let mut profiles = codex_configs.to_vec();
     let lock_path = home.lock_path();
     let had_lock = lock_path.exists();
     if had_lock {
         match (Lock::load(&lock_path), hooks) {
-            (Ok(old), _) => paths.extend(old.entries.into_keys().map(PathBuf::from)),
+            (Ok(old), _) => {
+                paths.extend(old.entries.into_keys().map(PathBuf::from));
+                profiles.extend(old.codex_profiles.into_keys().map(PathBuf::from));
+            }
             (Err(e), HookPins::Keep) => {
                 return Err(e.context("cannot tell which hook files are pinned; run `moat init`"));
             }
@@ -66,8 +87,13 @@ pub fn repin(home: &Home, binary: &Path, hooks: HookPins) -> Result<Lock> {
     // Without a lock there is nothing to keep, so this environment's hooks it is.
     if hooks == HookPins::Adopt || !had_lock {
         paths.extend(installed_hook_files(binary)?);
+        profiles.extend(crate::sandbox::install::codex_profile_files()?);
     }
-    let lock = Lock::pin(binary, &paths)?;
+    let mut lock = Lock::pin(binary, &paths)?;
+    for path in profiles.iter().filter(|p| p.is_file()) {
+        let digest = crate::sandbox::install::codex_part_digest(path)?;
+        lock.codex_profiles.insert(key(path), digest);
+    }
     lock.save(&lock_path)?;
     Ok(lock)
 }
@@ -188,6 +214,7 @@ impl Lock {
             pinned_at_ms: crate::time::now_ms(),
             binary: binary.to_string_lossy().into_owned(),
             entries,
+            codex_profiles: BTreeMap::new(),
         })
     }
 
@@ -213,18 +240,35 @@ impl Lock {
 
     /// Compare pinned digests with the files on disk. Empty means intact.
     pub fn verify(&self) -> Vec<Drift> {
-        self.entries
-            .keys()
-            .filter_map(|stored| {
-                // A stored key is canonical as of pinning. If it no longer maps to
-                // itself, a directory on the way was moved or replaced by a link:
-                // the file the kernel will read is not the one that was pinned.
-                if key(Path::new(stored)) != *stored {
-                    return Some(Drift::Modified(PathBuf::from(stored)));
-                }
-                self.verify_one(Path::new(stored))
-            })
-            .collect()
+        let files = self.entries.keys().filter_map(|stored| {
+            // A stored key is canonical as of pinning. If it no longer maps to
+            // itself, a directory on the way was moved or replaced by a link:
+            // the file the kernel will read is not the one that was pinned.
+            if key(Path::new(stored)) != *stored {
+                return Some(Drift::Modified(PathBuf::from(stored)));
+            }
+            self.verify_one(Path::new(stored))
+        });
+        let profiles = self.codex_profiles.iter().filter_map(|(stored, expected)| {
+            let path = PathBuf::from(stored);
+            if key(&path) != *stored {
+                return Some(Drift::Modified(path));
+            }
+            if fs::symlink_metadata(&path).is_err() {
+                return Some(Drift::Missing(path));
+            }
+            match crate::sandbox::install::codex_part_digest(&path) {
+                Ok(actual) if &actual == expected => None,
+                Ok(_) => Some(Drift::Modified(path)),
+                Err(e) => Some(Drift::Unreadable(path, format!("{e:#}"))),
+            }
+        });
+        files.chain(profiles).collect()
+    }
+
+    /// Whether the lock pins the moat profile in the Codex config at `path`.
+    pub fn pins_codex_profile(&self, path: &Path) -> bool {
+        self.codex_profiles.contains_key(&key(path))
     }
 
     /// Drift for one pinned file, or `None` when it is intact or not pinned.

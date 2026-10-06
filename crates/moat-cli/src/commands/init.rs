@@ -4,6 +4,7 @@ use std::io::Write as _;
 
 use anyhow::Result;
 use moat_audit::Store;
+use moat_core::{DEFAULT_POLICY, Policy};
 use moat_hosts::Host;
 
 use crate::cli::InitArgs;
@@ -13,6 +14,7 @@ use crate::home::Home;
 use crate::install::{HostConfig, Outcome};
 use crate::integrity;
 use crate::render::Deferred;
+use crate::sandbox::{self, Plan};
 
 pub fn run(args: &InitArgs) -> Result<Code> {
     let dry_run = args.dry_run;
@@ -85,7 +87,7 @@ pub fn run(args: &InitArgs) -> Result<Code> {
     if !dry_run {
         home.ensure_approval_files()?;
     }
-    for host in hosts {
+    for host in hosts.iter().copied() {
         let config = HostConfig::for_host(host)?;
         let outcome = config.install(&binary, dry_run)?;
         let verb = match outcome {
@@ -104,6 +106,8 @@ pub fn run(args: &InitArgs) -> Result<Code> {
             host.id()
         )?;
     }
+
+    sandboxes(&home, &hosts, dry_run, &mut out)?;
 
     if dry_run {
         writeln!(out, "would lock             {}", home.lock_path().display())?;
@@ -124,4 +128,47 @@ pub fn run(args: &InitArgs) -> Result<Code> {
     }
     out.finish()?;
     Ok(Code::Ok)
+}
+
+/// Standard tier (ADR-018): each selected host's own sandbox, configured from
+/// the policy. A policy that does not lint is reported, not fatal, so `init`
+/// can still repair hooks; `moat sandbox sync` writes the sandboxes later.
+fn sandboxes(home: &Home, hosts: &[Host], dry_run: bool, out: &mut Deferred) -> Result<()> {
+    let prefix = if dry_run { "would" } else { "✔" };
+    let selected: Vec<Host> = sandbox::install::HOSTS
+        .into_iter()
+        .filter(|h| hosts.contains(h))
+        .collect();
+    if selected.is_empty() {
+        return Ok(());
+    }
+    let policy = if home.policy_path().exists() {
+        home.load_policy()
+    } else {
+        Ok(Policy::parse(DEFAULT_POLICY)?)
+    };
+    let plan = match policy.and_then(|p| Plan::new(&p)) {
+        Ok(plan) => plan,
+        Err(e) => {
+            writeln!(out, "✗ sandbox          not written: {e:#}")?;
+            return Ok(());
+        }
+    };
+    for host in selected {
+        let verb = if sandbox::install::write(host, &plan, dry_run)? {
+            "updated"
+        } else {
+            "unchanged"
+        };
+        let report = sandbox::install::report(host, &plan);
+        writeln!(
+            out,
+            "{prefix} {:<16} {} (sandbox {verb}; {} stricter, {} wider than the policy: `moat sandbox show`)",
+            host.display_name(),
+            sandbox::install::settings_path(host)?.display(),
+            report.losses.len(),
+            report.allowances.len()
+        )?;
+    }
+    Ok(())
 }

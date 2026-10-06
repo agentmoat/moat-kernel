@@ -35,6 +35,7 @@ pub fn run(cli: Cli) -> Result<Code> {
         },
         Command::Sandbox { command } => match command {
             SandboxCommand::Show(args) => sandbox::show(&args),
+            SandboxCommand::Sync => sandbox::sync(),
         },
     }
 }
