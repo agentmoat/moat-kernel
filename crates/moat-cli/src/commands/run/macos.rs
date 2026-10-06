@@ -6,8 +6,7 @@ use std::process::Command;
 use anyhow::Result;
 use moat_core::{EvalContext, Policy};
 
-use crate::sandbox::seatbelt::Grants;
-use crate::sandbox::{Report, seatbelt_profile};
+use crate::sandbox::{Grants, Report, seatbelt_profile};
 
 /// Part of the base system; never one found on `PATH`. Apple has deprecated
 /// it, but Codex, Claude Code and Chromium still start their sandboxes with it.

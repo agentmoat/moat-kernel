@@ -84,6 +84,35 @@ fn a_policy_without_read_roots_uses_the_default_list() {
 }
 
 #[test]
+fn show_prints_the_landlock_rules_and_what_they_leave_open() {
+    let sb = Sandbox::installed(&[]);
+    let out = output(
+        sb.command()
+            .args(["sandbox", "show", "--format", "json"])
+            .current_dir(sb.project()),
+        None,
+    );
+    let landlock = &json(&out)["lightweight"]["landlock"];
+    let read = landlock["rules"]["read"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        read.iter()
+            .any(|p| p.as_str().is_some_and(|p| p.ends_with("/home/proj")))
+    );
+    let rules: Vec<&str> = landlock["report"]["allowances"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|a| a["rule"].as_str())
+        .collect();
+    for rule in ["landlock.inside-grants", "landlock.sockets"] {
+        assert!(rules.contains(&rule), "{rule}: {landlock}");
+    }
+}
+
+#[test]
 fn show_prints_the_seatbelt_profile_for_the_project_here() {
     let sb = Sandbox::installed(&[]);
     let project = sb.project();
