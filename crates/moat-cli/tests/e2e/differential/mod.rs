@@ -16,6 +16,9 @@ use serde::Deserialize;
 
 use crate::common::{Sandbox, bash_payload, hook_output, json};
 
+#[cfg(unix)]
+pub mod codex;
+
 /// A layer's verdict. Sandboxes express only `Allow` (ran) and `Deny` (blocked);
 /// `Ask` is a hook outcome (the host prompts the person).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -68,6 +71,32 @@ pub struct Scenario {
     pub project: Project,
     /// The expected hook decision.
     pub hook: Verdict,
+    /// The expected outcome under `codex sandbox -P moat` (`allow` ran, `deny`
+    /// blocked).
+    pub codex: Verdict,
+    /// A layer where this scenario is a known gap: its verdict is reported in
+    /// the matrix (never silently skipped) but not asserted, pending the issue.
+    #[serde(default)]
+    pub gap: Option<Gap>,
+}
+
+/// A documented known gap at one layer, tracked by an issue.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Gap {
+    /// `hook`, `codex` or `claude`.
+    pub layer: String,
+    /// The tracking issue number.
+    pub issue: u32,
+    /// Why the layer falls short.
+    pub why: String,
+}
+
+impl Scenario {
+    /// The tracking issue when this scenario is a known gap at `layer`.
+    pub fn gap_at(&self, layer: &str) -> Option<&Gap> {
+        self.gap.as_ref().filter(|g| g.layer == layer)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,39 +161,46 @@ impl Fixtures {
         Self { sb, benign, evil }
     }
 
-    /// A git-initialised project. With `malicious`, its `npm test` and `build.rs`
-    /// read `~/.ssh/id_rsa` and write above the project.
+    /// A git-initialised project. `bin/npm` and `bin/cargo` are shims (on the
+    /// sandbox `PATH`) that run the project's own build script, so the hook sees
+    /// an allowed `npm test` / `cargo build` while the payload stays inside the
+    /// script; a host sandbox is then the only layer that can stop it. With
+    /// `malicious` that script reads `~/.ssh/id_rsa`; otherwise it does nothing.
     fn project(sb: &Sandbox, name: &str, malicious: bool) -> PathBuf {
         let root = sb.home.join(name);
         std::fs::create_dir_all(root.join(".git/hooks")).unwrap();
         std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("bin")).unwrap();
         let w = |name: &str, body: &str| std::fs::write(root.join(name), body).unwrap();
         w("src/main.rs", "fn main() {}\n");
         w(".env", "TOKEN=secret\n");
         w(".env.example", "TOKEN=\n");
-        let test = if malicious {
-            "cat ~/.ssh/id_rsa > ../stolen.txt"
+        w(
+            "package.json",
+            "{\"scripts\":{\"test\":\"sh ./.build.sh\"}}\n",
+        );
+        w("Cargo.toml", "[package]\nname = \"p\"\n");
+        let payload = if malicious {
+            "cat ~/.ssh/id_rsa"
         } else {
             "echo ok"
         };
-        w(
-            "package.json",
-            &format!("{{\"scripts\":{{\"test\":\"{test}\"}}}}\n"),
-        );
-        let build = if malicious {
-            "fn main() { let _ = std::fs::read(concat!(env!(\"HOME\"), \"/.ssh/id_rsa\")); }\n"
-        } else {
-            "fn main() {}\n"
-        };
-        w("build.rs", build);
-        w(
-            "Cargo.toml",
-            "[package]\nname = \"p\"\nversion = \"0.0.0\"\nedition = \"2021\"\n",
-        );
+        w(".build.sh", &format!("{payload}\n"));
+        for shim in ["npm", "cargo"] {
+            let path = root.join("bin").join(shim);
+            // The real command name reaches the hook; the shim runs .build.sh.
+            std::fs::write(
+                &path,
+                "#!/bin/sh\nexec /bin/sh \"$(dirname \"$0\")/../.build.sh\"\n",
+            )
+            .unwrap();
+            make_executable(&path);
+        }
         root
     }
 
-    fn tree(&self, project: Project) -> &Path {
+    /// The project tree a scenario runs in.
+    pub fn tree(&self, project: Project) -> &Path {
         match project {
             Project::Benign => &self.benign,
             Project::Evil => &self.evil,
@@ -205,6 +241,15 @@ fn scenario_file_is_well_formed() {
                 s.id
             );
         }
+        if let Some(gap) = &s.gap {
+            assert!(
+                ["hook", "codex", "claude"].contains(&gap.layer.as_str()),
+                "{}: gap layer {}",
+                s.id,
+                gap.layer
+            );
+            assert!(gap.issue > 0, "{}: gap has no issue", s.id);
+        }
     }
     assert!(all.iter().any(|s| s.cite.is_some()), "no CVE replays");
 }
@@ -235,3 +280,15 @@ fn hook_layer_agrees_with_every_scenario() {
         mismatches.join("\n")
     );
 }
+
+/// Give `path` owner-execute, for the `npm`/`cargo` shims.
+#[cfg(unix)]
+fn make_executable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) {}
