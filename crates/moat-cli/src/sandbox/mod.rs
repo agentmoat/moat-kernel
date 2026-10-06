@@ -7,11 +7,15 @@
 //! workspace (Claude Code's working directories, Codex `:workspace_roots`).
 //! Backends only narrow, reported as losses, except where a host cannot run
 //! without a wider grant; those are listed as allowances, never silent.
+//!
+//! The Lightweight tier's Seatbelt profile ([`seatbelt`]) is lowered per
+//! session instead, for the project `moat run` starts in.
 
 pub mod claude;
 pub mod codex;
 pub mod install;
 mod patterns;
+pub mod seatbelt;
 
 use moat_core::ir::{Allowance, Enforcement, Loss};
 use moat_core::{EvalContext, Policy, PolicyError};
@@ -53,6 +57,34 @@ pub struct Plan {
     pub codex: codex::Generated,
 }
 
+/// `policy`, with the default policy's `sandbox.read_roots` when it has no
+/// `sandbox` key, and whether they were filled in.
+fn with_read_roots(policy: &Policy) -> anyhow::Result<(Policy, bool)> {
+    let mut policy = policy.clone();
+    let filled = policy.sandbox.is_none();
+    if filled {
+        policy.sandbox = Policy::parse(moat_core::DEFAULT_POLICY)?.sandbox;
+    }
+    Ok((policy, filled))
+}
+
+/// The Seatbelt profile `moat run` applies in the current directory, with
+/// `proxy_port` as its only network destination.
+pub fn seatbelt_profile(
+    policy: &Policy,
+    proxy_port: Option<u16>,
+) -> anyhow::Result<seatbelt::Generated> {
+    let (policy, _) = with_read_roots(policy)?;
+    let ir = moat_core::ir::lower(&policy, &crate::context::eval_context(None, None)?)?;
+    let tmpdir = std::fs::canonicalize(std::env::temp_dir())
+        .ok()
+        .map(|dir| crate::context::path_string(&dir));
+    Ok(seatbelt::generate(
+        &ir,
+        &seatbelt::Grants { proxy_port, tmpdir },
+    ))
+}
+
 /// Codex's `config.toml`, next to the hook file (`$CODEX_HOME` or `~/.codex`).
 pub fn codex_config_path() -> anyhow::Result<std::path::PathBuf> {
     let hooks = crate::install::HostConfig::for_host(moat_hosts::Host::Codex)?.settings_path;
@@ -62,11 +94,7 @@ pub fn codex_config_path() -> anyhow::Result<std::path::PathBuf> {
 impl Plan {
     /// Generate every backend for `policy` and the current user's home.
     pub fn new(policy: &Policy) -> anyhow::Result<Self> {
-        let mut policy = policy.clone();
-        let default_read_roots = policy.sandbox.is_none();
-        if default_read_roots {
-            policy.sandbox = Policy::parse(moat_core::DEFAULT_POLICY)?.sandbox;
-        }
+        let (policy, default_read_roots) = with_read_roots(policy)?;
         let (home, real_home) = crate::context::home_spellings()?;
         let ir = lower_for_hosts(
             &policy,

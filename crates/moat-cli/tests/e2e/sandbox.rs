@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, json, stdout, text};
+use crate::common::{Sandbox, json, output, stdout, text};
 
 #[test]
 fn show_prints_the_settings_and_their_losses_without_writing() {
@@ -80,5 +80,30 @@ fn a_policy_without_read_roots_uses_the_default_list() {
             .as_array()
             .is_some_and(|a| a.contains(&Value::from("/usr"))),
         "{allow}"
+    );
+}
+
+#[test]
+fn show_prints_the_seatbelt_profile_for_the_project_here() {
+    let sb = Sandbox::installed(&[]);
+    let project = sb.project();
+    let out = output(
+        sb.command()
+            .args(["sandbox", "show", "--format", "json"])
+            .current_dir(&project),
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    let seatbelt = &json(&out)["lightweight"]["seatbelt"];
+    let profile = seatbelt["profile"].as_str().unwrap_or_default();
+    // The child's working directory comes back resolved (`/private/var/…`).
+    for expected in ["(deny default)", "/home/proj\")", "; network: none"] {
+        assert!(profile.contains(expected), "{expected}: {profile}");
+    }
+    assert!(
+        seatbelt["report"]["allowances"]
+            .as_array()
+            .is_some_and(|a| a.iter().any(|a| a["rule"] == "seatbelt.platform")),
+        "{seatbelt}"
     );
 }
