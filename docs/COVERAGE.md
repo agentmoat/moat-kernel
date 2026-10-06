@@ -16,7 +16,7 @@ the verdict and rule ids the default policy must produce for it.
 | T7 | Obfuscation and nested execution | 42 | 31 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 4 | 0 | 0 |
 | T9 | Hook / policy tampering by the agent | 37 | 9 | 1 |
-| T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
+| T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
 | T11 | Time-of-check / time-of-use, symlinks | 15 | 2 | 0 |
 | T12 | Network to unknown hosts | 18 | 8 | 0 |
 
@@ -311,6 +311,10 @@ the verdict and rule ids the default policy must produce for it.
 - `T10-download-over-installed-binary` (attacks): Deny [kernel-self]
 - `T10-link-over-installed-binary` (attacks): Deny [kernel-self]
 - `T10-file-tool-writes-windows-binary` (attacks): Deny [kernel-self]
+- `T10-file-tool-writes-scoop-current-binary` (attacks): Deny [kernel-self]
+- `T10-copy-over-scoop-versioned-binary` (attacks): Deny [kernel-self]
+- `T10-replace-scoop-current-junction` (attacks): Deny [kernel-self]
+- `benign-write-monorepo-app-named-moat` (benign): Allow [project-fs]
 
 ## T11: Time-of-check / time-of-use, symlinks
 

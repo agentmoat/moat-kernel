@@ -751,6 +751,18 @@
   threat: T10
   action: { fs_write: "C:/Users/me/.cargo/bin/moat.exe" }
   expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-file-tool-writes-scoop-current-binary
+  threat: T10
+  action: { fs_write: "C:/Users/me/scoop/apps/moat/current/moat.exe" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-copy-over-scoop-versioned-binary
+  threat: T10
+  action: { shell: "cp /tmp/evil.exe C:/ProgramData/scoop/apps/moat/0.1.0/moat.exe" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T10-replace-scoop-current-junction
+  threat: T10
+  action: { shell: "rm -rf C:/Users/me/scoop/apps/moat/current" }
+  expect: { verdict: deny, rules: [kernel-self] }
 
 # T12 hosts written in forms a dotted-name heuristic misses
 - id: T12-decimal-encoded-loopback

@@ -136,6 +136,10 @@ deny:
       # the binary every installed hook runs
       - "**/bin/moat"
       - "**/bin/moat.exe"
+      # Scoop: apps/moat/current (the junction hooks run through) and each
+      # apps/moat/<version> it may point at (ADR-016)
+      - "**/apps/moat/current"
+      - "**/apps/moat/*/moat.exe"
     shell:
       - "moat policy *"
       - "moat init*"
