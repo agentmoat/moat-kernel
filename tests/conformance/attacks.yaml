@@ -154,6 +154,22 @@
   threat: T4
   action: { shell: "dd if=/dev/zero of=/dev/disk2 bs=1m" }
   expect: { verdict: deny, rules: [destructive] }
+- id: T4-push-deletes-remote-branch-with-empty-source
+  threat: T4
+  action: { shell: "git push origin :main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-push-delete-flag-after-remote
+  threat: T4
+  action: { shell: "git push origin --delete main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-push-short-delete-flag
+  threat: T4
+  action: { shell: "git push -d origin main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-push-delete-bundled-with-other-flags
+  threat: T4
+  action: { shell: "git push -vd origin main" }
+  expect: { verdict: deny, rules: [destructive] }
 # git global options before the subcommand do not hide it
 - id: T4-force-push-after-git-dir-option
   threat: T4
