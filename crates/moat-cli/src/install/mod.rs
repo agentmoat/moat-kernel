@@ -9,7 +9,7 @@ use anyhow::Result;
 use moat_hosts::Host;
 
 pub use binary::{hook_binary, stale_hint};
-pub use hook_file::{HookState, Outcome};
+pub use hook_file::{HookState, Outcome, read_or_empty};
 
 use crate::home::user_home;
 

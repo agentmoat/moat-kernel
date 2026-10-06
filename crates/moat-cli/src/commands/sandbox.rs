@@ -1,9 +1,9 @@
-//! `moat sandbox show`: the host sandbox settings the policy compiles to.
+//! `moat sandbox show` and `moat sandbox sync`: the host sandbox settings the policy compiles to.
 
 use std::io::{self, Write as _};
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use moat_hosts::Host;
 use serde_json::{Value, json};
 use toml_edit::DocumentMut;
@@ -12,8 +12,9 @@ use crate::cli::{Format, SandboxShowArgs};
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::HostConfig;
-use crate::render;
-use crate::sandbox::{Plan, Report, claude, codex, codex_config_path};
+use crate::integrity::{self, HookPins};
+use crate::render::{self, Deferred};
+use crate::sandbox::{Plan, Report, claude, codex, codex_config_path, install};
 
 /// One host's generated settings, ready to print.
 struct Shown<'a> {
@@ -74,6 +75,61 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
     Ok(Code::Ok)
 }
 
+/// `moat sandbox sync`: write every present host's sandbox settings from the
+/// current policy and re-pin them. A re-pin accepts what it pins, so like
+/// `moat allow` it refuses over a drifted lock (#163) and without a person.
+pub fn sync() -> Result<Code> {
+    if !crate::terminal::interactive() {
+        bail!(
+            "`moat sandbox sync` must be run by a person in a terminal, not from a hook or script"
+        );
+    }
+    let home = Home::locate()?;
+    if let Some(deny) = integrity::violation(&home)? {
+        bail!(
+            "refusing to sync while the policy lock shows drift ({}):\n  {}",
+            integrity::INTEGRITY_RULE,
+            deny.reasons.join("\n  ")
+        );
+    }
+    let plan = Plan::new(&home.load_policy()?)?;
+    let binary = crate::install::hook_binary()?;
+    let mut out = Deferred::default();
+    let (mut files, mut codex_configs) = (Vec::new(), Vec::new());
+    for host in install::HOSTS {
+        let path = install::settings_path(host)?;
+        if !path.parent().is_some_and(std::path::Path::is_dir) {
+            writeln!(out, "· {:<16} host not found", host.display_name())?;
+            continue;
+        }
+        let verb = if install::write(host, &plan, false)? {
+            "updated"
+        } else {
+            "unchanged"
+        };
+        writeln!(
+            out,
+            "✔ {:<16} {} (sandbox {verb})",
+            host.display_name(),
+            path.display()
+        )?;
+        write_report(&mut out, install::report(host, &plan))?;
+        match host {
+            Host::Codex => codex_configs.push(path),
+            _ => files.push(path),
+        }
+    }
+    let lock = integrity::repin_with(&home, &binary, HookPins::Keep, &files, &codex_configs)?;
+    writeln!(
+        out,
+        "✔ lock             {} files and {} Codex profile(s) pinned",
+        lock.entries.len(),
+        lock.codex_profiles.len()
+    )?;
+    out.finish()?;
+    Ok(Code::Ok)
+}
+
 /// The part of Claude Code's settings moat owns, as it would appear in the file.
 fn claude_settings(generated: &claude::Generated) -> Value {
     let mut settings = json!({ "sandbox": generated.sandbox });
@@ -84,7 +140,7 @@ fn claude_settings(generated: &claude::Generated) -> Value {
 }
 
 /// Losses and allowances, as `sandbox show`, `sandbox sync` and `doctor` print them.
-pub fn write_report(out: &mut impl io::Write, report: &Report) -> io::Result<()> {
+pub(super) fn write_report(out: &mut impl io::Write, report: &Report) -> io::Result<()> {
     for loss in &report.losses {
         writeln!(out, "  stricter: {loss}")?;
     }

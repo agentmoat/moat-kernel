@@ -203,7 +203,7 @@ fn upsert(
     }
 }
 
-fn read_or_empty(path: &Path) -> Result<Value> {
+pub fn read_or_empty(path: &Path) -> Result<Value> {
     if !path.exists() {
         return Ok(Value::Object(Map::new()));
     }
