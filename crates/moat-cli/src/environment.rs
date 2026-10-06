@@ -148,7 +148,7 @@ fn parse_pathext(raw: &str) -> Vec<String> {
 
 /// First executable named `program` in `dirs`, following the platform's rules:
 /// on Windows the name as given, then with each `pathext` extension.
-fn find_in(dirs: &[PathBuf], pathext: &[String], program: &str) -> Option<PathBuf> {
+pub fn find_in(dirs: &[PathBuf], pathext: &[String], program: &str) -> Option<PathBuf> {
     let candidates: Vec<String> = if cfg!(windows) {
         let default: Vec<String>;
         let exts = if pathext.is_empty() {

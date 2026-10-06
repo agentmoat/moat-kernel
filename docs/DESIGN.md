@@ -648,7 +648,8 @@ $ moat export 7c1e --json          # for incident/compliance
 
 ### 8.6 Doctor (self-check)
 
-`moat doctor` verifies: binary path in hooks == running binary; hook entries are
+`moat doctor` verifies: binary path in hooks == running binary (a hook naming a
+missing binary or a different `moat` is reported with `run moat init`); hook entries are
 exec-form and unmodified; `failClosed` set on Cursor; policy files match lock;
 file modes are `0600`/`0700`; PATH snapshot still resolves to pinned paths; SQLite
 integrity. Exit non-zero on any drift; prints the fix.
@@ -668,6 +669,7 @@ Each item: why it is hard → Phase 1 answer → Phase 2 answer → open questio
 ### G1 Self-protection: the agent can edit the policy or remove the hook
 - Why hard: the agent has `Edit`/`Write`/shell. One "helpful" edit to `settings.json` and the kernel is gone. HookPry shows hook configs are a live attack surface.
 - Phase 1: `kernel-self` deny group on all policy/hook paths for every action kind; `policy.lock` with sha256 of policy files **and** host hook configs verified on every `guard`; mismatch ⇒ deny everything until `moat doctor --accept` is run by a human in a TTY; Claude Code `ConfigChange` hook returns block for settings changes not initiated by `moat`.
+- Hooks name the stable install path of `moat`, so a package upgrade never leaves them pointing at a deleted binary, which hosts would skip (fail open); `moat doctor`/`status` name a hook whose binary is missing or is a different `moat` (ADR-016).
 - Phase 2: Ed25519-signed policy bundles; kernel binary verifies its own hash; optional macOS launchd/Linux systemd watcher re-installs hooks.
 - Open: Cursor/OpenClaw have no config-change veto; detection is per-call (next call fails closed), which is acceptable but not instantaneous.
 
@@ -731,7 +733,7 @@ Each item: why it is hard → Phase 1 answer → Phase 2 answer → open questio
 
 ### G12 Our own supply chain
 - Why hard: a kernel that updates itself is a target (HookPry class).
-- Phase 1: releases via `cargo-dist` with checksums; `cargo-deny` in CI; `moat init` writes absolute binary path into hooks (no `$PATH` lookup).
+- Phase 1: releases via `cargo-dist` with checksums; `cargo-deny` in CI; `moat init` writes absolute binary path into hooks (no `$PATH` lookup). The path is the stable install path (Homebrew `<prefix>/bin/moat`, Scoop `apps/moat/current`, the invoked link) when it resolves to the running file, never a versioned directory an upgrade deletes; the binary is pinned by path, not digest, so an upgrade is transparent (ADR-016).
 - Phase 2/3: signed releases (Sigstore), reproducible builds, SBOM.
 
 ## 10. Prototype specification — v0.1 ("Firewall")

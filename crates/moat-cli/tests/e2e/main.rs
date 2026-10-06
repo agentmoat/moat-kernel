@@ -12,6 +12,8 @@ mod cli;
 mod config_change;
 mod cursor;
 mod guard;
+#[cfg(unix)]
+mod install_path;
 mod lock;
 mod paths;
 mod replay_report;

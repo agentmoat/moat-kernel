@@ -48,7 +48,12 @@ impl Sandbox {
 
     /// The command with the isolated environment; callers add arguments.
     pub fn command(&self) -> Command {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_moat"));
+        self.command_at(Path::new(env!("CARGO_BIN_EXE_moat")))
+    }
+
+    /// [`Sandbox::command`] running the binary at `program` (a copy or a link).
+    pub fn command_at(&self, program: &Path) -> Command {
+        let mut cmd = Command::new(program);
         cmd.env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("HOME", &self.home)

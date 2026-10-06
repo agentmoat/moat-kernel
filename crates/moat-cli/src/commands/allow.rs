@@ -50,7 +50,7 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
         println!("✔ session {session} on {host} may run \"{command}\"");
     }
 
-    let binary = std::env::current_exe().context("locating the moat binary")?;
+    let binary = crate::install::hook_binary()?;
     let lock = integrity::repin(&home, &binary)?;
     println!("✔ lock re-pinned ({} files)", lock.entries.len());
     Ok(Code::Ok)

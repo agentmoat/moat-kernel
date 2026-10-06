@@ -1,6 +1,6 @@
 //! `moat init`: create the state directory, default policy, audit log and host hooks.
 
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use moat_audit::Store;
 use moat_hosts::Host;
 
@@ -15,7 +15,7 @@ pub fn run(args: &InitArgs) -> Result<Code> {
     let dry_run = args.dry_run;
     let prefix = if dry_run { "would" } else { "✔" };
     let home = Home::locate()?;
-    let binary = std::env::current_exe().context("locating the moat binary")?;
+    let binary = crate::install::hook_binary()?;
 
     if !dry_run {
         home.ensure()?;

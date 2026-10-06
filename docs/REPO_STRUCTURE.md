@@ -44,8 +44,8 @@ moat-kernel/
 │   ├── moat-cli/               # published crate `moat-kernel`, binary `moat`
 │   │   ├── src/{main,cli,home,context,project,time,environment,integrity,approvals,render,exit}.rs
 │   │   ├── src/commands/{mod,init,guard,show,status,doctor,allow,replay,report,policy}.rs
-│   │   ├── src/install/{mod,hook_file}.rs
-│   │   └── tests/e2e/{main,cli,guard,cursor,config_change,lock,approvals,allow,replay_report}.rs
+│   │   ├── src/install/{mod,hook_file,binary}.rs
+│   │   └── tests/e2e/{main,cli,guard,cursor,config_change,lock,install_path,approvals,allow,replay_report}.rs
 │   ├── moat-approve/           # (planned) TTY prompt, approval cache, Telegram channel
 │   ├── moat-sandbox/           # (planned) `moat exec`: profile builders (Seatbelt, Landlock+seccomp, bwrap), launcher; Windows stub → Phase 2 AppContainer
 │   ├── moat-proxy/             # (planned) egress proxy: CONNECT/SNI allowlist, connection log, taint feed
