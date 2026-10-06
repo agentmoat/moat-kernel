@@ -207,3 +207,52 @@ fn lowering_is_deterministic_and_serialises_kinds_by_name() {
     assert!(json.contains(r#""default":"deny""#), "{json}");
     assert!(json.contains(r#""secrets":[]"#), "{json}");
 }
+
+#[test]
+fn read_roots_are_an_allowance_that_deny_rules_still_beat() {
+    let ir = lower(
+        &Policy::parse(crate::DEFAULT_POLICY).unwrap(),
+        &EvalContext {
+            home: "/Users/me".into(),
+            ..ctx()
+        },
+    )
+    .unwrap();
+    assert_eq!(ir.allowances.len(), 1);
+    let roots = &ir.allowances[0];
+    assert_eq!(
+        (roots.kind, roots.rule.as_str()),
+        (Kind::FsRead, READ_ROOTS_RULE)
+    );
+    for expected in ["/usr", "/usr/**", "/Users/me/.cargo", "/Users/me/.cargo/**"] {
+        assert!(roots.patterns.contains(&expected.to_owned()), "{expected}");
+    }
+    assert!(
+        !ids(&ir.fs.read.allow).contains(&READ_ROOTS_RULE),
+        "the IR's own read verdicts stay the hook's"
+    );
+    let check = ir.checker().unwrap();
+    let os = |path: &str| check.check_os(&read(path));
+    let cargo = read("/Users/me/.cargo/registry/x");
+    assert_eq!(check.check(&cargo), Some(Effect::Deny));
+    assert_eq!(check.check_os(&cargo), Some(Effect::Allow));
+    assert_eq!(os("/usr/bin/git"), Some(Effect::Allow));
+    assert_eq!(os("/Users/me/.cargo/credentials.toml"), Some(Effect::Deny));
+    assert_eq!(os("/Users/me/.cargo/registry/.env"), Some(Effect::Deny));
+    assert_eq!(os("/Users/me/Documents/x"), Some(Effect::Deny));
+    assert_eq!(os("/p/src/main.rs"), Some(Effect::Allow), "the project");
+    let write = AtomicAction::FsWrite {
+        path: "/usr/local/bin/x".into(),
+    };
+    assert_eq!(
+        check.check_os(&write),
+        Some(Effect::Deny),
+        "writes stay out"
+    );
+}
+
+#[test]
+fn a_policy_without_read_roots_has_no_allowance() {
+    assert!(lowered("version: 1\nsandbox: {}\n").allowances.is_empty());
+    assert!(lowered("version: 1\n").allowances.is_empty());
+}

@@ -10,6 +10,8 @@ use crate::policy::PolicyError;
 /// An [`Enforcement`] with its globs compiled.
 #[derive(Debug)]
 pub struct Checker {
+    /// The read allowances, every one an `fs.read` [`super::Allowance`].
+    read_allowances: Vec<GlobPattern>,
     read: CompiledAccess,
     write: CompiledAccess,
     net: CompiledAccess,
@@ -28,6 +30,13 @@ impl Enforcement {
     pub fn checker(&self) -> Result<Checker, PolicyError> {
         let paths = self.fs.case_insensitive;
         Ok(Checker {
+            read_allowances: self
+                .allowances
+                .iter()
+                .filter(|a| a.kind == Kind::FsRead)
+                .flat_map(|a| &a.patterns)
+                .map(|p| GlobPattern::compile(p, paths))
+                .collect::<Result<_, _>>()?,
             read: CompiledAccess::compile(&self.fs.read, paths)?,
             write: CompiledAccess::compile(&self.fs.write, paths)?,
             net: CompiledAccess::compile(&self.egress.net, true)?,
@@ -48,6 +57,17 @@ impl Checker {
             Kind::Shell | Kind::EnvRead | Kind::EnvSet | Kind::Mcp => return None,
         };
         Some(access.effect(atom.subject()?))
+    }
+
+    /// What an OS layer does with `atom` once the [`super::Allowance`]s apply:
+    /// a deny rule still denies, then an allowance allows, then [`Self::check`].
+    #[must_use]
+    pub fn check_os(&self, atom: &AtomicAction) -> Option<Effect> {
+        let effect = self.check(atom)?;
+        let allowed = atom.kind() == Kind::FsRead
+            && !self.read.denies(atom.subject()?)
+            && any_match(&self.read_allowances, atom.subject()?);
+        Some(if allowed { Effect::Allow } else { effect })
     }
 }
 
@@ -71,9 +91,13 @@ impl CompiledAccess {
         })
     }
 
+    fn denies(&self, subject: &str) -> bool {
+        self.deny.iter().any(|r| any_match(r, subject))
+    }
+
     fn effect(&self, subject: &str) -> Effect {
         let hit = |rules: &[Vec<GlobPattern>]| rules.iter().any(|r| any_match(r, subject));
-        if hit(&self.deny) {
+        if self.denies(subject) {
             Effect::Deny
         } else if hit(&self.allow) {
             Effect::Allow
