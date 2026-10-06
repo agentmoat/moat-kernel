@@ -18,7 +18,7 @@ the verdict and rule ids the default policy must produce for it.
 | T9 | Hook / policy tampering by the agent | 37 | 8 | 1 |
 | T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
 | T11 | Time-of-check / time-of-use, symlinks | 13 | 1 | 0 |
-| T12 | Network to unknown hosts | 14 | 8 | 0 |
+| T12 | Network to unknown hosts | 18 | 8 | 0 |
 
 ## T1: Secret exfiltration via shell
 
@@ -346,9 +346,13 @@ the verdict and rule ids the default policy must produce for it.
 - `T12-decimal-encoded-loopback` (attacks): Deny [default.net]
 - `T12-hex-encoded-ip` (attacks): Deny [default.net]
 - `T12-single-label-intranet-host` (attacks): Deny [default.net]
-- `T12-ipv6-metadata-endpoint` (attacks): Deny [default.net]
+- `T12-ipv6-metadata-endpoint` (attacks): Deny [cloud-metadata]
 - `T12-webfetch-single-label-host` (attacks): Deny [default.net]
 - `T12-here-string-substitution-fetches` (attacks): Deny [default.net]
 - `T12-heredoc-substitution-fetches` (attacks): Deny [default.net]
 - `T12-heredoc-is-the-interpreter-program` (attacks): Deny [default.net]
 - `T12-curl-host-webfetch-may-read` (attacks): Deny [default.net]
+- `T12-fetch-aws-metadata-credentials` (attacks): Deny [cloud-metadata]
+- `T12-fetch-gcp-metadata` (attacks): Deny [cloud-metadata]
+- `T12-curl-ecs-task-credentials` (attacks): Deny [cloud-metadata]
+- `T12-fetch-ipv6-link-local` (attacks): Deny [cloud-metadata]
