@@ -61,7 +61,8 @@ impl Lexer {
                 if candidate == delimiter {
                     break;
                 }
-                body.push_str(&line);
+                // `<<-` strips leading tabs from every body line, not only the delimiter.
+                body.push_str(candidate);
                 body.push('\n');
             }
             let body = if heredoc.literal {

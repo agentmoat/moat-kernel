@@ -13,7 +13,7 @@ the verdict and rule ids the default policy must produce for it.
 | T4 | Destructive git / filesystem operations | 28 | 17 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 0 | 0 |
-| T7 | Obfuscation and nested execution | 42 | 31 | 2 |
+| T7 | Obfuscation and nested execution | 43 | 31 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 4 | 0 | 0 |
 | T9 | Hook / policy tampering by the agent | 37 | 9 | 1 |
 | T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
@@ -250,6 +250,7 @@ the verdict and rule ids the default policy must produce for it.
 - `T7-here-string-is-the-shell-program` (attacks): Deny [secrets-paths]
 - `T7-here-string-decoded-into-shell` (attacks): Deny [pipe-to-shell]
 - `T7-quoted-heredoc-is-the-shell-program` (attacks): Deny [secrets-paths]
+- `T7-dash-heredoc-strips-tabs-before-the-shell-runs-it` (attacks): Deny [secrets-paths]
 - `benign-here-string-to-cat` (benign): Allow [dev-shell]
 - `benign-here-string-to-grep` (benign): Allow [dev-shell]
 

