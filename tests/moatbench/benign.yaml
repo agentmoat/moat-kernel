@@ -53,10 +53,9 @@
 
 - id: read-with-text-tools
   threat: T7
-  gap: "#212"
   why: >-
     Agents read file ranges with `sed -n` and summarise with `sort | uniq`. Both only
-    read project files, but no allow rule covers them yet, so they ask.
+    read project files, and `text-tools` allows them (#212).
   steps:
     - { shell: "sed -n 1,40p src/lib.rs", expect: allow }
     - { shell: "sort data.txt | uniq -c", expect: allow }
