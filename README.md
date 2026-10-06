@@ -39,7 +39,7 @@ No release has been tagged yet. Until `v0.1.0-alpha.0` is out, build from a clon
 
 ```bash
 git clone https://github.com/crocodile-labs/openmoat && cd openmoat
-cargo install --locked --path crates/moat-cli    # installs the `moat` binary
+cargo install --locked --path crates/openmoat-cli    # installs the `moat` binary
 ```
 
 From the first release on, builds cover macOS (arm64, x64), Linux (x64, arm64; glibc

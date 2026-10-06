@@ -44,4 +44,4 @@ PY
 attacks -P moat --enable network_proxy
 probe "  curl https://example.org (not allowlisted)" -P moat --enable network_proxy -- curl -sS -o /dev/null -m 8 -w 'http=%{http_code}\n' https://example.org
 probe "  curl --noproxy '*' https://example.com (bypass the Codex proxy)" -P moat --enable network_proxy -- curl -sS --noproxy '*' -o /dev/null -m 8 -w 'http=%{http_code}\n' https://example.com
-probe "  read .env.example (template; moat allows it)" -P moat --enable network_proxy -- cat .env.example
+probe "  read .env.example (template; OpenMoat allows it)" -P moat --enable network_proxy -- cat .env.example

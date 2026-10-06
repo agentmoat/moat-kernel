@@ -54,7 +54,7 @@ def main():
     project = os.path.join(home, "project")
     os.makedirs(os.path.join(project, ".git"))
     os.makedirs(os.path.join(home, ".claude"))
-    # Only what the e2e tests pass (crates/moat-cli/tests/e2e/common.rs), so a
+    # Only what the e2e tests pass (crates/openmoat-cli/tests/e2e/common.rs), so a
     # developer's MOAT_HOME or CLAUDE_CONFIG_DIR can never be touched.
     env = {"PATH": os.environ.get("PATH", ""), "HOME": home, "USERPROFILE": home}
     if "SYSTEMROOT" in os.environ:

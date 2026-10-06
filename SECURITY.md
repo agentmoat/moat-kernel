@@ -1,8 +1,8 @@
 # Security policy
 
-moat is a security control. Reports about it are handled as such.
+OpenMoat is a security control. Reports about it are handled as such.
 
-**The alpha is decide-only** (ADR-013). `moat` decides whether each agent tool call may
+**The alpha is decide-only** (ADR-013). OpenMoat decides whether each agent tool call may
 run and records it, but the operating system does not enforce the decision: an allowed
 command runs with your permissions. Until OS enforcement ships in the beta, the shell
 classifier is the security boundary, so a classifier mistake that lets a dangerous
@@ -50,7 +50,7 @@ through GitHub, and you are credited unless you prefer otherwise.
 
 ## Safe harbour
 
-Research on your own machine and your own accounts, against your own copy of moat, is
+Research on your own machine and your own accounts, against your own copy of OpenMoat, is
 welcome and will not be pursued. Do not test against systems or data that are not
 yours.
 

@@ -1,6 +1,6 @@
 # Differential fixtures (ADR-019, issue #170). One scenario runs against every
 # enforcement point available on the machine; each layer must give the verdict
-# recorded here. A layer that disagrees fails the suite (crates/moat-cli/tests/
+# recorded here. A layer that disagrees fails the suite (crates/openmoat-cli/tests/
 # e2e/differential/). Attacks carry `threat: T1…T12`; replays of public
 # sandbox-escape advisories carry `cite:`.
 #

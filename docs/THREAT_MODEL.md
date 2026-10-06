@@ -1,6 +1,6 @@
 # Threat model
 
-What `moat` defends, against whom, how well the current code does it, and where it
+What OpenMoat defends, against whom, how well the current code does it, and where it
 does not. The alpha is decide-only (ADR-013): every statement below about the alpha
 is about a policy decision, not about what the operating system prevents.
 Per-threat test counts are in [COVERAGE.md](COVERAGE.md), generated from the
@@ -62,7 +62,7 @@ answer from the [roadmap](ROADMAP.md).
 - A malicious `moat` binary from a compromised release pipeline (signed releases and
   provenance are planned with the release workflow, #89).
 - Attacks on the model provider, and agents that run in a vendor's cloud.
-- Prompt-injection detection in text. `moat` governs actions, not intent.
+- Prompt-injection detection in text. OpenMoat governs actions, not intent.
 
 ## 5. Known limitations
 
@@ -70,7 +70,7 @@ These hold for the current code. Each is a design consequence or a tracked gap, 
 something the alpha claims to stop.
 
 - **Decide-only, except the Standard and Lightweight tiers.** The hook decides;
-  `moat run` (below) is the one place `moat` applies a sandbox itself. Since the
+  `moat run` (below) is the one place OpenMoat applies a sandbox itself. Since the
   Standard tier (ADR-018), `moat init` also configures the
   agent's own sandbox from the policy, so commands Claude Code runs through `Bash`,
   `PowerShell` and `Monitor`, and every command Codex runs, are confined by the
@@ -79,7 +79,7 @@ something the alpha claims to stop.
   network except allowlisted domains. A classifier mistake inside those bounds is
   still a bypass, and in scope as a vulnerability ([SECURITY.md](../SECURITY.md)).
 - **What the Standard tier does not cover.** It is as strong as each host's sandbox
-  and moat's translation, and every host version bump must keep the generated keys
+  and OpenMoat's translation, and every host version bump must keep the generated keys
   working (`moat doctor` names a weakened setting; the differential suite, #170, will
   execute them). Claude Code's file tools, `WebFetch`, MCP servers and hooks run
   outside its sandbox; only the hook governs them. Writes by a sandboxed command to
@@ -114,7 +114,7 @@ something the alpha claims to stop.
 
   The keychain is never granted, so a project script cannot read the agent's OAuth
   token from it. The agent's own sandbox must be off inside, because sandboxes do not
-  nest, so there is no per-command boundary below moat's. Unlike the Standard tier,
+  nest, so there is no per-command boundary below OpenMoat's. Unlike the Standard tier,
   the agent's in-process tools (file tools, `WebFetch`, the MCP servers it starts) are
   inside the sandbox too.
 
@@ -135,10 +135,10 @@ something the alpha claims to stop.
   `moat run` prints each of these as an allowance before the agent starts.
 - **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
   `cargo run`, `make test`, `pytest` and similar are allowed by `dev-shell`. They run
-  whatever the project's scripts, build files and test files say, and `moat` sees
+  whatever the project's scripts, build files and test files say, and OpenMoat sees
   only the command line. An agent that can write into the project can therefore run
   any code through an allowed command. In the Standard tier that code runs inside the
-  host's sandbox, and under `moat run` inside moat's, with the bounds above. Without
+  host's sandbox, and under `moat run` inside OpenMoat's, with the bounds above. Without
   either (Cursor), it runs with the user's permissions.
 - **Allowed hosts are relays.** `registries` allows network to `api.github.com`,
   `github.com` and the package registries. The host check passes for any command
@@ -152,7 +152,7 @@ something the alpha claims to stop.
 - **Session taint is minimal.** It follows host tool calls only: proxied connections
   carry no session. It does not count these as untrusted content: shell network to
   allowed hosts (`gh pr view`, `git pull`), an allowed command that reads secrets at run
-  time (a project script), or a command moat cannot classify. A secret that leaves
+  time (a project script), or a command OpenMoat cannot classify. A secret that leaves
   through an allowed command without a `net` atom (`npm test`) is not seen. With the
   default policy, `secrets-paths` denies, so only the secrets broker (#172) or a policy
   that asks for secret reads can taint a session. An edited or deleted audit event
@@ -258,5 +258,5 @@ something the alpha claims to stop.
   request and weekly.
 - **Planned:** differential testing of the lexer against real `bash`, executing
   fixtures under OS enforcement, and the full MoatBench, which measures attack success
-  with and without `moat` across live agents ([ROADMAP.md](ROADMAP.md)). Prompt fatigue is measured
+  with and without OpenMoat across live agents ([ROADMAP.md](ROADMAP.md)). Prompt fatigue is measured
   today only by `moat report` (asks per active hour).

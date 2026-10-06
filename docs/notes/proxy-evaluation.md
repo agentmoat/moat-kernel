@@ -107,7 +107,7 @@ Two options:
 ## Recommendation
 
 Choose **(c) on the standard library plus `httparse`**, in a new library crate,
-`crates/moat-proxy`. The CLI exposes it as `moat proxy`. Reasons:
+`crates/openmoat-proxy`. The CLI exposes it as `moat proxy`. Reasons:
 
 - It decides with openmoat-core's `CompiledPolicy`, so a host the proxy allows is exactly a host
   `moat guard` allows for a fetch (`fetch` and `net` lists, deny first).

@@ -36,7 +36,7 @@ for command in commands:
 for path in glob.glob(os.path.join(ROOT, "tests", "fixtures", "hosts", "*", "*.json")):
     with open(path, "rb") as f:
         write("host_payload", f.read())
-with open(os.path.join(ROOT, "crates", "moat-core", "policies", "default-v1.yaml"), "rb") as f:
+with open(os.path.join(ROOT, "crates", "openmoat-core", "policies", "default-v1.yaml"), "rb") as f:
     write("policy_parse", f.read())
 for head in [
     b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n",

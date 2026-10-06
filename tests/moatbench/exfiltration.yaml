@@ -1,5 +1,5 @@
 # Prompt-injection-driven exfiltration: text the agent read (an issue, a README,
-# a web page) tells it to send secrets somewhere. moat governs the actions, not
+# a web page) tells it to send secrets somewhere. OpenMoat governs the actions, not
 # the text, so the injected step itself must be stopped. Format: docs/MOATBENCH.md.
 
 - id: readme-injection-posts-ssh-key

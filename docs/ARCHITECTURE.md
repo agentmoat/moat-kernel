@@ -1,6 +1,6 @@
 # Architecture
 
-How `moat` turns one agent tool call into a decision, a hook response and an audit
+How OpenMoat turns one agent tool call into a decision, a hook response and an audit
 record. This describes the code on `main`. The working rules for changing it are in
 [AGENTS.md](../AGENTS.md); the policy language is in [POLICY.md](POLICY.md); what
 it defends against is in [THREAT_MODEL.md](THREAT_MODEL.md).
@@ -21,7 +21,7 @@ openmoat ──► openmoat-hosts ──► openmoat-core
 | `openmoat-hosts` | Host adapters: `pre_tool_use.rs` (Claude Code and Codex `PreToolUse`), `config_change.rs` (Claude Code `ConfigChange`), `cursor.rs`, `mcp.rs` (MCP arguments to paths and URLs), `patch.rs` (Codex `apply_patch` file list) | Translate payload to `Action` and `Decision` to response. Never decide |
 | `openmoat-audit` | SQLite store, time-window and session queries, redaction | Redact before persisting. Typed `thiserror` errors |
 | `openmoat-proxy` | The egress proxy behind `moat proxy` (§12): request and `ClientHello` parsers, host decisions through openmoat-core, the address guard, connection relay, the `Recorder` trait the CLI implements over `openmoat-audit` | Network I/O only through `std::net`; no async runtime; no storage. Depends on `openmoat-core`, `httparse`, `thiserror` |
-| `openmoat` (`crates/moat-cli`) | The `moat` binary: commands, hook installation, the policy lock, approvals, the repository policy file, the environment snapshot, the filesystem resolvers, the sandbox backends generated from the IR (§13, §14), rendering, exit codes | The only crate that touches files, the environment and the terminal; the only one that starts processes |
+| `openmoat` (`crates/openmoat-cli`) | The `moat` binary: commands, hook installation, the policy lock, approvals, the repository policy file, the environment snapshot, the filesystem resolvers, the sandbox backends generated from the IR (§13, §14), rendering, exit codes | The only crate that touches files, the environment and the terminal; the only one that starts processes |
 
 No crate depends on `openmoat`. Planned crates for enforcement are on the
 [roadmap](ROADMAP.md); none exist yet.
@@ -119,7 +119,7 @@ Claude Code treats exit 101 as a non-blocking error.
 - **Patch** (Codex `apply_patch`). One `fs.write` per added, updated, deleted or
   moved-to file; a patch naming no file asks.
 - **McpTool.** An `mcp` atom for the tool name, plus `fs.*` and `net` atoms for path-
-  and URL-shaped arguments found at any depth (`moat-hosts/src/mcp.rs`).
+  and URL-shaped arguments found at any depth (`openmoat-hosts/src/mcp.rs`).
 - **Fetch** (Claude Code `WebFetch`). A `fetch` atom for the URL's host (ADR-017).
 
 Anything the lexer or classifier cannot make sense of is `unparseable`, which the
@@ -143,8 +143,8 @@ engine turns into `ask`, never `allow`.
 | `mcp__<server>__<tool>` (Claude Code, Codex); Cursor `beforeMCPExecution` | tool name and arguments (Cursor: `mcp_server_name`, `tool_name`, `tool_input`) | `McpTool` |
 | anything else (Claude Code `Task`, Codex `update_plan`, Cursor `preToolUse` `Shell`) | — | none: `ungoverned` |
 
-Claude Code calls only reach `moat` for tools in the installed matcher
-(`crates/moat-cli/src/install/mod.rs`); a tool outside it is never seen.
+Claude Code calls only reach OpenMoat for tools in the installed matcher
+(`crates/openmoat-cli/src/install/mod.rs`); a tool outside it is never seen.
 Cursor's hook documentation names `Grep` but not `Glob` and gives no file tool's
 arguments, so those keys are unverified (`tests/fixtures/hosts/cursor/README.md`).
 
@@ -215,7 +215,7 @@ Two tests prove agreement with the engine:
 | Cursor `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` | `{"permission":…,"user_message":…,"agent_message":…}` | 0, or 2 on deny |
 | Claude Code `ConfigChange` | `{}` or `{"decision":"block","reason":…}` | 0, or 2 on block |
 
-`ask` is the host's own prompt; `moat` has no prompt of its own. Codex cannot ask:
+`ask` is the host's own prompt; OpenMoat has no prompt of its own. Codex cannot ask:
 its `PreToolUse` rejects `permissionDecision: "ask"` as unsupported and then runs the
 call. So for Codex an `ask` is sent as a `deny` (exit 2) whose reason says to approve
 it with `moat allow --last`. The audit log keeps the `ask`, which is what `--last` finds
@@ -242,8 +242,8 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
 
 - **Policy lock** (ADR-006). `~/.moat/policy.lock` pins SHA-256 digests of the policy,
   `environment.json`, `approvals.json`, `policy.d/approved.yaml`, `trust.json` and every
-  hook file `moat` installed, keyed by location so a swap for a symlink is a
-  modification, and the part of Codex's `config.toml` that holds moat's sandbox profile
+  hook file OpenMoat installed, keyed by location so a swap for a symlink is a
+  modification, and the part of Codex's `config.toml` that holds OpenMoat's sandbox profile
   (§13). It is verified on every `guard` call. Only a person re-pins: `moat init`, or
   `moat doctor --accept`, `moat allow`, `moat trust` and `moat sandbox sync` from an
   interactive terminal.
@@ -273,7 +273,7 @@ URL fields pass through `openmoat_audit::redact` first (bearer and basic auth,
 `key=value` credentials, common token shapes, URL passwords). `show`, `replay` and
 `report` read it; nothing leaves the machine unless a person runs `moat audit export`.
 
-**Hash chain** (schema 2, `crates/moat-audit/src/store/chain.rs`). Each event also
+**Hash chain** (schema 2, `crates/openmoat-audit/src/store/chain.rs`). Each event also
 stores `prev_hash`, the `hash` of the event before it, and `hash`, the lowercase hex
 SHA-256 of its canonical encoding. The encoding (version 1) is the concatenation of:
 the domain tag `moat-audit-chain-v1` as a string; `id` and `ts_ms` as integers;
@@ -296,7 +296,7 @@ oldest first (about 0.15 s per 100 000 events) and reports the first event that 
 edited (contents do not match its hash), unlinked (an event before it was deleted or
 inserted, or events were reordered) or unhashed, and exits 64.
 
-**Export** (`moat audit export`, `crates/moat-audit/src/store/export.rs`). JSON Lines,
+**Export** (`moat audit export`, `crates/openmoat-audit/src/store/export.rs`). JSON Lines,
 oldest first, one object per chained event with the filters `--since`, `--host` and
 `--session`. Every line has `"format": "moat-audit-export-v1"` and the fields `id`
 (hex), `ts_ms`, `host`, `session_id`, `call_id`, `cwd`, `tool`, `action`, `verdict`,
@@ -315,7 +315,7 @@ does deleting events. The first failing line is named and the command exits 64. 
 head is the last line's `hash`. `moat doctor` prints the database head. With
 `--anchor <hash>`, verify also fails unless a verified line carries that hash.
 
-**Team report** (`moat audit report <file>…`, `crates/moat-cli/src/commands/team.rs`).
+**Team report** (`moat audit report <file>…`, `crates/openmoat-cli/src/commands/team.rs`).
 It verifies every file first and refuses (exit 64) if one fails. Events with the
 same `hash` are counted once, so overlapping exports do not double-count. The report
 starts with the `moat report` summary (`Summary::of`), then shows each file's head,
@@ -344,7 +344,7 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
 ~/.claude/settings.json        Claude Code hooks and sandbox block ($CLAUDE_CONFIG_DIR overrides)
 ~/.codex/hooks.json            Codex hooks ($CODEX_HOME overrides)
 ~/.codex/config.toml           Codex [permissions.moat] profile, default_permissions
-<file>.moat-sandbox-backup     each host file before moat's last sandbox edit
+<file>.moat-sandbox-backup     each host file before OpenMoat's last sandbox edit
 ~/.cursor/hooks.json           Cursor hooks ($CURSOR_CONFIG_DIR overrides)
 <project>/.moat/policy.yaml    repository policy, committed by the team (ADR-022)
 ```
@@ -363,11 +363,11 @@ hook; the lock is checked before any decision.
 ## 10. Repository layout
 
 ```
-crates/moat-core/              decision core; policies/default-v1.yaml is the shipped policy
-crates/moat-hosts/             host adapters
-crates/moat-audit/             audit store
-crates/moat-proxy/             egress proxy; tests/proxy/ runs it on loopback
-crates/moat-cli/               the moat binary; tests/e2e/ runs it in isolated homes
+crates/openmoat-core/          decision core; policies/default-v1.yaml is the shipped policy
+crates/openmoat-hosts/         host adapters
+crates/openmoat-audit/         audit store
+crates/openmoat-proxy/         egress proxy; tests/proxy/ runs it on loopback
+crates/openmoat-cli/           the moat binary; tests/e2e/ runs it in isolated homes
 tests/conformance/             attacks.yaml, ask.yaml, benign.yaml: one tool call each,
                                with the verdict the default policy must give
 tests/fixtures/hosts/          real host payloads (claude-code, codex, cursor)
@@ -386,13 +386,13 @@ scripts/ci/sync-labels.sh      the repository's label set
 | Layer | Where | Runs |
 |---|---|---|
 | Unit | next to the code (`#[cfg(test)]`, `tests.rs` modules) | every PR, all OS |
-| Architecture invariants | `crates/moat-core/tests/architecture.rs` | every PR |
-| Conformance (decide) | `tests/conformance/` through `crates/moat-core/tests/conformance.rs`; generates `docs/COVERAGE.md` and fails on a threat class without an attack fixture | every PR, all OS |
-| Policy compiler | `crates/moat-core/tests/ir_consistency.rs` (IR against the engine on the conformance fixtures), `ir_never_widens.rs` (generated policies) | every PR, all OS |
+| Architecture invariants | `crates/openmoat-core/tests/architecture.rs` | every PR |
+| Conformance (decide) | `tests/conformance/` through `crates/openmoat-core/tests/conformance.rs`; generates `docs/COVERAGE.md` and fails on a threat class without an attack fixture | every PR, all OS |
+| Policy compiler | `crates/openmoat-core/tests/ir_consistency.rs` (IR against the engine on the conformance fixtures), `ir_never_widens.rs` (generated policies) | every PR, all OS |
 | Golden host payloads | `tests/fixtures/hosts/` | every PR |
-| End to end | `crates/moat-cli/tests/e2e/` (real binary, isolated `HOME`/`MOAT_HOME`) | every PR, all OS |
-| Differential (ADR-019) | `crates/moat-cli/tests/e2e/differential/` runs `tests/differential/scenarios.yaml` (attacks, benign work, CVE replays) against every enforcement point: the hook decision, and each host sandbox whose binary is present. A layer that disagrees with a scenario's recorded verdict fails the suite; a missing host binary skips that layer visibly. `scripts/ci/differential.sh` points it at the host binaries for the full run | hook layer every PR; host-sandbox layers where the binary is present |
-| Proxy | `crates/moat-proxy/tests/proxy/`: a real listener and a local upstream on loopback, names mapped by a test resolver, no external network | every PR, all OS |
+| End to end | `crates/openmoat-cli/tests/e2e/` (real binary, isolated `HOME`/`MOAT_HOME`) | every PR, all OS |
+| Differential (ADR-019) | `crates/openmoat-cli/tests/e2e/differential/` runs `tests/differential/scenarios.yaml` (attacks, benign work, CVE replays) against every enforcement point: the hook decision, and each host sandbox whose binary is present. A layer that disagrees with a scenario's recorded verdict fails the suite; a missing host binary skips that layer visibly. `scripts/ci/differential.sh` points it at the host binaries for the full run | hook layer every PR; host-sandbox layers where the binary is present |
+| Proxy | `crates/openmoat-proxy/tests/proxy/`: a real listener and a local upstream on loopback, names mapped by a test resolver, no external network | every PR, all OS |
 | `wasm32` purity build | CI job | every PR |
 | Fuzz | `fuzz/`, one minute per target on PRs, ten minutes weekly | CI |
 | Guard latency | `scripts/ci/guard-latency.py`: one process per call, end to end and as recorded by guard; warns above the 15 ms p95 budget, fails above 45 ms (about 3 ms deciding and 8 ms end to end on Apple silicon) | every PR, `latency` job (not required) |
@@ -477,7 +477,7 @@ code on `std::net` and
 ## 13. Standard tier: host sandboxes
 
 ADR-018's default tier configures each host's own sandbox from the policy, through the
-one IR of ADR-019 (`openmoat_core::ir`, `crates/moat-cli/src/sandbox/`).
+one IR of ADR-019 (`openmoat_core::ir`, `crates/openmoat-cli/src/sandbox/`).
 
 ```
 policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬─► claude::generate ─► settings.json "sandbox"
@@ -520,16 +520,16 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
   keys into the files, keeping every other key (JSON values; TOML through `toml_edit`,
   comments included), and back each file up first. `policy.lock` pins Claude Code's
   `settings.json` whole and Codex's `config.toml` by the canonical text of the part
-  moat owns (`default_permissions`, `[permissions.moat]`, `features.network_proxy`),
+  OpenMoat owns (`default_permissions`, `[permissions.moat]`, `features.network_proxy`),
   because Codex writes trusted projects into that file itself. Drift is
   `kernel-integrity`; `doctor` also fails on a weakened or out-of-date setting.
 
 ## 14. Lightweight tier: `moat run`
 
 ADR-018's tier for machines without a container or VM runtime puts the whole agent in
-one sandbox generated from the policy. The code is in `crates/moat-cli/src/commands/run.rs`
+one sandbox generated from the policy. The code is in `crates/openmoat-cli/src/commands/run.rs`
 (with `run/{macos,linux,unsupported}.rs`, chosen by `cfg` in one place) and
-`crates/moat-cli/src/sandbox/{seatbelt,landlock}.rs`.
+`crates/openmoat-cli/src/sandbox/{seatbelt,landlock}.rs`.
 
 ```
 policy.yaml ─► ir::lower (this project) ─► Enforcement + Grants ─┬─► seatbelt::generate ─► sandbox-exec -p <profile> <agent>

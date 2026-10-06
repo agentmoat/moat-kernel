@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End to end: a malicious project script steals a (fake) SSH key and phones home.
-# Without a sandbox it succeeds; under the Seatbelt profile generated from the moat
+# Without a sandbox it succeeds; under the Seatbelt profile generated from the OpenMoat
 # default policy it is blocked by the operating system, whatever the command string was.
 # Exits 1 if anything leaks under the sandbox. macOS only.
 set -u
@@ -25,7 +25,7 @@ plain npm run --silent test:node
 plain cargo build 2>&1 | grep warning
 
 bash "$HERE/setup.sh" >/dev/null   # reset the fake HOME (the payload edited ~/.zshrc)
-say "2. moat profile (sandbox-exec, generated from default-v1.yaml) + egress proxy"
+say "2. OpenMoat profile (sandbox-exec, generated from default-v1.yaml) + egress proxy"
 OUT="$(boxed npm run --silent test:node; boxed npm run --silent test:loud; boxed cargo build)"
 echo "$OUT" | grep -v -E '^\s+(Compiling|Finished)'
 
