@@ -342,3 +342,35 @@
   action: { shell: "cat docs/latest.md" }
   links: { /p/docs/latest.md: /p/docs/v2.md }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+# Moving around and everyday file operations inside the project (dev-shell)
+- id: benign-cd-src-then-cargo-test
+  threat: T1
+  action: { shell: "cd src && cargo test" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cd-crate-then-ls
+  threat: T1
+  action: { shell: "cd crates/x && ls" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-move-project-file
+  threat: T9
+  action: { shell: "mv src/a.rs src/b.rs" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-mkdir-touch-in-project
+  action: { shell: "mkdir -p build/out && touch src/new.rs" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-copy-and-remove-in-project
+  action: { shell: "cp src/a.rs src/b.rs && rm src/old.rs" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-checkout-branch
+  action: { shell: "git checkout main" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-jq-package-name
+  action: { shell: "jq .name package.json" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-python3-pytest
+  action: { shell: "python3 -m pytest tests/" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-pushd-popd
+  action: { shell: "pushd src && ls && popd" }
+  expect: { verdict: allow, rules: [dev-shell] }
+
