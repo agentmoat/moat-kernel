@@ -79,6 +79,10 @@ impl std::fmt::Debug for Proxy<'_> {
 impl Proxy<'_> {
     /// Serve connections from `listener` until accepting fails.
     pub fn serve(&self, listener: &TcpListener) -> io::Result<()> {
+        let address_policy = decide::address_policy(self.policy.policy());
+        let addresses = CompiledPolicy::compile(&address_policy, self.policy.context())
+            .map_err(io::Error::other)?;
+        let addresses = &addresses;
         let active = AtomicUsize::new(0);
         thread::scope(|scope| {
             loop {
@@ -97,13 +101,13 @@ impl Proxy<'_> {
                 // `scope.spawn` would panic and take the proxy down instead.
                 let _ = thread::Builder::new().spawn_scoped(scope, move || {
                     let _slot = slot;
-                    self.handle(&client);
+                    self.handle(&client, addresses);
                 });
             }
         })
     }
 
-    fn handle(&self, client: &TcpStream) {
+    fn handle(&self, client: &TcpStream, addresses: &CompiledPolicy<'_>) {
         let started = Instant::now();
         let timeout = Some(self.limits.handshake_timeout);
         if client.set_read_timeout(timeout).is_err() || client.set_write_timeout(timeout).is_err() {
@@ -131,6 +135,7 @@ impl Proxy<'_> {
             self.resolver,
             request.host(),
             request.port(),
+            addresses,
             self.loopback_ok,
             self.limits.connect_timeout,
         ) {

@@ -8,7 +8,7 @@ use std::io;
 use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs as _};
 use std::time::Duration;
 
-use moat_core::{Decision, Verdict};
+use moat_core::{CompiledPolicy, Decision, Verdict};
 
 use crate::decide::{self, Forbidden, RULE_ADDRESS, RULE_UPSTREAM};
 
@@ -54,12 +54,15 @@ impl Refusal {
 }
 
 /// Resolve `host`, refuse if any address is forbidden, then connect to the
-/// first address that answers. `loopback_ok` lists loopback addresses that
-/// may be reached anyway (tests); it never exempts link-local or metadata.
+/// first address that answers. A private address passes only when
+/// `addresses` (compiled from [`decide::address_policy`]) names it.
+/// `loopback_ok` lists loopback addresses that may be reached anyway (tests);
+/// nothing exempts link-local or metadata.
 pub fn connect(
     resolver: &dyn Resolve,
     host: &str,
     port: u16,
+    addresses: &CompiledPolicy<'_>,
     loopback_ok: &[SocketAddr],
     timeout: Duration,
 ) -> Result<TcpStream, Refusal> {
@@ -77,6 +80,7 @@ pub fn connect(
     for addr in &addrs {
         match decide::forbidden(addr.ip()) {
             Some(Forbidden::Loopback) if loopback_ok.contains(addr) => {}
+            Some(Forbidden::Private(_)) if decide::named(addresses, addr.ip()) => {}
             Some(why) => return Err(Refusal::Address(*addr, why)),
             None => {}
         }

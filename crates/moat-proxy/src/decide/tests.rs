@@ -112,11 +112,95 @@ fn local_and_metadata_addresses_are_forbidden() {
 fn ordinary_addresses_are_not_forbidden() {
     for ip in [
         "93.184.215.14",
-        "10.0.0.5",
-        "192.168.1.1",
+        "9.255.255.255",
+        "11.0.0.0",
+        "172.15.255.255",
+        "172.32.0.0",
+        "192.167.255.255",
+        "192.169.0.0",
+        "100.63.255.255",
+        "100.128.0.0",
+        "198.17.255.255",
+        "198.20.0.0",
         "2606:4700::1111",
         "fec0::1",
+        "fe00::1",
+        "::ffff:8.8.8.8",
     ] {
         assert_eq!(forbidden(ip.parse().unwrap()), None, "{ip}");
+    }
+}
+
+#[test]
+fn private_ranges_are_forbidden_in_every_spelling() {
+    let private = |range| Some(Forbidden::Private(range));
+    let ten = "a private address (10.0.0.0/8)";
+    let cgnat = "a shared CGNAT address (100.64.0.0/10)";
+    for (ip, why) in [
+        ("10.0.0.0", private(ten)),
+        ("10.255.255.255", private(ten)),
+        ("::ffff:10.0.0.5", private(ten)),
+        ("::a00:5", private(ten)),
+        ("64:ff9b::a00:5", private(ten)),
+        ("172.16.0.0", private("a private address (172.16.0.0/12)")),
+        (
+            "172.31.255.255",
+            private("a private address (172.16.0.0/12)"),
+        ),
+        ("192.168.0.0", private("a private address (192.168.0.0/16)")),
+        (
+            "::ffff:192.168.255.255",
+            private("a private address (192.168.0.0/16)"),
+        ),
+        ("100.64.0.0", private(cgnat)),
+        ("100.127.255.255", private(cgnat)),
+        ("64:ff9b::6440:1", private(cgnat)),
+        (
+            "198.18.0.0",
+            private("a benchmarking address (198.18.0.0/15)"),
+        ),
+        (
+            "198.19.255.255",
+            private("a benchmarking address (198.18.0.0/15)"),
+        ),
+        ("fc00::", private("a unique local address (fc00::/7)")),
+        ("fdff:ffff::1", private("a unique local address (fc00::/7)")),
+        // metadata inside a private range stays metadata: never opened
+        ("100.100.100.200", Some(Forbidden::Metadata)),
+        ("fd00:ec2::254", Some(Forbidden::Metadata)),
+    ] {
+        assert_eq!(forbidden(ip.parse().unwrap()), why, "{ip}");
+    }
+}
+
+#[test]
+fn only_allow_rules_naming_an_address_open_a_private_one() {
+    let yaml = r#"
+version: 1
+deny:
+  - { id: no-lab, net: ["10.9.*"] }
+allow:
+  - { id: wide, net: ["*", "*.example", "?0.0.0.1"] }
+  - { id: lan, net: ["10.0.0.5", "192.168.1.*", "10.9.0.1", "fd12::*"] }
+  - { id: docs, fetch: ["172.16.0.9"] }
+ask:
+  - { id: lab, net: ["100.64.0.1"] }
+"#;
+    let policy = Policy::parse(yaml).unwrap();
+    let named_policy = address_policy(&policy);
+    let addresses = CompiledPolicy::compile(&named_policy, &ctx()).unwrap();
+    for (ip, open) in [
+        ("10.0.0.5", true),
+        ("::ffff:10.0.0.5", true),
+        ("192.168.1.77", true),
+        ("172.16.0.9", true),
+        ("fd12::1", true),
+        ("10.0.0.6", false),
+        ("192.168.2.1", false),
+        ("20.0.0.1", false),
+        ("10.9.0.1", false),
+        ("100.64.0.1", false),
+    ] {
+        assert_eq!(named(&addresses, ip.parse().unwrap()), open, "{ip}");
     }
 }

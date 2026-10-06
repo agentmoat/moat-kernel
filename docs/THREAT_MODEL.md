@@ -53,7 +53,7 @@ answer from the [roadmap](ROADMAP.md).
 | T9 | Hook and policy tampering by the agent | `kernel-self` denies writes to state, host directories, hook files, and agent runs of `moat allow\|doctor\|init\|policy`; the lock denies everything after drift; Claude Code `ConfigChange` blocks a drifted settings file | Signed policy (1.0) |
 | T10 | Hook supply chain (a trojaned hook binary) | Hooks are exec-form with an absolute, stable path (ADR-016); `kernel-self` denies writes to any `bin/moat`; `doctor` names a missing or different hook binary | Signed releases |
 | T11 | Time of check vs. time of use, symlinks | Literal and resolved paths are both checked (ADR-009) | Sandbox path rules apply at use |
-| T12 | Network to unknown hosts | `default.net` denies shell network to unlisted hosts; `cloud-metadata` denies metadata and link-local services; `local-net` asks for localhost; `WebFetch` of an unlisted host asks (ADR-017) | Egress proxy and session taint |
+| T12 | Network to unknown hosts | `default.net` denies shell network to unlisted hosts; `cloud-metadata` denies metadata and link-local services; `local-net` asks for localhost; `moat proxy` refuses loopback, link-local and metadata addresses, and private and CGNAT ones the policy does not name, after DNS resolution; `WebFetch` of an unlisted host asks (ADR-017) | Egress proxy and session taint |
 
 ## 4. Out of scope
 

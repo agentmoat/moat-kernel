@@ -18,6 +18,8 @@ defaults: { "*": deny, fetch: ask }
 allow:
   - id: test-hosts
     net: ["allowed.test", "rebind.test", "mixed.test", "loop.test", "169.254.169.254"]
+  - id: lan-names
+    net: ["lan.test", "mixed-lan.test", "*.wild.test"]
 "#;
 
 const UPSTREAM_REPLY: &[u8] =
@@ -102,13 +104,20 @@ fn start(recorder: Option<&'static dyn Recorder>, limits: Limits) -> Harness {
     let rows: &'static MemoryRecorder = Box::leak(Box::default());
     let recorder = recorder.unwrap_or(rows);
     let local = IpAddr::V4(Ipv4Addr::LOCALHOST);
-    let metadata: IpAddr = "169.254.169.254".parse().unwrap();
+    let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+    let metadata = ip("169.254.169.254");
     let resolver = MapResolver(HashMap::from([
         ("allowed.test", vec![local]),
         ("rebind.test", vec![metadata]),
         ("mixed.test", vec![local, metadata]),
         ("loop.test", vec![local]),
         ("unknown.test", vec![local]),
+        ("lan.test", vec![ip("10.0.0.5")]),
+        (
+            "mixed-lan.test",
+            vec![ip("93.184.215.14"), ip("::ffff:192.168.1.1")],
+        ),
+        ("x.wild.test", vec![ip("fd12::1")]),
     ]));
     let policy: &'static Policy = Box::leak(Box::new(Policy::parse(POLICY).unwrap()));
     let ctx = EvalContext {
@@ -216,4 +225,5 @@ fn tunnel(h: &Harness, host: &str, sni: &str) -> (TcpStream, String) {
 
 mod http;
 mod limits;
+mod private;
 mod tunnel;

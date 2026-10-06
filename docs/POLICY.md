@@ -141,7 +141,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | `config-change` | allow | a Claude Code `ConfigChange` for a settings file that is not pinned, or still matches the lock; a change that names no file is allowed only while every pinned file matches the lock; recorded |
 | `approved-session` | allow | an `ask` for a shell command that a person granted with `moat allow` for this host session (§8.2) |
 | `approved-<n>` | allow | a permanent rule in `~/.moat/policy.d/approved.yaml` written by `moat allow --always` |
-| `proxy-address`, `proxy-sni`, `proxy-request`, `proxy-upstream` | deny | `moat proxy` refused a connection: a loopback, link-local or metadata destination, a TLS server name that does not match the CONNECT host, a request it does not serve, or a destination it could not reach (§5.2) |
+| `proxy-address`, `proxy-sni`, `proxy-request`, `proxy-upstream` | deny | `moat proxy` refused a connection: a loopback, link-local, metadata, or unnamed private destination, a TLS server name that does not match the CONNECT host, a request it does not serve, or a destination it could not reach (§5.2) |
 
 ### 5.2 `moat proxy`
 
@@ -158,6 +158,19 @@ first. Differences from the hook:
   `100.100.100.200`, `fd00:ec2::254`) and non-unicast destinations are refused whatever the
   policy allows. This applies to the name as written and to every address it resolves to.
   `local-net` and an allow for `localhost` do not reach this machine through the proxy.
+- Private and shared addresses are refused unless the policy names them: `10.0.0.0/8`,
+  `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` (CGNAT), `198.18.0.0/15`
+  (benchmarking) and `fc00::/7` (unique local), including IPv4-mapped,
+  IPv4-compatible and NAT64 spellings. This is checked on the name as written and on
+  every address it resolves to. One such address refuses the whole name, so a wildcard
+  allow whose name resolves into the LAN (DNS rebinding) does not reach it.
+  To open one, list the address in a `net` or `fetch` allow, either exactly
+  (`10.0.0.5`, `fd12::7`) or as a glob that starts with a digit or contains `:`
+  (`192.168.1.*`, `fd12::*`). There is no CIDR syntax. The pattern is matched against
+  the resolved address in canonical text form (`::ffff:10.0.0.5` is matched as
+  `10.0.0.5`; a NAT64 or IPv4-compatible address only by its IPv6 text). A deny rule
+  matching that text still wins. Patterns starting with `*`, `?`, `[` or `{`, and name
+  patterns such as `*.corp.example`, never open a private address.
 
 ### 5.2 What an operating-system layer can enforce
 
