@@ -490,6 +490,9 @@ Rules:
   for other languages, scan payload for `os.system`, `subprocess`, `child_process`,
   `exec`, URLs and secret paths; unknown → `ask`.
 - Command substitution `$(…)` and backticks: evaluate inner command as its own action.
+- `<<<` here-strings and here-document bodies are stdin data; the substitutions and `$VAR`s
+  the shell expands in them (any here-string, a here-document with an unquoted delimiter)
+  are evaluated, and a shell or interpreter reading stdin runs them as its program.
 - Options that run another command or write a file: the command after `find -exec`,
   `-execdir`, `-ok`, `-okdir` is classified on its own; `--output=FILE` is an `fs.write`
   (`shell/options.rs`).
