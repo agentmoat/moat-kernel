@@ -17,7 +17,7 @@ use crate::{redact, redact_value};
 mod chain;
 mod schema;
 
-pub use chain::GENESIS;
+pub use chain::{BreakKind, ChainBreak, ChainReport, GENESIS};
 
 const BUSY_TIMEOUT_MS: u64 = 2000;
 
