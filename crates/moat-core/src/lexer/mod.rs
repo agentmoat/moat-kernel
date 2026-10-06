@@ -11,8 +11,10 @@
 //! - control operators `|`, `||`, `&`, `&&`, `;`, `(`, `)`, newline;
 //! - redirections `<`, `>`, `>>`, `<>`, `&>`, `&>>`, `<&`, `>&`, with optional
 //!   leading file-descriptor digits (`2>&1`, `3<file`);
-//! - here-documents `<<` / `<<-`: the body (up to the delimiter line) is consumed
-//!   as data and exposed on the token so callers can treat it as content, never as code;
+//! - here-documents `<<` / `<<-`: the body (up to the delimiter line) is stdin data,
+//!   exposed on a token at the position of the `<<`. With an unquoted delimiter the shell
+//!   expands `$( … )`, backticks and `$VAR` in the body, so they are captured as for a
+//!   word; a quoted delimiter (`<<'EOF'`, `<<"EOF"`, `<<\EOF`) keeps the body literal;
 //! - here-strings `<<<`: a redirect operator whose following word is stdin data; the
 //!   word is lexed like any other, so its `$( … )` substitutions are still captured;
 //! - command substitution `$( … )` (nesting aware) and backticks; the inner text is
@@ -21,6 +23,7 @@
 //! Anything the lexer cannot make sense of is an error; the engine maps lexer
 //! errors to `ask`, never to `allow`.
 
+mod heredoc;
 #[cfg(test)]
 mod tests;
 
@@ -107,9 +110,11 @@ pub struct Word {
 pub enum Token {
     Word(Word),
     Operator(Operator),
-    /// The raw body lines of a here-document; classified as data, never as commands.
+    /// A here-document body: stdin data. Unless `literal`, `body` is expanded like a
+    /// double-quoted word (escapes resolved, substitutions captured).
     HereDoc {
-        body: String,
+        body: Word,
+        literal: bool,
     },
 }
 
@@ -149,7 +154,7 @@ struct Lexer {
     chars: Vec<char>,
     pos: usize,
     tokens: Vec<Token>,
-    pending_heredocs: Vec<(String, bool)>,
+    pending_heredocs: Vec<heredoc::Pending>,
     current: Option<Word>,
 }
 
@@ -184,15 +189,10 @@ impl Lexer {
 
     fn flush_word(&mut self) {
         if let Some(w) = self.current.take() {
-            if self
-                .pending_heredocs
-                .last()
-                .is_some_and(|(d, _)| d.is_empty())
-            {
+            if let Some(pending) = self.awaiting_delimiter() {
                 // The word following `<<` is the delimiter, not an argument.
-                let strip_tabs = self.pending_heredocs.last().is_some_and(|(_, s)| *s);
-                self.pending_heredocs.pop();
-                self.pending_heredocs.push((w.text, strip_tabs));
+                pending.literal |= w.quoted;
+                pending.delimiter = Some(w.text);
                 return;
             }
             self.tokens.push(Token::Word(w));
@@ -234,7 +234,12 @@ impl Lexer {
                     self.bump();
                     match self.bump() {
                         Some('\n') => {}
-                        Some(escaped) => self.word().text.push(escaped),
+                        Some(escaped) => {
+                            if let Some(pending) = self.awaiting_delimiter() {
+                                pending.literal = true;
+                            }
+                            self.word().text.push(escaped);
+                        }
                         None => return Err(LexError::TrailingBackslash),
                     }
                 }
@@ -254,15 +259,13 @@ impl Lexer {
             }
         }
         self.flush_word();
-        if let Some((delimiter, _)) = self.pending_heredocs.first() {
-            if delimiter.is_empty() {
-                // `<<` at end of input with no delimiter: treat as plain input redirect.
-                self.pending_heredocs.clear();
-            } else {
-                return Err(LexError::UnterminatedHereDoc {
-                    delimiter: delimiter.clone(),
-                });
-            }
+        // `<<` at end of input with no delimiter: treat as plain input redirect.
+        if let Some(delimiter) = self
+            .pending_heredocs
+            .iter()
+            .find_map(|h| h.delimiter.clone())
+        {
+            return Err(LexError::UnterminatedHereDoc { delimiter });
         }
         Ok(self.tokens)
     }
@@ -324,7 +327,7 @@ impl Lexer {
                     false
                 };
                 self.flush_word();
-                self.pending_heredocs.push((String::new(), strip_tabs));
+                self.start_heredoc(strip_tabs);
                 return;
             }
             ('<' | '>', Some('&')) => {
@@ -363,16 +366,24 @@ impl Lexer {
 
     fn double_quoted(&mut self) -> Result<(), LexError> {
         self.word().quoted = true;
+        self.expanding(Some('"'))
+    }
+
+    /// Text where only `\`, `$( … )`, backticks and `$VAR` are special: the inside of
+    /// double quotes (`close` = `"`) or an unquoted here-document body (`close` = `None`).
+    fn expanding(&mut self, close: Option<char>) -> Result<(), LexError> {
         loop {
             match self.bump() {
-                Some('"') => return Ok(()),
+                Some(c) if Some(c) == close => return Ok(()),
                 Some('\\') => match self.bump() {
-                    Some(c @ ('"' | '\\' | '$' | '`')) => self.word().text.push(c),
+                    Some(c @ ('\\' | '$' | '`')) => self.word().text.push(c),
+                    Some(c) if Some(c) == close => self.word().text.push(c),
                     Some('\n') => {}
                     Some(c) => {
                         self.word().text.push('\\');
                         self.word().text.push(c);
                     }
+                    None if close.is_none() => self.word().text.push('\\'),
                     None => return Err(LexError::UnterminatedDoubleQuote),
                 },
                 Some('`') => self.backtick()?,
@@ -381,6 +392,7 @@ impl Lexer {
                     self.dollar_paren()?;
                 }
                 Some(c) => self.word().text.push(c),
+                None if close.is_none() => return Ok(()),
                 None => return Err(LexError::UnterminatedDoubleQuote),
             }
         }
@@ -436,40 +448,6 @@ impl Lexer {
             }
         }
         Err(LexError::UnterminatedBacktick)
-    }
-
-    /// After a newline, consume the bodies of every pending here-document.
-    fn consume_heredoc_bodies(&mut self) -> Result<(), LexError> {
-        let pending = std::mem::take(&mut self.pending_heredocs);
-        for (delimiter, strip_tabs) in pending {
-            if delimiter.is_empty() {
-                continue;
-            }
-            let mut body = String::new();
-            loop {
-                if self.pos >= self.chars.len() {
-                    return Err(LexError::UnterminatedHereDoc { delimiter });
-                }
-                let line_start = self.pos;
-                while self.peek().is_some_and(|c| c != '\n') {
-                    self.bump();
-                }
-                let line: String = self.chars[line_start..self.pos].iter().collect();
-                self.bump(); // the newline, if any
-                let candidate = if strip_tabs {
-                    line.trim_start_matches('\t')
-                } else {
-                    &line
-                };
-                if candidate == delimiter {
-                    break;
-                }
-                body.push_str(&line);
-                body.push('\n');
-            }
-            self.tokens.push(Token::HereDoc { body });
-        }
-        Ok(())
     }
 }
 

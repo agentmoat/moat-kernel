@@ -14,13 +14,16 @@ use crate::lexer::{self, Operator, Token, Word};
 use crate::paths;
 
 /// One simple command: words (assignments + argv), its redirection targets and
-/// its `<<<` here-strings (stdin data).
+/// its stdin data.
 #[derive(Debug, Default)]
 struct SimpleCommand {
     words: Vec<Word>,
     reads: Vec<String>,
     writes: Vec<String>,
-    here_strings: Vec<Word>,
+    /// `<<<` here-strings and unquoted here-document bodies: expanded by the shell.
+    stdin: Vec<Word>,
+    /// Here-document bodies with a quoted delimiter: taken literally.
+    literal_stdin: Vec<String>,
 }
 
 impl SimpleCommand {
@@ -28,7 +31,13 @@ impl SimpleCommand {
         self.words.is_empty()
             && self.reads.is_empty()
             && self.writes.is_empty()
-            && self.here_strings.is_empty()
+            && self.stdin.is_empty()
+            && self.literal_stdin.is_empty()
+    }
+
+    fn stdin_texts(&self) -> impl Iterator<Item = &str> {
+        let expanded = self.stdin.iter().map(|w| w.text.as_str());
+        expanded.chain(self.literal_stdin.iter().map(String::as_str))
     }
 }
 
@@ -66,10 +75,14 @@ fn group_commands(tokens: &[Token]) -> Vec<SimpleCommand> {
                 }
             }
             Token::Operator(op) => pending_redirect = Some(*op),
-            Token::HereDoc { .. } => {}
+            Token::HereDoc {
+                body,
+                literal: true,
+            } => current.literal_stdin.push(body.text.clone()),
+            Token::HereDoc { body, .. } => current.stdin.push(body.clone()),
             Token::Word(w) => match pending_redirect.take() {
                 Some(Operator::RedirectIn) => current.reads.push(w.text.clone()),
-                Some(Operator::HereString) => current.here_strings.push(w.clone()),
+                Some(Operator::HereString) => current.stdin.push(w.clone()),
                 Some(Operator::RedirectOut | Operator::RedirectAppend) => {
                     current.writes.push(w.text.clone());
                 }
@@ -99,12 +112,12 @@ fn classify_simple(
     sink: &mut Sink,
     depth: u8,
 ) -> Result<(), ClassifyError> {
-    for w in cmd.words.iter().chain(&cmd.here_strings) {
+    for w in cmd.words.iter().chain(&cmd.stdin) {
         for inner in &w.substitutions {
             classify_into(inner, ctx, sink, depth + 1)?;
         }
     }
-    for w in &cmd.here_strings {
+    for w in &cmd.stdin {
         for name in env_refs(&w.text) {
             sink.push(AtomicAction::EnvRead { name })?;
         }
@@ -172,13 +185,9 @@ fn classify_simple(
     }
     if SHELLS.contains(&program) {
         let run = invocation::parse(program, &argv)?;
-        // `bash <<< 'cmd'` runs the here-string as its program.
-        let stdin_code = cmd.here_strings.iter().filter(|_| run.reads_stdin);
-        for code in run
-            .code
-            .into_iter()
-            .chain(stdin_code.map(|w| w.text.as_str()))
-        {
+        // `bash <<< 'cmd'` and `bash <<EOF` run their stdin as the program.
+        let stdin_code = cmd.stdin_texts().filter(|_| run.reads_stdin);
+        for code in run.code.into_iter().chain(stdin_code) {
             classify_into(code, ctx, sink, depth + 1)?;
         }
         if let Some(script) = run.script {
@@ -204,8 +213,8 @@ fn classify_simple(
         scan_payload(payload, ctx, sink)?;
     }
     if INLINE_INTERPRETERS.iter().any(|(name, _)| *name == program) {
-        for w in &cmd.here_strings {
-            scan_payload(&w.text, ctx, sink)?;
+        for text in cmd.stdin_texts() {
+            scan_payload(text, ctx, sink)?;
         }
     }
     options::classify(&argv, program, ctx, sink, depth)

