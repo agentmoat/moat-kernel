@@ -85,13 +85,7 @@ pub fn sync() -> Result<Code> {
         );
     }
     let home = Home::locate()?;
-    if let Some(deny) = integrity::violation(&home)? {
-        bail!(
-            "refusing to sync while the policy lock shows drift ({}):\n  {}",
-            integrity::INTEGRITY_RULE,
-            deny.reasons.join("\n  ")
-        );
-    }
+    integrity::refuse_drift(&home, "sync")?;
     let plan = Plan::new(&home.load_policy()?)?;
     let binary = crate::install::hook_binary()?;
     let mut out = Deferred::default();

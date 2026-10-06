@@ -105,6 +105,7 @@ fn state_files(home: &Home) -> Vec<PathBuf> {
         home.environment_path(),
         home.grants_path(),
         home.overlay_path(),
+        home.trust_path(),
     ]
 }
 
@@ -168,6 +169,18 @@ pub fn violation(home: &Home) -> Result<Option<Decision>> {
         "run `moat doctor` to inspect; `moat doctor --accept` or `moat init` to re-pin".to_owned(),
     );
     Ok(Some(decision))
+}
+
+/// Refuse a person's command that re-pins while pinned files drifted: the
+/// re-pin would accept a tampered file unseen. `doing` completes "refusing to …".
+pub fn refuse_drift(home: &Home, doing: &str) -> Result<()> {
+    if let Some(deny) = violation(home)? {
+        bail!(
+            "refusing to {doing} while the policy lock shows drift ({INTEGRITY_RULE}):\n  {}",
+            deny.reasons.join("\n  ")
+        );
+    }
+    Ok(())
 }
 
 /// One way a pinned file differs from the lock.

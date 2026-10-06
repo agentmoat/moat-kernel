@@ -226,10 +226,18 @@ for. The policy language, the full default policy and recipes are in
 
 Commit `.moat/policy.yaml` at the root of a repository. Its `deny` and `ask` rules
 apply to everyone who works there, whatever agent they use, and show up as
-`repo:<id>`. A repository is untrusted input, so it can only make your policy
-stricter: its `allow` rules are ignored, and a file that does not parse denies every
-call in the project until it is fixed. Repository rules apply in the hook, not in
-the host sandboxes ([docs/POLICY.md](docs/POLICY.md) §10).
+`repo:<id>`. A repository is untrusted input, so by itself it can only make your
+policy stricter, and a file that does not parse denies every call in the project
+until it is fixed. Its `allow` rules apply after you review and trust that exact file:
+
+```bash
+moat trust                   # in the repository; prints the allow rules it lets in
+moat trust --revoke
+```
+
+Any later change to the file drops it back to deny and ask only, until you trust it
+again. Repository rules apply in the hook, not in the host sandboxes
+([docs/POLICY.md](docs/POLICY.md) §10).
 
 ## Commands
 
@@ -243,6 +251,7 @@ the host sandboxes ([docs/POLICY.md](docs/POLICY.md) §10).
 | `moat audit verify <file> [--anchor <hash>]` | check an export without the database; print its head hash |
 | `moat audit report <file>…` | one report over verified exports from several machines |
 | `moat allow --last [--always]` | turn an `ask` into a session grant (24 h) or a permanent rule |
+| `moat trust [<repo>] [--revoke]` | let a repository's `.moat/policy.yaml` allow, until the file changes |
 | `moat policy lint` · `moat policy check "<cmd>"` | validate a policy · test an action against it |
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |
 | `moat guard --host <id>` | the hook entry point; agents call it, you do not |

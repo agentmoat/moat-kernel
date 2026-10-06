@@ -33,7 +33,7 @@ Trust zones:
 | The host (agent process and its hook plumbing) | semi-trusted: assumed to call the hook honestly, may be fail-open |
 | The model's tool calls | untrusted |
 | Commands, MCP servers, project scripts | untrusted |
-| A repository policy (`<project>/.moat/policy.yaml`) | untrusted: it may add deny and ask rules; its allow rules are ignored (ADR-022) |
+| A repository policy (`<project>/.moat/policy.yaml`) | untrusted: it may add deny and ask rules; its allow rules apply only to the exact file a person trusted with `moat trust` (ADR-022) |
 | Policy and hook files | integrity-checked on every call |
 
 ## 3. Threat classes
@@ -51,7 +51,7 @@ answer from the [roadmap](ROADMAP.md).
 | T6 | Environment poisoning (`PATH`, `LD_PRELOAD`, planted binaries) | `env-poison` denies setting dangerous variables; executable pins deny a program that resolves somewhere else than recorded (ADR-008) | Kernel-controlled environment for every command |
 | T7 | Obfuscation and nested execution (`bash -c`, `eval`, `$( … )`, here-documents, decoders) | Recursive classification to depth 4; decoder pipelines are canonicalised; anything unclear is `unparseable` and asks | Enforcement on the process, so spelling no longer matters |
 | T8 | MCP tool poisoning, over-privileged MCP tools | `mcp` rules on tool names; path and URL arguments become `fs.*` and `net` atoms; unreadable arguments deny | MCP stdio proxy with description pinning (1.0) |
-| T9 | Hook and policy tampering by the agent | `kernel-self` denies writes to state, host directories, hook files, and agent runs of `moat allow\|doctor\|init\|policy`; the lock denies everything after drift; Claude Code `ConfigChange` blocks a drifted settings file; a repository policy can only add deny and ask rules, and one that does not parse or sets `defaults`, `executables` or `sandbox` denies every call in the project (ADR-022) | Signed policy (1.0) |
+| T9 | Hook and policy tampering by the agent | `kernel-self` denies writes to state, host directories, hook files, and agent runs of `moat allow\|doctor\|init\|policy\|trust`; the lock denies everything after drift; Claude Code `ConfigChange` blocks a drifted settings file; a repository policy adds only deny and ask rules unless a person trusted that exact file in that checkout, and one that does not parse or sets `defaults`, `executables` or `sandbox` denies every call in the project (ADR-022) | Signed policy (1.0) |
 | T10 | Hook supply chain (a trojaned hook binary) | Hooks are exec-form with an absolute, stable path (ADR-016); `kernel-self` denies writes to any `bin/moat`; `doctor` names a missing or different hook binary | Signed releases |
 | T11 | Time of check vs. time of use, symlinks | Literal and resolved paths are both checked (ADR-009) | Sandbox path rules apply at use |
 | T12 | Network to unknown hosts | `default.net` denies shell network to unlisted hosts; `cloud-metadata` denies metadata and link-local services; `local-net` asks for localhost; `moat proxy` refuses loopback, link-local and metadata addresses, and private and CGNAT ones the policy does not name, after DNS resolution; `WebFetch` of an unlisted host asks (ADR-017); after a secret read, network and MCP calls in the same session ask (`session-taint`) | Egress proxy for every tier |
@@ -167,7 +167,7 @@ something the alpha claims to stop.
   allowed.
 - **TOCTOU and hard links.** A link swapped between the check and the command
   running, and hard links, are not seen (ADR-009).
-- **The terminal check is not a boundary.** `moat allow` and `moat doctor --accept`
+- **The terminal check is not a boundary.** `moat allow`, `moat trust` and `moat doctor --accept`
   check for a TTY. The `kernel-self` rules and the lock are what stop an agent from
   re-pinning or granting itself anything.
 - **Repository rules are hook-only, and a repository can block itself.** A
@@ -175,8 +175,12 @@ something the alpha claims to stop.
   `moat proxy` are generated per user from the user policy, so a repository deny is
   not enforced by an OS layer. A malicious or broken repository policy can deny
   every call in its own project (`kernel-error`). Any repository could do the same
-  with one deny rule, and it fails closed. It cannot widen anything: its allow
-  rules are ignored, and its ask rules never soften a user deny (ADR-022).
+  with one deny rule, and it fails closed. By itself it cannot widen anything: its
+  ask rules never soften a user deny, and its allow rules wait for `moat trust`.
+  Once trusted, its allow rules are as strong as the person's own, below the
+  person's deny rules. A trusted repository whose maintainers turn malicious
+  widens only through a new file version, which drops back to tightening-only
+  until someone trusts it again (ADR-022).
 - **The binary is pinned by path, not digest** (ADR-006, ADR-016). Whoever can replace
   the file the stable link points at decides what the hooks run.
 - **`CLAUDE_CONFIG_DIR` must match for `init`.** `moat init` installs hooks where its
