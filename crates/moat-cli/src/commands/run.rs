@@ -25,8 +25,7 @@ use crate::cli::RunArgs;
 use crate::context::{self, path_string};
 use crate::environment::find_in;
 use crate::exit::Code;
-use crate::sandbox::Report;
-use crate::sandbox::seatbelt::Grants;
+use crate::sandbox::{Grants, Report};
 
 /// What a proxy-aware program reads to find its proxy.
 const PROXY_VARS: [&str; 6] = [

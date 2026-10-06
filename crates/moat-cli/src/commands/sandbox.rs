@@ -14,8 +14,10 @@ use crate::home::Home;
 use crate::install::HostConfig;
 use crate::integrity::{self, HookPins};
 use crate::render::{self, Deferred};
-use crate::sandbox::seatbelt::Grants;
-use crate::sandbox::{Plan, Report, claude, codex, codex_config_path, install, seatbelt_profile};
+use crate::sandbox::{
+    Grants, Plan, Report, claude, codex, codex_config_path, install, landlock_rules,
+    seatbelt_profile,
+};
 
 /// One host's generated settings, ready to print.
 struct Shown<'a> {
@@ -31,6 +33,14 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
     let plan = Plan::new(&policy)?;
     let ctx = crate::context::eval_context(None, None)?;
     let seatbelt = seatbelt_profile(&policy, &ctx, Grants::default())?;
+    let landlock = landlock_rules(&policy, &ctx, Grants::default())?;
+    // `moat run` in this directory, before it adds the agent, `--write` paths
+    // and its proxy's port.
+    let landlock_text = serde_json::to_string_pretty(&landlock.rules)?;
+    let lightweight = [
+        ("Seatbelt (macOS)", &seatbelt.profile, &seatbelt.report),
+        ("Landlock (Linux)", &landlock_text, &landlock.report),
+    ];
     let mut codex_doc = DocumentMut::new();
     codex::apply(&mut codex_doc, &plan.codex)?;
     let hosts = [
@@ -55,11 +65,13 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
                 (s.host.id().to_owned(), entry)
             })
             .collect();
-        let seatbelt = json!({ "profile": seatbelt.profile, "report": seatbelt.report });
         render::json(&json!({
             "default_read_roots": plan.default_read_roots,
             "hosts": doc,
-            "lightweight": { "seatbelt": seatbelt },
+            "lightweight": {
+                "seatbelt": { "profile": &seatbelt.profile, "report": &seatbelt.report },
+                "landlock": { "rules": &landlock.rules, "report": &landlock.report },
+            },
         }))?;
         return Ok(Code::Ok);
     }
@@ -80,13 +92,14 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
         writeln!(out, "{}", shown.text.trim_end())?;
         write_report(&mut out, shown.report)?;
     }
-    writeln!(
-        out,
-        "Seatbelt  `moat run` in this directory (Lightweight tier, macOS), before it adds the \
-         agent, `--write` paths and its proxy's port"
-    )?;
-    writeln!(out, "{}", seatbelt.profile.trim_end())?;
-    write_report(&mut out, &seatbelt.report)?;
+    for (title, text, report) in lightweight {
+        writeln!(
+            out,
+            "{title}  `moat run` in this directory (Lightweight tier)"
+        )?;
+        writeln!(out, "{}", text.trim_end())?;
+        write_report(&mut out, report)?;
+    }
     writeln!(out, "dry run: nothing was written")?;
     Ok(Code::Ok)
 }

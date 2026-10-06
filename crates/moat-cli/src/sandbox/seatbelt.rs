@@ -19,8 +19,8 @@ use std::fmt::Write as _;
 use moat_core::Kind;
 use moat_core::ir::{Access, Effect, Enforcement, Rule};
 
-use super::Report;
 use super::patterns::{literal_tree, split};
+use super::{Grants, Report};
 
 /// Paths every process reads: `/` (the dynamic loader), the terminal and
 /// random devices, and `/private/var/select` (where `/bin/sh` finds its shell).
@@ -73,20 +73,6 @@ const KEYCHAIN: &str = "\
   (global-name \"com.apple.SecurityServer\")
   (global-name \"com.apple.securityd\"))
 ";
-
-/// What the session adds to the IR.
-#[derive(Debug, Clone, Default)]
-pub struct Grants {
-    /// The loopback port of moat's egress proxy, the only network destination.
-    pub proxy_port: Option<u16>,
-    /// The temp directory, resolved, which commands may read and write.
-    pub tmpdir: Option<String>,
-    /// The program `moat run` starts, resolved: it must be readable to start.
-    pub program: Option<String>,
-    /// Paths given to `moat run --write`, resolved, which commands may read
-    /// and write (the agent's own state).
-    pub writes: Vec<String>,
-}
 
 /// A generated profile.
 #[derive(Debug, Clone)]
@@ -245,33 +231,17 @@ fn rule(out: &mut String, comment: &str, operation: &str, patterns: &[String]) {
 
 /// Egress goes only to the proxy's loopback port: Seatbelt cannot name a host.
 fn network(p: &mut Generated, net: &Access, port: Option<u16>) {
-    let (out, report) = (&mut p.profile, &mut p.report);
     match port {
         Some(port) => {
             let _ = writeln!(
-                out,
+                p.profile,
                 "; network: only moat's egress proxy, which decides each host by the policy\n\
                  (allow network-outbound (remote ip \"localhost:{port}\"))"
             );
         }
-        None => out.push_str("; network: none\n"),
+        None => p.profile.push_str("; network: none\n"),
     }
-    if net.default == Effect::Allow {
-        report.loss(
-            Kind::Net,
-            "default.net",
-            "every host is reachable only through moat's proxy".into(),
-        );
-    }
-    for r in &net.allow {
-        report.loss(
-            Kind::Net,
-            &r.id,
-            "these hosts are reachable only through moat's proxy: a program that ignores \
-             HTTP(S)_PROXY cannot reach them"
-                .into(),
-        );
-    }
+    p.report.proxy_only(net);
 }
 
 /// One IR glob as a Seatbelt path filter.

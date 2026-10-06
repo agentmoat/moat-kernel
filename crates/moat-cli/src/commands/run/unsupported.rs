@@ -6,8 +6,7 @@ use std::process::Command;
 use anyhow::{Result, bail};
 use moat_core::{EvalContext, Policy};
 
-use crate::sandbox::Report;
-use crate::sandbox::seatbelt::Grants;
+use crate::sandbox::{Grants, Report};
 
 pub fn confine(_: &Policy, _: &EvalContext, _: Grants) -> Result<(Command, Report)> {
     bail!(
