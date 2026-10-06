@@ -115,7 +115,12 @@ What the proxy does with them:
 - **Leak blocking.** The proxy refuses a request to any other host that carries the
   placeholder or the value, in its head or plain-HTTP body (`proxy-secret`, §5.1).
 
-`moat proxy` does not load `secrets:` yet (#172).
+`moat proxy` reads every source at start-up and refuses to start (exit 64) if one cannot
+be read or holds a control character. It prints each secret's id, host, header and
+placeholder, which is what to give the agent (for example
+`GITHUB_TOKEN=moat-secret:gh:placeholder`), and never the value. A keychain source uses
+`/usr/bin/security` on macOS and `/usr/bin/secret-tool` (libsecret) on Linux. Keychain
+sources are not supported on Windows yet.
 
 ## 3. Pattern syntax
 

@@ -142,9 +142,9 @@ something the alpha claims to stop.
     `plain_http: true`, which `moat policy lint` flags for any host off this machine;
   - covert channels such as timing, or data hidden in requests to the owner host;
   - an agent that asks the user to paste the secret into the conversation;
-  - the owner host itself misusing or reflecting the token.
-
-  `moat proxy` does not load `secrets:` yet (#172).
+  - the owner host itself misusing or reflecting the token;
+  - traffic that does not go through `moat proxy`. Nothing routes the agent through it
+    yet; the host sandbox settings will.
 - **Hosts proceed when the hook binary is missing.** Claude Code and Codex treat a
   hook that cannot start as a non-blocking error and run the tool call. Cursor blocks
   because `moat init` sets `failClosed`. `moat status` and `moat doctor` report a

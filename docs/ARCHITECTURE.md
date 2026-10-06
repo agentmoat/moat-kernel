@@ -385,13 +385,17 @@ CI runs `scripts/ci/quality-gate.sh` on macOS (arm64, x64), Linux and Windows, p
 
 `moat proxy [--listen 127.0.0.1:18080]` is the default-deny network exit from ADR-020.
 Nothing routes traffic through it yet. The hosts' sandbox settings (`httpProxyPort`,
-Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `std::net` and
+Codex's proxy) will. Why it is our own code on `std::net` and
 `httparse`, rather than `codex-network-proxy` or `sandbox-runtime`, is in
 [notes/proxy-evaluation.md](notes/proxy-evaluation.md).
 
 - **Start-up.** It refuses a non-loopback listen address, a missing installation and a
   drifted policy lock (exit 64). It compiles the policy once, so restart it after a policy
   change. It writes to the audit log under one session id per run (`proxy-<ms>`).
+- **Brokered secrets** (POLICY.md §2.1). `commands/proxy.rs` has `secrets/` read each
+  source (a file, an env var, or a keychain item through the OS tool by absolute path)
+  into a zeroed-on-drop buffer and hand it to `moat_proxy::Broker`. A source that cannot
+  be read stops start-up. Only ids, hosts, headers and placeholders are printed.
 - **Per connection,** in this order:
   1. Read the request head, at most 16 KiB within 10 s. Two forms are served:
      - `CONNECT host:port`
@@ -444,9 +448,10 @@ Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `st
   - 256 concurrent connections; the next is answered `503`.
   - 10 s to connect upstream.
   - One thread per direction of each connection.
-- **Not yet:** TLS termination for per-host method and path rules (opt-in, ADR-020),
-  the secrets broker (#172), session taint for proxied connections (they carry no host
-  session; the hook applies taint, §2 step 9), and a policy reload without restart.
+- **Not yet:** TLS termination for per-host method and path rules and for injecting
+  secrets into HTTPS (opt-in, ADR-020), session taint for proxied connections (they carry
+  no host session; the hook applies taint, §2 step 9), and a policy reload without
+  restart.
 
 ## 13. Standard tier: host sandboxes
 
