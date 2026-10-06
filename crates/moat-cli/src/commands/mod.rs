@@ -11,6 +11,7 @@ mod report;
 mod sandbox;
 mod show;
 mod status;
+mod trust;
 
 use anyhow::Result;
 
@@ -25,6 +26,7 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Status => status::run(),
         Command::Doctor(args) => doctor::run(&args),
         Command::Allow(args) => allow::run(&args),
+        Command::Trust(args) => trust::run(&args),
         Command::Replay(args) => replay::run(&args),
         Command::Report(args) => report::run(&args),
         Command::Proxy(args) => proxy::run(&args),

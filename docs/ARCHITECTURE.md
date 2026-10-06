@@ -66,9 +66,11 @@ exits. There is no daemon.
    When the project has a repository policy (`<project>/.moat/policy.yaml`, ADR-022),
    `repo.rs` reads it and `moat_core::RepoPolicy::merge`, a pure function, merges it:
    its deny groups join `deny`, its ask groups go into `repo_ask`, which the engine tries
-   between `deny` and `allow`, and its allow groups are dropped. Its rule ids get the
-   prefix `repo:`. A repository policy that is not a regular file, cannot be read or
-   does not parse is a `kernel-error` deny.
+   between `deny` and `allow`. Its allow groups are appended to `allow` only when
+   `~/.moat/trust.json` is pinned by the lock and records the SHA-256 of these exact
+   bytes for this project root (symlinks resolved); otherwise they are dropped. Its
+   rule ids get the prefix `repo:`. A repository policy that is not a regular file,
+   cannot be read or does not parse is a `kernel-error` deny.
 7. **Decide.** `CompiledPolicy::compile(policy, ctx).decide_with(action, snapshot,
    FsPathResolver)` classifies and evaluates (§3, §4).
 8. **Grant.** An `ask` for a shell command whose exact text was granted for this host
@@ -218,11 +220,12 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
 ## 6. Self-protection
 
 - **Policy lock** (ADR-006). `~/.moat/policy.lock` pins SHA-256 digests of the policy,
-  `environment.json`, `approvals.json`, `policy.d/approved.yaml` and every hook file
-  `moat` installed, keyed by location so a swap for a symlink is a modification, and
-  the part of Codex's `config.toml` that holds moat's sandbox profile (§13). It is
-  verified on every `guard` call. Only a person re-pins: `moat init`, or `moat doctor
-  --accept` and `moat allow` from an interactive terminal.
+  `environment.json`, `approvals.json`, `policy.d/approved.yaml`, `trust.json` and every
+  hook file `moat` installed, keyed by location so a swap for a symlink is a
+  modification, and the part of Codex's `config.toml` that holds moat's sandbox profile
+  (§13). It is verified on every `guard` call. Only a person re-pins: `moat init`, or
+  `moat doctor --accept`, `moat allow`, `moat trust` and `moat sandbox sync` from an
+  interactive terminal.
 - **ConfigChange veto.** Claude Code reports settings changes; a pinned file that no
   longer matches the lock is blocked for the session. Codex and Cursor have no such
   event, so there the next tool call is denied instead. A `/settings-review` accept
@@ -232,10 +235,10 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
   the pinned ones, so a reviewed edit of a pinned file cannot pass the hook.
 - **`kernel-self` rules.** The default policy denies agent writes to the state and
   host directories, hook files and any `bin/moat`, and denies `moat
-  allow|doctor|init|policy` from an agent, including under pseudo-terminal wrappers
-  (ADR-011, ADR-014).
-- **Terminal check.** `moat allow` and `moat doctor --accept` refuse to run without a
-  terminal (`terminal.rs`). The debug-only `MOAT_ASSUME_TTY` override exists for tests.
+  allow|doctor|init|policy|trust` from an agent, including under pseudo-terminal
+  wrappers (ADR-011, ADR-014).
+- **Terminal check.** `moat allow`, `moat trust` and `moat doctor --accept` refuse to
+  run without a terminal (`terminal.rs`). The debug-only `MOAT_ASSUME_TTY` override exists for tests.
 - **Stable hook path** (ADR-016). Hooks run the package manager's stable link to
   `moat`, not a versioned file an upgrade deletes; `doctor` and `status` name a hook
   whose binary is missing or is a different `moat`.
@@ -285,6 +288,7 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
   policy.yaml                  user policy (moat init writes the default once)
   policy.d/approved.yaml       permanent approvals from `moat allow --always`
   approvals.json               session grants from `moat allow` (24 h each)
+  trust.json                   repository policies trusted with `moat trust`: root → SHA-256
   environment.json             search path and program locations recorded at init
   policy.lock                  digests of the files above and of installed hook files
   audit.db                     audit log

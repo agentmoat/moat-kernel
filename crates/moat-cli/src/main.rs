@@ -20,6 +20,7 @@ mod repo;
 mod sandbox;
 mod terminal;
 mod time;
+mod trust;
 
 use std::process::ExitCode;
 

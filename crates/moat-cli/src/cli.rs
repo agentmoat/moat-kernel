@@ -35,6 +35,9 @@ pub enum Command {
     Doctor(DoctorArgs),
     /// Approve a shell command for one session, or permanently.
     Allow(AllowArgs),
+    /// Let a repository's .moat/policy.yaml allow, not only deny and ask, until the file changes.
+    /// Refused unless run from an interactive terminal, and over a drifted lock.
+    Trust(TrustArgs),
     /// Replay agent sessions as a timeline of decisions.
     Replay(ReplayArgs),
     /// Summarise decisions over a window: verdicts, hosts, top rules, asks per hour.
@@ -135,6 +138,16 @@ pub struct AllowArgs {
     /// Add a permanent allow rule to ~/.moat/policy.d/approved.yaml instead.
     #[arg(long)]
     pub always: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct TrustArgs {
+    /// A directory in the repository. Defaults to the current directory.
+    pub repo: Option<PathBuf>,
+
+    /// Withdraw the trust instead: the repository policy only tightens again.
+    #[arg(long)]
+    pub revoke: bool,
 }
 
 #[derive(Debug, Args)]

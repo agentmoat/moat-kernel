@@ -208,7 +208,7 @@ the other layers are planned.
 | deny | `env-poison` | setting `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `GIT_*`, `BASH_ENV`, `ENV`, `PROMPT_COMMAND`, `MOAT_*` |
 | deny | `pipe-to-shell` | `curl`/`wget` output, or any decoded/decompressed stream (`base64 -d/-D/--decode`, `openssl … -d`, `xxd -r`, `gunzip`, `zcat`, `gzip -d`, …), piped into a shell or interpreter that reads its program from stdin (`sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `python*`, `node`, `perl`, `ruby`, `php`, `deno`, `bun`, `pwsh`); `eval` |
 | deny | `destructive` | `rm -rf /`, `rm -rf /*`, `rm -rf ~`, `rm -rf ~/*`, `rm -rf $HOME` (and `-fr`, `--no-preserve-root`), `git push --force*`/`-f*` (also after the remote, bundled as `-uf`, and a `+refspec` such as `+main` or `+HEAD:main`), remote branch deletion (`git push origin :main`, `--delete`, `-d`), the prefixes of `--force` and `--delete` git accepts as abbreviations (`--for*`, `--de*`; `--mirror` and `--prune` stay at the `push` ask), `git reset --hard`, `git clean -fdx`, `git branch -D`, `git stash drop/clear`, `sudo`, `mkfs`, `dd if=`, `shutdown`, `reboot` |
-| deny | `kernel-self` | writes to `~/.moat`, `~/.codex`, anything under a `.moat/` directory, host hook/settings files, and to the directories `~/.moat`, `~/.claude`, `~/.codex`, `~/.cursor` (and `.moat`, `.claude`, `.codex`, `.cursor` anywhere) themselves, so they cannot be renamed, deleted or replaced by a link; any `bin/moat` or `bin/moat.exe` (the binary every hook runs), and Scoop's `apps/moat/current` junction and `apps/moat/<version>/moat.exe` (ADR-016); `moat policy/init/doctor/allow` from an agent, also by absolute path (`*/moat …`) and under the pseudo-terminal wrappers `script`, `expect`, `unbuffer` (ADR-011), also by absolute path, Python `pty.spawn(…)`, `tmux`/`screen` and `osascript` (ADR-014) |
+| deny | `kernel-self` | writes to `~/.moat`, `~/.codex`, anything under a `.moat/` directory, host hook/settings files, and to the directories `~/.moat`, `~/.claude`, `~/.codex`, `~/.cursor` (and `.moat`, `.claude`, `.codex`, `.cursor` anywhere) themselves, so they cannot be renamed, deleted or replaced by a link; any `bin/moat` or `bin/moat.exe` (the binary every hook runs), and Scoop's `apps/moat/current` junction and `apps/moat/<version>/moat.exe` (ADR-016); `moat policy/init/doctor/allow/trust` from an agent, also by absolute path (`*/moat …`) and under the pseudo-terminal wrappers `script`, `expect`, `unbuffer` (ADR-011), also by absolute path, Python `pty.spawn(…)`, `tmux`/`screen` and `osascript` (ADR-014) |
 | deny | `shell-rc` | writes to `~/.zshrc`, `~/.bashrc`, `~/.profile` and friends |
 | deny | `cloud-metadata` | network to instance metadata and link-local services (`169.254.*`, `fe80:*`, `fd00:ec2::254`, `100.100.100.200`, `metadata.google.internal`, `metadata.goog`), for shell network and for a host fetch tool alike |
 | allow | `project-fs` | read anywhere in `${project}`, including the root itself (a search with no path); write anywhere except `.git/` and `.moat/` |
@@ -274,7 +274,7 @@ warning does not prove a rule is reachable.
 installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
 pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
 until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
-by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. Which hook files are pinned is decided only by `moat init`: it keeps the ones already in the lock and adds those installed under its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR`. `moat doctor --accept` and `moat allow` re-pin exactly the files already in the lock, so running them from a shell where those variables differ from the agent's never drops the agent's hook file; `moat doctor` and `moat status` name a hook file installed under the current environment that the lock does not pin, and a pinned one outside it. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
+by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. Which hook files are pinned is decided only by `moat init`: it keeps the ones already in the lock and adds those installed under its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR`. `moat doctor --accept`, `moat allow` and `moat trust` re-pin exactly the files already in the lock, plus moat's own state files (`trust.json` once `moat trust` writes it), so running them from a shell where those variables differ from the agent's never drops the agent's hook file; `moat doctor` and `moat status` name a hook file installed under the current environment that the lock does not pin, and a pinned one outside it. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
 
 ### 8.1 Executable pinning and the environment snapshot
 
@@ -379,7 +379,8 @@ project's `.git`). Run
 
 A project can commit rules for everyone who works in it: `<project>/.moat/policy.yaml`,
 where the project is the git root that `${project}` names (§3.2). A repository is input
-you did not write, so its policy can only make yours stricter (ADR-022).
+you did not write, so by itself its policy can only make yours stricter. Its allow rules
+apply only after you trust that exact file with `moat trust` (ADR-022).
 
 ```yaml
 version: 1
@@ -397,7 +398,9 @@ ask:
   before your allow rules. So they make an action your policy allows ask, but they
   never soften one of your denies. Per atomic action the result is the stricter of
   the two policies.
-- `allow` groups are ignored.
+- `allow` groups are ignored until you trust the file. Trusted, they are added after
+  your allow rules, so your deny rules (`secrets-paths`, `kernel-self`, …) still win.
+  They can widen your `ask` rules and defaults.
 - Every repository rule id is shown with the prefix `repo:` (`repo:no-prod-deploy`) in
   responses, the audit log and `moat show`. This way a repository rule cannot pose as
   one of yours.
@@ -409,7 +412,24 @@ ask:
   `--policy`, only that file is used.
 - Agents cannot change it: `kernel-self` denies writes to `**/.moat/**`.
 - Hook only. Host sandboxes (§9) and `moat proxy` are generated from your policy,
-  per user and not per repository, so a repository deny is not enforced there.
+  per user and not per repository. A repository deny is not enforced there, and a
+  trusted repository allow does not widen them.
+
+```bash
+moat trust                   # trust the repository policy of the current directory's project
+moat trust ~/code/app        # or of another project
+moat trust --revoke          # its allow rules stop applying; deny and ask stay
+```
+
+`moat trust` prints each allow rule it lets in. It records the SHA-256 of the file's
+bytes against the project root (symlinks resolved) in `~/.moat/trust.json`, never in
+the repository, and re-pins the lock. The record holds for that exact file in that
+exact checkout. After any change to the file (a pull, a branch switch, an edit), or for
+a copy in another directory, the policy applies in its tightening-only form until you
+run `moat trust` again. A file that does not parse cannot be trusted. Like `moat
+allow`, `moat trust` must be run from a terminal, refuses while the lock shows drift
+(exit 64), and is denied to agents by `kernel-self`. A `trust.json` the lock does not
+pin is ignored.
 
 ## 11. Planned, not yet available
 

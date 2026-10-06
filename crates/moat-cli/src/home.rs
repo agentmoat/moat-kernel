@@ -52,6 +52,10 @@ impl Home {
         self.root.join("policy.d").join("approved.yaml")
     }
 
+    pub fn trust_path(&self) -> PathBuf {
+        self.root.join("trust.json")
+    }
+
     pub fn exists(&self) -> bool {
         self.root.is_dir()
     }
