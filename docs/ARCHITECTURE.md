@@ -389,6 +389,7 @@ scripts/ci/sync-labels.sh      the repository's label set
 | Policy compiler | `crates/moat-core/tests/ir_consistency.rs` (IR against the engine on the conformance fixtures), `ir_never_widens.rs` (generated policies) | every PR, all OS |
 | Golden host payloads | `tests/fixtures/hosts/` | every PR |
 | End to end | `crates/moat-cli/tests/e2e/` (real binary, isolated `HOME`/`MOAT_HOME`) | every PR, all OS |
+| Differential (ADR-019) | `crates/moat-cli/tests/e2e/differential/` runs `tests/differential/scenarios.yaml` (attacks, benign work, CVE replays) against every enforcement point: the hook decision, and each host sandbox whose binary is present. A layer that disagrees with a scenario's recorded verdict fails the suite; a missing host binary skips that layer visibly. `scripts/ci/differential.sh` points it at the host binaries for the full run | hook layer every PR; host-sandbox layers where the binary is present |
 | Proxy | `crates/moat-proxy/tests/proxy/`: a real listener and a local upstream on loopback, names mapped by a test resolver, no external network | every PR, all OS |
 | `wasm32` purity build | CI job | every PR |
 | Fuzz | `fuzz/`, one minute per target on PRs, ten minutes weekly | CI |
