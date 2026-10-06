@@ -42,6 +42,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - Fuzzing: `fuzz/` adds `cargo fuzz` targets for the command classifier, policy loader, host payload adapters and approved-command patterns, seeded from the conformance fixtures; CI runs them on every pull request and longer weekly.
+- The default policy moved to `crates/moat-core/policies/default-v1.yaml` and is exported as `moat_core::DEFAULT_POLICY`. `moat-kernel` read it from outside its crate, so it could not be published; every crate now packages and builds from its tarball, and CI checks that on each PR (`cargo package --workspace`).
 - Policy: `approval:` and `scope:` are reserved. They were parsed but never consulted; they remain accepted so existing files stay valid, `moat policy lint` now warns that they have no effect, and the default policy no longer writes an `approval:` block.
 - `moat-core` API: typed `Kind` (with `FromStr`) replaces kind strings in `AtomicAction::kind`, `Action::kind`, `Defaults::for_kind` and the new `RuleGroup::patterns`; `EvalContext::case_insensitive_paths` replaces a compile-time platform switch inside the core (the CLI sets it for macOS and Windows).
 - `moat-core` API: `Verdict` implements `FromStr` (`UnknownVerdict`); `Decision::single` builds a one-rule decision. Internally one generic matcher replaces the duplicated glob and shell list matching, and one helper splits `!` exclusions.

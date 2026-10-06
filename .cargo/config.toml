@@ -2,4 +2,4 @@
 rustdocflags = ["-D", "warnings"]
 
 [alias]
-gate = "run -q -p moat-kernel -- policy lint policies/default-v1.yaml"
+gate = "run -q -p moat-kernel -- policy lint crates/moat-core/policies/default-v1.yaml"

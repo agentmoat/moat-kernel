@@ -1,5 +1,5 @@
 //! Conformance suite: every fixture in `tests/conformance/*.yaml` is evaluated
-//! against `policies/default-v1.yaml`. A fixture passes when the verdict matches
+//! against the shipped default policy (`moat_core::DEFAULT_POLICY`). A fixture passes when the verdict matches
 //! and every expected rule id is present in the decision.
 //!
 //! The suite is the executable form of the security claims in DESIGN.md §3.3,
@@ -14,7 +14,8 @@ use std::path::{Path, PathBuf};
 use std::collections::BTreeMap;
 
 use moat_core::{
-    Action, CompiledPolicy, EvalContext, MapPathResolver, MapResolver, Policy, Verdict,
+    Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, MapPathResolver, MapResolver, Policy,
+    Verdict,
 };
 use serde::Deserialize;
 
@@ -144,8 +145,7 @@ fn load_fixtures(dir: &Path) -> Vec<(String, Fixture)> {
 #[test]
 fn default_policy_conformance() {
     let root = repo_root();
-    let policy_text = fs::read_to_string(root.join("policies/default-v1.yaml")).unwrap();
-    let policy = Policy::parse(&policy_text).expect("default policy must lint");
+    let policy = Policy::parse(DEFAULT_POLICY).expect("default policy must lint");
     let ctx = EvalContext {
         home: "/Users/me".into(),
         project: "/p".into(),

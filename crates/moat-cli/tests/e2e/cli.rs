@@ -10,7 +10,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn default_policy() -> PathBuf {
-    repo_root().join("policies/default-v1.yaml")
+    repo_root().join("crates/moat-core/policies/default-v1.yaml")
 }
 
 fn check(sb: &Sandbox, action: &str, extra: &[&str]) -> Output {

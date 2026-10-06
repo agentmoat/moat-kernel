@@ -35,6 +35,6 @@ for command in commands:
 for path in glob.glob(os.path.join(ROOT, "tests", "fixtures", "hosts", "*", "*.json")):
     with open(path, "rb") as f:
         write("host_payload", f.read())
-with open(os.path.join(ROOT, "policies", "default-v1.yaml"), "rb") as f:
+with open(os.path.join(ROOT, "crates", "moat-core", "policies", "default-v1.yaml"), "rb") as f:
     write("policy_parse", f.read())
 print(f"seeded {len(commands)} commands")

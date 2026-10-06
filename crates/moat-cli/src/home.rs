@@ -5,11 +5,9 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::Policy;
+use moat_core::{DEFAULT_POLICY, Policy};
 
 use crate::context;
-
-pub const DEFAULT_POLICY: &str = include_str!("../../../policies/default-v1.yaml");
 
 #[derive(Debug, Clone)]
 pub struct Home {

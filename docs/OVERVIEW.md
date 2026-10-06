@@ -161,7 +161,7 @@ moat init
 
 `moat init` detects installed agents (Claude Code, Codex, Cursor; OpenClaw **(planned)**),
 installs their hooks, writes a default policy and pins it with a lock. The policy,
-abridged (every rule needs an `id`; the full file is `policies/default-v1.yaml`):
+abridged (every rule needs an `id`; the full file is `crates/moat-core/policies/default-v1.yaml`):
 
 ```yaml
 # ~/.moat/policy.yaml  (user policy; a per-repo ./.moat/policy.yaml override is planned)

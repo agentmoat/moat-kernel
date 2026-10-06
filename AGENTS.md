@@ -21,7 +21,7 @@ Specs: `docs/DESIGN.md` (threat model, hook formats, policy semantics),
 | `crates/moat-hosts` | host adapters: `pre_tool_use.rs` (Claude Code, Codex), `config_change.rs` (Claude Code), `cursor.rs` | translate payload ⇄ `Action`/`Decision`; never decide |
 | `crates/moat-audit` | SQLite store (`store.rs`), time-window and session queries (`query.rs`), redaction (`redact.rs`) | typed `thiserror` errors; redact before persisting; never log secrets |
 | `crates/moat-cli` | the `moat` binary: `cli.rs` grammar, `commands/{init,guard,show,status,doctor,allow,replay,report,policy}.rs`, `install/{mod,hook_file}.rs`, `home.rs`, `context.rs`, `project.rs`, `time.rs`, `environment.rs` (search-path snapshot), `realpath.rs` (symlink resolution), `integrity.rs` (policy lock), `approvals.rs` (grants and overlay), `render.rs`, `exit.rs` | the only crate that touches files, env, terminal; `anyhow` allowed; all user output goes through `render.rs` or the command module |
-| `policies/default-v1.yaml` | shipped default policy | every change needs a conformance fixture and a CHANGELOG line |
+| `crates/moat-core/policies/default-v1.yaml` | shipped default policy | every change needs a conformance fixture and a CHANGELOG line |
 | `tests/conformance/{attacks,benign,ask}.yaml` | executable security claims | ids unique, one action each, `rules` must appear in the decision; attacks and asks carry `threat: T1…T12`; `docs/COVERAGE.md` is generated from them (`MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`) and every threat needs an attack |
 | `tests/fixtures/hosts/<host>/*.json` | real host payloads | golden inputs; never include real tokens or personal paths |
 | `crates/*/tests/` | end-to-end tests of the binary in one target, `crates/moat-cli/tests/e2e/` (one module per area: `cli`, `guard`, `cursor`, `config_change`, `lock`, `approvals`, `allow`, `replay_report`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
@@ -61,7 +61,7 @@ scripts/ci/quality-gate.sh        # fmt, clippy -D warnings, doc, tests, policy 
 Claim "done" only after it passes locally. CI runs the same script on macOS (arm64, x64), Linux and Windows.
 
 ### Add or change a policy rule
-1. Edit `policies/default-v1.yaml` (keep rule ids stable; they appear in audit logs and user output).
+1. Edit `crates/moat-core/policies/default-v1.yaml` (keep rule ids stable; they appear in audit logs and user output).
 2. Add fixtures: at least one attack that must be denied/asked and one benign action that must still be allowed, in `tests/conformance/`.
 3. If the semantics change (not just a pattern), update `docs/POLICY.md` and `docs/DESIGN.md` §6, and add an ADR if an invariant moves.
 4. Add a `### Security` or `### Changed` line to `CHANGELOG.md`.
@@ -101,7 +101,7 @@ Copy the shape of `docs/adr/ADR-004-exit-code-contract.md`: Context, Decision, C
 
 ## 7. For coding agents specifically
 
-- Do not edit `policies/default-v1.yaml`, a fixture's `expect`, or a test to make a failing check pass; fix the classifier or explain why the expectation was wrong.
+- Do not edit the default policy, a fixture's `expect`, or a test to make a failing check pass; fix the classifier or explain why the expectation was wrong.
 - Do not disable lints, delete tests, or add `#[allow]`/`#[ignore]` to get green.
 - `moat allow` and `moat doctor --accept` refuse to run without a terminal. End-to-end tests set `MOAT_ASSUME_TTY=1`, which only debug builds honour (`crates/moat-cli/src/terminal.rs`); never add another way around the terminal check.
 - Do not run `moat init` against the real `~/.claude` of a machine where a Claude Code session is active; use `MOAT_HOME`, `CLAUDE_CONFIG_DIR` and a scratch project (see `docs/PROGRESS.md` §2.3).
