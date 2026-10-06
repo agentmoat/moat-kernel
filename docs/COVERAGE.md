@@ -7,8 +7,8 @@ the verdict and rule ids the default policy must produce for it.
 
 | Threat | Class | Attacks | Asks | Benign |
 |---|---|---|---|---|
-| T1 | Secret exfiltration via shell | 9 | 0 | 0 |
-| T2 | Secret exfiltration via file tools | 8 | 0 | 0 |
+| T1 | Secret exfiltration via shell | 10 | 0 | 0 |
+| T2 | Secret exfiltration via file tools | 17 | 0 | 0 |
 | T3 | Secret exfiltration via environment | 12 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 9 | 4 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
@@ -31,6 +31,7 @@ the verdict and rule ids the default policy must produce for it.
 - `T1-kube-config` (attacks): Deny [secrets-paths]
 - `T1-gh-token-file` (attacks): Deny [secrets-paths]
 - `T1-plant-authorized-key` (attacks): Deny [secrets-paths]
+- `T1-grep-history-for-tokens` (attacks): Deny [secrets-paths]
 
 ## T2: Secret exfiltration via file tools
 
@@ -41,6 +42,15 @@ the verdict and rule ids the default policy must produce for it.
 - `T2-shell-dotenv-without-prefix` (attacks): Deny [secrets-paths]
 - `T2-shell-nested-dotenv-relative` (attacks): Deny [secrets-paths]
 - `T2-shell-traversal-without-prefix` (attacks): Deny [secrets-paths]
+- `T2-read-git-credentials` (attacks): Deny [secrets-paths]
+- `T2-read-npmrc-token` (attacks): Deny [secrets-paths]
+- `T2-read-pypirc` (attacks): Deny [secrets-paths]
+- `T2-read-cargo-credentials` (attacks): Deny [secrets-paths]
+- `T2-read-gcloud-adc` (attacks): Deny [secrets-paths]
+- `T2-read-azure-tokens` (attacks): Deny [secrets-paths]
+- `T2-read-zsh-history` (attacks): Deny [secrets-paths]
+- `T2-read-bash-history` (attacks): Deny [secrets-paths]
+- `T2-dotenv-template-exclusion-is-exact` (attacks): Deny [secrets-paths]
 - `T2-read-envrc` (attacks): Deny [secrets-paths]
 
 ## T3: Secret exfiltration via environment

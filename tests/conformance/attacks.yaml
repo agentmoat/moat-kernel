@@ -70,6 +70,46 @@
   threat: T2
   action: { shell: "cat src/../../Users/me/.ssh/id_rsa" }
   expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-read-git-credentials
+  threat: T2
+  action: { fs_read: "~/.git-credentials" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-read-npmrc-token
+  threat: T2
+  action: { fs_read: "~/.npmrc" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-read-pypirc
+  threat: T2
+  action: { fs_read: "~/.pypirc" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-read-cargo-credentials
+  threat: T2
+  action: { fs_read: "~/.cargo/credentials.toml" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-read-gcloud-adc
+  threat: T2
+  action: { fs_read: "~/.config/gcloud/application_default_credentials.json" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-read-azure-tokens
+  threat: T2
+  action: { fs_read: "~/.azure/msal_token_cache.json" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-read-zsh-history
+  threat: T2
+  action: { fs_read: "~/.zsh_history" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-read-bash-history
+  threat: T2
+  action: { fs_read: "~/.bash_history" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-grep-history-for-tokens
+  threat: T1
+  action: { shell: "grep -i token ~/.zsh_history" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T2-dotenv-template-exclusion-is-exact
+  threat: T2
+  action: { fs_read: "/p/.env.example.local" }
+  expect: { verdict: deny, rules: [secrets-paths] }
 
 # T3 secret exfiltration via environment
 - id: T3-echo-api-key
