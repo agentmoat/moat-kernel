@@ -194,6 +194,14 @@ fn event_ids_are_hex() {
     assert_eq!("#1F".parse::<EventId>().unwrap(), EventId(31));
     assert!("zz".parse::<EventId>().is_err());
     assert!("0".parse::<EventId>().is_err());
+
+    assert_eq!(serde_json::to_string(&EventId(31)).unwrap(), r#""1f""#);
+    assert_eq!(
+        serde_json::from_str::<EventId>(r#""1f""#).unwrap(),
+        EventId(31)
+    );
+    assert_eq!(serde_json::from_str::<EventId>("31").unwrap(), EventId(31));
+    assert!(serde_json::from_str::<EventId>(r#""zz""#).is_err());
 }
 
 #[test]

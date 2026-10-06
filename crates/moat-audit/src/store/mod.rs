@@ -82,10 +82,35 @@ impl From<std::io::Error> for StoreError {
     }
 }
 
-/// Row id, shown and parsed as lowercase hex (`moat show 1f`).
+/// Row id, shown, parsed and serialised as lowercase hex (`moat show 1f`,
+/// `"id": "1f"`). The integers older builds serialised still deserialise.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(into = "String", try_from = "WireId")]
 pub struct EventId(pub i64);
+
+impl From<EventId> for String {
+    fn from(id: EventId) -> Self {
+        id.to_string()
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum WireId {
+    Hex(String),
+    Row(i64),
+}
+
+impl TryFrom<WireId> for EventId {
+    type Error = StoreError;
+
+    fn try_from(wire: WireId) -> Result<Self, Self::Error> {
+        match wire {
+            WireId::Hex(text) => text.parse(),
+            WireId::Row(id) => Ok(Self(id)),
+        }
+    }
+}
 
 impl fmt::Display for EventId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

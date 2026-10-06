@@ -97,6 +97,7 @@ fn guard_denies_secret_exfiltration_and_records_it() {
     let events: Value = serde_json::from_slice(&json.stdout).unwrap();
     assert_eq!(events[0]["verdict"], "deny");
     assert_eq!(events[0]["tool"], "Bash");
+    assert_eq!(events[0]["id"], id.as_str());
 }
 
 #[test]
