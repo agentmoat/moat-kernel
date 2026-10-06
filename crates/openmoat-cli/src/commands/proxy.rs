@@ -23,16 +23,19 @@ use crate::home::Home;
 use crate::integrity;
 use crate::secrets;
 
+/// Where `moat proxy` listens when neither `--listen` nor `sandbox.proxy_port` says.
+const DEFAULT_PORT: u16 = 18080;
+
 pub fn run(args: &ProxyArgs) -> Result<Code> {
     if let Some(listen) = args.listen.filter(|a| !a.ip().is_loopback()) {
         bail!("--listen {listen} is not a loopback address; the proxy would serve other machines");
     }
     let home = installed()?;
     let policy = home.load_policy()?;
-    let port = crate::sandbox::proxy_port(&policy);
-    let listen = args
-        .listen
-        .unwrap_or_else(|| SocketAddr::from((Ipv4Addr::LOCALHOST, port)));
+    let hosts_port = crate::sandbox::proxy_port(&policy);
+    let listen = args.listen.unwrap_or_else(|| {
+        SocketAddr::from((Ipv4Addr::LOCALHOST, hosts_port.unwrap_or(DEFAULT_PORT)))
+    });
     let exit = Exit::open(&home, policy, context::eval_context(None, None)?)?;
     let listener = TcpListener::bind(listen).with_context(|| format!("listening on {listen}"))?;
     let addr = listener
@@ -44,7 +47,7 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
         "moat proxy: listening on {addr} (audit session {})",
         exit.session()
     )?;
-    if addr.port() != port {
+    if let Some(port) = hosts_port.filter(|p| *p != addr.port()) {
         writeln!(
             std::io::stderr(),
             "moat proxy: note: the host sandboxes send traffic to port {port} (`sandbox.proxy_port`), not here"

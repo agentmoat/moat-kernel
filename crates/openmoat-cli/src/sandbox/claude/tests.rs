@@ -100,10 +100,16 @@ fn network_lists_domains_and_keeps_addresses_denied() {
 }
 
 #[test]
-fn both_proxy_ports_name_moat_proxy() {
+fn both_proxy_ports_name_moat_proxy_only_when_the_policy_opts_in() {
     let out = generated(DEFAULT_POLICY);
-    assert_eq!(out.sandbox["network"]["httpProxyPort"], json!(18080));
-    assert_eq!(out.sandbox["network"]["socksProxyPort"], json!(18080));
+    assert!(out.sandbox["network"].get("httpProxyPort").is_none());
+    assert!(out.sandbox["network"].get("socksProxyPort").is_none());
+    assert!(
+        !out.report
+            .losses
+            .iter()
+            .any(|l| l.rule == "claude-code.proxy")
+    );
     let own = generated("version: 1\nsandbox:\n  proxy_port: 18555\n");
     assert_eq!(own.sandbox["network"]["httpProxyPort"], json!(18555));
     assert_eq!(own.sandbox["network"]["socksProxyPort"], json!(18555));

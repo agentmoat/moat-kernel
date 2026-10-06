@@ -62,8 +62,9 @@ pub fn in_sync(doc: &DocumentMut, generated: &Generated) -> bool {
     apply(&mut expected, generated).is_ok() && owned_part(&expected) == owned_part(doc)
 }
 
-/// Settings in `doc` that keep the moat profile from applying, worded for `moat doctor`.
-pub fn weaknesses(doc: &DocumentMut) -> Vec<String> {
+/// Settings in `doc` that keep the moat profile from applying, worded for `moat
+/// doctor`; `via_moat_proxy` when the policy sets `sandbox.proxy_port`.
+pub fn weaknesses(doc: &DocumentMut, via_moat_proxy: bool) -> Vec<String> {
     let mut out = Vec::new();
     if doc.get("default_permissions").and_then(Item::as_str) != Some(PROFILE) {
         out.push(format!(
@@ -97,7 +98,7 @@ pub fn weaknesses(doc: &DocumentMut) -> Vec<String> {
         .and_then(|p| p.get(PROFILE))
         .and_then(|p| p.get("network"));
     let set = |key: &str| network.and_then(|n| n.get(key)).and_then(Item::as_bool);
-    if set("allow_upstream_proxy") == Some(false) {
+    if via_moat_proxy && set("allow_upstream_proxy") == Some(false) {
         out.push(
             "allow_upstream_proxy is false: Codex's proxy never hands traffic to `moat proxy`"
                 .to_owned(),

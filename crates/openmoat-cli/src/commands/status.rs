@@ -211,9 +211,9 @@ fn sandboxes(out: &mut impl io::Write, plan: &Plan, lock_path: &Path) -> Result<
             }
         }
     }
-    if present {
+    if let Some(port) = plan.proxy_port.filter(|_| present) {
         // A warning that leaves `healthy` alone: a stopped proxy fails closed.
-        let (ok, text) = super::proxy::listening_line(plan.proxy_port);
+        let (ok, text) = super::proxy::listening_line(port);
         writeln!(
             out,
             "moat proxy       {} {text}",

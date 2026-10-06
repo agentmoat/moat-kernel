@@ -73,15 +73,20 @@ fn block_reads_on(root: &Value) -> bool {
 }
 
 /// Settings in `root` that weaken the sandbox, worded for `moat doctor`.
-pub fn weaknesses(root: &Value, expect_block_reads: bool, proxy_port: u16) -> Vec<String> {
+pub fn weaknesses(root: &Value, expect_block_reads: bool, proxy_port: Option<u16>) -> Vec<String> {
     let at = |path: &str| root.pointer(path);
     let is = |path: &str, value: bool| at(path) == Some(&json!(value));
     let mut out = Vec::new();
     for key in ["httpProxyPort", "socksProxyPort"] {
-        if at(&format!("/sandbox/network/{key}")) != Some(&json!(proxy_port)) {
-            out.push(format!(
-                "sandbox.network.{key} is not {proxy_port}: that traffic does not go through `moat proxy`"
-            ));
+        let set = at(&format!("/sandbox/network/{key}")).filter(|v| !v.is_null());
+        match proxy_port {
+            Some(port) if set != Some(&json!(port)) => out.push(format!(
+                "sandbox.network.{key} is not {port}: that traffic does not go through `moat proxy`"
+            )),
+            None if set.is_some() => out.push(format!(
+                "sandbox.network.{key} is set: another proxy decides that traffic, not the allowlist"
+            )),
+            _ => {}
         }
     }
     let mut flag = |bad: bool, text: &str| {
@@ -182,9 +187,9 @@ mod tests {
             json!(["/x.sock"])
         );
         assert!(
-            weaknesses(&root, true, 18080).is_empty(),
+            weaknesses(&root, true, None).is_empty(),
             "{:?}",
-            weaknesses(&root, true, 18080)
+            weaknesses(&root, true, None)
         );
         assert!(apply(&mut json!([]), &out).is_err());
         assert!(apply(&mut json!({"sandbox": 1}), &out).is_err());
@@ -202,14 +207,9 @@ mod tests {
         root["sandbox"]["network"]["allowAllUnixSockets"] = json!(true);
         root["permissions"][BLOCK_READS] = json!(false);
         root["sandbox"]["network"]["httpProxyPort"] = json!(8080);
-        root["sandbox"]["network"]
-            .as_object_mut()
-            .unwrap()
-            .remove("socksProxyPort");
-        let found = weaknesses(&root, true, 18080).join("\n");
+        let found = weaknesses(&root, true, None).join("\n");
         for key in [
-            "httpProxyPort",
-            "socksProxyPort",
+            "httpProxyPort is set",
             "sandbox.enabled",
             "failIfUnavailable",
             "allowUnsandboxedCommands",
@@ -217,6 +217,22 @@ mod tests {
             "allowAllUnixSockets",
             BLOCK_READS,
         ] {
+            assert!(found.contains(key), "{key}: {found}");
+        }
+        assert!(!in_sync(&root, &out));
+    }
+
+    #[test]
+    fn weaknesses_name_a_changed_or_missing_moat_proxy_port() {
+        let out = generated("version: 1\nsandbox:\n  proxy_port: 18555\n");
+        let mut root = json!({});
+        apply(&mut root, &out).unwrap();
+        assert!(weaknesses(&root, false, Some(18555)).is_empty());
+        root["sandbox"]["network"]["httpProxyPort"] = json!(8080);
+        let network = root["sandbox"]["network"].as_object_mut().unwrap();
+        network.remove("socksProxyPort");
+        let found = weaknesses(&root, false, Some(18555)).join("\n");
+        for key in ["httpProxyPort is not 18555", "socksProxyPort is not 18555"] {
             assert!(found.contains(key), "{key}: {found}");
         }
         assert!(!in_sync(&root, &out));

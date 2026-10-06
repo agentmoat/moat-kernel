@@ -12,10 +12,10 @@
 //! - `permissions.blockReadsOutsideWorkingDirectories` denies sandboxed reads
 //!   under the user directories (`/Users`, `/home`, `/Volumes`, …) outside the
 //!   working directories, and makes file tools refuse them;
-//! - with `network.httpProxyPort` and `network.socksProxyPort` set, sandboxed
-//!   commands reach the network only through those loopback ports (2.1.292;
-//!   the sandboxing docs, "Custom proxy configuration"), so with nothing
-//!   listening they have none.
+//! - with `network.httpProxyPort` and `network.socksProxyPort` set (only when
+//!   the policy sets `sandbox.proxy_port`), sandboxed commands reach the
+//!   network only through those loopback ports (2.1.292; the sandboxing docs,
+//!   "Custom proxy configuration"), so with nothing listening they have none.
 
 mod settings;
 
@@ -64,21 +64,15 @@ pub struct Generated {
     pub report: Report,
 }
 
-/// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`], with
-/// sandboxed commands' traffic sent to `moat proxy` on `proxy_port`.
-pub fn generate(ir: &Enforcement, proxy_port: u16) -> Result<Generated> {
+/// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`]. With
+/// `proxy_port`, sandboxed commands' traffic goes to `moat proxy` there.
+pub fn generate(ir: &Enforcement, proxy_port: Option<u16>) -> Result<Generated> {
     let mut report = Report::default();
     let filesystem = Filesystem::build(ir, &mut report)?;
-    let network = network(&ir.egress.net, proxy_port);
-    report.proxy_only(&ir.egress.net);
-    report.loss(
-        Kind::Net,
-        "claude-code.proxy",
-        format!(
-            "sandboxed commands have no network while nothing listens on 127.0.0.1:{proxy_port} \
-             (`moat proxy`), and none over SOCKS5 (`ALL_PROXY`, ssh): `moat proxy` speaks HTTP only"
-        ),
-    );
+    let network = match proxy_port {
+        None => network(&ir.egress.net, &mut report),
+        Some(port) => through_moat_proxy(&ir.egress.net, port, &mut report),
+    };
     let mut sandbox = Map::new();
     sandbox.insert("enabled".into(), json!(true));
     sandbox.insert("failIfUnavailable".into(), json!(true));
@@ -316,42 +310,82 @@ impl Filesystem {
     }
 }
 
-/// `network.*` for sandboxed commands. Both proxy ports name `moat proxy`, so
-/// it decides every connection by the policy, and Claude Code's own lists and
-/// local-address check stop applying to that traffic. The lists are still
-/// written, narrowed to the domain names of the `net` rules: they apply again
-/// if the ports are removed (`moat doctor` reports that), and `strictAllowlist`
-/// in user settings keeps a repository from setting its own ports or domains.
-fn network(net: &Access, proxy_port: u16) -> Value {
+/// `network.*` for sandboxed commands: Claude Code gates only those, so the
+/// `net` rules apply (a fetch-only allow would widen `curl`).
+fn network(net: &Access, report: &mut Report) -> Value {
     let mut allowed = Vec::new();
     let mut denied = Vec::new();
+    if net.default == Effect::Allow {
+        report.loss(
+            Kind::Net,
+            "default.net",
+            "Claude Code's allowlist cannot allow every host: sandboxed commands reach only listed hosts"
+                .into(),
+        );
+    }
     // A host that is not a domain name (`169.254.*`) cannot be listed; it is
     // unlisted and no allowed domain can match an address, so it stays denied.
     for rule in &net.deny {
-        let (positive, _) = split(&rule.patterns);
+        let (positive, excluded) = split(&rule.patterns);
         for pattern in positive.into_iter().filter(|p| domain(p)) {
             push_unique(&mut denied, pattern.to_owned());
+        }
+        if !excluded.is_empty() {
+            report.loss(
+                Kind::Net,
+                &rule.id,
+                "exceptions to a deny rule are left out: denied".into(),
+            );
         }
     }
     for rule in &net.allow {
         let (positive, excluded) = split(&rule.patterns);
         if !excluded.iter().all(|p| domain(p)) {
+            report.loss(
+                Kind::Net,
+                &rule.id,
+                "an exception is not a domain name, so the whole rule is left out: denied".into(),
+            );
             continue;
         }
         for pattern in excluded {
             push_unique(&mut denied, pattern.to_owned());
         }
-        for pattern in positive.into_iter().filter(|p| domain(p)) {
-            push_unique(&mut allowed, pattern.to_owned());
+        for pattern in positive {
+            if domain(pattern) {
+                push_unique(&mut allowed, pattern.to_owned());
+            } else {
+                report.loss(
+                    Kind::Net,
+                    &rule.id,
+                    format!("`{pattern}` is not a domain name, so it stays denied"),
+                );
+            }
         }
     }
-    json!({
-        "httpProxyPort": proxy_port,
-        "socksProxyPort": proxy_port,
-        "allowedDomains": allowed,
-        "deniedDomains": denied,
-        "strictAllowlist": true,
-    })
+    json!({ "allowedDomains": allowed, "deniedDomains": denied, "strictAllowlist": true })
+}
+
+/// `network.*` with both proxy ports naming `moat proxy`, which then decides
+/// every connection by the policy; Claude Code's own lists and local-address
+/// check stop applying to that traffic. The lists are still written: they
+/// apply again if the ports are removed (`moat doctor` reports that), and
+/// `strictAllowlist` in user settings keeps a repository from setting its own
+/// ports or domains. Their losses are not reported, since they do not decide.
+fn through_moat_proxy(net: &Access, port: u16, report: &mut Report) -> Value {
+    let mut value = network(net, &mut Report::default());
+    value["httpProxyPort"] = json!(port);
+    value["socksProxyPort"] = json!(port);
+    report.proxy_only(net);
+    report.loss(
+        Kind::Net,
+        "claude-code.proxy",
+        format!(
+            "sandboxed commands have no network while nothing listens on 127.0.0.1:{port} \
+             (`moat proxy`), and none over SOCKS5 (`ALL_PROXY`, ssh): `moat proxy` speaks HTTP only"
+        ),
+    );
+    value
 }
 
 #[cfg(test)]

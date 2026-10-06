@@ -86,6 +86,15 @@ fn an_unlisted_host_gets_403_and_an_audit_row() {
 #[test]
 fn doctor_and_status_warn_while_the_hosts_proxy_is_not_listening() {
     let sb = Sandbox::installed(&[".claude", ".codex"]);
+    // Opt-in: without `sandbox.proxy_port` the hosts keep their own proxies.
+    for args in [["doctor"], ["status"]] {
+        let out = sb.moat(&args);
+        assert!(
+            !text(&out).contains("moat proxy "),
+            "{args:?}: {}",
+            text(&out)
+        );
+    }
     let port = sb.use_free_proxy_port();
     let warning = format!("WARNING: nothing listens on 127.0.0.1:{port}");
     for args in [["doctor"], ["status"]] {

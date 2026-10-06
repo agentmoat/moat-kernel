@@ -10,8 +10,6 @@
     "fs.read `secrets-paths`: Claude Code would re-open the exceptions (**/.env.example, **/.env.sample, **/.env.template) outside the working directories too, so they are left out: denied for sandboxed commands",
     "fs.write `secrets-paths`: Claude Code would re-open the exceptions (**/.env.example, **/.env.sample, **/.env.template) outside the working directories too, so they are left out: denied for sandboxed commands",
     "fs.write `project-fs`: user settings cannot name the project, so `.moat/**` is denied in every directory",
-    "net `registries`: these hosts are reachable only through OpenMoat's proxy: a program that ignores HTTP(S)_PROXY cannot reach them",
-    "net `claude-code.proxy`: sandboxed commands have no network while nothing listens on 127.0.0.1:18080 (`moat proxy`), and none over SOCKS5 (`ALL_PROXY`, ssh): `moat proxy` speaks HTTP only",
     "fs.read `default`: Claude Code's file tools refuse reads outside the working directories (permissions.blockReadsOutsideWorkingDirectories) where the hook would ask; `/add-dir` adds a directory"
   ],
   "permissions": {
@@ -146,8 +144,6 @@
         "metadata.google.internal",
         "metadata.goog"
       ],
-      "httpProxyPort": 18080,
-      "socksProxyPort": 18080,
       "strictAllowlist": true
     }
   }

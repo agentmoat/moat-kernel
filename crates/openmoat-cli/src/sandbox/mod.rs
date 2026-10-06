@@ -30,17 +30,15 @@ use serde::Serialize;
 /// directory: it only marks the patterns that name `${project}`.
 pub const PROJECT: &str = "/__moat_project__";
 
-/// The loopback port of `moat proxy` when the policy names none.
-pub const DEFAULT_PROXY_PORT: u16 = 18080;
-
-/// The loopback port `moat proxy` listens on and the host sandboxes send their
-/// commands' traffic to (`sandbox.proxy_port`).
-pub fn proxy_port(policy: &Policy) -> u16 {
+/// The loopback port of `moat proxy` the host sandboxes send their commands'
+/// traffic to (`sandbox.proxy_port`); `None` leaves each host's own proxy in
+/// charge (opt-in until `moat proxy` can run as a service, #272).
+pub fn proxy_port(policy: &Policy) -> Option<u16> {
     policy
         .sandbox
         .as_ref()
         .and_then(|s| s.proxy_port)
-        .map_or(DEFAULT_PROXY_PORT, std::num::NonZeroU16::get)
+        .map(std::num::NonZeroU16::get)
 }
 
 /// Lower `policy` for host-wide settings of a user whose home is `home`
@@ -69,8 +67,9 @@ pub fn lower_for_hosts(
 pub struct Plan {
     /// The policy had no `sandbox.read_roots`, so the default policy's apply.
     pub default_read_roots: bool,
-    /// The loopback port the host sandboxes send their commands' traffic to.
-    pub proxy_port: u16,
+    /// The loopback port the host sandboxes send their commands' traffic to,
+    /// when the policy opts in.
+    pub proxy_port: Option<u16>,
     /// Claude Code's settings.
     pub claude: claude::Generated,
     /// Codex's permissions profile.

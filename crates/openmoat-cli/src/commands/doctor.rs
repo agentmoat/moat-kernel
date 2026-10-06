@@ -68,9 +68,9 @@ fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>) {
         }
         let _ = write_report(&mut report.out, host_sandbox::report(host, &plan));
     }
-    if present {
+    if let Some(port) = plan.proxy_port.filter(|_| present) {
         // A warning, not a problem: a stopped proxy fails closed.
-        let (ok, text) = super::proxy::listening_line(plan.proxy_port);
+        let (ok, text) = super::proxy::listening_line(port);
         let _ = writeln!(
             report.out,
             "{} moat proxy       {text}",

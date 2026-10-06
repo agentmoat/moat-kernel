@@ -28,7 +28,7 @@ executables:                        # pin program names to absolute paths (enfor
 
 sandbox:                            # optional: what the host sandboxes may read beyond the rules (§9)
   read_roots: ["/usr", "~/.cargo"]
-  proxy_port: 18080                 # optional: where `moat proxy` listens for the host sandboxes (§9)
+  proxy_port: 18080                 # optional, opt-in: send host sandbox traffic through `moat proxy` (§9)
 
 secrets:    [ <secret>, … ]         # values OpenMoat keeps from the agent (§2.1)
 ```
@@ -450,15 +450,26 @@ read although no allow rule covers them:
   `~/.local/bin`, `~/go`, `~/.gitconfig`). A policy without a `sandbox:` section gets
   that list, and `sandbox show` says so.
 
-Network leaves the host sandboxes through `moat proxy` (§5.2) on `127.0.0.1` and the
-additive `sandbox.proxy_port` key (1–65535; default 18080). `moat proxy` without
-`--listen` uses the same port, and the policy lock pins it with the rest of the file.
-Keep `moat proxy` running, for example as a user service (a launchd agent or a systemd
-user unit running `moat proxy`). While it is stopped, Claude Code's sandboxed commands
-have no network and `moat doctor` and `moat status` warn. Codex's own proxy decides
-Codex's commands and hands what it allows on to `moat proxy` only when Codex starts
-with `HTTP_PROXY` and `HTTPS_PROXY` set to `http://127.0.0.1:<port>`; its API hosts
-then need an allow rule (THREAT_MODEL.md §5).
+**Network through `moat proxy` is opt-in.** By default each host's own proxy enforces
+the `net` rules' domain names: Claude Code's `allowedDomains` with `strictAllowlist`,
+and Codex's `network.domains`. Neither host's sandbox allows a direct connection.
+
+Set the additive `sandbox.proxy_port` key (1–65535) to send sandboxed commands'
+traffic through `moat proxy` (§5.2) on `127.0.0.1:<port>` instead. `moat proxy`
+without `--listen` then uses that port, and the policy lock pins it with the rest of
+the file.
+
+| | What you gain | What it costs |
+|---|---|---|
+| `moat proxy` | Every connection is decided by the full policy (address patterns too, not only domain names) and recorded in the audit log. Brokered secrets (§2.1) are injected. Loopback, link-local, metadata and unnamed private addresses are refused after DNS. | `moat proxy` must be running. While it is stopped, Claude Code's sandboxed commands have no network (`npm install`, `cargo build` and `git fetch` fail), and `moat doctor` and `moat status` warn. Programs that speak only SOCKS5 have none at all. |
+
+Keep the proxy running as a user service, for example a launchd agent or a systemd
+user unit running `moat proxy`. `moat init` cannot install one yet (#272); routing
+through `moat proxy` stays opt-in until it can.
+
+Codex's own proxy still decides Codex's commands. It hands what it allows on to `moat
+proxy` only when Codex starts with `HTTP_PROXY` and `HTTPS_PROXY` set to
+`http://127.0.0.1:<port>`, and its API hosts then need an allow rule (THREAT_MODEL.md §5).
 
 What each host enforces for sandboxed commands after `moat init` with the default
 policy:
@@ -467,16 +478,17 @@ policy:
 |---|---|---|
 | Read | project, read roots, paths outside the user directories; never `secrets-paths` | project, read roots, Codex's minimal system paths; never `secrets-paths` |
 | Write | working directories, temp; never `secrets-paths`, `kernel-self`, `shell-rc`, `.moat`, or what in `.git` makes git run code (`hooks`, `config`, `config.worktree`, `info/attributes`, a worktree's `commondir`, the same in submodules) | project, temp; the same denies; `.git` read-only |
-| Network | through `moat proxy` only (`httpProxyPort`, `socksProxyPort`): the policy's hosts; no direct connection | `registries` domains through Codex's network proxy, no direct connection; on to `moat proxy` when Codex runs with `HTTP(S)_PROXY` |
+| Network | `registries` domains only (`strictAllowlist`); `cloud-metadata` denied; no direct connection. With `sandbox.proxy_port`: through `moat proxy` only | the same, through Codex's network proxy; with `sandbox.proxy_port`, on to `moat proxy` when Codex runs with `HTTP(S)_PROXY` |
 | Escape hatches | `allowUnsandboxedCommands: false`, `failIfUnavailable: true`, no `excludedCommands` | `default_permissions = "moat"`; Codex asks before running outside the sandbox |
 
 Losses (stricter than the policy): the `.env.example`, `.env.sample` and `.env.template`
 exceptions cannot be re-allowed inside the `**/.env.*` deny; `.git` is read-only for
 Codex's sandboxed commands; every `.moat` is denied under Claude Code, whose user
 settings cannot name the project; Claude Code's file tools refuse reads outside the
-working directories; Claude Code's sandboxed commands have no network without `moat
-proxy`, and none over SOCKS5, which `moat proxy` does not speak. Allowances (wider):
-Codex's traffic skips `moat proxy` unless Codex runs with `HTTP(S)_PROXY`; the read roots, Codex `:minimal` and
+working directories; with `sandbox.proxy_port`, Claude Code's sandboxed commands
+have no network without `moat proxy` and none over SOCKS5. Allowances (wider): with
+`sandbox.proxy_port`, Codex's traffic skips `moat proxy` unless Codex runs with
+`HTTP(S)_PROXY`; the read roots, Codex `:minimal` and
 `:tmpdir`, Claude Code's working directories, system paths, the directory-node
 rules of `kernel-self` (`**/.claude` itself; the files below stay denied) and, so
 that `git commit` works, writes to every `.git` under Claude Code except the paths

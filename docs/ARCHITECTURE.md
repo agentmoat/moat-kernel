@@ -430,9 +430,9 @@ CI runs `scripts/ci/quality-gate.sh` on macOS (arm64, x64), Linux and Windows, p
 ## 12. Egress proxy
 
 `moat proxy [--listen 127.0.0.1:<port>]` is the default-deny network exit from ADR-020.
-Without `--listen` it binds `127.0.0.1` and the policy's `sandbox.proxy_port` (default
-18080), the port the host sandboxes send their commands' traffic to (§13); run it as a
-user service. `moat run` serves the same proxy, brokered secrets included, from a thread
+Without `--listen` it binds `127.0.0.1` and the policy's `sandbox.proxy_port` when that
+is set, the port the host sandboxes then send their commands' traffic to (§13; run it as
+a user service), and `127.0.0.1:18080` otherwise. `moat run` serves the same proxy, brokered secrets included, from a thread
 on an ephemeral loopback port and makes it the agent's only way out (§14). Why it is our
 own code on `std::net` and
 `httparse`, rather than `codex-network-proxy` or `sandbox-runtime`, is in
@@ -526,32 +526,42 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
 - **Writes** stay in the project, the temp directory and paths an allow rule names as
   a literal tree. Deny rules become `denyWrite` (Claude Code) or `deny`/`read` entries
   (Codex, which has no write-only glob).
-- **Network** goes through `moat proxy` (§12) on `sandbox.proxy_port`, and a stopped
-  proxy leaves commands without network, never with direct network. `moat doctor` and
-  `moat status` warn when nothing listens on the port; they find out by trying to bind
-  it, so the proxy records nothing.
-  - *Claude Code:* `httpProxyPort` and `socksProxyPort` both name the port, so Claude
-    Code runs no proxy of its own and sandboxed commands have no other route out
-    (verified on 2.1.292; the sandboxing docs, "Custom proxy configuration"). Its
-    `allowedDomains`, `deniedDomains` and local-address check then no longer apply to
-    that traffic; `moat proxy` decides by the same policy and adds its address
-    checks, audit rows and brokered secrets. The lists are still written from the
-    `net` rules' domain names: they apply again if the ports are removed, which
-    `doctor` reports, and `strictAllowlist` in user settings keeps a repository's
-    settings from changing the ports or adding domains. Losses: SOCKS5-only programs
-    (`ALL_PROXY`, ssh through it) have no network, since `moat proxy` speaks HTTP.
-  - *Codex* has no external-proxy setting: `codex sandbox` always starts its own proxy
-    on an ephemeral loopback port, enforces `network.domains` there, and the profile
-    allows commands no other connection (`curl --noproxy '*'` fails; codex-cli 0.160.1).
-    That proxy hands what it allows to an upstream only when the Codex process has
-    `HTTP_PROXY`/`HTTPS_PROXY` and `allow_upstream_proxy` is on
-    (`network-proxy/src/upstream.rs`); no `config.toml` key names the upstream. The
-    profile states `allow_upstream_proxy = true` and `allow_local_binding = false`, and
-    `doctor` names either when weakened. Starting Codex with both variables set to
-    `http://127.0.0.1:<port>` is the user's step (allowance `codex.upstream`), and it
-    routes Codex's own API requests through `moat proxy` too.
-  - Hosts that are not domain names (`169.254.*`) stay unlisted in both hosts' lists,
-    so they stay denied there as well.
+- **Network** has two modes. Neither leaves a direct route out.
+  - *Default (no `sandbox.proxy_port`): each host's own proxy.* The `net` rules'
+    domain names become `allowedDomains` with `strictAllowlist` (Claude Code) and
+    `network.domains` behind `features.network_proxy` (Codex). Hosts that are not
+    domain names (`169.254.*`) stay unlisted, so they stay denied. Codex's profile also
+    states `allow_local_binding = false` (its default), and `doctor` names it when on.
+    Claude Code `httpProxyPort`/`socksProxyPort` set by hand are reported, because
+    they replace the allowlist.
+  - *Opt-in (`sandbox.proxy_port` set): through `moat proxy` (§12).* This adds
+    OpenMoat's audit rows, brokered secrets and private-address checks. The cost is
+    that the proxy must be running: a stopped proxy leaves commands without network,
+    never with direct network. It stays opt-in until `moat init` can install the proxy
+    as a user service (#272). `moat doctor` and `moat status` warn when nothing listens
+    on the port. They check by trying to bind it, so the proxy records nothing.
+  - *Claude Code, opt-in:* `httpProxyPort` and `socksProxyPort` both name the port, so
+    Claude Code runs no proxy of its own and sandboxed commands have no other route out
+    (verified on 2.1.292; the sandboxing docs, "Custom proxy configuration").
+    - Its `allowedDomains`, `deniedDomains` and local-address check then no longer
+      apply to that traffic. `moat proxy` decides by the same policy.
+    - The lists are still written. They apply again if the ports are removed, which
+      `doctor` reports. `strictAllowlist` in user settings keeps a repository's
+      settings from changing the ports or adding domains.
+    - Loss: SOCKS5-only programs (`ALL_PROXY`, ssh through it) have no network, since
+      `moat proxy` speaks HTTP.
+  - *Codex has no setting for an external proxy.*
+    - `codex sandbox` always starts its own proxy on an ephemeral loopback port and
+      enforces `network.domains` there. The profile allows commands no other connection
+      (`curl --noproxy '*'` fails; codex-cli 0.160.1).
+    - That proxy hands what it allows to an upstream only when the Codex process has
+      `HTTP_PROXY`/`HTTPS_PROXY` and `allow_upstream_proxy` is on
+      (`network-proxy/src/upstream.rs`). No `config.toml` key names the upstream.
+    - Opt-in adds `allow_upstream_proxy = true`, which `doctor` names when it is
+      turned off.
+    - Starting Codex with both variables set to `http://127.0.0.1:<port>` is the
+      user's step (allowance `codex.upstream`). It routes Codex's own API requests
+      through `moat proxy` too.
 - **Losses and allowances.** A backend narrows what it cannot express and reports it
   as a loss. It may widen only where the host cannot run otherwise (the read roots,
   Codex `:minimal` and `:tmpdir`, Claude Code's working directories and unblocked
@@ -571,8 +581,9 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
   `settings.json` whole and Codex's `config.toml` by the canonical text of the part
   OpenMoat owns (`default_permissions`, `[permissions.moat]`, `features.network_proxy`),
   because Codex writes trusted projects into that file itself. Drift is
-  `kernel-integrity`; `doctor` also fails on a weakened or out-of-date setting, a proxy
-  port that is missing or not `sandbox.proxy_port` included.
+  `kernel-integrity`. `doctor` also fails on a weakened or out-of-date setting,
+  including a Claude Code proxy port that does not match `sandbox.proxy_port` (missing
+  when it is set, present when it is not).
 
 ## 14. Lightweight tier: `moat run`
 
@@ -607,7 +618,7 @@ moat run ─► moat proxy (thread, 127.0.0.1:<ephemeral>) ◄── HTTP(S)_PRO
   `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` (both cases) point at it, and `NO_PROXY`
   is removed. A program that ignores them has no network; that is the one loss for the
   default policy. The port is ephemeral and the proxy private to the session, unlike
-  the Standard tier's long-running `moat proxy` on `sandbox.proxy_port` (§13).
+  the Standard tier's opt-in long-running `moat proxy` on `sandbox.proxy_port` (§13).
 - **Seatbelt (macOS).** `(deny default)`, then:
   - process basics (exec, fork, signals and process info in the same sandbox, ttys,
     POSIX shm, the two directory-service lookups `opendirectoryd.libinfo` and

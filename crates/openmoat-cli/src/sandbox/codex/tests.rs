@@ -125,6 +125,19 @@ fn network_lists_domains_and_keeps_addresses_unlisted() {
 
 #[test]
 fn the_profile_hands_traffic_to_moat_proxy_and_weakening_it_is_reported() {
+    let own = generated(DEFAULT_POLICY);
+    assert!(own.profile["network"].get("allow_upstream_proxy").is_none());
+    assert_eq!(
+        own.profile["network"]["allow_local_binding"].as_bool(),
+        Some(false)
+    );
+    assert!(
+        !own.report
+            .allowances
+            .iter()
+            .any(|a| a.rule == "codex.upstream")
+    );
+
     let out = generated("version: 1\nsandbox:\n  proxy_port: 18555\n");
     let net = &out.profile["network"];
     assert_eq!(net["allow_upstream_proxy"].as_bool(), Some(true));
@@ -138,11 +151,15 @@ fn the_profile_hands_traffic_to_moat_proxy_and_weakening_it_is_reported() {
 
     let mut doc = DocumentMut::new();
     apply(&mut doc, &out).unwrap();
-    assert!(weaknesses(&doc).is_empty(), "{:?}", weaknesses(&doc));
+    assert!(
+        weaknesses(&doc, true).is_empty(),
+        "{:?}",
+        weaknesses(&doc, true)
+    );
     let net = &mut doc["permissions"][PROFILE]["network"];
     net["allow_upstream_proxy"] = toml_edit::value(false);
     net["allow_local_binding"] = toml_edit::value(true);
-    let found = weaknesses(&doc).join("\n");
+    let found = weaknesses(&doc, true).join("\n");
     for key in ["allow_upstream_proxy", "allow_local_binding"] {
         assert!(found.contains(key), "{key}: {found}");
     }
@@ -178,12 +195,12 @@ fn protect_denies_the_codex_home_and_in_sync_ignores_other_keys() {
     let mut doc: DocumentMut = "# mine\nmodel = \"o3\"\n".parse().unwrap();
     assert!(!in_sync(&doc, &out));
     assert!(
-        weaknesses(&doc)
+        weaknesses(&doc, false)
             .iter()
             .any(|w| w.contains("default_permissions"))
     );
     apply(&mut doc, &out).unwrap();
-    assert!(in_sync(&doc, &out) && weaknesses(&doc).is_empty());
+    assert!(in_sync(&doc, &out) && weaknesses(&doc, false).is_empty());
     let before = owned_part(&doc);
     doc["projects"]["/w"]["trust_level"] = toml_edit::value("trusted");
     assert_eq!(
@@ -196,5 +213,9 @@ fn protect_denies_the_codex_home_and_in_sync_ignores_other_keys() {
         "{doc}"
     );
     doc["sandbox_mode"] = toml_edit::value("danger-full-access");
-    assert!(weaknesses(&doc).iter().any(|w| w.contains("sandbox_mode")));
+    assert!(
+        weaknesses(&doc, false)
+            .iter()
+            .any(|w| w.contains("sandbox_mode"))
+    );
 }

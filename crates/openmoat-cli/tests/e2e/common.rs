@@ -92,9 +92,9 @@ impl Sandbox {
         self.moat_stdin(&["guard", "--host", host], payload)
     }
 
-    /// Point `sandbox.proxy_port` at a free loopback port, so no test meets a
-    /// `moat proxy` the developer runs on the default one; re-pinned and the host
-    /// sandboxes synced as a person would. Returns the port.
+    /// Opt the host sandboxes into `moat proxy` on a free loopback port
+    /// (`sandbox.proxy_port`), so no test meets a proxy the developer runs;
+    /// re-pinned and the host sandboxes synced as a person would. Returns the port.
     pub fn use_free_proxy_port(&self) -> u16 {
         let port = TcpListener::bind("127.0.0.1:0")
             .unwrap()
