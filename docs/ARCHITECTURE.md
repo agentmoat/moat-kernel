@@ -37,8 +37,9 @@ host payload (stdin)
                           └─► engine            per atom: deny → allow → ask → defaults
                                 └─► combine     strictest wins ⇒ Decision
                                       └─► session grant   ask on a granted shell command ⇒ allow
-                                            └─► audit record      failure ⇒ deny [kernel-error]
-                                                  └─► hook response (stdout) + exit code
+                                            └─► session taint     earlier calls in the audit log ⇒ allow may become ask
+                                                  └─► audit record      failure ⇒ deny [kernel-error]
+                                                        └─► hook response (stdout) + exit code
 ```
 
 `moat guard --host <id>` (`commands/guard.rs`) runs this once per tool call and
@@ -68,10 +69,17 @@ exits. There is no daemon.
    session with `moat allow` becomes `allow` with rule `approved-session`. A grant
    never touches a `deny` and expires 24 h after it was given; expired grants are
    ignored and pruned.
-9. **Record.** The event is appended to the audit log's hash chain (§7). If it cannot
+9. **Taint.** `taint::of_session` (`taint.rs`) reads this host session's earlier events
+   from the audit log. It folds `CompiledPolicy::exposure` over the calls that may have
+   run: allowed calls, and asks on a host that can ask. Each call is resolved from its
+   own recorded working directory. `CompiledPolicy::with_taint` then tightens the
+   decision (POLICY.md §4.1). This runs after the grant, so a grant cannot lift a taint
+   ask. A log or session event that cannot be read is a `kernel-error` deny. An edited
+   or deleted event is found by the hash chain (`moat doctor`), not on every call.
+10. **Record.** The event is appended to the audit log's hash chain (§7). If it cannot
    be written, the decision becomes a `kernel-error` deny: an unrecorded call is not
    allowed.
-10. **Respond.** The adapter renders the host's response document. `deny` also prints
+11. **Respond.** The adapter renders the host's response document. `deny` also prints
     the reason line on stderr and exits 2.
 
 A panic inside steps 1–10 is caught and answered with a deny and exit 2, because
@@ -399,7 +407,8 @@ Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `st
   - 10 s to connect upstream.
   - One thread per direction of each connection.
 - **Not yet:** TLS termination for per-host method and path rules (opt-in, ADR-020),
-  the secrets broker and session taint (#172), and a policy reload without restart.
+  the secrets broker (#172), session taint for proxied connections (they carry no host
+  session; the hook applies taint, §2 step 9), and a policy reload without restart.
 
 ## 13. Standard tier: host sandboxes
 

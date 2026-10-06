@@ -17,6 +17,7 @@ mod project;
 mod realpath;
 mod render;
 mod sandbox;
+mod taint;
 mod terminal;
 mod time;
 
