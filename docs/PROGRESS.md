@@ -34,8 +34,8 @@ built yet.
 | Tooling | Workspace lints (clippy pedantic, `unsafe` forbidden), rustfmt, `deny.toml` (licences, advisories, I/O crates banned from core), CI matrix macOS (arm64, x64)/Linux/Windows + wasm purity + cargo-deny, `pr-title`, `pr-standards` (auto labels, size and body checks), `moat-reviewer` first-pass review, dual MIT/Apache-2.0 | `cargo clippy` 0 warnings |
 
 Totals: 136 tests (`cargo test --workspace`), 95 conformance fixtures, 9,312 lines of Rust
-including tests; guard latency ≈ 11 ms including SQLite open (budget 15 ms, measured by
-hand, no benchmark in CI yet).
+including tests; guard latency p95 ≈ 3 ms deciding, ≈ 8 ms end to end including process
+start and the audit write (budget 15 ms; the CI `latency` job reports it on every PR, #95).
 
 ### 2.3 Live test (2026-10-03)
 Real Claude Code 2.1.288 session, project-scoped `PreToolUse` hook, isolated `MOAT_HOME`:
