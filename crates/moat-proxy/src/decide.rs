@@ -4,11 +4,12 @@
 //! `fetch` atom through moat-core's [`CompiledPolicy`], so `fetch` and `net`
 //! lists both apply and deny rules come first. The proxy cannot prompt, so an
 //! `ask` is refused. Cloud metadata and link-local addresses are refused
-//! whatever the policy says, by name and again after DNS resolution.
+//! whatever the policy says, by name and again after DNS resolution. Private
+//! and CGNAT addresses are refused unless an allow rule names the address.
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use moat_core::{AtomicAction, CompiledPolicy, Decision, Verdict};
+use moat_core::{AtomicAction, CompiledPolicy, Decision, Defaults, Kind, Policy, Verdict};
 
 /// Rule id for a destination refused whatever the policy says.
 pub const RULE_ADDRESS: &str = "proxy-address";
@@ -27,6 +28,34 @@ const ALIBABA_METADATA: Ipv4Addr = Ipv4Addr::new(100, 100, 100, 200);
 const AWS_METADATA_V6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0xec2, 0, 0, 0, 0, 0, 0x254);
 /// RFC 6052 well-known NAT64 prefix: `64:ff9b::a.b.c.d` reaches `a.b.c.d`.
 const NAT64: [u16; 6] = [0x64, 0xff9b, 0, 0, 0, 0];
+/// Ranges on the local network (or the carrier's), each with its description.
+const PRIVATE_V4: [(Ipv4Addr, u8, &str); 5] = [
+    (
+        Ipv4Addr::new(10, 0, 0, 0),
+        8,
+        "a private address (10.0.0.0/8)",
+    ),
+    (
+        Ipv4Addr::new(172, 16, 0, 0),
+        12,
+        "a private address (172.16.0.0/12)",
+    ),
+    (
+        Ipv4Addr::new(192, 168, 0, 0),
+        16,
+        "a private address (192.168.0.0/16)",
+    ),
+    (
+        Ipv4Addr::new(100, 64, 0, 0),
+        10,
+        "a shared CGNAT address (100.64.0.0/10)",
+    ),
+    (
+        Ipv4Addr::new(198, 18, 0, 0),
+        15,
+        "a benchmarking address (198.18.0.0/15)",
+    ),
+];
 
 /// Decide whether `host`, normalised as [`Request::host`](crate::Request::host)
 /// reports it, may be reached. Only an `allow` lets the connection proceed.
@@ -83,6 +112,10 @@ pub enum Forbidden {
     Metadata,
     /// Unspecified, broadcast, multicast or `0.0.0.0/8`: never a server.
     NotUnicast,
+    /// Private, CGNAT, benchmarking or unique-local (`fc00::/7`): reachable
+    /// only when an allow rule names the address ([`named`]). Carries the
+    /// description naming the range.
+    Private(&'static str),
 }
 
 impl Forbidden {
@@ -94,6 +127,7 @@ impl Forbidden {
             Self::LinkLocal => "a link-local address",
             Self::Metadata => "a cloud metadata address",
             Self::NotUnicast => "not a unicast address",
+            Self::Private(range) => range,
         }
     }
 }
@@ -108,7 +142,10 @@ fn forbidden_v4(ip: Ipv4Addr) -> Option<Forbidden> {
     } else if ip.is_unspecified() || ip.is_broadcast() || ip.is_multicast() || ip.octets()[0] == 0 {
         Some(Forbidden::NotUnicast)
     } else {
-        None
+        PRIVATE_V4
+            .iter()
+            .find(|(net, len, _)| u32::from(ip) >> (32 - len) == u32::from(*net) >> (32 - len))
+            .map(|(_, _, range)| Forbidden::Private(range))
     }
 }
 
@@ -127,9 +164,64 @@ fn forbidden_v6(ip: Ipv6Addr) -> Option<Forbidden> {
         let [a, b] = seg[6].to_be_bytes();
         let [c, d] = seg[7].to_be_bytes();
         forbidden_v4(Ipv4Addr::new(a, b, c, d))
+    } else if seg[0] & 0xfe00 == 0xfc00 {
+        Some(Forbidden::Private("a unique local address (fc00::/7)"))
     } else {
         None
     }
+}
+
+/// The part of `policy` that can open a [`Forbidden::Private`] address: its
+/// deny rules, and the allow rules' `net` and `fetch` patterns that name an
+/// address: a pattern starting with a digit or containing `:`, and not with a
+/// glob metacharacter. Everything else is denied, so a wildcard such as `*`
+/// or `*.example` never reaches the local network by DNS.
+#[must_use]
+pub fn address_policy(policy: &Policy) -> Policy {
+    let allow = policy
+        .allow
+        .iter()
+        .map(|g| {
+            let keep = |list: &[String]| {
+                list.iter()
+                    .filter(|p| names_address(p))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            };
+            moat_core::RuleGroup {
+                id: g.id.clone(),
+                reason: g.reason.clone(),
+                net: keep(g.patterns(Kind::Net)),
+                fetch: keep(g.patterns(Kind::Fetch)),
+                ..Default::default()
+            }
+        })
+        .collect();
+    Policy {
+        defaults: Defaults::All(Verdict::Deny),
+        deny: policy.deny.clone(),
+        allow,
+        ask: Vec::new(),
+        ..policy.clone()
+    }
+}
+
+/// Whether a host pattern names an address (see [`address_policy`]).
+fn names_address(pattern: &str) -> bool {
+    !pattern.starts_with(['*', '?', '[', '{'])
+        && (pattern.starts_with(|c: char| c.is_ascii_digit()) || pattern.contains(':'))
+}
+
+/// Whether `addresses` (compiled from [`address_policy`]) allows `ip`, matched
+/// in its canonical text form (`::ffff:10.0.0.5` as `10.0.0.5`).
+#[must_use]
+pub fn named(addresses: &CompiledPolicy<'_>, ip: IpAddr) -> bool {
+    let atom = AtomicAction::Fetch {
+        host: ip.to_canonical().to_string(),
+    };
+    addresses
+        .evaluate_atomic(&atom)
+        .is_some_and(|d| d.verdict == Verdict::Allow)
 }
 
 #[cfg(test)]

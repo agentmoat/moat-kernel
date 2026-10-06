@@ -81,6 +81,18 @@ impl<'p> CompiledPolicy<'p> {
         })
     }
 
+    /// The policy this was compiled from.
+    #[must_use]
+    pub fn policy(&self) -> &'p Policy {
+        self.policy
+    }
+
+    /// The context this was compiled for.
+    #[must_use]
+    pub fn context(&self) -> &EvalContext {
+        &self.ctx
+    }
+
     /// Evaluate one atomic action: deny → allow → ask → default.
     ///
     /// Returns `None` for a whole-pipeline atom that no rule mentions: pipelines

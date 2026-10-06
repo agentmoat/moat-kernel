@@ -352,7 +352,10 @@ Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `st
   3. Resolve the name with the system resolver (IP literals skip it). Refuse the
      connection when any resolved address is loopback, link-local, a cloud metadata
      address (`100.100.100.200`, `fd00:ec2::254`, NAT64 and IPv4-mapped forms included)
-     or not unicast. Connect only to an address that was checked.
+     or not unicast. Also refuse it when an address is private, CGNAT, benchmarking or
+     unique-local and no allow rule names that address (POLICY.md §5.2). Those rules are
+     compiled once at start-up into a second policy that holds only address patterns.
+     Connect only to an address that was checked.
   4. For CONNECT:
      - answer `200`, then read the TLS `ClientHello` (up to 64 KiB, reassembled across
        records);
