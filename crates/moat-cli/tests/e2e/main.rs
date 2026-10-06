@@ -19,4 +19,5 @@ mod guard;
 mod install_path;
 mod lock;
 mod paths;
+mod proxy;
 mod replay_report;

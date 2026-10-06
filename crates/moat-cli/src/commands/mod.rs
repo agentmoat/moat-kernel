@@ -5,6 +5,7 @@ mod doctor;
 mod guard;
 mod init;
 mod policy;
+mod proxy;
 mod replay;
 mod report;
 mod show;
@@ -25,6 +26,7 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Allow(args) => allow::run(&args),
         Command::Replay(args) => replay::run(&args),
         Command::Report(args) => report::run(&args),
+        Command::Proxy(args) => proxy::run(&args),
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),
             PolicyCommand::Check(args) => policy::check(&args),
