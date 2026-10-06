@@ -57,11 +57,20 @@ is pushed to `main` directly.
 
 Checks that must pass before merge (enforced by the `main` ruleset; names as shown on the
 PR): `macos-14`, `macos-15-intel`, `ubuntu-latest`, `windows-latest` (the quality gate),
-`moat-core builds for wasm32 (no I/O)`, `cargo-deny`, `conventional` (title) and
-`labels · size · risk · body` (pr-standards). The PR body must have
-non-empty **Testing** and **Security impact** sections. `risk: high` PRs need
-maintainer review (CODEOWNERS). Squash-merge; the PR title becomes the commit subject
-and the **Release note** line feeds `CHANGELOG.md`.
+`moat-core builds for wasm32 (no I/O)`, `cargo-deny`, `crates package and build from
+their tarballs`, `workflows (actionlint, zizmor)`, `conventional` (title) and
+`labels · size · risk · body` (pr-standards). The branch must be up to date with `main`
+(strict checks), so rebase before merging. `fuzz (smoke)` and `latency` run on every PR
+but are not required: a fuzz finding or a noisy runner should not block an unrelated
+change, so read them before merging. The PR body must have non-empty **Testing** and
+**Security impact** sections. CODEOWNERS requests the maintainer's review on `risk:
+high` paths; with one maintainer it is not enforced by the ruleset (two-maintainer
+review is a v1.0 item). Squash-merge; the PR title becomes the commit subject and the
+**Release note** line feeds `CHANGELOG.md`.
+
+Release tags (`v*`) can only be created, moved or deleted by repository admins (the
+`release tags` ruleset), because pushing one starts the release workflow. Publishing to
+crates.io additionally waits for approval on the `release` environment.
 
 Labels are defined in `scripts/ci/sync-labels.sh`; edit that script, not the GitHub UI.
 
