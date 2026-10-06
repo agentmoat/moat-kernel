@@ -347,6 +347,14 @@
   threat: T4
   action: { shell: "rm -r ./~" }
   expect: { verdict: ask, rules: [default] }
+- id: ask-mkdir-below-home
+  threat: T4
+  action: { shell: "mkdir ~/x" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-file-tool-write-below-home
+  threat: T4
+  action: { fs_write: "/Users/me/notes.txt" }
+  expect: { verdict: ask, rules: [default] }
 - id: ask-checkout-discards-changes
   threat: T4
   action: { shell: "git checkout -- ." }

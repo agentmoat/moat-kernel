@@ -23,7 +23,7 @@ use serde_json::{Map, Value, json};
 pub use settings::{apply, in_sync, protect, weaknesses};
 
 use super::Report;
-use super::patterns::{Spot, domain, has_glob, literal_tree, push_unique, split, spot};
+use super::patterns::{Spot, domain, has_glob, is_below, literal_tree, push_unique, split, spot};
 
 /// The permissions key that closes reads outside the working directories.
 pub const BLOCK_READS: &str = "blockReadsOutsideWorkingDirectories";
@@ -275,10 +275,7 @@ impl Filesystem {
             .nodes
             .iter()
             .filter(|node| !self.trees.contains(node))
-            .filter(|node| {
-                let below = format!("{node}/");
-                self.deny_write.iter().any(|e| e.starts_with(&below))
-            })
+            .filter(|node| self.deny_write.iter().any(|e| is_below(e, node)))
             .cloned()
             .collect();
         if dropped.is_empty() {

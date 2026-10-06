@@ -51,8 +51,10 @@ fn default_policy_lowers_paths_and_hosts() {
     );
     assert_eq!(
         ids(&ir.fs.write.deny),
-        ["secrets-paths", "kernel-self", "shell-rc"]
+        ["secrets-paths", "destructive", "kernel-self", "shell-rc"]
     );
+    // the home directory and the root themselves, not their subtrees
+    assert_eq!(ir.fs.write.deny[1].patterns, ["/Users/me", "/"]);
     assert_eq!(ir.egress.net.default, Effect::Deny);
     assert_eq!(
         ids(&ir.egress.net.deny),

@@ -43,6 +43,17 @@ pub fn literal_tree(pattern: &str) -> Option<&str> {
     (!base.is_empty() && !has_glob(base)).then_some(base)
 }
 
+/// Whether `entry` lies below the directory `node`. A root (`/`, `C:/`) already
+/// ends in its separator, so `/` has every absolute path below it, not `//…`.
+pub fn is_below(entry: &str, node: &str) -> bool {
+    let prefix = if node.ends_with('/') {
+        node.to_owned()
+    } else {
+        format!("{node}/")
+    };
+    entry.len() > prefix.len() && entry.starts_with(&prefix)
+}
+
 /// A rule's positive patterns and its exclusions (without the `!`).
 pub fn split(patterns: &[String]) -> (Vec<&str>, Vec<&str>) {
     let (excluded, positive): (Vec<&str>, Vec<&str>) = patterns
@@ -89,6 +100,8 @@ mod tests {
         assert_eq!(literal_tree("/h/.ssh/**"), Some("/h/.ssh"));
         assert_eq!(literal_tree("/h/**/.env"), None);
         assert_eq!(split(&["a".into(), "!b".into()]), (vec!["a"], vec!["b"]));
+        assert!(is_below("/h/.ssh", "/h") && is_below("/h", "/") && is_below("C:/x", "C:/"));
+        assert!(!is_below("/hx", "/h") && !is_below("/h", "/h") && !is_below("/", "/"));
         for ok in ["github.com", "*.crates.io", "localhost"] {
             assert!(domain(ok), "{ok}");
         }
