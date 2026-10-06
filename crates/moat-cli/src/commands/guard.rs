@@ -64,6 +64,9 @@ fn decide_and_respond(host: Host) -> Code {
     }
 
     let event = request.as_ref().map_or(event, |r| r.event.clone());
+    // What the host receives can be stricter than what was decided and recorded
+    // (Codex cannot ask, so an `ask` reaches it as a `deny`).
+    let decision = host.answer(&event, &decision);
     let response = host.render_response(&event, &decision);
     let mut stdout = io::stdout().lock();
     let written = writeln!(stdout, "{response}").and_then(|()| stdout.flush());
