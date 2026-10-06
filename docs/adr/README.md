@@ -10,7 +10,7 @@ refines them. To add one, copy the shape of ADR-004 and take the next number.
 | [002](ADR-002-deny-is-absolute.md) | Evaluation is `deny → allow → ask → defaults`; allow never overrides deny; kind-wide denial is a per-kind default; strictest wins across atoms | accepted |
 | [003](ADR-003-decide-and-enforce.md) | The parser is not the security boundary; OS enforcement, an egress proxy and session taint are the answer | accepted; release timing superseded by ADR-013 |
 | [004](ADR-004-exit-code-contract.md) | Exit codes: 0 allow/ask/ok, 2 deny, 3 unresolved ask, 64 usage or configuration error | accepted; amended by ADR-015 |
-| [005](ADR-005-own-posix-lexer.md) | An own POSIX lexer and classifier in `moat-core`; inline interpreter code is scanned, not parsed; anything unclear is `unparseable` (ask) | accepted |
+| [005](ADR-005-own-posix-lexer.md) | An own POSIX lexer and classifier in `openmoat-core`; inline interpreter code is scanned, not parsed; anything unclear is `unparseable` (ask) | accepted |
 | [006](ADR-006-policy-lock-integrity.md) | `policy.lock` pins policy, approval, environment and hook files by location, symlink-aware; drift denies everything until a person re-pins | accepted |
 | [007](ADR-007-approvals-overlay.md) | `moat allow`: exact-text session grants in `approvals.json`, permanent rules in the pinned `policy.d/approved.yaml` overlay | accepted |
 | [008](ADR-008-program-resolver.md) | Executable pinning through a CLI-supplied `ProgramResolver` over the search path recorded at `moat init` | accepted |
@@ -23,11 +23,17 @@ refines them. To add one, copy the shape of ADR-004 and take the next number.
 | [015](ADR-015-guard-usage-errors-deny.md) | `moat guard` exits 2 (deny) when it cannot parse its own arguments | accepted; amends ADR-004 |
 | [016](ADR-016-stable-hook-binary-path.md) | Hooks and the lock record the stable install path of `moat`; `doctor` names a missing or different hook binary | accepted; refines ADR-006 |
 | [017](ADR-017-fetch-kind.md) | `fetch`, a narrower kind of `net` for a host's own read-only fetch tool (`WebFetch`); the default asks for unlisted hosts | accepted |
-| [018](ADR-018-enforcement-approach.md) | Enforcement tiers: Standard (the host's own sandbox, generated and pinned by moat), Isolated (container or VM with moat outside), Lightweight (generated Seatbelt or Landlock); Seatbelt does not nest | accepted |
+| [018](ADR-018-enforcement-approach.md) | Enforcement tiers: Standard (the host's own sandbox, generated and pinned by OpenMoat), Isolated (container or VM with OpenMoat outside), Lightweight (generated Seatbelt or Landlock); Seatbelt does not nest | accepted |
 | [019](ADR-019-one-policy-compiled-to-every-enforcement-point.md) | One policy compiled to every enforcement point through one IR; lossy targets narrow, never widen; differential executing tests prove the layers agree | accepted |
 | [020](ADR-020-egress-proxy-and-secrets-broker.md) | `moat proxy` is the only network exit; the secrets broker injects credentials so the agent never holds them; minimal session taint | accepted |
 | [021](ADR-021-os-layer-allowances.md) | An OS layer may be wider than the hook only by listed allowances: `sandbox.read_roots` and what a host needs to run, each printed by `moat sandbox show` | proposed |
 | [022](ADR-022-repository-policy-and-trust.md) | `<project>/.moat/policy.yaml` adds deny and ask rules by itself; its allow rules apply only after `moat trust` pins that exact file by hash; hook only | accepted |
+
+## Names in older ADRs
+
+ADRs written before 2026-10-07 call the product "moat" or "agentmoat" and its crates
+`moat-*` in `crates/moat-*`. Today the product is OpenMoat, its crates are
+`openmoat-*` in `crates/openmoat-*`, and the command is still `moat`.
 
 ## References to retired documents
 

@@ -85,7 +85,7 @@ jobs:
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
 
-            You are moat-reviewer, the first-pass reviewer for moat, a security kernel for AI
+            You are moat-reviewer, the first-pass reviewer for OpenMoat, a security kernel for AI
             agents. A human maintainer owns the verdict; you find what they would otherwise
             find late. Be direct, specific and short. Review the change, not the author.
 

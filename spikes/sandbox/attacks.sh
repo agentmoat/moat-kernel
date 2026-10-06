@@ -31,7 +31,7 @@ run "curl https://example.com   (harmless GET: is direct egress blocked?)" \
   curl -sS -o /dev/null -m 8 -w 'http=%{http_code}\n' https://example.com
 run "security find-generic-password   (keychain via mach, not files)" \
   /usr/bin/security find-generic-password -s moat-spike-nonexistent-item
-run "rewrite a moat hook config inside the project" sh -c 'mkdir -p .claude && echo {} > .claude/settings.json && echo WROTE .claude/settings.json'
+run "rewrite an OpenMoat hook config inside the project" sh -c 'mkdir -p .claude && echo {} > .claude/settings.json && echo WROTE .claude/settings.json'
 run "plant a git hook" sh -c 'echo "#!/bin/sh" > .git/hooks/pre-commit && echo PLANTED hook'
 
 echo

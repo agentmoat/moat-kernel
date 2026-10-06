@@ -11,7 +11,7 @@ cargo 1.95.0, `/usr/bin/sandbox-exec`.
 
 | # | Question | Answer |
 |---|---|---|
-| 1 | Does a restrictive Seatbelt profile apply inside an existing sandbox? | **No.** Only a profile that compiles to the *same* policy as the one already applied is accepted. Any other profile fails with `sandbox_apply: Operation not permitted` (exit 71), whether it is stricter or looser, even `(allow default)`. So `moat exec` cannot run inside the Codex or Claude Code sandbox, and their sandboxes cannot run inside moat's. |
+| 1 | Does a restrictive Seatbelt profile apply inside an existing sandbox? | **No.** Only a profile that compiles to the *same* policy as the one already applied is accepted. Any other profile fails with `sandbox_apply: Operation not permitted` (exit 71), whether it is stricter or looser, even `(allow default)`. So `moat exec` cannot run inside the Codex or Claude Code sandbox, and their sandboxes cannot run inside OpenMoat's. |
 | 2 | Option (a): does a profile generated from the policy enforce `secrets-paths`, project-only writes and an egress allowlist? | **Yes for files. Network: yes only with a proxy.** The malicious `npm test`, a node script, a Makefile and a `build.rs` all fail to read the fake `~/.ssh`/`~/.aws`/`.env`, to persist into `~/.zshrc`, to write outside the project and to connect out, while edit, `git commit`, `cargo build/run`, `node --version` keep working. SBPL cannot name a host or an IP (`host must be * or localhost`), so the sandbox allows only `localhost:<proxy-port>` and the proxy enforces the host allowlist. |
 | 3 | Can Claude Code itself run inside that outer profile? | **Yes, with three allowances:** a writable state dir (`CLAUDE_CONFIG_DIR`), the API host through the proxy, and credentials that do not come from the keychain (`ANTHROPIC_API_KEY`/`apiKeyHelper`, or `--bare`). The real binary answered a `-p` prompt and ran its Bash tool inside the profile, and that Bash call could not read `~/.ssh/id_rsa`. Codex was not run as an agent (it needs a real login); its needs are listed below. |
 | 4 | Option (b): can the host's own sandbox be configured from the policy? | **Yes for both hosts, with known losses.** Generated Codex `[permissions]` profile and Claude Code `sandbox` settings blocked every attack. The built-in Codex `workspace-write` (`:workspace`) does **not**: it lets `npm test` read `~/.ssh` and `~/.aws` and only stops the upload because the network is off entirely. |
@@ -63,20 +63,20 @@ codex sandbox -P :workspace -- sandbox-exec -p <restrictive>  sandbox_apply: Ope
 - Rule: a second `sandbox_apply` succeeds only when the new profile compiles to the policy the
   process already has (text may differ in whitespace and comments). It is not "stricter fails,
   looser works": a different allow-all profile fails too.
-- Inside a real host sandbox (Codex `:workspace`), a moat profile fails the same way.
-- The reverse: Claude Code with `sandbox.enabled` inside moat's profile could not even start its
+- Inside a real host sandbox (Codex `:workspace`), a OpenMoat profile fails the same way.
+- The reverse: Claude Code with `sandbox.enabled` inside OpenMoat's profile could not even start its
   sandbox (`Sandbox is required but failed to initialize: EPERM ... listen .../srt-mux-*.sock`,
   `evidence/q4-claude.txt`); with `failIfUnavailable: true` it refused to run the command (fail closed).
 - Consequence: one Seatbelt layer per process tree. `moat exec` per command only works when the
-  host's sandbox is off; host-sandbox generation (b) only works when moat is not the outer sandbox.
+  host's sandbox is off; host-sandbox generation (b) only works when OpenMoat is not the outer sandbox.
   Matching the host's dynamically generated profile byte-for-byte is not a realistic way around it.
 - Side note: the Bash tool of the Claude Code session running this spike was not sandboxed
   (a fresh profile applied from it).
 
-## Q2: moat as the outer sandbox (`gen_profile.py`, `sbx.sh`, `attacks.sh`, `q2-*.sh`)
+## Q2: OpenMoat as the outer sandbox (`gen_profile.py`, `sbx.sh`, `attacks.sh`, `q2-*.sh`)
 
 `gen_profile.py --project P --home H [--writable D]... [--proxy-port N]...` reads
-`crates/moat-core/policies/default-v1.yaml` (PyYAML, or macOS's system Ruby YAML when PyYAML is
+`crates/openmoat-core/policies/default-v1.yaml` (PyYAML, or macOS's system Ruby YAML when PyYAML is
 absent) and emits SBPL (`evidence/generated-profile.sb`):
 
 1. `(deny default)` + platform basics (exec/fork, sysctl, a short mach-service list; **not**
@@ -91,7 +91,7 @@ absent) and emits SBPL (`evidence/generated-profile.sb`):
 `sbx.sh` runs a command under it with a rebuilt environment (`env -i`: no inherited secrets,
 T3/T6). Results (`evidence/attacks-baseline.txt` vs `evidence/attacks-sandbox.txt`):
 
-| Payload | No sandbox | moat profile |
+| Payload | No sandbox | OpenMoat profile |
 |---|---|---|
 | `npm test` (issue payload) | runs, exit 0 | `cat: .../.ssh/id_rsa: Operation not permitted` |
 | `npm run test:node` | `LEAKED .ssh/id_rsa FAKE-...`, `LEAKED .aws/credentials`, `PERSISTED ~/.zshrc`, `CONNECTED to a raw IP` | `read blocked ... EPERM` ×2, `write blocked ~/.zshrc EPERM`, `connect blocked EPERM` |
@@ -172,7 +172,7 @@ claude --bare -p ... --allowedTools Bash          tool result: cat: .../.ssh/id_
 proxy log                                         DENY CONNECT api.anthropic.com:443 (even with ANTHROPIC_BASE_URL set)
 ```
 
-What the agent needs inside moat's profile:
+What the agent needs inside OpenMoat's profile:
 
 | Need | Evidence | Allowance |
 |---|---|---|
@@ -241,7 +241,7 @@ Answer to the issue's question 1: `workspace-write` with network off stops the u
 because no network exists; the secret is readable, can be copied into the project, and leaks
 the moment network is enabled for anything. The generated profile closes the read.
 
-Claude Code (`evidence/q4-claude.txt`, temp `CLAUDE_CONFIG_DIR`, the agent not wrapped by moat):
+Claude Code (`evidence/q4-claude.txt`, temp `CLAUDE_CONFIG_DIR`, the agent not wrapped by OpenMoat):
 
 ```
 issue payload        cat: .../id_rsa: Operation not permitted; CONNECT tunnel failed, response 403
@@ -264,9 +264,9 @@ Two traps found and fixed in the generator, both silent:
    which is where Claude Code puts agent worktrees (the spike itself lives in one). Bare
    directory entries that have more specific entries below them are dropped.
 
-### Mapping: moat policy → host sandbox
+### Mapping: OpenMoat policy → host sandbox
 
-| moat policy part | Seatbelt (a) | Claude Code (b) | Codex (b) |
+| OpenMoat policy part | Seatbelt (a) | Claude Code (b) | Codex (b) |
 |---|---|---|---|
 | `secrets-paths` fs.read/fs.write | lossless (`subpath`/`literal`/regex) | lossless (`denyRead`+`denyWrite`, `/**/` anchoring) | `~` and absolute lossless; `**/x` only under the project (lossy) |
 | `!**/.env.example` exceptions | lossless (same-op re-allow) | lossless (`allowRead`) | **lost**: no allow inside a deny glob |
@@ -292,5 +292,5 @@ Two traps found and fixed in the generator, both silent:
 | `fake_api.py` | local Messages API stand-in, so `claude -p` runs without credentials or egress |
 | `attacks.sh` | payloads + ordinary work, `baseline` or `sandbox` |
 | `q1-nesting.sh`, `q2-sbpl-network-probe.sh`, `q2-proxy.sh`, `q3-claude.sh`, `q4-codex.sh`, `q4-claude.sh` | one script per question |
-| `demo.sh` | end-to-end demo: leaks without a sandbox, blocked under the moat profile |
+| `demo.sh` | end-to-end demo: leaks without a sandbox, blocked under the OpenMoat profile |
 | `collect-evidence.sh` | re-runs all of the above into `evidence/` |

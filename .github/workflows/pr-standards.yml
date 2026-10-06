@@ -41,11 +41,11 @@ jobs:
 
           areas=()
           has() { grep -qE "$1" <<<"$files"; }
-          has '^crates/moat-core/'      && areas+=("area: core")
-          has '^crates/moat-hosts/'     && areas+=("area: hosts")
-          has '^crates/moat-audit/'     && areas+=("area: audit")
-          has '^crates/moat-cli/'       && areas+=("area: cli")
-          has '^(crates/moat-core/policies/|tests/conformance/)' && areas+=("area: policy")
+          has '^crates/openmoat-core/'      && areas+=("area: core")
+          has '^crates/openmoat-hosts/'     && areas+=("area: hosts")
+          has '^crates/openmoat-audit/'     && areas+=("area: audit")
+          has '^crates/openmoat-cli/'       && areas+=("area: cli")
+          has '^(crates/openmoat-core/policies/|tests/conformance/)' && areas+=("area: policy")
           has '^(\.github/|scripts/)'   && areas+=("area: ci")
           has '(^docs/|\.md$)'          && areas+=("area: docs")
           has '^(Cargo\.(toml|lock)|crates/[^/]+/Cargo\.toml|deny\.toml)$' && areas+=("area: deps")
@@ -57,11 +57,11 @@ jobs:
           else size="size: XL"; fi
 
           risk="risk: low"
-          if has '^(crates/moat-hosts/|crates/moat-cli/src/install/|crates/moat-audit/)'; then risk="risk: medium"; fi
-          if has '^(crates/moat-core/src/(engine|policy|shell|lexer|pattern|paths)|crates/moat-core/policies/|\.github/workflows/|SECURITY\.md|crates/moat-cli/src/commands/guard\.rs|crates/moat-cli/src/exit\.rs)'; then risk="risk: high"; fi
+          if has '^(crates/openmoat-hosts/|crates/openmoat-cli/src/install/|crates/openmoat-audit/)'; then risk="risk: medium"; fi
+          if has '^(crates/openmoat-core/src/(engine|policy|shell|lexer|pattern|paths)|crates/openmoat-core/policies/|\.github/workflows/|SECURITY\.md|crates/openmoat-cli/src/commands/guard\.rs|crates/openmoat-cli/src/exit\.rs)'; then risk="risk: high"; fi
 
           behaviour_change=false
-          has '^crates/moat-core/(src|policies)/' && behaviour_change=true
+          has '^crates/openmoat-core/(src|policies)/' && behaviour_change=true
           fixture_touched=false
           has '^tests/conformance/' && fixture_touched=true
 

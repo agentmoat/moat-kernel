@@ -27,7 +27,7 @@
 - id: mcp-unknown-tool-asks
   threat: T8
   why: >-
-    A tool moat knows nothing about (a shell-runner server) is not on the safe list, so
+    A tool OpenMoat knows nothing about (a shell-runner server) is not on the safe list, so
     a person decides.
   steps:
     - { mcp: { server: runner, tool: run_command, args: { command: "make deploy" } }, expect: ask }

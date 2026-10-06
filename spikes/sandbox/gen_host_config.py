@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Option (b): translate the moat default policy into the host's own sandbox config.
+"""Option (b): translate the OpenMoat default policy into the host's own sandbox config.
 
   gen_host_config.py codex  --project DIR   > $CODEX_HOME/config.toml
   gen_host_config.py claude --project DIR   > $CLAUDE_CONFIG_DIR/settings.json

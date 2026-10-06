@@ -1,4 +1,4 @@
-# Contributing to moat
+# Contributing to OpenMoat
 
 Thank you for helping build the kernel AI agents run on. This file is short on
 purpose; the detail lives in `docs/`.
@@ -38,7 +38,7 @@ is pushed to `main` directly.
 3. Behaviour changes come with tests at the right level:
    - unit tests next to the code (`#[cfg(test)]`),
    - conformance fixtures in `tests/conformance/` for every rule or parser change,
-   - end-to-end tests in `crates/moat-cli/tests/` for CLI and hook behaviour,
+   - end-to-end tests in `crates/openmoat-cli/tests/` for CLI and hook behaviour,
    - architecture tests (`crates/*/tests/architecture.rs`) when crate boundaries move.
 4. Run `scripts/ci/quality-gate.sh`. CI runs the same script on macOS, Linux and Windows.
 5. Fill in the PR template: **Testing** and **Security impact** are required sections.
@@ -98,7 +98,7 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
   `feat`, `fix`, `sec`, `policy`, `host(claude-code)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`.
   Squash-merge; the PR title becomes the commit.
 - Library crates (`openmoat-core`, `openmoat-hosts`, `openmoat-audit`) use typed `thiserror`
-  errors and never print. `anyhow` and terminal output live only in `moat-cli`.
+  errors and never print. `anyhow` and terminal output live only in `openmoat-cli`.
 - `openmoat-core` has no I/O, no `unsafe`, and no internal dependencies; CI builds it
   for `wasm32` to prove it.
 - Files stay under 500 lines; functions under 200 (clippy enforces the latter).

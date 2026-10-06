@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn the moat default policy into a macOS Seatbelt (SBPL) profile.
+"""Turn the OpenMoat default policy into a macOS Seatbelt (SBPL) profile.
 
 Spike code, not product code. It maps the parts of the policy that an OS sandbox can
 enforce on every process the agent spawns:
@@ -28,7 +28,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_POLICY = os.path.join(HERE, "..", "..", "crates", "moat-core", "policies", "default-v1.yaml")
+DEFAULT_POLICY = os.path.join(HERE, "..", "..", "crates", "openmoat-core", "policies", "default-v1.yaml")
 
 
 def load_policy(path):

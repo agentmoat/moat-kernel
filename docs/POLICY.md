@@ -1,6 +1,6 @@
 # Policy reference (schema v1)
 
-A policy is a YAML document that tells `moat` what an agent may do. The installed
+A policy is a YAML document that tells OpenMoat what an agent may do. The installed
 user policy lives at `~/.moat/policy.yaml` (or `$MOAT_HOME/policy.yaml`).
 `moat init` writes the default; `moat policy lint` validates; `moat policy check`
 explains a decision. A project can add rules of its own in `<project>/.moat/policy.yaml`
@@ -29,7 +29,7 @@ executables:                        # pin program names to absolute paths (enfor
 sandbox:                            # optional: what the host sandboxes may read beyond the rules (§9)
   read_roots: ["/usr", "~/.cargo"]
 
-secrets:    [ <secret>, … ]         # values moat keeps from the agent (§2.1)
+secrets:    [ <secret>, … ]         # values OpenMoat keeps from the agent (§2.1)
 ```
 
 `approval:` (`channel`, `remember`, `timeout_s`) and `scope:` (`project_roots`) are reserved:
@@ -78,7 +78,7 @@ secrets:
     plain_http: false               # optional; true also injects into plain-HTTP (clear-text) requests
 ```
 
-A brokered secret is kept by moat, not by the agent (ADR-020). The agent holds the
+A brokered secret is kept by OpenMoat, not by the agent (ADR-020). The agent holds the
 placeholder `moat-secret:<id>:placeholder` instead of the value. `moat proxy` reads the
 value from `source` and is the only component that uses it.
 
@@ -89,7 +89,7 @@ value from `source` and is the only component that uses it.
   connection (`Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Proxy-*`, …)
   are refused. Two secrets cannot set the same header for the same host.
 - **`plain_http`** is off unless set. A plain-HTTP request carries the value in clear text,
-  readable by anyone on the network path, so moat injects into one only for a secret
+  readable by anyone on the network path, so OpenMoat injects into one only for a secret
   that says `plain_http: true`.
 - **Never wider.** A secret opens nothing: its host still needs a `net` or `fetch` allow
   rule, or the proxy refuses it.
@@ -188,7 +188,7 @@ other atomic action, so an `allow` becomes `ask` and a `deny` stays `deny`.
 
 | Once the session has… | …these atomic actions ask |
 |---|---|
-| read secret material: an `fs.read` that the group with id `secrets-paths` names, in whichever list it sits | `net` and `fetch` to every host except the secret's own, and every `mcp` call (moat cannot see an MCP server's hosts) |
+| read secret material: an `fs.read` that the group with id `secrets-paths` names, in whichever list it sits | `net` and `fetch` to every host except the secret's own, and every `mcp` call (OpenMoat cannot see an MCP server's hosts) |
 | read untrusted content: a `fetch`, or the result of an `mcp` call | `fs.write` to a protected path |
 
 - A secret read from a file belongs to no host, so every host asks. A secret the secrets
@@ -203,7 +203,7 @@ other atomic action, so an `allow` becomes `ask` and a `deny` stays `deny`.
   and settings (`CLAUDE.md`, `AGENTS.md`, `.claude/**`, `.codex/**`, `.cursor/**`,
   `.cursorrules`, `.mcp.json`), at any depth.
 - Shell network to an allowed host (`git fetch`, `gh pr view`) is not counted as untrusted
-  content, and a command moat cannot classify taints nothing it can name.
+  content, and a command OpenMoat cannot classify taints nothing it can name.
 - `moat guard` reads the history from the audit log: the earlier events of the same host
   session that may have run. Those are allowed calls, and asks on a host that can ask. A
   declined ask is not recorded, so it counts as run. Codex turns an ask into a deny, so
@@ -369,7 +369,7 @@ warning does not prove a rule is reachable.
 installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
 pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
 until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
-by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. Which hook files are pinned is decided only by `moat init`: it keeps the ones already in the lock and adds those installed under its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR`. `moat doctor --accept`, `moat allow` and `moat trust` re-pin exactly the files already in the lock, plus moat's own state files (`trust.json` once `moat trust` writes it), so running them from a shell where those variables differ from the agent's never drops the agent's hook file; `moat doctor` and `moat status` name a hook file installed under the current environment that the lock does not pin, and a pinned one outside it. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
+by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. Which hook files are pinned is decided only by `moat init`: it keeps the ones already in the lock and adds those installed under its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR`. `moat doctor --accept`, `moat allow` and `moat trust` re-pin exactly the files already in the lock, plus OpenMoat's own state files (`trust.json` once `moat trust` writes it), so running them from a shell where those variables differ from the agent's never drops the agent's hook file; `moat doctor` and `moat status` name a hook file installed under the current environment that the lock does not pin, and a pinned one outside it. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
 
 ### 8.1 Executable pinning and the environment snapshot
 
@@ -501,7 +501,7 @@ ask:
   one of yours.
 - A file that cannot be read or parsed, that sets a key it may not set, or that is not
   a regular file denies every tool call in the project with `kernel-error` and the
-  reason. Fix the file to go on. moat never ignores it, because ignoring it would
+  reason. Fix the file to go on. OpenMoat never ignores it, because ignoring it would
   silently drop the team's deny rules.
 - `moat policy check` without `--policy` decides with it, as `guard` does. With
   `--policy`, only that file is used.
@@ -534,5 +534,5 @@ every call in the project is denied.
 
 ## 11. Planned, not yet available
 
-A prompt of moat's own for `ask`, managed organisation policy and Telegram
+A prompt of OpenMoat's own for `ask`, managed organisation policy and Telegram
 approvals have no issue yet. Status and order: [ROADMAP.md](ROADMAP.md).

@@ -1,6 +1,6 @@
 # Roadmap
 
-Where `moat` is, what comes next, and in which order. The release stages and their
+Where OpenMoat is, what comes next, and in which order. The release stages and their
 exit criteria come from ADR-013. The live, ordered work list is the pinned issue
 [#144](https://github.com/crocodile-labs/openmoat/issues/144), and each stage is a
 GitHub milestone. Neither carries dates.
@@ -39,8 +39,8 @@ that run other programs), and no amount of parser work closes that gap. So:
 - From the beta on, allowed commands run under OS enforcement derived from the same
   policy. A parser mistake then costs a prompt or a confusing message, not a breach.
   Every layer is generated from the one policy and the layers are tested against each
-  other (ADR-018 to ADR-020): the host's own sandbox, configured and pinned by moat, by
-  default; a container or VM with moat outside it for strict use; one egress proxy and a
+  other (ADR-018 to ADR-020): the host's own sandbox, configured and pinned by OpenMoat, by
+  default; a container or VM with OpenMoat outside it for strict use; one egress proxy and a
   secrets broker so the agent never holds credentials.
 
 ## Stages
@@ -122,7 +122,7 @@ Neither exists today. Only the user policy (`~/.moat/policy.yaml` plus the
 - A chat assistant, channel integration, memory system, skills marketplace or UI.
 - A model runtime. The kernel does not know which model is running.
 - A new tool protocol. MCP is the protocol.
-- A replacement for VM or container isolation of whole workloads. `moat` composes with them.
+- A replacement for VM or container isolation of whole workloads. OpenMoat composes with them.
 - Model-based decisions or intent detection. Decisions are deterministic rules over
   actions.
-- Agents that run in a vendor's cloud rather than on the machine `moat` runs on.
+- Agents that run in a vendor's cloud rather than on the machine OpenMoat runs on.

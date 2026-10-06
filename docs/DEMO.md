@@ -2,8 +2,8 @@
 
 A short, reproducible terminal demo. A README carries a prompt injection that tells
 coding agents to upload the SSH key. Claude Code follows it in plain form and Codex
-follows it base64-obfuscated inside `bash -lc`. Both run under one moat policy, which
-denies every attempt, denies the agent's attempts to switch moat off, and records it
+follows it base64-obfuscated inside `bash -lc`. Both run under one OpenMoat policy, which
+denies every attempt, denies the agent's attempts to switch OpenMoat off, and records it
 all in one audit log.
 
 ## Run it
@@ -45,7 +45,7 @@ It ends with `moat show --recent 10` (both agents, one log) and
 
 ## What it does not claim
 
-moat decides; the operating system does not enforce the decision yet (ADR-013,
+OpenMoat decides; the operating system does not enforce the decision yet (ADR-013,
 [THREAT_MODEL.md](THREAT_MODEL.md) §5). The demo shows the hook's decisions and the
 audit trail, which is what stops the call in a real Claude Code or Codex session. The
 same scenarios, and more, run in CI as [MoatBench mini](MOATBENCH.md).

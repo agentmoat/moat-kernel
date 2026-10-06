@@ -1,6 +1,6 @@
 # Documentation map
 
-Start with the top-level `README.md` for what `moat` is and how to install it. The
+Start with the top-level `README.md` for what OpenMoat is and how to install it. The
 alpha is decide-only (ADR-013); every document here describes the code on `main`.
 
 | Document | Read it when you want to… |

@@ -14,9 +14,9 @@ members = ["."]
 
 [dependencies]
 libfuzzer-sys = "0.4"
-openmoat-core = { path = "../crates/moat-core" }
-openmoat-hosts = { path = "../crates/moat-hosts" }
-openmoat-proxy = { path = "../crates/moat-proxy" }
+openmoat-core = { path = "../crates/openmoat-core" }
+openmoat-hosts = { path = "../crates/openmoat-hosts" }
+openmoat-proxy = { path = "../crates/openmoat-proxy" }
 
 [[bin]]
 name = "decide_shell"
