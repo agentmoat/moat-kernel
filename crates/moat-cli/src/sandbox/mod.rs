@@ -9,6 +9,7 @@
 //! without a wider grant; those are listed as allowances, never silent.
 
 pub mod claude;
+pub mod codex;
 mod patterns;
 
 use moat_core::ir::{Allowance, Enforcement, Loss};
@@ -47,6 +48,14 @@ pub struct Plan {
     pub default_read_roots: bool,
     /// Claude Code's settings.
     pub claude: claude::Generated,
+    /// Codex's permissions profile.
+    pub codex: codex::Generated,
+}
+
+/// Codex's `config.toml`, next to the hook file (`$CODEX_HOME` or `~/.codex`).
+pub fn codex_config_path() -> anyhow::Result<std::path::PathBuf> {
+    let hooks = crate::install::HostConfig::for_host(moat_hosts::Host::Codex)?.settings_path;
+    Ok(hooks.with_file_name("config.toml"))
 }
 
 impl Plan {
@@ -67,6 +76,7 @@ impl Plan {
         Ok(Self {
             default_read_roots,
             claude: claude::generate(&ir)?,
+            codex: codex::generate(&ir)?,
         })
     }
 }

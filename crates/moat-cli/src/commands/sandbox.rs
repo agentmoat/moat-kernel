@@ -1,32 +1,53 @@
 //! `moat sandbox show`: the host sandbox settings the policy compiles to.
 
 use std::io::{self, Write as _};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use moat_hosts::Host;
 use serde_json::{Value, json};
+use toml_edit::DocumentMut;
 
 use crate::cli::{Format, SandboxShowArgs};
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::HostConfig;
 use crate::render;
-use crate::sandbox::{Plan, Report, claude};
+use crate::sandbox::{Plan, Report, claude, codex, codex_config_path};
+
+/// One host's generated settings, ready to print.
+struct Shown<'a> {
+    host: Host,
+    path: PathBuf,
+    /// What moat owns in the file, in the file's own format.
+    text: String,
+    report: &'a Report,
+}
 
 pub fn show(args: &SandboxShowArgs) -> Result<Code> {
     let plan = Plan::new(&Home::locate()?.load_policy()?)?;
-    let hosts = [(
-        Host::ClaudeCode,
-        HostConfig::for_host(Host::ClaudeCode)?.settings_path,
-        claude_settings(&plan.claude),
-        &plan.claude.report,
-    )];
+    let mut codex_doc = DocumentMut::new();
+    codex::apply(&mut codex_doc, &plan.codex)?;
+    let hosts = [
+        Shown {
+            host: Host::ClaudeCode,
+            path: HostConfig::for_host(Host::ClaudeCode)?.settings_path,
+            text: serde_json::to_string_pretty(&claude_settings(&plan.claude))?,
+            report: &plan.claude.report,
+        },
+        Shown {
+            host: Host::Codex,
+            path: codex_config_path()?,
+            text: codex_doc.to_string(),
+            report: &plan.codex.report,
+        },
+    ];
     if args.format == Format::Json {
         let doc: serde_json::Map<String, Value> = hosts
             .iter()
-            .map(|(host, path, settings, report)| {
-                let entry = json!({ "path": path, "settings": settings, "report": report });
-                (host.id().to_owned(), entry)
+            .map(|s| {
+                let entry = json!({ "path": s.path, "settings": s.text, "report": s.report });
+                (s.host.id().to_owned(), entry)
             })
             .collect();
         render::json(&json!({ "default_read_roots": plan.default_read_roots, "hosts": doc }))?;
@@ -39,10 +60,15 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
             "note: the policy has no `sandbox.read_roots`; the default policy's list applies"
         )?;
     }
-    for (host, path, settings, report) in hosts {
-        writeln!(out, "{}  {}", host.display_name(), path.display())?;
-        writeln!(out, "{}", serde_json::to_string_pretty(&settings)?)?;
-        write_report(&mut out, report)?;
+    for shown in hosts {
+        writeln!(
+            out,
+            "{}  {}",
+            shown.host.display_name(),
+            shown.path.display()
+        )?;
+        writeln!(out, "{}", shown.text.trim_end())?;
+        write_report(&mut out, shown.report)?;
     }
     writeln!(out, "dry run: nothing was written")?;
     Ok(Code::Ok)
