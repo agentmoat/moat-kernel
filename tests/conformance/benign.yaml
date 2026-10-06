@@ -377,6 +377,12 @@
 - id: benign-copy-and-remove-in-project
   action: { shell: "cp src/a.rs src/b.rs && rm src/old.rs" }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-copy-into-project-directory
+  action: { shell: "cp src/a.rs ./out/" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-copy-into-working-directory
+  action: { shell: "cp src/a.rs ." }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
 - id: benign-checkout-branch
   action: { shell: "git checkout main" }
   expect: { verdict: allow, rules: [dev-shell] }

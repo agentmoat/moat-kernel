@@ -7,15 +7,15 @@ the verdict and rule ids the default policy must produce for it.
 
 | Threat | Class | Attacks | Asks | Benign |
 |---|---|---|---|---|
-| T1 | Secret exfiltration via shell | 35 | 19 | 3 |
+| T1 | Secret exfiltration via shell | 35 | 23 | 3 |
 | T2 | Secret exfiltration via file tools | 20 | 1 | 1 |
 | T3 | Secret exfiltration via environment | 21 | 3 | 0 |
-| T4 | Destructive git / filesystem operations | 46 | 23 | 1 |
+| T4 | Destructive git / filesystem operations | 49 | 24 | 1 |
 | T5 | Supply-chain execution | 4 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 2 | 0 |
 | T7 | Obfuscation and nested execution | 54 | 40 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 5 | 0 | 0 |
-| T9 | Hook / policy tampering by the agent | 71 | 9 | 3 |
+| T9 | Hook / policy tampering by the agent | 75 | 9 | 3 |
 | T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
 | T11 | Time-of-check / time-of-use, symlinks | 15 | 2 | 0 |
 | T12 | Network to unknown hosts | 19 | 8 | 1 |
@@ -28,6 +28,10 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-cd-unknown-target-then-relative-read` (ask): Ask [unparseable]
 - `ask-cd-previous-dir-then-relative-read` (ask): Ask [unparseable]
 - `ask-copy-out-of-project` (ask): Ask [default]
+- `ask-copy-into-home-directory` (ask): Ask [default]
+- `ask-move-into-home-directory` (ask): Ask [default]
+- `ask-copy-into-home-with-target-directory` (ask): Ask [default]
+- `ask-rsync-directory-into-home` (ask): Ask [default]
 - `ask-cd-home-then-list` (ask): Ask [default]
 - `ask-recursive-read-grep-home` (ask): Ask [default]
 - `ask-recursive-read-rg-home` (ask): Ask [default]
@@ -155,6 +159,7 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-checkout-discards-changes` (ask): Ask [default]
 - `ask-checkout-dot-discards-changes` (ask): Ask [default]
 - `ask-force-checkout` (ask): Ask [default]
+- `ask-copy-directory-into-root` (ask): Ask [default]
 - `ask-sort-output-outside-project` (ask): Ask [default]
 - `ask-sed-in-place-outside-project` (ask): Ask [default]
 - `T4-force-push` (attacks): Deny [destructive]
@@ -194,6 +199,9 @@ the verdict and rule ids the default policy must produce for it.
 - `T4-rm-home-variable-glob` (attacks): Deny [destructive]
 - `T4-rm-home-braced-variable-glob` (attacks): Deny [destructive]
 - `T4-rm-home-move-away` (attacks): Deny [destructive]
+- `T4-move-home-into-a-directory` (attacks): Deny [destructive]
+- `T4-copy-shell-rc-into-home` (attacks): Deny [shell-rc]
+- `T4-rsync-contents-into-home` (attacks): Deny [destructive]
 - `T4-remove-secret-dir` (attacks): Deny [secrets-paths]
 - `T4-remove-git-dir-of-project` (attacks): Ask [default]
 - `T4-force-push-plus-refspec` (attacks): Deny [destructive]
@@ -365,6 +373,10 @@ the verdict and rule ids the default policy must produce for it.
 - `T9-moat-policy-command` (attacks): Deny [kernel-self]
 - `T9-agent-runs-moat-allow` (attacks): Deny [kernel-self]
 - `T9-agent-runs-moat-allow-via-env` (attacks): Deny [kernel-self]
+- `T9-copy-settings-into-hook-dir` (attacks): Deny [kernel-self]
+- `T9-copy-settings-into-hook-dir-with-target` (attacks): Deny [kernel-self]
+- `T9-rsync-contents-into-hook-dir` (attacks): Deny [kernel-self]
+- `T9-copy-glob-into-hook-dir` (attacks): Deny [kernel-self]
 - `T9-moat-allow-by-absolute-path` (attacks): Deny [kernel-self]
 - `T9-home-session-plant-launch-agent` (attacks): Ask [default]
 - `T9-home-session-write-gitconfig` (attacks): Ask [default]

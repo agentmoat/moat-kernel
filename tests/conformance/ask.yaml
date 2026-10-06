@@ -375,6 +375,28 @@
   threat: T1
   action: { shell: "cp src/main.rs /tmp/main.rs" }
   expect: { verdict: ask, rules: [default] }
+# into a directory, a copy or move writes the entry named after the source
+# (`~/f`), not the directory itself, which `destructive` denies
+- id: ask-copy-into-home-directory
+  threat: T1
+  action: { shell: "cp notes.txt ~/" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-move-into-home-directory
+  threat: T1
+  action: { shell: "mv build/report.html ~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-copy-into-home-with-target-directory
+  threat: T1
+  action: { shell: "cp -t ~ notes.txt" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-rsync-directory-into-home
+  threat: T1
+  action: { shell: "rsync -a dist ~/" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-copy-directory-into-root
+  threat: T4
+  action: { shell: "cp -r assets /" }
+  expect: { verdict: ask, rules: [default] }
 - id: ask-cd-home-then-list
   threat: T1
   action: { shell: "cd ~ && ls" }
