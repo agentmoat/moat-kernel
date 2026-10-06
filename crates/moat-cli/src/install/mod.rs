@@ -28,7 +28,10 @@ const TOOL_HOOK_TIMEOUT_S: u64 = 600;
 /// Seconds for the settings-change veto, which never waits for a person.
 const CONFIG_HOOK_TIMEOUT_S: u64 = 60;
 
-const TOOL_MATCHER: &str = "Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|WebFetch|mcp__.*";
+/// Every Claude Code tool `moat-hosts` maps to an action; a tool missing here
+/// never reaches `moat guard`.
+const TOOL_MATCHER: &str =
+    "Bash|Monitor|PowerShell|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LSP|WebFetch|mcp__.*";
 
 const CLAUDE_CODE_HOOKS: &[HookSpec] = &[
     HookSpec {

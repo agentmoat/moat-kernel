@@ -13,7 +13,7 @@ the verdict and rule ids the default policy must produce for it.
 | T4 | Destructive git / filesystem operations | 23 | 10 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 0 | 0 |
-| T7 | Obfuscation and nested execution | 41 | 30 | 2 |
+| T7 | Obfuscation and nested execution | 41 | 31 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 4 | 0 | 0 |
 | T9 | Hook / policy tampering by the agent | 33 | 8 | 0 |
 | T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
@@ -147,6 +147,7 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-unterminated-heredoc` (ask): Ask [unparseable]
 - `ask-nesting-too-deep` (ask): Ask [unparseable]
 - `ask-empty-command` (ask): Ask [unparseable]
+- `ask-powershell-is-never-classified` (ask): Ask [unparseable]
 - `ask-make-shell-override-after-target` (ask): Ask [default]
 - `ask-make-shell-override-before-target` (ask): Ask [default]
 - `ask-make-shellflags-override` (ask): Ask [default]

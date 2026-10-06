@@ -51,6 +51,10 @@
   threat: T7
   action: { shell: "   " }
   expect: { verdict: ask, rules: [unparseable] }
+- id: ask-powershell-is-never-classified
+  threat: T7
+  action: { foreign_shell: { shell: PowerShell, command: "ls $env:USERPROFILE\\.ssh" } }
+  expect: { verdict: ask, rules: [unparseable] }
 
 - id: ask-inline-python-prints-version
   threat: T12

@@ -1,0 +1,15 @@
+{
+  "session_id": "7c1e4b2a",
+  "transcript_path": "/Users/me/.claude/projects/-p/7c1e4b2a.jsonl",
+  "cwd": "/p",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Monitor",
+  "tool_input": {
+    "command": "tail -f ~/.ssh/id_rsa",
+    "description": "Watch the log",
+    "timeout_ms": 300000,
+    "persistent": false
+  },
+  "tool_use_id": "toolu_07STU"
+}
