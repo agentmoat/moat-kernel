@@ -421,7 +421,9 @@ Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `st
      - the `Host` header must match the target;
      - drop hop-by-hop headers (`Connection` and the headers it names, `Proxy-*`, `TE`,
        `Trailer`, `Upgrade`, `Keep-Alive`) and add `Connection: close`;
-     - refuse `Content-Length` with `Transfer-Encoding`, or more than one `Content-Length`.
+     - refuse `Content-Length` with `Transfer-Encoding`, or more than one `Content-Length`;
+     - after the row is recorded, put the value of each brokered secret the host owns
+       into the head (POLICY.md §2.1). The head is zeroed once it is written.
   6. Record one audit row: host `proxy`, the method as the tool, the action
      `net` `connect://host:port` or `http://host:port` (never the path), and the verdict
      and rules. If the row cannot be written, the connection is refused.

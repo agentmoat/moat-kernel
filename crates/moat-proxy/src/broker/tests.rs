@@ -84,3 +84,31 @@ fn debug_names_ids_and_hosts_never_values() {
     );
     assert!(!shown.contains(VALUE), "{shown}");
 }
+
+#[test]
+fn the_owner_head_gets_the_value_in_place_of_the_placeholder() {
+    let b = broker(VALUE).unwrap();
+    let head = b"GET /moat-secret:gh:placeholder HTTP/1.1\r\nHost: api.github.com\r\n\
+                 authorization: Bearer moat-secret:gh:placeholder\r\n\
+                 X-Other: moat-secret:gh:placeholder\r\nConnection: close\r\n\r\n";
+    let out = b.inject("api.github.com", head).unwrap();
+    assert_eq!(
+        String::from_utf8(out.to_vec()).unwrap(),
+        format!(
+            "GET /moat-secret:gh:placeholder HTTP/1.1\r\nHost: api.github.com\r\n\
+             authorization: Bearer {VALUE}\r\nX-Other: moat-secret:gh:placeholder\r\n\
+             Connection: close\r\n\r\n"
+        )
+    );
+}
+
+#[test]
+fn a_missing_header_is_added_and_other_hosts_get_nothing() {
+    let b = broker(VALUE).unwrap();
+    let head = b"GET / HTTP/1.1\r\nHost: api.github.com\r\nConnection: close\r\n\r\n";
+    let out = b.inject("api.github.com", head).unwrap();
+    let added = format!("Connection: close\r\nAuthorization: {VALUE}\r\n\r\n");
+    assert!(out.ends_with(added.as_bytes()));
+    assert!(b.inject("github.com", head).is_none());
+    assert!(Broker::default().inject("api.github.com", head).is_none());
+}

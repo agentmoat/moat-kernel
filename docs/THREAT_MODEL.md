@@ -137,6 +137,8 @@ something the alpha claims to stop.
   - the value encoded (base64, percent-encoding, compression) or split across requests,
     since the check matches exact bytes;
   - anything inside a CONNECT tunnel, which is TLS and is not decrypted;
+  - an observer on the network path of a plain-HTTP request to the owner host, where
+    the proxy injects the value in clear text;
   - covert channels such as timing, or data hidden in requests to the owner host;
   - an agent that asks the user to paste the secret into the conversation;
   - the owner host itself misusing or reflecting the token.

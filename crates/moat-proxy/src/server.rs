@@ -14,6 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use moat_core::{CompiledPolicy, Decision, Verdict};
+use zeroize::Zeroizing;
 
 use crate::audit::{Connection, Recorder};
 use crate::broker::{Broker, Watch};
@@ -177,17 +178,21 @@ impl Proxy<'_> {
         let (first_bytes, inspect) = match &request.target {
             Target::Connect { host, .. } => {
                 match self.check_tunnel(client, host, rest, &decision, &request, started) {
-                    Some(hello) => (hello, None),
+                    Some(hello) => (Zeroizing::new(hello), None),
                     None => return,
                 }
             }
-            Target::Http { head, .. } => {
+            Target::Http { head, host, .. } => {
                 if !self.record(Some(&request), &decision, started) {
                     refuse(client, 403, "audit log unavailable");
                     return;
                 }
                 let inspect: tunnel::Inspect<'_> = &mut inspect;
-                ([head.as_slice(), &rest].concat(), Some(inspect))
+                // Only the owner host's head carries a value; it is zeroed
+                // with `first_bytes` once written.
+                let injected = self.broker.inject(host, head);
+                let head = injected.as_deref().map_or(head.as_slice(), Vec::as_slice);
+                (Zeroizing::new([head, &rest].concat()), Some(inspect))
             }
         };
         if (&upstream).write_all(&first_bytes).is_ok() {
