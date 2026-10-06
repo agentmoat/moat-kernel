@@ -41,7 +41,7 @@ pub enum Command {
     Report(ReportArgs),
     /// Run the default-deny egress proxy: only hosts the policy allows, every connection recorded.
     Proxy(ProxyArgs),
-    /// Export the audit log for review elsewhere.
+    /// Export the audit log for review elsewhere, and verify an export.
     Audit {
         #[command(subcommand)]
         command: AuditCommand,
@@ -191,6 +191,37 @@ pub struct ShowArgs {
 pub enum AuditCommand {
     /// Write events to stdout as JSON Lines, oldest first, each with its chain hashes.
     Export(ExportArgs),
+    /// Check an export's hash chain without the database and print its head hash.
+    Verify(VerifyArgs),
+    /// Report over exports from several machines: per host, per rule, top asks and
+    /// denies, false-positive candidates. Every file must verify first.
+    Report(TeamReportArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct TeamReportArgs {
+    /// Files `moat audit export` wrote; events present in several are counted once.
+    #[arg(required = true)]
+    pub files: Vec<PathBuf>,
+
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
+}
+
+#[derive(Debug, Args)]
+pub struct VerifyArgs {
+    /// The file `moat audit export` wrote.
+    pub file: PathBuf,
+
+    /// A head hash recorded earlier (`moat audit verify` or `moat doctor` printed it);
+    /// fail unless a verified event carries it.
+    #[arg(long)]
+    pub anchor: Option<String>,
+
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
 }
 
 #[derive(Debug, Args)]

@@ -8,12 +8,13 @@
 //! nothing unredacted is ever stored, and an export adds nothing the store does
 //! not hold.
 
+use moat_core::{Action, Verdict};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
-use super::chain::{ROWS, Row, read_row};
-use super::{EventId, Store, StoreError};
+use super::chain::{Fields, ROWS, Row, read_row};
+use super::{Event, EventId, Store, StoreError};
 
 /// Which events [`Store::export`] writes. Conditions combine with AND.
 #[derive(Debug, Clone, Copy, Default)]
@@ -93,6 +94,59 @@ impl ExportedEvent {
             prev_hash: row.prev_hash.unwrap_or_default(),
             hash: row.hash.unwrap_or_default(),
         })
+    }
+
+    /// The event as `moat show` reads it from the database: an action that does
+    /// not decode is marked unreadable, as there; a verdict, rules or reasons
+    /// that do not decode are an error.
+    pub fn to_event(&self) -> Result<Event, StoreError> {
+        let decode_error = |reason: String| StoreError::Decode {
+            id: self.id,
+            reason,
+        };
+        let list = |raw: &RawValue| {
+            serde_json::from_str::<Vec<String>>(raw.get()).map_err(|e| decode_error(e.to_string()))
+        };
+        let action = serde_json::from_str::<Option<Action>>(self.action.get());
+        Ok(Event {
+            id: self.id,
+            ts_ms: self.ts_ms,
+            host: self.host.clone(),
+            session_id: self.session_id.clone(),
+            call_id: self.call_id.clone(),
+            cwd: self.cwd.clone(),
+            tool: self.tool.clone(),
+            action_unreadable: action.is_err(),
+            action: action.unwrap_or(None),
+            verdict: self
+                .verdict
+                .parse::<Verdict>()
+                .map_err(|e| decode_error(e.to_string()))?,
+            rules: list(&self.rules)?,
+            reasons: list(&self.reasons)?,
+            latency_us: self.latency_us,
+            prev_hash: Some(self.prev_hash.clone()),
+            hash: Some(self.hash.clone()),
+        })
+    }
+
+    /// The cells the chain hashes, linked to this line's own `prev_hash`.
+    pub(super) fn fields(&self) -> Fields<'_> {
+        Fields {
+            id: self.id.0,
+            ts_ms: self.ts_ms,
+            host: &self.host,
+            session_id: &self.session_id,
+            call_id: self.call_id.as_deref(),
+            cwd: self.cwd.as_deref(),
+            tool: &self.tool,
+            action: self.action.get(),
+            verdict: &self.verdict,
+            rules: self.rules.get(),
+            reasons: self.reasons.get(),
+            latency_us: self.latency_us,
+            prev_hash: &self.prev_hash,
+        }
     }
 }
 
