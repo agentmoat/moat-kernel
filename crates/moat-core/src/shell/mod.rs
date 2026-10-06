@@ -18,6 +18,7 @@
 //! | `find -exec/-execdir/-ok/-okdir` commands, `--output=FILE` (`options.rs`) | nested classification, `FsWrite` |
 //! | `make --eval`, `-e`, `SHELL=`, `X!=cmd`, `$(shell …)` (`make.rs`) | `make <arg>` `Shell` atom + nested classification |
 //! | text tool options (`text.rs`): `sort -o FILE`, `uniq in out`; an unknown option | `FsWrite`; `<program> @<option>` `Shell` atom |
+//! | `sed` scripts (`sed/`): `r FILE`, `w FILE`; `e`, anything not understood | `FsRead`, `FsWrite`; `sed @<script>` `Shell` atom |
 //!
 //! Classification is conservative by design: when the input cannot be parsed
 //! safely the result is [`ParseOutcome::Unparseable`], which the engine maps to
@@ -32,7 +33,8 @@
 //! `operands` decides which plain arguments name files;
 //! `decoders`, `make` and `options` handle constructs that hide a command or a
 //! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
-//! `text` reads the options of text tools, whose values are data, not files;
+//! `text` reads the options of text tools, whose values are data, not files,
+//! and `sed` their scripts;
 //! `tables` holds the program lists that drive all of them.
 
 mod commands;
@@ -43,6 +45,7 @@ mod invocation;
 mod make;
 mod operands;
 mod options;
+mod sed;
 pub(crate) mod tables;
 #[cfg(test)]
 mod tests;
