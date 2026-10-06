@@ -10,8 +10,9 @@ use std::fmt;
 
 use crate::kind::Kind;
 use crate::paths;
-use crate::pattern::{GlobPattern, ShellPattern};
+use crate::pattern::{self, GlobPattern, ShellPattern};
 use crate::policy::{Defaults, Policy, RuleGroup};
+use crate::secret::Source as SecretSource;
 
 /// Placeholders so `~` and `${project}` compare equal on both sides without
 /// `{…}` being read as glob alternation.
@@ -53,7 +54,58 @@ pub fn warnings(policy: &Policy) -> Vec<Warning> {
     }
     shadowed(&policy.ask, &policy.allow, "ask", "allow", &mut out);
     shadowed(&policy.allow, &policy.deny, "allow", "deny", &mut out);
+    secrets(policy, &mut out);
     out
+}
+
+/// A secret whose host the proxy refuses is never injected, and one whose
+/// source the agent may read is not kept from the agent.
+fn secrets(policy: &Policy, out: &mut Vec<Warning>) {
+    for secret in &policy.secrets {
+        let mut warn = |message: String| {
+            out.push(Warning {
+                rule: format!("secrets.{}", secret.id),
+                message,
+            });
+        };
+        if !listed(&policy.allow, &[Kind::Net, Kind::Fetch], &secret.host) {
+            warn(format!(
+                "no net or fetch allow rule names {}, so `moat proxy` refuses it and the \
+                 secret is never injected",
+                secret.host
+            ));
+        }
+        let exposed = match &secret.source {
+            SecretSource::File(path) => paths::expand_pattern(path, HOME, Some(PROJECT))
+                .filter(|p| !listed(&policy.deny, &[Kind::FsRead], p))
+                .map(|_| format!("no deny fs.read rule covers `{path}`, so the agent can read it")),
+            SecretSource::Env(name) => (!listed(&policy.deny, &[Kind::EnvRead], name)).then(|| {
+                format!("no deny env.read rule covers `{name}`, so the agent can read it")
+            }),
+            SecretSource::Keychain { .. } => None,
+        };
+        if let Some(message) = exposed {
+            warn(message);
+        }
+        if secret.plain_http && !secret.is_loopback() {
+            warn(format!(
+                "`plain_http: true` sends the value to {} in clear text, readable by anyone \
+                 on the network path",
+                secret.host
+            ));
+        }
+    }
+}
+
+/// Does a group in `groups` match `candidate` in one of `kinds`, `!` exclusions
+/// applied?
+fn listed(groups: &[RuleGroup], kinds: &[Kind], candidate: &str) -> bool {
+    groups.iter().any(|g| {
+        kinds.iter().any(|k| {
+            let list: Vec<GlobPattern> = g.patterns(*k).iter().filter_map(|p| glob(p)).collect();
+            pattern::any_match(&list, candidate)
+        })
+    })
 }
 
 fn unknown_default_kinds(defaults: &Defaults) -> Vec<Warning> {
@@ -204,5 +256,52 @@ mod tests {
         assert_eq!(w.len(), 1, "{w:?}");
         assert!(w[0].contains("`network`"));
         assert!(warn("version: 1\ndefaults: allow\n").is_empty());
+    }
+
+    #[test]
+    fn secrets_the_proxy_refuses_or_the_agent_can_read() {
+        let secrets = "secrets:\n  - id: gh\n    host: api.github.com\n    header: Authorization\n    \
+                       source: { file: ~/.config/moat/gh }\n  - id: npm\n    host: registry.npmjs.org\n    \
+                       header: Authorization\n    source: { env: NPM_TOKEN }\n";
+        let w = warn(&format!("version: 1\n{secrets}"));
+        assert_eq!(w.len(), 4, "{w:?}");
+        assert!(
+            w[0].contains("secrets.gh") && w[0].contains("refuses it"),
+            "{w:?}"
+        );
+        assert!(
+            w[1].contains("`~/.config/moat/gh`, so the agent can read it"),
+            "{w:?}"
+        );
+        assert!(
+            w[3].contains("`NPM_TOKEN`, so the agent can read it"),
+            "{w:?}"
+        );
+        let covered = warn(&format!(
+            "version: 1\ndeny:\n  - id: s\n    fs.read: ['~/.config/moat/**']\n    env.read: ['*_TOKEN']\n\
+             allow:\n  - id: n\n    net: ['api.github.com', '*.npmjs.org']\n{secrets}"
+        ));
+        assert!(covered.is_empty(), "{covered:?}");
+        let excluded = warn(&format!(
+            "version: 1\ndeny:\n  - id: s\n    fs.read: ['~/.config/**', '!~/.config/moat/**']\n    \
+             env.read: ['*']\nallow:\n  - id: n\n    net: ['*', '!api.github.com']\n{secrets}"
+        ));
+        assert_eq!(excluded.len(), 2, "{excluded:?}");
+    }
+
+    #[test]
+    fn plain_http_injection_off_this_machine_is_reported() {
+        let policy = |host: &str| {
+            format!(
+                "version: 1\ndeny:\n  - id: s\n    env.read: ['*']\nallow:\n  - id: n\n    net: ['*']\n\
+                 secrets:\n  - id: s\n    host: {host}\n    header: X-K\n    source: {{ env: K }}\n    \
+                 plain_http: true\n"
+            )
+        };
+        let w = warn(&policy("api.example.com"));
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].contains("in clear text"), "{w:?}");
+        assert!(warn(&policy("localhost")).is_empty());
+        assert!(warn(&policy("127.0.0.1")).is_empty());
     }
 }

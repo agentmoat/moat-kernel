@@ -1,9 +1,11 @@
 //! Accepting connections and deciding each one.
 //!
-//! Order per connection: read the head → decide the host → resolve and check
-//! the addresses → connect → (CONNECT) answer 200, read the `ClientHello` and
-//! check its SNI → record → relay. Nothing reaches the destination before the
-//! record is written; a failed record closes the connection.
+//! Order per connection: read the head → check it for brokered secrets bound
+//! elsewhere → decide the host → resolve and check the addresses → connect →
+//! (CONNECT) answer 200, read the `ClientHello` and check its SNI → record →
+//! relay, watching a plain-HTTP body for brokered secrets too. Nothing reaches
+//! the destination before the record is written; a failed record closes the
+//! connection.
 
 use std::io::{self, ErrorKind, Read as _, Write as _};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
@@ -12,8 +14,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use moat_core::{CompiledPolicy, Decision, Verdict};
+use zeroize::Zeroizing;
 
 use crate::audit::{Connection, Recorder};
+use crate::broker::{Broker, Watch};
 use crate::decide::{self, RULE_AUDIT, RULE_REQUEST, RULE_SNI};
 use crate::request::{self, Request, Target};
 use crate::sni::{self, Hello};
@@ -62,6 +66,8 @@ pub struct Proxy<'a> {
     pub recorder: &'a dyn Recorder,
     /// Resource limits.
     pub limits: &'a Limits,
+    /// Brokered secrets; [`Broker::default`] for none.
+    pub broker: &'a Broker,
     /// Loopback addresses the proxy may connect to despite the loopback ban.
     /// Empty in `moat proxy`; integration tests list their local server.
     pub loopback_ok: &'a [SocketAddr],
@@ -71,6 +77,7 @@ impl std::fmt::Debug for Proxy<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Proxy")
             .field("limits", &self.limits)
+            .field("broker", &self.broker)
             .field("loopback_ok", &self.loopback_ok)
             .finish_non_exhaustive()
     }
@@ -124,6 +131,13 @@ impl Proxy<'_> {
                 return;
             }
         };
+        let mut watch = Watch::new(self.broker, request.host());
+        if let Some(leak) = watch.next(&buf) {
+            let decision = leak.decision(request.host());
+            self.record(Some(&request), &decision, started);
+            refuse(client, 403, &summary(&decision));
+            return;
+        }
         let rest = buf.split_off(request.head_len);
         let decision = decide::host(self.policy, request.host());
         if decision.verdict != Verdict::Allow {
@@ -152,23 +166,43 @@ impl Proxy<'_> {
                 return;
             }
         };
-        let first_bytes = match &request.target {
+        // A plain-HTTP body keeps being watched; a tunnel carries TLS, where
+        // the proxy cannot see a secret.
+        let mut inspect = |chunk: &[u8]| match watch.next(chunk) {
+            None => true,
+            Some(leak) => {
+                self.record(Some(&request), &leak.decision(request.host()), started);
+                false
+            }
+        };
+        let (first_bytes, inspect) = match &request.target {
             Target::Connect { host, .. } => {
                 match self.check_tunnel(client, host, rest, &decision, &request, started) {
-                    Some(hello) => hello,
+                    Some(hello) => (Zeroizing::new(hello), None),
                     None => return,
                 }
             }
-            Target::Http { head, .. } => {
+            Target::Http { head, host, .. } => {
+                let mut decision = decision.clone();
+                decision
+                    .reasons
+                    .extend(self.broker.withheld(host).iter().map(|id| {
+                        format!("secret `{id}` not injected: plain HTTP needs `plain_http: true`")
+                    }));
                 if !self.record(Some(&request), &decision, started) {
                     refuse(client, 403, "audit log unavailable");
                     return;
                 }
-                [head.as_slice(), &rest].concat()
+                let inspect: tunnel::Inspect<'_> = &mut inspect;
+                // Only the owner host's head carries a value; it is zeroed
+                // with `first_bytes` once written.
+                let injected = self.broker.inject(host, head);
+                let head = injected.as_deref().map_or(head.as_slice(), Vec::as_slice);
+                (Zeroizing::new([head, &rest].concat()), Some(inspect))
             }
         };
         if (&upstream).write_all(&first_bytes).is_ok() {
-            tunnel::relay(client, &upstream, self.limits.idle_timeout);
+            tunnel::relay(client, &upstream, self.limits.idle_timeout, inspect);
         }
     }
 

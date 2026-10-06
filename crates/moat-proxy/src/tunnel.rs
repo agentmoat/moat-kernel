@@ -3,6 +3,9 @@
 //! One thread per direction. Each read waits at most the idle timeout; when it
 //! expires the connection closes unless the other direction moved bytes in the
 //! meantime, so a long download with a silent client is not cut off.
+//!
+//! The client's bytes can pass an inspection first; when it says no, the
+//! connection closes before that chunk is forwarded.
 
 use std::io::{ErrorKind, Read as _, Write as _};
 use std::net::{Shutdown, TcpStream};
@@ -12,9 +15,18 @@ use std::time::{Duration, Instant};
 
 const BUFFER: usize = 16 * 1024;
 
+/// What a chunk from the client must pass before it is forwarded: `false`
+/// closes the connection.
+pub(crate) type Inspect<'a> = &'a mut dyn FnMut(&[u8]) -> bool;
+
 /// Relay between `client` and `upstream` until both sides finish or the
 /// connection is idle for `idle`.
-pub(crate) fn relay(client: &TcpStream, upstream: &TcpStream, idle: Duration) {
+pub(crate) fn relay(
+    client: &TcpStream,
+    upstream: &TcpStream,
+    idle: Duration,
+    inspect: Option<Inspect<'_>>,
+) {
     for s in [client, upstream] {
         // A socket without timeouts could hold its thread forever.
         if s.set_read_timeout(Some(idle)).is_err() || s.set_write_timeout(Some(idle)).is_err() {
@@ -24,12 +36,18 @@ pub(crate) fn relay(client: &TcpStream, upstream: &TcpStream, idle: Duration) {
     }
     let activity = Activity::new();
     thread::scope(|scope| {
-        scope.spawn(|| copy(upstream, client, &activity, idle));
-        copy(client, upstream, &activity, idle);
+        scope.spawn(|| copy(upstream, client, &activity, idle, None));
+        copy(client, upstream, &activity, idle, inspect);
     });
 }
 
-fn copy(from: &TcpStream, to: &TcpStream, activity: &Activity, idle: Duration) {
+fn copy(
+    from: &TcpStream,
+    to: &TcpStream,
+    activity: &Activity,
+    idle: Duration,
+    mut inspect: Option<Inspect<'_>>,
+) {
     let mut buf = [0u8; BUFFER];
     loop {
         match (&*from).read(&mut buf) {
@@ -39,7 +57,9 @@ fn copy(from: &TcpStream, to: &TcpStream, activity: &Activity, idle: Duration) {
                 return;
             }
             Ok(n) => {
-                if (&*to).write_all(&buf[..n]).is_err() {
+                if inspect.as_mut().is_some_and(|pass| !pass(&buf[..n]))
+                    || (&*to).write_all(&buf[..n]).is_err()
+                {
                     break;
                 }
                 activity.touch();

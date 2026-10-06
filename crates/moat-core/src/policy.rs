@@ -42,6 +42,7 @@ use thiserror::Error;
 
 use crate::kind::Kind;
 use crate::pattern::{GlobPattern, ShellPattern};
+use crate::secret::{self, Secret};
 use crate::verdict::Verdict;
 
 pub const SUPPORTED_VERSION: u32 = 1;
@@ -251,6 +252,9 @@ pub struct Policy {
     /// (ADR-018). Absent in policies written before it existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sandbox: Option<SandboxSettings>,
+    /// Secrets `moat proxy` keeps from the agent and injects for one host each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub secrets: Vec<Secret>,
 }
 
 /// The `sandbox:` section (ADR-018, ADR-019).
@@ -327,7 +331,7 @@ impl Policy {
         for root in self.sandbox.iter().flat_map(|s| &s.read_roots) {
             lint_read_root(root)?;
         }
-        Ok(())
+        secret::check(&self.secrets)
     }
 
     /// Number of rule groups in `deny`, `allow` and `ask`.

@@ -27,6 +27,8 @@ executables:                        # pin program names to absolute paths (enfor
 
 sandbox:                            # optional: what the host sandboxes may read beyond the rules (§9)
   read_roots: ["/usr", "~/.cargo"]
+
+secrets:    [ <secret>, … ]         # values moat keeps from the agent (§2.1)
 ```
 
 `approval:` (`channel`, `remember`, `timeout_s`) and `scope:` (`project_roots`) are reserved:
@@ -63,6 +65,62 @@ kind. One tool call usually produces several atomic actions (see §4).
 | `fetch` | the host of a URL a host's own fetch tool reads (Claude Code `WebFetch`), as for `net` | glob, case-insensitive |
 | `env.read`, `env.set` | the variable name | glob |
 | `mcp` | the full MCP tool name `mcp__<server>__<tool>` | glob |
+
+### 2.1 Brokered secrets (`secrets:`)
+
+```yaml
+secrets:
+  - id: gh                          # lowercase letters, digits, `-`; unique
+    host: api.github.com            # one host, exact: lowercase DNS name or IPv4, no pattern or port
+    header: Authorization           # the request header the value goes in
+    source: { env: GITHUB_TOKEN }   # or { file: ~/.config/moat/gh } or { keychain: { service: moat, account: gh } }
+    plain_http: false               # optional; true also injects into plain-HTTP (clear-text) requests
+```
+
+A brokered secret is kept by moat, not by the agent (ADR-020). The agent holds the
+placeholder `moat-secret:<id>:placeholder` instead of the value. `moat proxy` reads the
+value from `source` and is the only component that uses it.
+
+- **`source`.** `file` is absolute or under `~/`; the value is its contents without the
+  trailing newline. `env` is a variable of the `moat proxy` process. `keychain` is an item
+  in the operating system's keychain.
+- **`header`** must be an HTTP header name. Headers that frame the request or the
+  connection (`Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Proxy-*`, …)
+  are refused. Two secrets cannot set the same header for the same host.
+- **`plain_http`** is off unless set. A plain-HTTP request carries the value in clear text,
+  readable by anyone on the network path, so moat injects into one only for a secret
+  that says `plain_http: true`.
+- **Never wider.** A secret opens nothing: its host still needs a `net` or `fetch` allow
+  rule, or the proxy refuses it.
+- **Lint.** `moat policy lint` warns in three cases:
+  - no allow rule names the host;
+  - no deny rule covers a `file` source (`fs.read`) or an `env` source (`env.read`), so
+    the agent could read the value itself;
+  - `plain_http: true` is set for a host that is not loopback (`localhost`, `*.localhost`,
+    `127.0.0.0/8`).
+
+What the proxy does with them:
+
+- **Injection, plain HTTP with `plain_http: true` only.** In a plain-HTTP request to
+  `host` (any port), every `header` line has the placeholder replaced by the value. When
+  the request has no such header, `header: <value>` is added. The placeholder elsewhere
+  (the path, other headers) is left as it is. The value then crosses the network in clear
+  text.
+- **Without `plain_http`** the request is forwarded unchanged, still carrying the
+  placeholder, and the server rejects it. The audit row says
+  ``secret `<id>` not injected``.
+- **HTTPS (CONNECT)** is not decrypted, so a request there carries the placeholder and
+  the server rejects it. Injection into HTTPS needs opt-in TLS termination, which is not
+  built (#172).
+- **Leak blocking.** The proxy refuses a request to any other host that carries the
+  placeholder or the value, in its head or plain-HTTP body (`proxy-secret`, §5.1).
+
+`moat proxy` reads every source at start-up and refuses to start (exit 64) if one cannot
+be read or holds a control character. It prints each secret's id, host, header and
+placeholder, which is what to give the agent (for example
+`GITHUB_TOKEN=moat-secret:gh:placeholder`), and never the value. A keychain source uses
+`/usr/bin/security` on macOS and `/usr/bin/secret-tool` (libsecret) on Linux. Keychain
+sources are not supported on Windows yet.
 
 ## 3. Pattern syntax
 
@@ -176,7 +234,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | `session-taint` | ask | earlier calls of the session read secret material or untrusted content, and this call could carry the secret out or persist the content (§4.1) |
 | `approved-session` | allow | an `ask` for a shell command that a person granted with `moat allow` for this host session (§8.2) |
 | `approved-<n>` | allow | a permanent rule in `~/.moat/policy.d/approved.yaml` written by `moat allow --always` |
-| `proxy-address`, `proxy-sni`, `proxy-request`, `proxy-upstream` | deny | `moat proxy` refused a connection: a loopback, link-local, metadata, or unnamed private destination, a TLS server name that does not match the CONNECT host, a request it does not serve, or a destination it could not reach (§5.2) |
+| `proxy-address`, `proxy-sni`, `proxy-request`, `proxy-upstream`, `proxy-secret` | deny | `moat proxy` refused a connection: a loopback, link-local, metadata, or unnamed private destination, a TLS server name that does not match the CONNECT host, a request it does not serve, a destination it could not reach, or a brokered secret sent to a host other than its own (§2.1, §5.2) |
 
 ### 5.2 `moat proxy`
 

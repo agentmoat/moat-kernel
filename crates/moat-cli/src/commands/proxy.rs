@@ -3,7 +3,8 @@
 //!
 //! Starts only from an intact installation: the policy lock must match, so a
 //! tampered policy is never compiled into a long-running proxy. The policy is
-//! read once; restart the proxy after changing it.
+//! read once; restart the proxy after changing it. Every brokered secret
+//! (`secrets:`) is read at start-up; one that cannot be read stops it.
 
 use std::io::Write as _;
 use std::net::TcpListener;
@@ -19,6 +20,7 @@ use crate::context;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity;
+use crate::secrets;
 
 pub fn run(args: &ProxyArgs) -> Result<Code> {
     if !args.listen.ip().is_loopback() {
@@ -37,6 +39,7 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
     let policy = home.load_policy()?;
     let ctx = context::eval_context(None, None)?;
     let compiled = CompiledPolicy::compile(&policy, &ctx)?;
+    let broker = secrets::broker(&policy.secrets, &ctx.home)?;
     let audit_path = home.audit_path();
     let store = Store::open_existing(&audit_path)
         .with_context(|| format!("opening {}", audit_path.display()))?;
@@ -55,6 +58,17 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
         stdout,
         "moat proxy: listening on {addr} (audit session {session})"
     )?;
+    // Only what the agent may know: the id, host, header and placeholder.
+    for s in &policy.secrets {
+        writeln!(
+            stdout,
+            "moat proxy: secret `{}` goes to {} in {}; give the agent {}",
+            s.id,
+            s.host,
+            s.header,
+            s.placeholder()
+        )?;
+    }
     stdout.flush()?;
     drop(stdout);
 
@@ -65,6 +79,7 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
         recorder: &recorder,
         limits: &limits,
         loopback_ok: &[],
+        broker: &broker,
     };
     proxy.serve(&listener).context("accepting connections")?;
     Ok(Code::Ok)
