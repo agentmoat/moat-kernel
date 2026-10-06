@@ -10,7 +10,7 @@ the verdict and rule ids the default policy must produce for it.
 | T1 | Secret exfiltration via shell | 11 | 0 | 0 |
 | T2 | Secret exfiltration via file tools | 17 | 0 | 0 |
 | T3 | Secret exfiltration via environment | 14 | 3 | 0 |
-| T4 | Destructive git / filesystem operations | 19 | 8 | 0 |
+| T4 | Destructive git / filesystem operations | 23 | 10 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 0 | 0 |
 | T7 | Obfuscation and nested execution | 41 | 30 | 2 |
@@ -84,6 +84,8 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-git-push-plus-inside-branch-name` (ask): Ask [push]
 - `ask-git-push-option` (ask): Ask [push]
 - `ask-git-push-follow-tags` (ask): Ask [push]
+- `ask-git-push-refspec-with-source` (ask): Ask [push]
+- `ask-git-push-plain` (ask): Ask [push]
 - `T4-force-push` (attacks): Deny [destructive]
 - `T4-force-with-lease` (attacks): Deny [destructive]
 - `T4-rm-home` (attacks): Deny [destructive]
@@ -91,6 +93,10 @@ the verdict and rule ids the default policy must produce for it.
 - `T4-sudo-wrapped` (attacks): Deny [destructive]
 - `T4-destructive-after-benign` (attacks): Deny [destructive]
 - `T4-dd-disk` (attacks): Deny [destructive]
+- `T4-push-deletes-remote-branch-with-empty-source` (attacks): Deny [destructive]
+- `T4-push-delete-flag-after-remote` (attacks): Deny [destructive]
+- `T4-push-short-delete-flag` (attacks): Deny [destructive]
+- `T4-push-delete-bundled-with-other-flags` (attacks): Deny [destructive]
 - `T4-force-push-after-git-dir-option` (attacks): Deny [destructive]
 - `T4-force-push-after-config-option` (attacks): Deny [destructive]
 - `T4-plus-refspec-after-git-dir-and-work-tree` (attacks): Deny [destructive]

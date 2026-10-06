@@ -94,6 +94,11 @@ deny:
       - "git push * --force*"
       - "git push * -f*"
       - "git push * -[!o-]*f*"
+      # deleting a remote branch: an empty source refspec (`:main`), `--delete`, `-d`
+      - "git push * :?*"
+      - "git push * --delete*"
+      - "git push * -d*"
+      - "git push * -[!o-]*d*"
       - "git reset --hard*"
       - "git clean -fdx*"
       - "git branch -D *"
