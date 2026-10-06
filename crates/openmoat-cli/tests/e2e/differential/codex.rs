@@ -1,8 +1,9 @@
 //! The Codex host-sandbox layer of the differential suite (#170): each scenario
 //! runs under `codex sandbox -P moat`, the Seatbelt (macOS) or Landlock (Linux)
 //! profile Codex derives from the `[permissions.moat]` profile `moat init`
-//! generates. The binary is `MOAT_CODEX_BIN`, else `codex` on `PATH`; without
-//! one the layer prints a visible skip and the suite passes on the other layers.
+//! generates, with `moat proxy` running as Codex's upstream. The binary is
+//! `MOAT_CODEX_BIN`, else `codex` on `PATH`; without one the layer prints a
+//! visible skip and the suite passes on the other layers.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -24,12 +25,20 @@ impl Fixtures {
     /// Run `scenario` under `codex sandbox -P moat`: `Allow` if the command (and
     /// every step of it, `set -eo pipefail`) completed, `Deny` if the sandbox
     /// stopped it. The project's own `bin/` holds the `npm`/`cargo` shims.
-    fn codex_verdict(&self, codex: &std::path::Path, scenario: &Scenario) -> Verdict {
+    /// Codex runs with `HTTP(S)_PROXY` naming `moat proxy` on `proxy_port`, so its
+    /// own proxy hands what it allows on to OpenMoat's.
+    fn codex_verdict(
+        &self,
+        codex: &std::path::Path,
+        proxy_port: u16,
+        scenario: &Scenario,
+    ) -> Verdict {
         let project = self.tree(scenario.project);
         let path = format!("{}/bin:/usr/bin:/bin", project.display());
         // bash (not dash) for `pipefail`, so a blocked `curl … | sh` is a Deny
         // rather than the trailing shell's exit 0.
         let script = format!("set -eo pipefail; {}", scenario.command);
+        let proxy = format!("http://127.0.0.1:{proxy_port}");
         let out = Command::new(codex)
             .args(["sandbox", "-P", "moat", "-C"])
             .arg(project)
@@ -38,6 +47,8 @@ impl Fixtures {
             .env("PATH", path)
             .env("HOME", &self.sb.home)
             .env("CODEX_HOME", self.sb.home.join(".codex"))
+            .env("HTTP_PROXY", &proxy)
+            .env("HTTPS_PROXY", &proxy)
             .output()
             .expect("running codex sandbox");
         if out.status.success() {
@@ -58,10 +69,12 @@ fn codex_layer_agrees_with_every_scenario() {
         return;
     };
     let fx = Fixtures::build();
+    let port = fx.sb.use_free_proxy_port();
+    let _proxy = fx.sb.start_proxy();
     let mut matrix = String::from("\ndifferential matrix (codex sandbox):\n");
     let mut mismatches = Vec::new();
     for s in &scenarios() {
-        let got = fx.codex_verdict(&codex, s);
+        let got = fx.codex_verdict(&codex, port, s);
         if let Some(gap) = s.gap_at("codex") {
             let _ = writeln!(
                 matrix,

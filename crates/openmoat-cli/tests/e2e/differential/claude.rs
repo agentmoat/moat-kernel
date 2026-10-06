@@ -5,7 +5,8 @@
 //! holding only the generated sandbox settings (no OpenMoat hook, so this measures
 //! the host sandbox, not the hook), a fake `HOME`, `--bare`, a fake API key and
 //! a local fake Anthropic API (`tests/differential/fake_api.py`) that drives one
-//! Bash tool call. Nothing leaves the machine.
+//! Bash tool call. `moat proxy` runs on the port the settings name. Nothing
+//! leaves the machine.
 //!
 //! The binary is `MOAT_CLAUDE_BIN` (else `claude` on `PATH`) and the fake API is
 //! `MOAT_FAKE_API` (else `python3`); without either the layer skips visibly.
@@ -171,6 +172,9 @@ fn claude_layer_blocks_every_attack() {
     };
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/differential/fake_api.py");
     let fx = Fixtures::build();
+    // The generated settings send sandboxed traffic to `moat proxy` on this port.
+    fx.sb.use_free_proxy_port();
+    let _proxy = fx.sb.start_proxy();
 
     // Readiness: an allowed system read must run, or the sandbox is denying
     // everything and "blocked" would be meaningless.
@@ -195,6 +199,22 @@ fn claude_layer_blocks_every_attack() {
                 s.claude.symbol().trim()
             ));
         }
+    }
+    // The unlisted host reached `moat proxy`, which refused and recorded it: the
+    // sandbox sent it there, not to Claude Code's own proxy. (curl connects to
+    // the metadata address directly, and the sandbox refuses that connection.)
+    let shown = json(&fx.sb.moat(&["show", "--since", "all", "--format", "json"]));
+    let refused: Vec<&str> = shown
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|row| row["host"] == "proxy" && row["verdict"] == "deny")
+        .filter_map(|row| row["action"]["net"]["url"].as_str())
+        .collect();
+    if !refused.contains(&"connect://evil.example:443") {
+        mismatches.push(format!(
+            "evil.example did not reach moat proxy: {refused:?}"
+        ));
     }
     let _ = writeln!(
         matrix,
