@@ -19,10 +19,14 @@ fn show_prints_the_settings_and_their_losses_without_writing() {
         "/**/.env",
         "stricter: fs.read `secrets-paths`",
         "wider:    fs.read `sandbox.read_roots`",
+        "wider:    fs.write `claude-code.git-internals`",
+        "\"/**/.git/hooks\"",
+        "\"/**/.git/config\"",
         "dry run: nothing was written",
     ] {
         assert!(shown.contains(expected), "{expected}: {shown}");
     }
+    assert!(!shown.contains("\"/**/.git\""), "git commit works: {shown}");
     let home = sb.home.to_string_lossy().replace('\\', "/");
     assert!(shown.contains(&format!("{home}/.ssh")), "{shown}");
     assert_eq!(
