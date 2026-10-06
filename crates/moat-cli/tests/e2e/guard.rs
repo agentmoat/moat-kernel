@@ -207,6 +207,30 @@ fn claude_code_command_tools_are_hooked_and_governed() {
 }
 
 #[test]
+fn webfetch_to_an_unlisted_host_asks_but_a_websocket_is_denied() {
+    let sb = Sandbox::bare(&[".claude"]);
+    sb.moat(&["init"]);
+    for (name, code, verdict, rule) in [
+        ("webfetch-docs", 0, "ask", "default.fetch"),
+        ("webfetch", 0, "allow", "registries"),
+        ("monitor-ws", 2, "deny", "default.net"),
+    ] {
+        let out = sb.guard("claude-code", &fixture(&format!("claude-code/{name}.json")));
+        assert_eq!(out.status.code(), Some(code), "{name}: {}", stderr(&out));
+        let d = decision(&out);
+        assert_eq!(d["permissionDecision"], verdict, "{name}");
+        let reason = d["permissionDecisionReason"].as_str().unwrap();
+        assert!(reason.contains(rule), "{name}: {reason}");
+    }
+    let shown = sb.moat(&["show", "--recent", "3"]);
+    assert!(
+        stdout(&shown).contains("fetch https://docs.rs/serde/latest/serde/"),
+        "{}",
+        stdout(&shown)
+    );
+}
+
+#[test]
 fn guard_fails_closed() {
     let sb = Sandbox::bare(&[".claude"]);
 
