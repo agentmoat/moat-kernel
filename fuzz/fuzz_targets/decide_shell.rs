@@ -19,6 +19,8 @@ fn compiled() -> &'static CompiledPolicy<'static> {
             project: Some("/home/me/p".into()),
             cwd: "/home/me/p".into(),
             case_insensitive_paths: false,
+            real_home: None,
+            real_project: None,
         };
         CompiledPolicy::compile(policy, &ctx).expect("default policy compiles")
     })

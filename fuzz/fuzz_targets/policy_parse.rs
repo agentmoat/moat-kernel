@@ -19,6 +19,8 @@ fuzz_target!(|data: &[u8]| {
         project: Some("/home/me/p".into()),
         cwd: "/home/me/p".into(),
         case_insensitive_paths: true,
+        real_home: None,
+        real_project: None,
     };
     let _ = CompiledPolicy::compile(&policy, &ctx);
 });
