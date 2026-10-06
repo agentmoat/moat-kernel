@@ -14,7 +14,9 @@ agent tool call ──► moat guard ──► allow ──► the host runs it;
 > **Status: alpha, decide-only** (ADR-013). `moat` decides and records; it does not
 > enforce. Nothing at the operating-system level backs a decision: an allowed command
 > runs with your permissions, so a classifier mistake is a security bug. OS enforcement
-> and an egress proxy gate the beta; the public benchmark gates 1.0. The workspace is at
+> and an egress proxy gate the beta; the first step, the Standard tier, configures
+> Claude Code's and Codex's own sandboxes from the policy ([below](#host-sandboxes-standard-tier)).
+> The public benchmark gates 1.0. The workspace is at
 > `0.1.0-alpha.0` and has not been released. Expect breaking changes during the alpha.
 > [Roadmap](docs/ROADMAP.md).
 
@@ -86,6 +88,35 @@ these from their own environment. If you start Claude Code with `CLAUDE_CONFIG_D
 set, run those commands with the same value; otherwise `init` installs into
 `~/.claude/settings.json`, which that Claude Code never reads, and `status` reports
 the wrong file.
+
+### Host sandboxes (Standard tier)
+
+`moat init` also turns on each agent's own sandbox and configures it from the policy
+(ADR-018). Commands the agent runs, and every script they start (`npm test`,
+`build.rs`, `make`), are then confined by the operating system: no secrets, no reads
+outside the project and `sandbox.read_roots`, no writes outside the project, and
+network only to allowlisted domains ([POLICY.md §9](docs/POLICY.md)).
+
+- **Claude Code** (`settings.json`): the `sandbox` block (`enabled`,
+  `failIfUnavailable: true`, `allowUnsandboxedCommands: false`, `excludedCommands: []`,
+  read and write lists, `network.allowedDomains` with `strictAllowlist`) and
+  `permissions.blockReadsOutsideWorkingDirectories: true`. Claude Code's file tools
+  then refuse reads outside the working directories; `/add-dir` adds one.
+- **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =
+  "moat"` and `features.network_proxy = true`.
+
+Other settings and comments are kept, and each file is copied to
+`<file>.moat-sandbox-backup` before moat changes it. `moat sandbox show` prints what
+the policy compiles to, with every place a host is stricter or wider than the policy;
+`moat sandbox sync` rewrites both after you edit the policy and re-pins them. Editing
+the generated parts by hand is drift (`kernel-integrity`), and `moat doctor` names any
+weakened setting. Sandboxed commands cannot write `.git`: commit outside the sandbox
+(Codex asks to; under Claude Code, run `git commit` yourself).
+
+To undo, delete the `sandbox` key and `permissions.blockReadsOutsideWorkingDirectories`
+from Claude Code's settings, and `default_permissions`, `[permissions.moat]` and
+`features.network_proxy` from Codex's `config.toml` (or restore the backups), then run
+`moat doctor --accept`.
 
 ## Day to day
 
@@ -192,6 +223,7 @@ for. The policy language, the full default policy and recipes are in
 | `moat replay --since today` · `moat report --since 7d` | per-session timeline · summary |
 | `moat allow --last [--always]` | turn an `ask` into a session grant (24 h) or a permanent rule |
 | `moat policy lint` · `moat policy check "<cmd>"` | validate a policy · test an action against it |
+| `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |
 | `moat guard --host <id>` | the hook entry point; agents call it, you do not |
 
 Exit codes: 0 allow or success, 2 deny, 3 unresolved ask (`policy check`), 64 usage
@@ -200,9 +232,11 @@ so a broken hook blocks rather than fails open (ADR-004, ADR-015).
 
 ## Limits
 
-- Decide-only: no OS enforcement and no network proxy yet.
+- OS enforcement comes from the agents' own sandboxes (Claude Code's covers only
+  `Bash`, `PowerShell` and `Monitor`); moat has no sandbox or network proxy of its own
+  yet, and Cursor has none.
 - Project scripts run whatever they contain: `npm test`, `cargo test` and `make test`
-  are allowed, and the code they run is not inspected.
+  are allowed, and the code they run is not inspected; the host sandbox bounds it.
 - Hosts the policy allows (`api.github.com`, the registries) can receive data from a
   command that is allowed or that you approve.
 - Claude Code and Codex run the tool call when the hook binary is missing; Cursor
