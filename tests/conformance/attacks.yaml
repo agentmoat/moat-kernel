@@ -1006,3 +1006,34 @@
   action: { fetch: "http://[fe80::1]/" }
   expect: { verdict: deny, rules: [cloud-metadata] }
 
+# Text tools (`text-tools`) read their operands; what they write or run is
+# judged on its own (#212)
+- id: T1-sort-ssh-key
+  threat: T1
+  action: { shell: "sort ~/.ssh/id_rsa" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-cut-dotenv
+  threat: T1
+  action: { shell: "cut -d= -f2 .env" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T9-sort-output-zshrc
+  threat: T9
+  action: { shell: "sort -o ~/.zshrc data.txt" }
+  expect: { verdict: deny, rules: [shell-rc] }
+- id: T9-sort-output-after-operand
+  threat: T9
+  action: { shell: "sort data.txt --output=/Users/me/.bashrc" }
+  expect: { verdict: deny, rules: [shell-rc] }
+- id: T9-uniq-output-operand-bashrc
+  threat: T9
+  action: { shell: "uniq data.txt ~/.bashrc" }
+  expect: { verdict: deny, rules: [shell-rc] }
+- id: T7-sort-compress-program
+  threat: T7
+  action: { shell: "sort --compress-program=./payload -S 1 data.txt" }
+  expect: { verdict: ask, rules: [default] }
+- id: T7-sort-abbreviated-compress-program
+  threat: T7
+  action: { shell: "sort --compress-prog=sh data.txt" }
+  expect: { verdict: ask, rules: [default] }
+

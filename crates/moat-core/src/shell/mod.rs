@@ -17,6 +17,7 @@
 //! | `python -c`, `node -e`, `perl -e`, … payloads | URL/path scan of the payload |
 //! | `find -exec/-execdir/-ok/-okdir` commands, `--output=FILE` (`options.rs`) | nested classification, `FsWrite` |
 //! | `make --eval`, `-e`, `SHELL=`, `X!=cmd`, `$(shell …)` (`make.rs`) | `make <arg>` `Shell` atom + nested classification |
+//! | text tool options (`text.rs`): `sort -o FILE`, `uniq in out`; an unknown option | `FsWrite`; `<program> @<option>` `Shell` atom |
 //!
 //! Classification is conservative by design: when the input cannot be parsed
 //! safely the result is [`ParseOutcome::Unparseable`], which the engine maps to
@@ -31,6 +32,7 @@
 //! `operands` decides which plain arguments name files;
 //! `decoders`, `make` and `options` handle constructs that hide a command or a
 //! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
+//! `text` reads the options of text tools, whose values are data, not files;
 //! `tables` holds the program lists that drive all of them.
 
 mod commands;
@@ -44,6 +46,7 @@ mod options;
 pub(crate) mod tables;
 #[cfg(test)]
 mod tests;
+mod text;
 pub(crate) mod tokens;
 
 use crate::action::AtomicAction;

@@ -438,3 +438,16 @@
   threat: T2
   action: { fs_read: "~/.cargo/registry/src/index/serde-1.0.0/src/lib.rs" }
   expect: { verdict: ask, rules: [default] }
+# Text tools: an option the classifier does not know, or a file outside the project (#212)
+- id: ask-sort-files0-from-reads-unnamed-files
+  threat: T1
+  action: { shell: "sort --files0-from=list.txt" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-uniq-unknown-option
+  threat: T7
+  action: { shell: "uniq --frobnicate data.txt" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-sort-output-outside-project
+  threat: T4
+  action: { shell: "sort -o /tmp/sorted.txt data.txt" }
+  expect: { verdict: ask, rules: [default] }

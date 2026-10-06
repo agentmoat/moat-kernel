@@ -397,3 +397,20 @@
   threat: T1
   action: { shell: "grep -r TODO ." }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+
+# Read-only text tools on project files (#212)
+- id: benign-sort-uniq-count
+  action: { shell: "sort data.txt | uniq -c" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-cut-first-field
+  action: { shell: "cut -d, -f1 data.csv" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-cut-slash-delimiter-is-not-a-path
+  action: { shell: "cut -d '/' -f 2 paths.txt" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sort-output-into-project
+  action: { shell: "sort -u -o sorted.txt data.txt" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-text-pipeline
+  action: { shell: "git log --format=%an | sort | uniq -c | sort -rn -k1 | head -5" }
+  expect: { verdict: allow, rules: [text-tools, dev-shell] }

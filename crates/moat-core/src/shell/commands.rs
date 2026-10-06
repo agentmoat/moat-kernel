@@ -7,7 +7,7 @@ use super::tables::{
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
-use super::{cwd, decoders, git, invocation, make, operands, options};
+use super::{cwd, decoders, git, invocation, make, operands, options, text};
 use crate::action::AtomicAction;
 use crate::host;
 use crate::lexer::{self, Operator, Token, Word};
@@ -200,7 +200,8 @@ fn classify_simple(
     {
         sink.read(ctx, file)?;
     }
-    classify_arguments(&argv, program, words, ctx, sink)?;
+    let text_operands = text::classify(&argv, program, ctx, sink)?;
+    classify_arguments(&argv, program, words, &text_operands, ctx, sink)?;
 
     if MAKES.contains(&program) {
         return make::classify(&argv, ctx, sink, depth);
@@ -352,6 +353,7 @@ fn classify_arguments(
     argv: &[String],
     program: &str,
     words: &[Word],
+    text_operands: &text::Operands,
     ctx: &ShellContext<'_>,
     sink: &mut Sink,
 ) -> Result<(), ClassifyError> {
@@ -373,7 +375,7 @@ fn classify_arguments(
                 name: name.to_owned(),
             })?;
         }
-        if i == 0 {
+        if i == 0 || text_operands.data.contains(&i) {
             continue;
         }
         let candidate = strip_at(tok);
@@ -400,6 +402,7 @@ fn classify_arguments(
         if let Some(file) = file {
             let is_write = WRITE_ALL_PATHS.contains(&program)
                 || in_place_edit
+                || text_operands.writes.contains(&i)
                 || (WRITE_LAST_PATH.contains(&program) && Some(i) == destination);
             if is_write {
                 sink.write(ctx, file)?;
