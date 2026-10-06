@@ -40,6 +40,37 @@ pub fn lower_for_hosts(
     )
 }
 
+/// Everything the Standard tier writes for one policy on this machine.
+#[derive(Debug)]
+pub struct Plan {
+    /// The policy had no `sandbox.read_roots`, so the default policy's apply.
+    pub default_read_roots: bool,
+    /// Claude Code's settings.
+    pub claude: claude::Generated,
+}
+
+impl Plan {
+    /// Generate every backend for `policy` and the current user's home.
+    pub fn new(policy: &Policy) -> anyhow::Result<Self> {
+        let mut policy = policy.clone();
+        let default_read_roots = policy.sandbox.is_none();
+        if default_read_roots {
+            policy.sandbox = Policy::parse(moat_core::DEFAULT_POLICY)?.sandbox;
+        }
+        let (home, real_home) = crate::context::home_spellings()?;
+        let ir = lower_for_hosts(
+            &policy,
+            &home,
+            real_home,
+            crate::context::CASE_INSENSITIVE_PATHS,
+        )?;
+        Ok(Self {
+            default_read_roots,
+            claude: claude::generate(&ir)?,
+        })
+    }
+}
+
 /// How one backend's output differs from the IR.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Report {
