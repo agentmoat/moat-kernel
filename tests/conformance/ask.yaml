@@ -284,3 +284,12 @@
   threat: T7
   action: { shell: "git --exec-path=/tmp/bin log" }
   expect: { verdict: ask, rules: [default] }
+# T1: another user's home is outside the project; the previous directory is unknown
+- id: ask-tilde-other-user-home
+  threat: T1
+  action: { shell: "cat ~alice/.ssh/id_rsa" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-tilde-previous-directory
+  threat: T1
+  action: { shell: "cat ~-/.ssh/id_rsa" }
+  expect: { verdict: ask, rules: [unparseable] }

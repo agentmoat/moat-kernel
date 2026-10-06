@@ -36,7 +36,7 @@ moat-kernel/
 │   ├── moat-core/              # PURE: no I/O, no OS calls, no internal deps
 │   │   ├── src/{lib,policy,engine,pattern,paths,programs,action,verdict}.rs
 │   │   ├── src/lexer/{mod,tests}.rs
-│   │   ├── src/shell/{mod,commands,tokens,tables,tests}.rs
+│   │   ├── src/shell/{mod,commands,tokens,tables}.rs, src/shell/tests/{mod,stdin}.rs
 │   │   ├── policies/default-v1.yaml   # shipped defaults, exported as DEFAULT_POLICY (changelog entry on change)
 │   │   └── tests/{conformance,architecture}.rs
 │   ├── moat-hosts/             # src/{lib,pre_tool_use,config_change,cursor}.rs; openclaw, mcp_proxy (planned)

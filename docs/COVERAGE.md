@@ -7,7 +7,7 @@ the verdict and rule ids the default policy must produce for it.
 
 | Threat | Class | Attacks | Asks | Benign |
 |---|---|---|---|---|
-| T1 | Secret exfiltration via shell | 15 | 0 | 0 |
+| T1 | Secret exfiltration via shell | 18 | 2 | 0 |
 | T2 | Secret exfiltration via file tools | 18 | 0 | 0 |
 | T3 | Secret exfiltration via environment | 14 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 25 | 10 | 0 |
@@ -22,6 +22,8 @@ the verdict and rule ids the default policy must produce for it.
 
 ## T1: Secret exfiltration via shell
 
+- `ask-tilde-other-user-home` (ask): Ask [default]
+- `ask-tilde-previous-directory` (ask): Ask [unparseable]
 - `T1-cat-ssh-key` (attacks): Deny [secrets-paths]
 - `T1-curl-upload-ssh-key` (attacks): Deny [secrets-paths]
 - `T1-substitution-exfil` (attacks): Deny [secrets-paths]
@@ -31,6 +33,9 @@ the verdict and rule ids the default policy must produce for it.
 - `T1-kube-config` (attacks): Deny [secrets-paths]
 - `T1-gh-token-file` (attacks): Deny [secrets-paths]
 - `T1-plant-authorized-key` (attacks): Deny [secrets-paths]
+- `T1-tilde-user-ssh-key` (attacks): Deny [secrets-paths]
+- `T1-tilde-user-copy-credentials` (attacks): Deny [secrets-paths]
+- `T1-tilde-user-plant-shell-rc` (attacks): Deny [shell-rc]
 - `T1-grep-history-for-tokens` (attacks): Deny [secrets-paths]
 - `T1-recursive-grep-of-secret-dir` (attacks): Deny [secrets-paths]
 - `T1-rg-unrestricted-secret-dir` (attacks): Deny [secrets-paths]

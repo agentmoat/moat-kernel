@@ -317,3 +317,6 @@
   context: { cwd: /Users/me, project: /Users/me/code/app }
   action: { fs_read: "/Users/me/code/app/src/main.rs" }
   expect: { verdict: allow, rules: [project-fs] }
+- id: benign-tilde-plus-is-the-working-directory
+  action: { shell: "cat ~+/src/main.rs" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }

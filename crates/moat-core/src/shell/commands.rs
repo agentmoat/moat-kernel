@@ -123,14 +123,10 @@ fn classify_simple(
         }
     }
     for r in &cmd.reads {
-        sink.push(AtomicAction::FsRead {
-            path: normalise(r, ctx),
-        })?;
+        sink.push(AtomicAction::FsRead { path: ctx.path(r)? })?;
     }
     for w in &cmd.writes {
-        sink.push(AtomicAction::FsWrite {
-            path: normalise(w, ctx),
-        })?;
+        sink.push(AtomicAction::FsWrite { path: ctx.path(w)? })?;
     }
 
     let mut idx = 0;
@@ -175,7 +171,7 @@ fn classify_simple(
         && let Some(file) = argv.get(1)
     {
         sink.push(AtomicAction::FsRead {
-            path: normalise(file, ctx),
+            path: ctx.path(file)?,
         })?;
     }
     classify_arguments(&argv, program, words, ctx, sink)?;
@@ -196,7 +192,7 @@ fn classify_simple(
         }
         if let Some(script) = run.script {
             sink.push(AtomicAction::FsRead {
-                path: normalise(script, ctx),
+                path: ctx.path(script)?,
             })?;
         }
         return Ok(());
@@ -335,7 +331,7 @@ fn classify_arguments(
             let is_write = WRITE_ALL_PATHS.contains(&program)
                 || in_place_edit
                 || (WRITE_LAST_PATH.contains(&program) && Some(i) == destination);
-            let path = normalise(candidate, ctx);
+            let path = ctx.path(candidate)?;
             sink.push(if is_write {
                 AtomicAction::FsWrite { path }
             } else {
@@ -346,7 +342,7 @@ fn classify_arguments(
         if program == "dd"
             && let Some((key, value)) = tok.split_once('=')
         {
-            let path = normalise(value, ctx);
+            let path = ctx.path(value)?;
             match key {
                 "if" => sink.push(AtomicAction::FsRead { path })?,
                 "of" => sink.push(AtomicAction::FsWrite { path })?,
@@ -376,7 +372,7 @@ fn scan_payload(
     for raw in payload.split(is_separator).filter(|s| !s.is_empty()) {
         if paths::looks_like_path(raw) {
             sink.push(AtomicAction::FsRead {
-                path: normalise(raw, ctx),
+                path: ctx.path(raw)?,
             })?;
         } else if let Some(host) = host::of_word(raw) {
             sink.push(AtomicAction::Net { host })?;
@@ -431,8 +427,4 @@ fn push_pipelines(tokens: &[Token], sink: &mut Sink) -> Result<(), ClassifyError
         })?;
     }
     Ok(())
-}
-
-fn normalise(raw: &str, ctx: &ShellContext<'_>) -> String {
-    paths::normalise(raw, ctx.home, ctx.project, ctx.cwd)
 }

@@ -529,7 +529,9 @@ Rules:
 
 ### 7.3 Path canonicalisation
 
-`~` → home; relative → joined with hook `cwd`; `..` collapsed lexically in the core.
+`~` → home; `~name` → home when `name` is its last component, otherwise the sibling
+`parent(home)/name`; `~+` → `cwd`; `~-` → unknown (ask); relative → joined with hook
+`cwd`; `..` collapsed lexically in the core.
 `moat guard` then resolves symlinks through a caller-supplied `PathResolver` (ADR-009):
 an existing path is canonicalised, a path that does not exist yet resolves through its
 deepest existing ancestor, a dangling link through its target (at most 8 hops). A result

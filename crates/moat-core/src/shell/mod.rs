@@ -45,6 +45,7 @@ mod tokens;
 
 use crate::action::AtomicAction;
 use crate::lexer::LexError;
+use crate::paths;
 
 /// Result of classifying a command line.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,6 +60,15 @@ pub struct ShellContext<'a> {
     pub home: &'a str,
     pub project: Option<&'a str>,
     pub cwd: &'a str,
+}
+
+impl ShellContext<'_> {
+    /// The canonical path a shell word names, or an error when it depends on a
+    /// directory that is not known (`~-`), which makes the command `ask`.
+    pub(crate) fn path(&self, word: &str) -> Result<String, ClassifyError> {
+        paths::resolve(word, self.home, self.project, Some(self.cwd))
+            .ok_or_else(|| ClassifyError::UnknownDirectory(word.to_owned()))
+    }
 }
 
 /// Maximum nesting of `$( … )`, `sh -c`, `eval` and wrapper commands.
@@ -92,6 +102,8 @@ pub(crate) enum ClassifyError {
     TooManyActions,
     #[error("cannot interpret `{option}` for `{program}`")]
     ShellOption { program: String, option: String },
+    #[error("`{0}` names a path relative to a directory that is not known")]
+    UnknownDirectory(String),
 }
 
 /// Accumulates atomic actions with de-duplication and a hard size bound.
