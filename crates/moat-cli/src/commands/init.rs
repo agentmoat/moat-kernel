@@ -79,10 +79,12 @@ pub fn run(args: &InitArgs) -> Result<Code> {
             Outcome::Updated => "updated",
             Outcome::Unchanged => "unchanged",
         };
+        let events: Vec<&str> = config.hooks.iter().map(|spec| spec.event).collect();
         println!(
-            "{prefix} {:<16} {} ({verb}: PreToolUse → {} guard --host {})",
+            "{prefix} {:<16} {} ({verb}: {} → {} guard --host {})",
             host.display_name(),
             config.settings_path.display(),
+            events.join(", "),
             binary.display(),
             host.id()
         );

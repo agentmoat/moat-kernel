@@ -197,8 +197,8 @@ approval:
 ✔ policy           /Users/you/.moat/policy.yaml (defaults v1)
 ✔ audit log        /Users/you/.moat/audit.db
 ✔ environment      /Users/you/.moat/environment.json (12 dirs, 28 programs pinned)
-✔ Claude Code      /Users/you/.claude/settings.json (installed: PreToolUse → /Users/you/.cargo/bin/moat guard --host claude-code)
-✔ Cursor           /Users/you/.cursor/hooks.json (installed: PreToolUse → /Users/you/.cargo/bin/moat guard --host cursor)
+✔ Claude Code      /Users/you/.claude/settings.json (installed: PreToolUse, ConfigChange → /Users/you/.cargo/bin/moat guard --host claude-code)
+✔ Cursor           /Users/you/.cursor/hooks.json (installed: beforeShellExecution, beforeMCPExecution, beforeReadFile, preToolUse → /Users/you/.cargo/bin/moat guard --host cursor)
 ✔ lock             /Users/you/.moat/policy.lock (6 files pinned)
 done. run `moat status` any time to verify.
 ```
