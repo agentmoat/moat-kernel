@@ -10,12 +10,12 @@ the verdict and rule ids the default policy must produce for it.
 | T1 | Secret exfiltration via shell | 31 | 19 | 3 |
 | T2 | Secret exfiltration via file tools | 20 | 1 | 1 |
 | T3 | Secret exfiltration via environment | 14 | 3 | 0 |
-| T4 | Destructive git / filesystem operations | 28 | 18 | 0 |
+| T4 | Destructive git / filesystem operations | 28 | 19 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 2 | 0 |
-| T7 | Obfuscation and nested execution | 51 | 36 | 2 |
+| T7 | Obfuscation and nested execution | 51 | 37 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 5 | 0 | 0 |
-| T9 | Hook / policy tampering by the agent | 45 | 9 | 3 |
+| T9 | Hook / policy tampering by the agent | 48 | 9 | 3 |
 | T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
 | T11 | Time-of-check / time-of-use, symlinks | 15 | 2 | 0 |
 | T12 | Network to unknown hosts | 19 | 8 | 1 |
@@ -141,6 +141,7 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-checkout-dot-discards-changes` (ask): Ask [default]
 - `ask-force-checkout` (ask): Ask [default]
 - `ask-sort-output-outside-project` (ask): Ask [default]
+- `ask-sed-in-place-outside-project` (ask): Ask [default]
 - `T4-force-push` (attacks): Deny [destructive]
 - `T4-force-with-lease` (attacks): Deny [destructive]
 - `T4-rm-home` (attacks): Deny [destructive]
@@ -239,6 +240,7 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-sed-script-file` (ask): Ask [default]
 - `ask-sed-unknown-command` (ask): Ask [default]
 - `ask-sed-script-ambiguous-under-bsd` (ask): Ask [default]
+- `ask-sed-bare-in-place-suffix-is-ambiguous` (ask): Ask [default]
 - `T7-bash-c` (attacks): Deny [secrets-paths]
 - `T7-sh-c-nested-twice` (attacks): Deny [secrets-paths]
 - `T7-eval` (attacks): Deny [pipe-to-shell]
@@ -357,6 +359,9 @@ the verdict and rule ids the default policy must produce for it.
 - `T9-uniq-output-operand-bashrc` (attacks): Deny [shell-rc]
 - `T9-sed-write-command-zshrc` (attacks): Deny [shell-rc]
 - `T9-sed-substitute-write-flag-moat-policy` (attacks): Deny [kernel-self]
+- `T9-sed-in-place-long-option-zshrc` (attacks): Deny [shell-rc]
+- `T9-sed-in-place-in-cluster-git-config` (attacks): Ask [default]
+- `T9-sed-in-place-backup-creates-envrc` (attacks): Deny [secrets-paths]
 - `benign-move-project-file` (benign): Allow [dev-shell]
 - `benign-taint-webfetch-then-source-edit` (benign): Allow [project-fs]
 - `benign-ci-workflow-edit-in-a-clean-session` (benign): Allow [project-fs]

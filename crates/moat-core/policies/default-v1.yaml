@@ -312,13 +312,14 @@ allow:
       - "mypy *"
       - "golangci-lint*"
   - id: text-tools
-    reason: read-only text tools; the classifier reads their options (shell/text.rs)
+    reason: read-only text tools; the classifier reads their options and scripts (shell/text.rs)
     shell:
+      - "sed *"
       - "sort *"
       - "uniq *"
       - "cut *"
       # what the classifier cannot prove read-only is reported as `<program> @<argument>`
-      - "!{sort,uniq,cut} @*"
+      - "!{sed,sort,uniq,cut} @*"
   - id: registries
     net:
       - "api.github.com"

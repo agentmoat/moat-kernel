@@ -360,7 +360,6 @@ fn classify_arguments(
     // For copy-like programs the destination is the last operand, which may be a
     // remote spec (`host:/dir`); only a local destination is a write.
     let destination = (1..argv.len()).rev().find(|&i| !argv[i].starts_with('-'));
-    let in_place_edit = program == "sed" && argv.iter().any(|a| a.starts_with("-i"));
     let options_end = argv.iter().position(|a| a == "--");
 
     for (i, (tok, word)) in argv.iter().zip(words).enumerate() {
@@ -401,7 +400,6 @@ fn classify_arguments(
         };
         if let Some(file) = file {
             let is_write = WRITE_ALL_PATHS.contains(&program)
-                || in_place_edit
                 || text_operands.writes.contains(&i)
                 || (WRITE_LAST_PATH.contains(&program) && Some(i) == destination);
             if is_write {
