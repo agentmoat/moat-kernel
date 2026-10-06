@@ -451,3 +451,15 @@
   threat: T4
   action: { shell: "sort -o /tmp/sorted.txt data.txt" }
   expect: { verdict: ask, rules: [default] }
+- id: ask-sed-script-file
+  threat: T7
+  action: { shell: "sed -f fix.sed src/lib.rs" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-sed-unknown-command
+  threat: T7
+  action: { shell: "sed -n 'F' src/lib.rs" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-sed-script-ambiguous-under-bsd
+  threat: T7
+  action: { shell: "sed p -e 'e id' src/lib.rs" }
+  expect: { verdict: ask, rules: [default] }

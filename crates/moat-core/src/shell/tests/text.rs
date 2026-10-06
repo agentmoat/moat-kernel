@@ -45,9 +45,57 @@ fn unknown_options_are_reported() {
     ] {
         assert!(has_shell(&parsed(cmd), marker), "{cmd}");
     }
-    assert!(
-        !parsed("sort -rn -k2 x | uniq -c")
-            .iter()
-            .any(|a| matches!(a, AtomicAction::Shell { argv } if argv[1].starts_with('@')))
-    );
+    assert!(!has_unproven(&parsed("sort -rn -k2 x | uniq -c")));
+}
+
+fn has_unproven(atoms: &[AtomicAction]) -> bool {
+    atoms.iter().any(
+        |a| matches!(a, AtomicAction::Shell { argv } if argv.get(1).is_some_and(|w| w.starts_with('@'))),
+    )
+}
+
+#[test]
+fn sed_script_is_not_a_file() {
+    for cmd in [
+        "sed -n '/start/,/end/p' f",
+        "sed -n -e 1,20p -e '$p' f",
+        "sed --expression=/x/d f",
+        "sed -n -e /x/d f -E",
+    ] {
+        let a = parsed(cmd);
+        assert!(has_read(&a, "/p/f"), "{cmd}");
+        assert!(!has_unproven(&a), "{cmd}");
+        assert!(
+            !a.iter()
+                .any(|x| matches!(x, AtomicAction::FsRead { path } if path != "/p/f")),
+            "{cmd}"
+        );
+    }
+}
+
+#[test]
+fn sed_script_files() {
+    let a = parsed("sed -n '1r ~/.ssh/id_rsa' x");
+    assert!(has_read(&a, "/p/~/.ssh/id_rsa"));
+    let a = parsed("sed -n '1r /Users/me/.ssh/id_rsa' x");
+    assert!(has_read(&a, "/Users/me/.ssh/id_rsa"));
+    assert!(has_write(&parsed("sed 's/a/b/w /tmp/o' x"), "/tmp/o"));
+}
+
+#[test]
+fn sed_forms_that_may_do_more_are_reported() {
+    for cmd in [
+        "sed -n '1e id' x",
+        "sed 's/.*/id/e' x",
+        "sed -f prog.sed x",
+        "sed -l 5 p x",
+        // BSD reads `s/a/b/` as the suffix and `x` as the script
+        "sed -i s/a/b/ x",
+        "sed -i'/tmp/*' s/a/b/ x",
+        // BSD stops at `p`: `-e` and `e id` are files, but GNU runs `e id`
+        "sed p -e 'e id' x",
+        "sed notes.txt -n -e p",
+    ] {
+        assert!(has_unproven(&parsed(cmd)), "{cmd}");
+    }
 }
