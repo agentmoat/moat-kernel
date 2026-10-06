@@ -9,6 +9,7 @@ mod common;
 mod allow;
 mod approvals;
 mod cli;
+mod closed_pipe;
 mod config_change;
 mod cursor;
 mod guard;

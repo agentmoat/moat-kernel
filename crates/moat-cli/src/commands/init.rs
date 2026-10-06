@@ -1,5 +1,7 @@
 //! `moat init`: create the state directory, default policy, audit log and host hooks.
 
+use std::io::Write as _;
+
 use anyhow::Result;
 use moat_audit::Store;
 use moat_hosts::Host;
@@ -10,17 +12,19 @@ use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HostConfig, Outcome};
 use crate::integrity;
+use crate::render::Deferred;
 
 pub fn run(args: &InitArgs) -> Result<Code> {
     let dry_run = args.dry_run;
     let prefix = if dry_run { "would" } else { "✔" };
     let home = Home::locate()?;
     let binary = crate::install::hook_binary()?;
+    let mut out = Deferred::default();
 
     if !dry_run {
         home.ensure()?;
     }
-    println!("{prefix} state directory  {}", home.root().display());
+    writeln!(out, "{prefix} state directory  {}", home.root().display())?;
 
     let policy_path = home.policy_path();
     let wrote_policy = if dry_run {
@@ -29,18 +33,23 @@ pub fn run(args: &InitArgs) -> Result<Code> {
         home.ensure_policy()?
     };
     if wrote_policy {
-        println!(
+        writeln!(
+            out,
             "{prefix} policy           {} (defaults v1)",
             policy_path.display()
-        );
+        )?;
     } else {
-        println!("✔ policy           {} (kept)", policy_path.display());
+        writeln!(out, "✔ policy           {} (kept)", policy_path.display())?;
     }
 
     if !dry_run {
         Store::open(&home.audit_path())?;
     }
-    println!("{prefix} audit log        {}", home.audit_path().display());
+    writeln!(
+        out,
+        "{prefix} audit log        {}",
+        home.audit_path().display()
+    )?;
 
     let hosts = match &args.hosts {
         Some(explicit) => explicit.clone(),
@@ -50,22 +59,27 @@ pub fn run(args: &InitArgs) -> Result<Code> {
             .collect(),
     };
     if hosts.is_empty() {
-        println!("· hooks            no supported host found; pass --hosts to force");
+        writeln!(
+            out,
+            "· hooks            no supported host found; pass --hosts to force"
+        )?;
     }
     if dry_run {
-        println!(
+        writeln!(
+            out,
             "would environment      {}",
             home.environment_path().display()
-        );
+        )?;
     } else {
         let snapshot = Snapshot::capture();
         snapshot.save(&home.environment_path())?;
-        println!(
+        writeln!(
+            out,
             "✔ environment      {} ({} dirs, {} programs pinned)",
             home.environment_path().display(),
             snapshot.path.len(),
             snapshot.programs.len()
-        );
+        )?;
     }
 
     if !dry_run {
@@ -80,31 +94,34 @@ pub fn run(args: &InitArgs) -> Result<Code> {
             Outcome::Unchanged => "unchanged",
         };
         let events: Vec<&str> = config.hooks.iter().map(|spec| spec.event).collect();
-        println!(
+        writeln!(
+            out,
             "{prefix} {:<16} {} ({verb}: {} → {} guard --host {})",
             host.display_name(),
             config.settings_path.display(),
             events.join(", "),
             binary.display(),
             host.id()
-        );
+        )?;
     }
 
     if dry_run {
-        println!("would lock             {}", home.lock_path().display());
+        writeln!(out, "would lock             {}", home.lock_path().display())?;
     } else {
         let lock = integrity::repin(&home, &binary)?;
-        println!(
+        writeln!(
+            out,
             "✔ lock             {} ({} files pinned)",
             home.lock_path().display(),
             lock.entries.len()
-        );
+        )?;
     }
 
     if dry_run {
-        println!("dry run: nothing was written");
+        writeln!(out, "dry run: nothing was written")?;
     } else {
-        println!("done. run `moat status` any time to verify.");
+        writeln!(out, "done. run `moat status` any time to verify.")?;
     }
+    out.finish()?;
     Ok(Code::Ok)
 }

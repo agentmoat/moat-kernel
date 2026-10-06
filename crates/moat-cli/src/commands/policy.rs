@@ -1,5 +1,6 @@
 //! `moat policy lint` and `moat policy check`.
 
+use std::io::{self, Write as _};
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -17,8 +18,9 @@ use crate::render;
 pub fn lint(args: &LintArgs) -> Result<Code> {
     let (policy, path) = load(args.file.clone())?;
     let warnings = moat_core::lint::warnings(&policy);
+    let mut out = io::stdout().lock();
     for warning in &warnings {
-        println!("warning: {warning}");
+        writeln!(out, "warning: {warning}")?;
     }
     let (deny, allow, ask) = policy.rule_count();
     let suffix = match warnings.len() {
@@ -26,10 +28,11 @@ pub fn lint(args: &LintArgs) -> Result<Code> {
         1 => ", 1 warning".to_owned(),
         n => format!(", {n} warnings"),
     };
-    println!(
+    writeln!(
+        out,
         "ok: {} ({deny} deny, {allow} allow, {ask} ask groups{suffix})",
         path.display()
-    );
+    )?;
     Ok(Code::Ok)
 }
 
