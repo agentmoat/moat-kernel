@@ -1,0 +1,226 @@
+# Architecture
+
+How `moat` turns one agent tool call into a decision, a hook response and an audit
+record. This describes the code on `main`. The working rules for changing it are in
+[AGENTS.md](../AGENTS.md); the policy language is in [POLICY.md](POLICY.md); what
+it defends against is in [THREAT_MODEL.md](THREAT_MODEL.md).
+
+## 1. Crates
+
+```
+moat-cli ──► moat-hosts ──► moat-core
+   │                            ▲
+   ├──► moat-audit ─────────────┘
+   └──► moat-core
+```
+
+| Crate | Role | Rules |
+|---|---|---|
+| `moat-core` | Policy model and lint, POSIX lexer (`lexer/`), shell classifier (`shell/`), URL host parser (`host.rs`), patterns, path normalisation, the engine, `ProgramResolver` and `PathResolver` traits | Pure: no I/O, no `unsafe`, depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Builds for `wasm32-unknown-unknown` in CI; `tests/architecture.rs` enforces the dependency allowlist and the 500-line file budget |
+| `moat-hosts` | Host adapters: `pre_tool_use.rs` (Claude Code and Codex `PreToolUse`), `config_change.rs` (Claude Code `ConfigChange`), `cursor.rs`, `mcp.rs` (MCP arguments to paths and URLs), `patch.rs` (Codex `apply_patch` file list) | Translate payload to `Action` and `Decision` to response. Never decide |
+| `moat-audit` | SQLite store, time-window and session queries, redaction | Redact before persisting. Typed `thiserror` errors |
+| `moat-cli` | The `moat` binary (crate `moat-kernel`): commands, hook installation, the policy lock, approvals, the environment snapshot, the filesystem resolvers, rendering, exit codes | The only crate that touches files, the environment and the terminal |
+
+No crate depends on `moat-cli`. Planned crates for enforcement and proxying are on
+the [roadmap](ROADMAP.md); none exist yet.
+
+## 2. One tool call, end to end
+
+```
+host payload (stdin)
+  └─► adapter (moat-hosts)                 Action, or none for an ungoverned tool
+        └─► policy lock check              drift ⇒ deny [kernel-integrity]
+              └─► load policy + overlay    ~/.moat/policy.yaml + policy.d/approved.yaml
+                    └─► classify (moat-core)    Action ⇒ atomic actions
+                          └─► engine            per atom: deny → allow → ask → defaults
+                                └─► combine     strictest wins ⇒ Decision
+                                      └─► session grant   ask on a granted shell command ⇒ allow
+                                            └─► audit record      failure ⇒ deny [kernel-error]
+                                                  └─► hook response (stdout) + exit code
+```
+
+`moat guard --host <id>` (`commands/guard.rs`) runs this once per tool call and
+exits. There is no daemon.
+
+1. **Read.** At most 1 MiB of UTF-8 from stdin. An empty or unreadable payload is a
+   `kernel-error` deny.
+2. **Adapt.** The host adapter parses the payload into a `HookRequest`: host, session
+   id, call id, working directory, tool name, and an `Action` (`Shell`,
+   `ForeignShell`, `FsRead`, `FsWrite`, `Net`, `Fetch`, `Patch`, `McpTool`). A tool
+   the adapter does not govern yields no action and is allowed with rule `ungoverned`
+   and recorded. A malformed payload is a `kernel-error` deny.
+3. **ConfigChange.** A Claude Code `ConfigChange` takes its own path: the changed file
+   is compared with `policy.lock`, and a pinned file that drifted is blocked for the
+   session (§6).
+4. **Lock.** `integrity::violation` recomputes every digest in `policy.lock`. Any drift
+   denies the call with `kernel-integrity` before the policy is read.
+5. **Policy.** `~/.moat/policy.yaml` is parsed and linted (1 MiB limit). Rules from
+   `policy.d/approved.yaml` are appended to `allow` and the result is linted again.
+6. **Context.** `EvalContext` carries the home directory, the project root (git root
+   above the call's working directory, never the home directory, an ancestor of it or
+   a filesystem root; `project.rs`), their symlink-resolved spellings, the working
+   directory and whether paths compare case-insensitively.
+7. **Decide.** `CompiledPolicy::compile(policy, ctx).decide_with(action, snapshot,
+   FsPathResolver)` classifies and evaluates (§3, §4).
+8. **Grant.** An `ask` for a shell command whose exact text was granted for this host
+   session with `moat allow` becomes `allow` with rule `approved-session`. A grant
+   never touches a `deny`.
+9. **Record.** The event is written to the audit log. If it cannot be written, the
+   decision becomes a `kernel-error` deny: an unrecorded call is not allowed.
+10. **Respond.** The adapter renders the host's response document. `deny` also prints
+    the reason line on stderr and exits 2.
+
+A panic inside steps 1–10 is caught and answered with a deny and exit 2, because
+Claude Code treats exit 101 as a non-blocking error.
+
+## 3. Classification
+
+`moat-core` turns an `Action` into atomic actions (`AtomicAction`): `Shell`,
+`Pipeline`, `FsRead`, `FsWrite`, `Net`, `Fetch`, `EnvRead`, `EnvSet`, `McpTool`.
+
+- **Shell** (ADR-005). The lexer (`lexer/`) reads words, quotes, escapes, operators,
+  redirections, `$( … )`, backticks, here-documents and here-strings, up to 64 KB. The
+  classifier (`shell/`) emits one `Shell` atom per simple command and one `Pipeline`
+  atom per pipeline suffix. It recurses into `sh -c`, `eval`, substitutions and
+  wrappers (`sudo`, `env`, `xargs`, `timeout`, …) to depth 4. It adds `fs.read`/`fs.write`
+  atoms for redirections and file operands (`operands.rs`), relative paths resolved
+  through `cd`/`pushd` (`cwd.rs`), `net` atoms for URLs and hosts, and `env.*` atoms
+  for assignments and `$VAR` reads. Shell options are read per shell
+  (`invocation.rs`), git's global options are unwrapped (`git.rs`), `make` arguments
+  that run code (`make.rs`), options that run programs (`options.rs`) and decoder
+  pipelines (`decoders.rs`) are surfaced. Inline interpreter code (`python -c`,
+  `node -e`) is scanned for paths, hosts and variable names, not parsed. Output is
+  capped at 2048 atoms.
+- **ForeignShell** (Claude Code `PowerShell`). Always `ask` with rule `unparseable`;
+  there is no PowerShell parser.
+- **Patch** (Codex `apply_patch`). One `fs.write` per added, updated, deleted or
+  moved-to file; a patch naming no file asks.
+- **McpTool.** An `mcp` atom for the tool name, plus `fs.*` and `net` atoms for path-
+  and URL-shaped arguments found at any depth (`moat-hosts/src/mcp.rs`).
+- **Fetch** (Claude Code `WebFetch`). A `fetch` atom for the URL's host (ADR-017).
+
+Anything the lexer or classifier cannot make sense of is `unparseable`, which the
+engine turns into `ask`, never `allow`.
+
+## 4. Decision
+
+For each atomic action, the lists are tried in order `deny → allow → ask`; the first
+list with a match decides that atom. If none matches, `defaults` decides (rule id
+`default.<kind>` or `default`). The verdict for the tool call is the strictest across
+its atoms: `deny > ask > allow`. Deny is absolute (ADR-002). A `fetch` atom also
+matches `net` patterns and falls back to the `net` default (ADR-017). The decision
+carries the rule ids that produced the final verdict and weaker matches as context.
+
+### Resolvers
+
+The engine needs two facts that live on the filesystem. `moat-core` defines a trait
+for each and the CLI implements it:
+
+| Trait | ADR | Implementation | What it adds |
+|---|---|---|---|
+| `ProgramResolver` | ADR-008 | `environment.rs` (`Snapshot`) | The first word of each command is resolved through the search path recorded at `moat init` (`environment.json`), not the hook's inherited `PATH`. A pinned program (policy `executables:` or the snapshot) that now resolves elsewhere is a deny with rule `executables` |
+| `PathResolver` | ADR-009 | `realpath.rs` (`FsPathResolver`) | Every `fs.read`/`fs.write` path is also checked at its symlink-resolved location; both are evaluated and the strictest wins. New files resolve through their deepest existing ancestor |
+
+Patterns naming `${project}` or `~` are compiled for both the written and the resolved
+spelling of the root, so a project under macOS `/tmp` → `/private/tmp` matches either
+way. `moat policy check` uses the same resolvers (the snapshot only when an
+installation exists) and, against the installed policy, the same lock check.
+
+## 5. Hook responses and exit codes
+
+| Host event | Response | Exit |
+|---|---|---|
+| Claude Code, Codex `PreToolUse` | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":…,"permissionDecisionReason":…}}` | 0, or 2 on deny |
+| Cursor `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` | `{"permission":…,"user_message":…,"agent_message":…}` | 0, or 2 on deny |
+| Claude Code `ConfigChange` | `{}` or `{"decision":"block","reason":…}` | 0, or 2 on block |
+
+`ask` is the host's own prompt; `moat` has no prompt of its own. Exit codes follow
+ADR-004 and ADR-015: 0 allow or ask, 2 deny, 3 unresolved ask from `moat policy
+check`, 64 usage or configuration error. `guard` never exits 64: an argument it cannot
+parse is a deny with exit 2, because Claude Code and Codex proceed on any other
+non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
+`moat init` sets it on every Cursor hook.
+
+## 6. Self-protection
+
+- **Policy lock** (ADR-006). `~/.moat/policy.lock` pins SHA-256 digests of the policy,
+  `environment.json`, `approvals.json`, `policy.d/approved.yaml` and every hook file
+  `moat` installed, keyed by location so a swap for a symlink is a modification. It is
+  verified on every `guard` call. Only a person re-pins: `moat init`, or `moat doctor
+  --accept` and `moat allow` from an interactive terminal.
+- **ConfigChange veto.** Claude Code reports settings changes; a pinned file that no
+  longer matches the lock is blocked for the session. Codex and Cursor have no such
+  event, so there the next tool call is denied instead.
+- **`kernel-self` rules.** The default policy denies agent writes to the state and
+  host directories, hook files and any `bin/moat`, and denies `moat
+  allow|doctor|init|policy` from an agent, including under pseudo-terminal wrappers
+  (ADR-011, ADR-014).
+- **Terminal check.** `moat allow` and `moat doctor --accept` refuse to run without a
+  terminal (`terminal.rs`). The debug-only `MOAT_ASSUME_TTY` override exists for tests.
+- **Stable hook path** (ADR-016). Hooks run the package manager's stable link to
+  `moat`, not a versioned file an upgrade deletes; `doctor` and `status` name a hook
+  whose binary is missing or is a different `moat`.
+
+## 7. Audit log
+
+`~/.moat/audit.db` is SQLite in WAL mode, created with mode 0600, with one `events`
+table (time, host, session, call id, working directory, tool, action, verdict, rules,
+reasons, latency). Every governed and ungoverned call is recorded. Command, path and
+URL fields pass through `moat_audit::redact` first (bearer and basic auth,
+`key=value` credentials, common token shapes, URL passwords). `show`, `replay` and
+`report` read it; nothing leaves the machine.
+
+## 8. Files on disk
+
+```
+~/.moat/                       ($MOAT_HOME overrides; directory 0700, files 0600)
+  policy.yaml                  user policy (moat init writes the default once)
+  policy.d/approved.yaml       permanent approvals from `moat allow --always`
+  approvals.json               session grants from `moat allow`
+  environment.json             search path and program locations recorded at init
+  policy.lock                  digests of the files above and of installed hook files
+  audit.db                     audit log
+~/.claude/settings.json        Claude Code hooks ($CLAUDE_CONFIG_DIR overrides)
+~/.codex/hooks.json            Codex hooks ($CODEX_HOME overrides)
+~/.cursor/hooks.json           Cursor hooks ($CURSOR_CONFIG_DIR overrides)
+```
+
+## 9. Invariants
+
+The full list, with the tests that hold each one, is AGENTS.md §3. In short: deny is
+absolute; strictest wins; unparseable is `ask`; every error path in `guard` is a deny
+with exit 2; exit codes 2 and 3 mean nothing else; nothing persisted skips
+redaction; the core stays pure; `moat init` never overwrites a policy or duplicates a
+hook; the lock is checked before any decision.
+
+## 10. Repository layout
+
+```
+crates/moat-core/              decision core; policies/default-v1.yaml is the shipped policy
+crates/moat-hosts/             host adapters
+crates/moat-audit/             audit store
+crates/moat-cli/               the moat binary; tests/e2e/ runs it in isolated homes
+tests/conformance/             attacks.yaml, ask.yaml, benign.yaml: one tool call each,
+                               with the verdict the default policy must give
+tests/fixtures/hosts/          real host payloads (claude-code, codex, cursor)
+fuzz/                          cargo-fuzz targets: decide_shell, policy_parse,
+                               host_payload, literal_pattern (separate workspace)
+docs/                          this document, POLICY, THREAT_MODEL, ROADMAP,
+                               COVERAGE (generated), adr/
+scripts/ci/quality-gate.sh     the one gate CI and the pre-push hook run
+```
+
+## 11. Testing layers
+
+| Layer | Where | Runs |
+|---|---|---|
+| Unit | next to the code (`#[cfg(test)]`, `tests.rs` modules) | every PR, all OS |
+| Architecture invariants | `crates/moat-core/tests/architecture.rs` | every PR |
+| Conformance (decide) | `tests/conformance/` through `crates/moat-core/tests/conformance.rs`; generates `docs/COVERAGE.md` and fails on a threat class without an attack fixture | every PR, all OS |
+| Golden host payloads | `tests/fixtures/hosts/` | every PR |
+| End to end | `crates/moat-cli/tests/e2e/` (real binary, isolated `HOME`/`MOAT_HOME`) | every PR, all OS |
+| `wasm32` purity build | CI job | every PR |
+| Fuzz | `fuzz/`, one minute per target on PRs, ten minutes weekly | CI |
+
+CI runs `scripts/ci/quality-gate.sh` on macOS (arm64, x64), Linux and Windows, plus
+`cargo-deny`, the crate packaging check and `actionlint`/`zizmor` on workflows.
