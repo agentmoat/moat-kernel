@@ -19,9 +19,24 @@ deny:
       - "~/.netrc"
       - "~/.docker/config.json"
       - "~/.kube/**"
+      - "~/.config/gcloud/**"
+      - "~/.azure/**"
+      # package-registry and git credential stores
+      - "~/.git-credentials"
+      - "~/.npmrc"
+      - "~/.pypirc"
+      - "~/.cargo/credentials"
+      - "~/.cargo/credentials.toml"
+      # shell history holds pasted tokens and passwords
+      - "~/.zsh_history"
+      - "~/.bash_history"
       - "**/.env"
       - "**/.env.*"
       - "**/.envrc"
+      # committed templates of .env carry no values
+      - "!**/.env.example"
+      - "!**/.env.sample"
+      - "!**/.env.template"
       - "~/Library/Keychains/**"
     fs.write: *secret-paths
   - id: env-secrets
@@ -132,7 +147,8 @@ deny:
 
 allow:
   - id: project-fs
-    fs.read: ["${project}/**"]
+    # the root itself too: a search with no path reads the whole project
+    fs.read: ["${project}", "${project}/**"]
     fs.write: ["${project}/**", "!${project}/.git/**", "!${project}/.moat/**"]
   - id: dev-shell
     shell:
