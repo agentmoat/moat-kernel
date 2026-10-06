@@ -445,3 +445,18 @@ fn roots_match_under_their_resolved_spelling_too() {
         "the resolved spelling is a fact the caller supplies"
     );
 }
+
+/// Matchers are built on first use, but a pattern that does not parse must
+/// still fail the compile, before any decision, whichever kind it belongs to.
+#[test]
+fn a_pattern_broken_by_expansion_fails_the_compile_up_front() {
+    let p = policy("version: 1\ndeny:\n  - id: secret\n    fs.read: ['~/.ssh/**']\n");
+    let broken_home = EvalContext {
+        home: "/h{x".into(),
+        ..ctx()
+    };
+    assert!(matches!(
+        CompiledPolicy::compile(&p, &broken_home),
+        Err(PolicyError::BadGlob { .. })
+    ));
+}

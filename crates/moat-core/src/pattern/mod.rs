@@ -1,12 +1,16 @@
 //! Pattern matching helpers shared by all rule kinds (DESIGN.md §6.2).
 
-use globset::{Glob, GlobBuilder, GlobMatcher};
+use globset::GlobBuilder;
 
+mod lazy;
 mod literal;
+mod word;
 pub use literal::literal_shell_pattern;
 
 use crate::lexer;
 use crate::policy::PolicyError;
+use lazy::LazyGlob;
+use word::WordGlob;
 
 /// `!pattern` → `(true, "pattern")`. A leading `!` makes a pattern an exclusion
 /// within its list, for globs and shell patterns alike.
@@ -47,9 +51,9 @@ pub(crate) fn any_match<C: ?Sized, M: Matcher<C>>(patterns: &[M], candidate: &C)
 #[derive(Debug, Clone)]
 pub struct GlobPattern {
     source: String,
-    matcher: GlobMatcher,
+    matcher: LazyGlob,
     /// Matcher for `dir` when the pattern is `dir/**`.
-    dir: Option<GlobMatcher>,
+    dir: Option<LazyGlob>,
     /// `!pattern` inside an allow list excludes matches (DESIGN.md §6.2).
     pub negated: bool,
 }
@@ -80,16 +84,16 @@ impl GlobPattern {
         if body.is_empty() {
             return Err(PolicyError::EmptyPattern);
         }
-        let build = |glob: &str| -> Result<GlobMatcher, PolicyError> {
-            let glob: Glob = GlobBuilder::new(glob)
+        let build = |glob: &str| -> Result<LazyGlob, PolicyError> {
+            GlobBuilder::new(glob)
                 .literal_separator(true)
                 .case_insensitive(case_insensitive)
                 .build()
+                .map(LazyGlob::new)
                 .map_err(|e| PolicyError::BadGlob {
                     pattern: raw.to_owned(),
                     error: e,
-                })?;
-            Ok(glob.compile_matcher())
+                })
         };
         let dir = match body.strip_suffix("/**") {
             Some(dir) if !dir.is_empty() => Some(build(dir)?),
@@ -124,46 +128,6 @@ impl GlobPattern {
             || mine.strip_suffix("**").is_some_and(|prefix| {
                 prefix.ends_with('/') && !has_glob_syntax(prefix) && theirs.starts_with(prefix)
             })
-    }
-}
-
-/// Stands in for a literal backslash while matching one shell word. globset
-/// rewrites `\` to `/` in every candidate on Windows (it assumes paths), so a
-/// backslash would match nothing there; swapping it on both sides first makes
-/// shell words match byte for byte on every platform. It is ASCII because
-/// globset's character classes do not match characters outside it.
-const BACKSLASH: &str = "\u{1}";
-
-/// A glob for one shell word. A backslash escapes the next character on every
-/// platform, as in a POSIX shell, so `\\` is a literal backslash.
-#[derive(Debug, Clone)]
-struct WordGlob(GlobMatcher);
-
-impl WordGlob {
-    fn new(word: &str) -> Result<Self, globset::Error> {
-        let mut glob = String::with_capacity(word.len());
-        let mut chars = word.chars().peekable();
-        while let Some(c) = chars.next() {
-            if c == '\\' && chars.peek() == Some(&'\\') {
-                chars.next();
-                glob.push_str(BACKSLASH);
-            } else {
-                glob.push(c);
-            }
-        }
-        GlobBuilder::new(&glob)
-            .literal_separator(false)
-            .backslash_escape(true)
-            .build()
-            .map(|g| Self(g.compile_matcher()))
-    }
-
-    fn is_match(&self, word: &str) -> bool {
-        if word.contains('\\') {
-            self.0.is_match(word.replace('\\', BACKSLASH))
-        } else {
-            self.0.is_match(word)
-        }
     }
 }
 
