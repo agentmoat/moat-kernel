@@ -44,6 +44,8 @@ fuzz_target!(|data: &[u8]| {
         project: Some("/home/me/p".into()),
         cwd: "/home/me/p".into(),
         case_insensitive_paths: false,
+        real_home: None,
+        real_project: None,
     };
     let compiled = CompiledPolicy::compile(&policy, &ctx).expect("linted policy compiles");
     let decision = compiled.decide(&Action::Shell {
