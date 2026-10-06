@@ -16,6 +16,7 @@ mod integrity;
 mod project;
 mod realpath;
 mod render;
+mod taint;
 mod terminal;
 mod time;
 

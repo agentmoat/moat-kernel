@@ -21,3 +21,4 @@ mod lock;
 mod paths;
 mod proxy;
 mod replay_report;
+mod taint;
