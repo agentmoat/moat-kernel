@@ -349,6 +349,8 @@ exits 64: it denies with exit 2 instead, so a broken hook blocks rather than fai
   command that is allowed or that you approve.
 - Claude Code and Codex run the tool call when the hook binary is missing; Cursor
   blocks.
+- Continue CLI (`cn`) loads Claude Code's hooks but treats an `ask` as allow (#264).
+  Run it under `moat run` until it has its own adapter.
 - Tools no hook exposes are not seen: Claude Code `WebSearch`, Codex web search.
 - PowerShell is not parsed; Claude Code `PowerShell` calls always ask.
 

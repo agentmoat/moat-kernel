@@ -103,6 +103,27 @@ Milestone `v1.0.0`; #144 section P3.
 
 Exit (ADR-013): MoatBench meets its gate and the policy schema is stable.
 
+### More agents
+
+Tracking issue #267 lists every agent checked, with the hook API each one offers.
+Until an agent has an adapter, `moat run` can still sandbox it.
+
+| Issue | Agent | Hook it would use |
+|---|---|---|
+| #264 | Continue CLI (`cn`) | Claude Code-compatible `PreToolUse`. Security: `cn` already loads OpenMoat's Claude Code hooks but ignores `ask` |
+| #257 | Gemini CLI | `BeforeTool` |
+| #258 | GitHub Copilot (CLI, cloud agent, VS Code) | `preToolUse` in `.github/hooks` |
+| #259 | Windsurf | `pre_run_command`, `pre_read_code`, `pre_write_code`, `pre_mcp_tool_use` |
+| #260 | Cline | `PreToolUse` script hook |
+| #261 | Kiro | `PreToolUse` command hook |
+| #262 | Amp | plugin `tool.call` event |
+| #263 | goose | `PreToolUse` |
+| #265 | OpenCode | plugin `tool.execute.before` and `permission.ask` |
+| #266 | Junie (CLI) | `PreToolUse` |
+
+Aider and the Zed agent have no pre-execution hook, and Roo Code has shut down; use
+`moat run` for those.
+
 ## The team wedge
 
 A team gets value when one policy and one record cover everyone's agents:
