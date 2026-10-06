@@ -1,9 +1,12 @@
 # moat
 
-`moat` sits between an AI coding agent and your machine. Every tool call the agent
-makes (a shell command, a file read or write, a web fetch, an MCP tool) is checked
-against one policy you control, allowed, asked about or denied with a reason, and
-written to a local audit log. One policy and one log for Claude Code, Codex and Cursor.
+**A firewall and seatbelt for AI coding agents.**
+
+AI coding agents run commands, edit files and call the network on your machine with
+your permissions. One prompt injection in a README, an issue or a web page is enough
+to make an agent read `~/.ssh` and send it somewhere, or wipe a directory. `moat` sits
+between the agent and your machine and enforces one policy you control, for Claude
+Code, Codex and Cursor alike.
 
 ```
 agent tool call ──► moat guard ──► allow ──► the host runs it; logged
@@ -11,17 +14,23 @@ agent tool call ──► moat guard ──► allow ──► the host runs it;
                                  └► ask   ──► the agent's own permission prompt, with the reason
 ```
 
-> **Status: alpha, decide-only** (ADR-013). `moat` decides and records; it does not
-> enforce. Nothing at the operating-system level backs a decision: an allowed command
-> runs with your permissions, so a classifier mistake is a security bug. OS enforcement
-> and an egress proxy gate the beta; the first step, the Standard tier, configures
-> Claude Code's and Codex's own sandboxes from the policy ([below](#host-sandboxes-standard-tier)).
-> The public benchmark gates 1.0. The workspace is at
-> `0.1.0-alpha.0` and has not been released. Expect breaking changes during the alpha.
-> [Roadmap](docs/ROADMAP.md).
+## What it does
 
-Decisions are deterministic: no model is involved. Errors fail closed. The policy,
-the hook files and `moat`'s own state are pinned by a lock checked on every call.
+| Layer | What it stops | State |
+|---|---|---|
+| **Hook decisions** | Every shell command, file read and write, web fetch and MCP call is allowed, asked about or denied before it runs: secret files, destructive commands, `curl \| sh`, edits to the agent's own settings | on `main` |
+| **Host sandboxes** (Standard tier) | The same policy configures Claude Code's and Codex's own OS sandboxes, so scripts hidden inside `npm test` or `build.rs` cannot read secrets or write outside the project | on `main` |
+| **Egress proxy** | `moat proxy`: default-deny network, TLS SNI checked against the host, local, private and cloud-metadata addresses refused | on `main`; hosts are not routed through it yet |
+| **Self-protection** | The policy, hook files and moat's own state are pinned by a lock checked on every call; an agent cannot edit, approve or turn off moat | on `main` |
+| **Audit log** | Every decision in a local SQLite log with a SHA-256 hash chain, so edits in the middle are detected | on `main` |
+| Secrets broker, session taint, audit export, `moat run` (Seatbelt and Landlock), repository policy | Agents that never hold your tokens; exfiltration chains; team reports; a sandbox for agents without one; per-repo rules | in review |
+
+Decisions are deterministic: no model is involved. Errors fail closed.
+
+> **Status: alpha, not released.** The workspace is at `0.1.0-alpha.0`. Expect breaking
+> changes until the beta. What the OS layers enforce, and what they cannot, is listed
+> per host in [THREAT_MODEL](docs/THREAT_MODEL.md); `moat sandbox show` prints it for
+> your policy. [Roadmap](docs/ROADMAP.md).
 
 ## Install
 
@@ -52,8 +61,7 @@ brew install agentmoat/tap/moat
 cargo install moat-kernel --locked --version 0.1.0-alpha.0
 ```
 
-Crate names may change before the first crates.io publish (#122); the binary stays
-`moat`. Each release carries `sha256.sum` and GitHub build attestations:
+Each release carries `sha256.sum` and GitHub build attestations:
 `gh attestation verify <archive> --repo agentmoat/moat-kernel`.
 
 ## Quick start
