@@ -212,7 +212,7 @@ jobs:
           COMMIT: ${{ github.sha }}
         run: |
           {
-            echo "> **decide-only**: decisions are not enforced by the operating system (ADR-013). An allowed command runs with your permissions, so a classifier mistake is a security bug."
+            echo "> **Alpha**: the hook's decisions are not enforced by the operating system (ADR-013). Only commands inside the host sandboxes \`moat init\` configures, or under \`moat run\`, are confined by the OS. Elsewhere an allowed call runs with your permissions, so a classifier mistake is a security bug."
             echo
             printf '%s\n' "$BODY"
           } > "$RUNNER_TEMP/notes.md"

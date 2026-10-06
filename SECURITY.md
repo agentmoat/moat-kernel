@@ -2,10 +2,12 @@
 
 OpenMoat is a security control. Reports about it are handled as such.
 
-**The alpha is decide-only** (ADR-013). OpenMoat decides whether each agent tool call may
-run and records it, but the operating system does not enforce the decision: an allowed
-command runs with your permissions. Until OS enforcement ships in the beta, the shell
-classifier is the security boundary, so a classifier mistake that lets a dangerous
+**In the alpha the operating system enforces only part of the policy** (ADR-013).
+OpenMoat decides whether each agent tool call may run and records it. The operating
+system confines only the commands inside the host sandboxes `moat init` configures
+(Claude Code `Bash`, `PowerShell` and `Monitor`; every Codex command) and agents started
+with `moat run`. Everywhere else an allowed call runs with your permissions and the
+shell classifier is the security boundary, so a classifier mistake that lets a dangerous
 action through is a vulnerability, not a usability bug.
 
 ## Supported versions
@@ -61,6 +63,7 @@ yours.
 | Policy bypass | a command the default policy should deny is allowed, or evaluated as a different action than the one that executes |
 | Parser confusion | quoting, operators, substitutions or encodings that make the classifier see something other than what the shell runs |
 | Fail-open | any error path in `moat guard` that results in `allow` |
+| Sandbox generation | a generated host sandbox setting, Seatbelt profile or Landlock rule that allows more than the policy and than `moat sandbox show` reports |
 | Self-protection gap | an agent tool call that can modify `~/.moat`, host hook configuration or the `moat` binary without a `deny` |
 | Audit integrity | decisions missing from the log, or secrets persisted un-redacted |
 | Supply chain | malicious or vulnerable dependencies; from the first release, artefacts whose checksum or attestation does not verify |
@@ -68,13 +71,13 @@ yours.
 ## Out of scope (today)
 
 These are known limits, documented in `docs/THREAT_MODEL.md` §5 and
-`docs/ROADMAP.md`, and are being built rather than being bugs:
+`docs/ROADMAP.md`, rather than bugs:
 
 | Not yet covered | Status |
 |---|---|
-| OS-level enforcement: a report that an allowed command could do harm because nothing below the decision stops it (a misjudged command is a policy bypass, in scope) | beta (#126, #130) |
-| Network enforcement beyond pattern matching | egress proxy, beta (#127) |
-| Data sent to a host the policy allows (`api.github.com`, registries) by an allowed or approved command, including project scripts such as `npm test` | session taint and enforcement, beta (#127) |
+| OS enforcement where no sandbox applies (Claude Code's file tools, `WebFetch` and MCP calls, Cursor, Windows): a report that an allowed call could do harm because nothing below the decision stops it (a misjudged call is a policy bypass, in scope) | `moat run`; Windows enforcement (#135), Isolated tier (#174, #175) |
+| HTTPS secret injection, and per-host method and path rules, in `moat proxy` | #247 |
+| Data sent to a host the policy allows (`api.github.com`, registries) by an allowed or approved command, including project scripts such as `npm test` | known limit; session taint asks for network after a secret read |
 | PowerShell / cmd tokenisation | Claude Code `PowerShell` always asks; other PowerShell lines are lexed as POSIX and fall through to the `ask` default |
 | Hosts that proceed when the hook binary is missing | host limitation; `moat status` reports it |
 | Agents running in a vendor's cloud rather than on the host | not a target |
