@@ -62,6 +62,10 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
                 field,
             })
     };
+    let cwd = p
+        .cwd
+        .filter(|c| !c.is_empty())
+        .or_else(|| p.workspace_roots.first().cloned());
     let (tool, action) = match event {
         "beforeShellExecution" => (
             "Shell".to_owned(),
@@ -84,15 +88,11 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
         ),
         "preToolUse" => {
             let tool = required(p.tool_name, "tool_name")?;
-            let action = pre_tool_action(&tool, &p.tool_input)?;
+            let action = pre_tool_action(&tool, &p.tool_input, cwd.as_deref())?;
             (tool, action)
         }
         other => return Err(HostError::WrongEvent(other.to_owned())),
     };
-    let cwd = p
-        .cwd
-        .filter(|c| !c.is_empty())
-        .or_else(|| p.workspace_roots.first().cloned());
     Ok(HookRequest {
         host,
         session_id: crate::session_or_unknown(p.conversation_id),
@@ -106,7 +106,11 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
 
 /// Shell commands are governed by `beforeShellExecution`, so `Shell` here is
 /// deliberately ungoverned to avoid deciding and auditing the same command twice.
-fn pre_tool_action(tool: &str, input: &Value) -> Result<Option<Action>, HostError> {
+fn pre_tool_action(
+    tool: &str,
+    input: &Value,
+    cwd: Option<&str>,
+) -> Result<Option<Action>, HostError> {
     let field = |name: &'static str| crate::input_str(input, tool, name);
     Ok(match tool {
         "Write" | "Edit" | "MultiEdit" | "StrReplace" | "Delete" => Some(Action::FsWrite {
@@ -115,6 +119,7 @@ fn pre_tool_action(tool: &str, input: &Value) -> Result<Option<Action>, HostErro
         "Read" => Some(Action::FsRead {
             path: field("file_path")?,
         }),
+        "Grep" | "Glob" => Some(crate::search_root(input, cwd)),
         _ => None,
     })
 }
@@ -199,6 +204,25 @@ mod tests {
             .parse_request(&fixture("preToolUse-shell"))
             .unwrap();
         assert_eq!(shell.action, None);
+    }
+
+    #[test]
+    fn pre_tool_use_search_tools_read_their_path() {
+        let grep = Host::Cursor
+            .parse_request(&fixture("preToolUse-grep"))
+            .unwrap();
+        assert_eq!(
+            grep.action,
+            Some(Action::FsRead {
+                path: "/Users/me/.ssh".into()
+            })
+        );
+        let no_path = r#"{"hook_event_name":"preToolUse","workspace_roots":["/p"],
+            "tool_name":"Glob","tool_input":{"glob_pattern":"**/*.rs"}}"#;
+        assert_eq!(
+            Host::Cursor.parse_request(no_path).unwrap().action,
+            Some(Action::FsRead { path: "/p".into() })
+        );
     }
 
     #[test]

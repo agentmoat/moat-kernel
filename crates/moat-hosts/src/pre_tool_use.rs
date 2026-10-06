@@ -82,17 +82,7 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
         "apply_patch" => Action::Patch {
             writes: crate::patch::writes(&field("command")?),
         },
-        "Glob" | "Grep" => {
-            let path = input
-                .get("path")
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .or(cwd)
-                .unwrap_or(".");
-            Action::FsRead {
-                path: path.to_owned(),
-            }
-        }
+        "Glob" | "Grep" => crate::search_root(input, cwd),
         name if name.starts_with("mcp__") => crate::mcp::action(name, input)?,
         _ => return Ok(None),
     };

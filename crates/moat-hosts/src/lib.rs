@@ -49,6 +49,20 @@ fn input_str(input: &Value, tool: &str, field: &'static str) -> Result<String, H
         })
 }
 
+/// The directory a search tool (`Glob`, `Grep`) reads: its `path`, else the
+/// working directory.
+fn search_root(input: &Value, cwd: Option<&str>) -> Action {
+    let path = input
+        .get("path")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .or(cwd)
+        .unwrap_or(".");
+    Action::FsRead {
+        path: path.to_owned(),
+    }
+}
+
 /// The host's session id, or a placeholder when it sent none.
 fn session_or_unknown(session: Option<String>) -> String {
     session.unwrap_or_else(|| UNKNOWN_SESSION.to_owned())

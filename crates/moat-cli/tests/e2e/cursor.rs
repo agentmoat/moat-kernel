@@ -133,6 +133,28 @@ fn pre_tool_use_write_inside_the_workspace_is_allowed() {
 }
 
 #[test]
+fn pre_tool_use_grep_of_a_secret_is_denied() {
+    let sb = sandbox();
+    let payload = serde_json::json!({
+        "conversation_id": "c", "hook_event_name": "preToolUse",
+        "workspace_roots": [sb.home.to_string_lossy()],
+        "tool_name": "Grep",
+        "tool_input": {"pattern": "aws_secret", "path": sb.home.join(".aws/credentials").to_string_lossy()},
+        "tool_use_id": "tu-10"
+    })
+    .to_string();
+    let (code, doc) = guard(&sb, &payload);
+    assert_eq!(code, Some(2), "{doc}");
+    assert!(
+        doc["user_message"]
+            .as_str()
+            .unwrap()
+            .contains("secrets-paths"),
+        "{doc}"
+    );
+}
+
+#[test]
 fn unknown_cursor_event_fails_closed() {
     let sb = sandbox();
     let (code, doc) = guard(
