@@ -254,6 +254,18 @@ fn scenario_file_is_well_formed() {
                 gap.layer
             );
             assert!(gap.issue > 0, "{}: gap has no issue", s.id);
+            assert!(!gap.why.trim().is_empty(), "{}: gap has no why", s.id);
+        }
+        // A host sandbox expected to let an attack run is a known gap, never a
+        // silent expectation; this holds on hosts that cannot run that layer too.
+        if s.is_attack() {
+            for (layer, verdict) in [("codex", s.codex), ("claude", s.claude)] {
+                assert!(
+                    verdict != Verdict::Allow || s.gap_at(layer).is_some(),
+                    "{}: {layer} is expected to allow an attack without a gap",
+                    s.id
+                );
+            }
         }
     }
     assert!(all.iter().any(|s| s.cite.is_some()), "no CVE replays");
