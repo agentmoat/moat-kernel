@@ -9,6 +9,7 @@
 //! without a wider grant; those are listed as allowances, never silent.
 
 pub mod claude;
+pub mod codex;
 mod patterns;
 
 use moat_core::ir::{Allowance, Enforcement, Loss};
