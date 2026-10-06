@@ -89,6 +89,11 @@ deny:
       - "rm -rf $HOME"
       - "git push --force*"
       - "git push -f*"
+      # a `+` refspec, and force flags after the remote or bundled with other short options
+      - "git push * +*"
+      - "git push * --force*"
+      - "git push * -f*"
+      - "git push * -[!o-]*f*"
       - "git reset --hard*"
       - "git clean -fdx*"
       - "git branch -D *"

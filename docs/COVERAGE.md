@@ -10,7 +10,7 @@ the verdict and rule ids the default policy must produce for it.
 | T1 | Secret exfiltration via shell | 10 | 0 | 0 |
 | T2 | Secret exfiltration via file tools | 17 | 0 | 0 |
 | T3 | Secret exfiltration via environment | 13 | 3 | 0 |
-| T4 | Destructive git / filesystem operations | 9 | 4 | 0 |
+| T4 | Destructive git / filesystem operations | 15 | 8 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 0 | 0 |
 | T7 | Obfuscation and nested execution | 40 | 27 | 2 |
@@ -78,6 +78,10 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-write-outside-project` (ask): Ask [default]
 - `ask-rm-rf-temp-dir-is-not-destructive` (ask): Ask [default]
 - `ask-gh-run-view-writes-output-file` (ask): Ask [default]
+- `ask-git-push-set-upstream` (ask): Ask [push]
+- `ask-git-push-plus-inside-branch-name` (ask): Ask [push]
+- `ask-git-push-option` (ask): Ask [push]
+- `ask-git-push-follow-tags` (ask): Ask [push]
 - `T4-force-push` (attacks): Deny [destructive]
 - `T4-force-with-lease` (attacks): Deny [destructive]
 - `T4-rm-home` (attacks): Deny [destructive]
@@ -87,6 +91,12 @@ the verdict and rule ids the default policy must produce for it.
 - `T4-dd-disk` (attacks): Deny [destructive]
 - `T4-git-branch-force-delete` (attacks): Deny [destructive]
 - `T4-rm-fr-home` (attacks): Deny [destructive]
+- `T4-force-push-plus-refspec` (attacks): Deny [destructive]
+- `T4-force-push-plus-head-refspec` (attacks): Deny [destructive]
+- `T4-force-push-flag-after-remote` (attacks): Deny [destructive]
+- `T4-force-push-short-flag-after-remote` (attacks): Deny [destructive]
+- `T4-force-push-bundled-short-flags` (attacks): Deny [destructive]
+- `T4-force-push-inside-bash-lc` (attacks): Deny [destructive]
 
 ## T5: Supply-chain execution
 

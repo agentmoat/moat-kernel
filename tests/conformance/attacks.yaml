@@ -703,3 +703,29 @@
   threat: T9
   action: { shell: "osascript -e 'tell app \"Terminal\" to do script \"moat allow --last\"'" }
   expect: { verdict: deny, rules: [kernel-self] }
+
+# T4 force pushes spelled as a `+` refspec, after the remote, or bundled
+- id: T4-force-push-plus-refspec
+  threat: T4
+  action: { shell: "git push origin +main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-force-push-plus-head-refspec
+  threat: T4
+  action: { shell: "git push origin +HEAD:main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-force-push-flag-after-remote
+  threat: T4
+  action: { shell: "git push origin main --force" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-force-push-short-flag-after-remote
+  threat: T4
+  action: { shell: "git push origin main -f" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-force-push-bundled-short-flags
+  threat: T4
+  action: { shell: "git push -uf origin main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-force-push-inside-bash-lc
+  threat: T4
+  action: { shell: "bash -lc 'git push origin +main'" }
+  expect: { verdict: deny, rules: [destructive] }
