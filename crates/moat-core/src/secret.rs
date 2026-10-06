@@ -40,6 +40,11 @@ pub struct Secret {
     /// Where moat reads the value, written `{ env: NAME }` and so on.
     #[serde(with = "serde_yaml_ng::with::singleton_map")]
     pub source: Source,
+    /// Also inject into plain-HTTP requests, which carry the value in clear
+    /// text. Off unless set: without it a plain-HTTP request keeps the
+    /// placeholder.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub plain_http: bool,
 }
 
 /// Where moat reads a secret's value. The agent should not be able to read it
@@ -66,6 +71,19 @@ impl Secret {
     #[must_use]
     pub fn placeholder(&self) -> String {
         format!("moat-secret:{}:placeholder", self.id)
+    }
+
+    /// True when the host is this machine: `localhost`, a name under it, or
+    /// `127.0.0.0/8`. Hosts are validated lowercase DNS names or IPv4. The
+    /// address type comes from `core`, which parses and does no I/O.
+    #[must_use]
+    pub fn is_loopback(&self) -> bool {
+        let host = self.host.as_str();
+        host == "localhost"
+            || host.ends_with(".localhost")
+            || host
+                .parse::<core::net::Ipv4Addr>()
+                .is_ok_and(|ip| ip.is_loopback())
     }
 }
 
@@ -198,6 +216,29 @@ mod tests {
         );
         assert_eq!(p.secrets[0].placeholder(), "moat-secret:gh:placeholder");
         assert!(Policy::parse("version: 1\n").unwrap().secrets.is_empty());
+    }
+
+    #[test]
+    fn plain_http_is_off_unless_set() {
+        let off = parse(&format!("{GH}    source: {{ env: T }}\n")).unwrap();
+        assert!(!off.secrets[0].plain_http);
+        let on = parse(&format!(
+            "{GH}    source: {{ env: T }}\n    plain_http: true\n"
+        ))
+        .unwrap();
+        assert!(on.secrets[0].plain_http);
+        assert!(!on.secrets[0].is_loopback());
+        for (host, loopback) in [
+            ("localhost", true),
+            ("api.localhost", true),
+            ("127.0.0.2", true),
+            ("10.0.0.1", false),
+            ("localhost.example", false),
+        ] {
+            let mut s = on.secrets[0].clone();
+            s.host = host.into();
+            assert_eq!(s.is_loopback(), loopback, "{host}");
+        }
     }
 
     #[test]
