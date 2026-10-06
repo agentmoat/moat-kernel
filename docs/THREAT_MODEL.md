@@ -68,15 +68,41 @@ answer from the [roadmap](ROADMAP.md).
 These hold for the current code. Each is a design consequence or a tracked gap, not
 something the alpha claims to stop.
 
-- **Decide-only.** Nothing is enforced by the operating system. An allowed command
-  runs with the user's full permissions. A classifier mistake, an option the
-  exclusion lists miss, or a program that runs other programs is a bypass, and in
-  scope as a vulnerability ([SECURITY.md](../SECURITY.md)).
+- **Decide-only, except the Standard tier.** `moat` itself enforces nothing; the
+  hook decides. Since the Standard tier (ADR-018), `moat init` also configures the
+  agent's own sandbox from the policy, so commands Claude Code runs through `Bash`,
+  `PowerShell` and `Monitor`, and every command Codex runs, are confined by the
+  operating system: no reads of `secrets-paths`, no reads outside the project and
+  `sandbox.read_roots`, no writes outside the project (and the temp directory), and no
+  network except allowlisted domains. A classifier mistake inside those bounds is
+  still a bypass, and in scope as a vulnerability ([SECURITY.md](../SECURITY.md)).
+- **What the Standard tier does not cover.** It is as strong as each host's sandbox
+  and moat's translation, and every host version bump must keep the generated keys
+  working (`moat doctor` names a weakened setting; the differential suite, #170, will
+  execute them). Claude Code's file tools, `WebFetch`, MCP servers and hooks run
+  outside its sandbox; only the hook governs them. Writes by a sandboxed command to
+  the session's working directory are allowed even when the session started above
+  the git root, and Claude Code leaves paths outside the user directories (`/Users`,
+  `/home`, `/Volumes`, …) readable. `sandbox.read_roots` (toolchains, `/usr`, temp)
+  are readable by sandboxed commands while the hook still asks for them. Egress goes
+  to allowlisted domains through the hosts' proxies, which check the requested host
+  name, so any allowlisted host stays a relay. `moat sandbox show` lists every loss
+  and allowance; ADR-018 lists the open risks.
+- **Translation losses (stricter than the policy).** Neither host can re-allow
+  `.env.example`, `.env.sample` or `.env.template` inside the `**/.env.*` deny, so
+  sandboxed commands cannot read them. Both keep `.git` read-only for sandboxed
+  commands (Claude Code because user settings cannot name the project, so `.git` is
+  denied in every directory), so `git commit` fails inside Claude Code's sandbox and
+  Codex asks to run it outside. Claude Code's file tools refuse reads outside the
+  working directories (`permissions.blockReadsOutsideWorkingDirectories`) where the
+  hook would ask.
 - **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
   `cargo run`, `make test`, `pytest` and similar are allowed by `dev-shell`. They run
   whatever the project's scripts, build files and test files say, and `moat` sees
   only the command line. An agent that can write into the project can therefore run
-  any code through an allowed command. OS enforcement is the answer.
+  any code through an allowed command. In the Standard tier that code runs inside the
+  host's sandbox, with the bounds above; without a host sandbox (Cursor), it runs with
+  the user's permissions.
 - **Allowed hosts are relays.** `registries` allows network to `api.github.com`,
   `github.com` and the package registries. The host check passes for any command
   that reaches them, so a command that is itself allowed (a project script) or that

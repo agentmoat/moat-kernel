@@ -298,6 +298,7 @@ fn compile_prints_the_enforcement_ir_and_its_losses() {
         losses.iter().any(|l| l["rule"] == "default.fetch"),
         "{losses:?}"
     );
+    assert_eq!(ir["allowances"][0]["rule"], "sandbox.read_roots");
 
     let out = compile("text");
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
@@ -307,4 +308,5 @@ fn compile_prints_the_enforcement_ir_and_its_losses() {
         text.contains("fetch `default.fetch`: no rule matches: the hook asks, OS layers deny"),
         "{text}"
     );
+    assert!(text.contains("  fs.read `sandbox.read_roots`:"), "{text}");
 }

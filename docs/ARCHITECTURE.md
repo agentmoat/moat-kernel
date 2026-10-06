@@ -159,9 +159,9 @@ installation exists) and, against the installed policy, the same lock check.
 
 ADR-019 makes `policy.yaml` the single source for every enforcement point.
 `moat_core::ir::lower(policy, ctx)` derives the `Enforcement` IR from the same policy
-and `EvalContext` the engine compiles. The engine is the hook backend. OS backends (host
-sandbox settings, Seatbelt, Landlock, the egress proxy) will be generated from the IR
-(#168, #169, #176).
+and `EvalContext` the engine compiles. The engine is the hook backend. Claude Code's and
+Codex's sandbox settings are generated from the IR (§13); Seatbelt, Landlock and the
+egress proxy will be (#176).
 
 | IR part | Contents |
 |---|---|
@@ -170,6 +170,7 @@ sandbox settings, Seatbelt, Landlock, the egress proxy) will be generated from t
 | `secrets`, `limits` | empty until the policy schema defines them (#172) |
 | `decide_only` | rule ids per kind the IR cannot carry: `shell`, `env.read`, `env.set`, `mcp`, and `executables` program names |
 | `losses` | every place the IR is stricter than the hook, with a message |
+| `allowances` | where OS layers may be wider than the hook: `sandbox.read_roots` (ADR-021). Kept out of `fs.read`, so the IR's own verdicts never widen; `Checker::check_os` applies them after the deny rules |
 
 Per access the IR applies deny rules, then allow rules, then the default.
 `ir::Checker` is that reference evaluation.
@@ -210,7 +211,8 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
 
 - **Policy lock** (ADR-006). `~/.moat/policy.lock` pins SHA-256 digests of the policy,
   `environment.json`, `approvals.json`, `policy.d/approved.yaml` and every hook file
-  `moat` installed, keyed by location so a swap for a symlink is a modification. It is
+  `moat` installed, keyed by location so a swap for a symlink is a modification, and
+  the part of Codex's `config.toml` that holds moat's sandbox profile (§13). It is
   verified on every `guard` call. Only a person re-pins: `moat init`, or `moat doctor
   --accept` and `moat allow` from an interactive terminal.
 - **ConfigChange veto.** Claude Code reports settings changes; a pinned file that no
@@ -278,8 +280,10 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
   environment.json             search path and program locations recorded at init
   policy.lock                  digests of the files above and of installed hook files
   audit.db                     audit log
-~/.claude/settings.json        Claude Code hooks ($CLAUDE_CONFIG_DIR overrides)
+~/.claude/settings.json        Claude Code hooks and sandbox block ($CLAUDE_CONFIG_DIR overrides)
 ~/.codex/hooks.json            Codex hooks ($CODEX_HOME overrides)
+~/.codex/config.toml           Codex [permissions.moat] profile, default_permissions
+<file>.moat-sandbox-backup     each host file before moat's last sandbox edit
 ~/.cursor/hooks.json           Cursor hooks ($CURSOR_CONFIG_DIR overrides)
 ```
 
@@ -385,3 +389,52 @@ Codex's proxy) and the secrets broker (#172) will. Why it is our own code on `st
   - One thread per direction of each connection.
 - **Not yet:** TLS termination for per-host method and path rules (opt-in, ADR-020),
   the secrets broker and session taint (#172), and a policy reload without restart.
+
+## 13. Standard tier: host sandboxes
+
+ADR-018's default tier configures each host's own sandbox from the policy, through the
+one IR of ADR-019 (`moat_core::ir`, `crates/moat-cli/src/sandbox/`).
+
+```
+policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬─► claude::generate ─► settings.json "sandbox"
+                                                                 └─► codex::generate  ─► config.toml [permissions.moat]
+```
+
+- **One host-wide lowering.** Host settings are per user, not per session, so the IR
+  is lowered once with a placeholder project. Each backend maps project patterns to
+  the host's own workspace: Claude Code's working directories (implicit), Codex
+  `:workspace_roots`.
+- **Reads.** `sandbox.read_roots` lowers to an `Allowance`, kept apart from the IR's
+  read rules so the IR's own verdicts stay the hook's or stricter.
+  `Checker::check_os` is the reference for OS layers: deny rules, then allowances,
+  then the IR's rules. Claude Code gets `allowRead` plus
+  `permissions.blockReadsOutsideWorkingDirectories`; Codex gets an explicit profile
+  (`:minimal`, the roots, the workspace) that does not extend `:workspace`, which reads
+  the whole disk.
+- **Writes** stay in the project, the temp directory and paths an allow rule names as
+  a literal tree. Deny rules become `denyWrite` (Claude Code) or `deny`/`read` entries
+  (Codex, which has no write-only glob).
+- **Network.** The `net` rules' domain names become `allowedDomains` with
+  `strictAllowlist` (Claude Code) and `network.domains` behind
+  `features.network_proxy` (Codex). Hosts that are not domain names
+  (`169.254.*`) stay unlisted, so they stay denied. `httpProxyPort` is not set yet:
+  pointing the hosts at `moat proxy` (§12) is a follow-up of ADR-020.
+- **Losses and allowances.** A backend narrows what it cannot express and reports it
+  as a loss. It may widen only where the host cannot run otherwise (the read roots,
+  Codex `:minimal` and `:tmpdir`, Claude Code's working directories and unblocked
+  system paths, directory nodes left out of `denyWrite`), and each of those is
+  listed. `moat sandbox show`, `sandbox sync` and `doctor` print both.
+- **Traps the generators handle** (found in the spike, re-verified on Claude Code
+  2.1.290 and codex-cli 0.160.1): a relative pattern in Claude Code user settings
+  resolves against `~/.claude`, so every pattern is absolute (`/**/.env`); a directory
+  in `denyWrite` covers its subtree, so `**/.claude` (a directory-node rule) is left
+  out and `.claude/worktrees/*` stays writable; Claude Code's `allowRead` of a `**/`
+  exception re-opens it everywhere, so exceptions are dropped; Codex accepts globs
+  only for `deny` and not under `:tmpdir`, and keeps `.git` read-only.
+- **Writing and pinning.** `moat init` and `moat sandbox sync` merge the generated
+  keys into the files, keeping every other key (JSON values; TOML through `toml_edit`,
+  comments included), and back each file up first. `policy.lock` pins Claude Code's
+  `settings.json` whole and Codex's `config.toml` by the canonical text of the part
+  moat owns (`default_permissions`, `[permissions.moat]`, `features.network_proxy`),
+  because Codex writes trusted projects into that file itself. Drift is
+  `kernel-integrity`; `doctor` also fails on a weakened or out-of-date setting.

@@ -26,6 +26,7 @@ refines them. To add one, copy the shape of ADR-004 and take the next number.
 | [018](ADR-018-enforcement-approach.md) | Enforcement tiers: Standard (the host's own sandbox, generated and pinned by moat), Isolated (container or VM with moat outside), Lightweight (generated Seatbelt or Landlock); Seatbelt does not nest | accepted |
 | [019](ADR-019-one-policy-compiled-to-every-enforcement-point.md) | One policy compiled to every enforcement point through one IR; lossy targets narrow, never widen; differential executing tests prove the layers agree | accepted |
 | [020](ADR-020-egress-proxy-and-secrets-broker.md) | `moat proxy` is the only network exit; the secrets broker injects credentials so the agent never holds them; minimal session taint | accepted |
+| [021](ADR-021-os-layer-allowances.md) | An OS layer may be wider than the hook only by listed allowances: `sandbox.read_roots` and what a host needs to run, each printed by `moat sandbox show` | proposed |
 
 ## References to retired documents
 

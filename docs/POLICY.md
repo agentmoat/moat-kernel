@@ -24,6 +24,9 @@ ask:    [ <rule group>, … ]         # evaluated third
 
 executables:                        # pin program names to absolute paths (enforced, see §8.1)
   git: ["/usr/bin/git", "/opt/homebrew/bin/git"]
+
+sandbox:                            # optional: what the host sandboxes may read beyond the rules (§9)
+  read_roots: ["/usr", "~/.cargo"]
 ```
 
 `approval:` (`channel`, `remember`, `timeout_s`) and `scope:` (`project_roots`) are reserved:
@@ -174,9 +177,10 @@ first. Differences from the hook:
 
 ### 5.2 What an operating-system layer can enforce
 
-The alpha only decides; nothing below is enforced yet. The policy compiler (ADR-019)
-already derives from `policy.yaml` what an OS layer (a host's sandbox, Seatbelt,
-Landlock, the egress proxy) will enforce. `moat policy compile [--format json]` prints it.
+The policy compiler (ADR-019) derives from `policy.yaml` what an OS layer (a host's
+sandbox, Seatbelt, Landlock, the egress proxy) enforces. `moat policy compile [--format
+json]` prints it. Claude Code's and Codex's sandboxes are configured from it today (§9);
+the other layers are planned.
 
 - **OS-enforceable:** `fs.read`, `fs.write`, `net` and `fetch` rules and their defaults.
   Patterns are expanded for the session (`~`, `${project}`, both spellings of a linked
@@ -186,9 +190,11 @@ Landlock, the egress proxy) will enforce. `moat policy compile [--format json]` 
 - **`ask` becomes deny.** An OS layer can only allow or deny. An `ask` rule, or an `ask`
   default, is denied there. The hook still asks for the tool calls it sees. Each such
   narrowing is listed as a loss.
-- **Never wider.** Whatever a backend cannot represent exactly, it narrows and reports.
-  Network to the cloud-metadata hosts (`moat.cloud-metadata`) is denied whatever the
-  policy says.
+- **Never wider, except listed allowances.** Whatever a backend cannot represent
+  exactly, it narrows and reports. An OS layer is wider than the hook only by an
+  allowance (ADR-021): `sandbox.read_roots` (§9), which `policy compile` prints under
+  `allowances`, and what a host needs to run, which `moat sandbox show` lists. Network
+  to the cloud-metadata hosts (`moat.cloud-metadata`) is denied whatever the policy says.
 
 ## 6. The default policy, in one table
 
@@ -320,7 +326,51 @@ overlay, approvals, hook file) drifted, it lists each one and exits 64 without c
 the overlay, the grants or the lock. Review the changes with `moat doctor` and accept them
 with `moat doctor --accept`, then approve again; approving a command never accepts drift.
 
-## 9. Planned, not yet available
+## 9. Host sandboxes (`sandbox:`)
+
+`moat init` and `moat sandbox sync` compile the policy into each host's own sandbox
+(Standard tier, ADR-018, ADR-019). The rules above apply there as an OS layer can apply
+them: a deny rule denies; an allow rule allows; everything else, `ask` included, is
+denied. Shell, `env.*`, `mcp` and `executables` rules have no OS form and stay with the
+hook.
+
+A deny-by-default read would also deny the toolchains and system files every command
+reads, so the additive `sandbox.read_roots` key lists the paths sandboxed commands may
+read although no allow rule covers them:
+
+- Absolute or `~/…`, a directory or a file, never a glob, `.`/`..`, a filesystem root
+  or the home directory itself (`policy lint` rejects them). Each root covers itself and
+  everything below it. Missing paths are harmless.
+- Only OS layers use the list. The hook keeps deciding these reads by the rules, so
+  `cat ~/.cargo/registry/…` still asks; deny rules win inside a root in every layer
+  (`~/.cargo/credentials.toml` stays denied).
+- This is the one way an OS layer is wider than the hook (ADR-019), and `moat sandbox
+  show` prints it as an allowance. The default policy lists system directories
+  (`/usr`, `/bin`, `/etc`, `/opt`, `/System`, `/Library`, `/nix`, …), temp directories
+  and toolchain homes (`~/.cargo`, `~/.rustup`, `~/.npm`, `~/.nvm`, `~/.pyenv`,
+  `~/.local/bin`, `~/go`, `~/.gitconfig`). A policy without a `sandbox:` section gets
+  that list, and `sandbox show` says so.
+
+What each host enforces for sandboxed commands after `moat init` with the default
+policy:
+
+| | Claude Code (`Bash`, `PowerShell`, `Monitor`) | Codex (every command) |
+|---|---|---|
+| Read | project, read roots, paths outside the user directories; never `secrets-paths` | project, read roots, Codex's minimal system paths; never `secrets-paths` |
+| Write | working directories, temp; never `secrets-paths`, `kernel-self`, `shell-rc`, `.git`, `.moat` | project, temp; the same denies; `.git` read-only |
+| Network | `registries` domains only (`strictAllowlist`); `cloud-metadata` denied | the same, through Codex's network proxy |
+| Escape hatches | `allowUnsandboxedCommands: false`, `failIfUnavailable: true`, no `excludedCommands` | `default_permissions = "moat"`; Codex asks before running outside the sandbox |
+
+Losses (stricter than the policy): the `.env.example`, `.env.sample` and `.env.template`
+exceptions cannot be re-allowed inside the `**/.env.*` deny; `.git` is read-only for
+sandboxed commands (so is every `.git` and `.moat` under Claude Code, whose user
+settings cannot name the project); Claude Code's file tools refuse reads outside the
+working directories. Allowances (wider): the read roots, Codex `:minimal` and
+`:tmpdir`, Claude Code's working directories, system paths and the directory-node
+rules of `kernel-self` (`**/.claude` itself; the files below stay denied). Run
+`moat sandbox show` for the exact list your policy produces.
+
+## 10. Planned, not yet available
 
 Repository-level policy (`<repo>/.moat/policy.yaml`) loaded only after `moat trust`
 (#128). A prompt of moat's own for `ask`, managed organisation policy and Telegram

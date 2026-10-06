@@ -103,6 +103,15 @@ fn compile_text(ir: &Enforcement) -> Result<()> {
     for loss in &ir.losses {
         writeln!(out, "  {loss}")?;
     }
+    writeln!(
+        out,
+        "allowances ({}; OS layers allow where the hook would not, ADR-021)",
+        ir.allowances.len()
+    )?;
+    for allowance in &ir.allowances {
+        writeln!(out, "  {allowance}")?;
+        writeln!(out, "    {}", allowance.patterns.join(" "))?;
+    }
     Ok(())
 }
 
