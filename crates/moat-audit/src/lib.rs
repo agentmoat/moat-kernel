@@ -1,8 +1,9 @@
 //! Local audit log: every decision the kernel makes, append-only, redacted.
 //!
 //! One `SQLite` file in WAL mode. Several `moat guard` processes may write at
-//! once (parallel tool calls, several agents), so writes are single statements
-//! with a busy timeout and no long-lived transactions.
+//! once (parallel tool calls, several agents), so each write is one short
+//! `BEGIN IMMEDIATE` transaction with a busy timeout: it reads the newest event's
+//! hash and appends the next event linked to it, so the hash chain never forks.
 
 #![warn(missing_docs)]
 
@@ -12,4 +13,4 @@ mod store;
 
 pub use query::{SessionSummary, Summary};
 pub use redact::{redact, redact_value};
-pub use store::{Event, EventId, NewEvent, Store, StoreError};
+pub use store::{Event, EventId, GENESIS, NewEvent, Store, StoreError};

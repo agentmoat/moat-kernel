@@ -7,7 +7,7 @@ use moat_core::Verdict;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
-use crate::store::{Event, SELECT, Store, StoreError, row_to_event};
+use crate::store::{Event, Store, StoreError, row_to_event};
 
 const MS_PER_HOUR: i64 = 3_600_000;
 const TOP_RULES: usize = 10;
@@ -76,7 +76,8 @@ impl Store {
     /// Events at or after `since_ms`, optionally for one host, oldest first.
     pub fn since(&self, since_ms: i64, host: Option<&str>) -> Result<Vec<Event>, StoreError> {
         let mut stmt = self.conn.prepare(&format!(
-            "{SELECT} WHERE ts_ms >= ?1 AND (?2 IS NULL OR host = ?2) ORDER BY id"
+            "{} WHERE ts_ms >= ?1 AND (?2 IS NULL OR host = ?2) ORDER BY id",
+            self.select()
         ))?;
         let rows = stmt.query_map(params![since_ms, host], row_to_event)?;
         rows.collect::<Result<_, _>>().map_err(Into::into)
