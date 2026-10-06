@@ -9,7 +9,7 @@ use std::net::TcpStream;
 use std::process::Stdio;
 use std::time::Duration;
 
-use crate::common::{Sandbox, json, stderr};
+use crate::common::{Sandbox, json, stderr, text};
 
 #[test]
 fn refuses_a_non_loopback_listen_address() {
@@ -81,6 +81,26 @@ fn an_unlisted_host_gets_403_and_an_audit_row() {
     assert_eq!(row["tool"], "GET");
     assert_eq!(row["verdict"], "deny");
     assert_eq!(row["action"]["net"]["url"], "http://evil.example:80");
+}
+
+#[test]
+fn doctor_and_status_warn_while_the_hosts_proxy_is_not_listening() {
+    let sb = Sandbox::installed(&[".claude", ".codex"]);
+    let port = sb.use_free_proxy_port();
+    let warning = format!("WARNING: nothing listens on 127.0.0.1:{port}");
+    for args in [["doctor"], ["status"]] {
+        let out = sb.moat(&args);
+        assert!(text(&out).contains(&warning), "{args:?}: {}", text(&out));
+        assert_eq!(out.status.code(), Some(0), "a warning: {}", text(&out));
+    }
+
+    // Without --listen it serves the policy's port, the one the hosts use.
+    let _proxy = sb.start_proxy();
+    let listening = format!("listening on 127.0.0.1:{port}");
+    for args in [["doctor"], ["status"]] {
+        let out = sb.moat(&args);
+        assert!(text(&out).contains(&listening), "{args:?}: {}", text(&out));
+    }
 }
 
 /// Generated for the test; no real secret is used.

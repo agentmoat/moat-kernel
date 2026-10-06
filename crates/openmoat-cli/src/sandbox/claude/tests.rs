@@ -6,8 +6,8 @@ use crate::sandbox::{assert_golden, lower_for_hosts};
 
 pub(super) fn generated(yaml: &str) -> Generated {
     let policy = Policy::parse(yaml).expect("test policy lints");
-    generate(&lower_for_hosts(&policy, "/Users/me", None, false).expect("lowers"))
-        .expect("generates")
+    let ir = lower_for_hosts(&policy, "/Users/me", None, false).expect("lowers");
+    generate(&ir, crate::sandbox::proxy_port(&policy)).expect("generates")
 }
 
 fn list(generated: &Generated, pointer: &str) -> Vec<String> {
@@ -97,6 +97,24 @@ fn network_lists_domains_and_keeps_addresses_denied() {
     assert!(denied.contains(&"metadata.google.internal".to_owned()));
     assert!(!denied.iter().any(|h| h.contains("169.254")));
     assert_eq!(out.sandbox["network"]["strictAllowlist"], json!(true));
+}
+
+#[test]
+fn both_proxy_ports_name_moat_proxy() {
+    let out = generated(DEFAULT_POLICY);
+    assert_eq!(out.sandbox["network"]["httpProxyPort"], json!(18080));
+    assert_eq!(out.sandbox["network"]["socksProxyPort"], json!(18080));
+    let own = generated("version: 1\nsandbox:\n  proxy_port: 18555\n");
+    assert_eq!(own.sandbox["network"]["httpProxyPort"], json!(18555));
+    assert_eq!(own.sandbox["network"]["socksProxyPort"], json!(18555));
+    assert!(
+        own.report
+            .losses
+            .iter()
+            .any(|l| l.rule == "claude-code.proxy" && l.message.contains("127.0.0.1:18555")),
+        "{:?}",
+        own.report.losses
+    );
 }
 
 #[test]

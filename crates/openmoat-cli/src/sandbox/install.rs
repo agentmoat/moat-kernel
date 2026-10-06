@@ -103,7 +103,7 @@ pub fn problems(host: Host, plan: &Plan, lock: Option<&Lock>) -> Result<Option<V
         found
     } else {
         let root = read_or_empty(&path)?;
-        let mut found = claude::weaknesses(&root, plan.claude.block_reads);
+        let mut found = claude::weaknesses(&root, plan.claude.block_reads, plan.proxy_port);
         if !claude::in_sync(&root, &plan.claude) {
             found.push(out_of_date);
         }

@@ -73,7 +73,8 @@ unsure or something fails, it blocks. Everything runs locally and nothing leaves
 machine unless you export it. Open source under Apache-2.0 and MIT.
 
 > **Status: alpha, not yet released.** The workspace is at `0.1.0-alpha.0`; expect
-> changes until the beta. Hosts are not yet routed through `moat proxy`. Exactly what
+> changes until the beta. Claude Code's sandboxed commands go through `moat proxy`;
+> Codex's do only when you start Codex with `HTTP(S)_PROXY` naming it. Exactly what
 > each operating-system layer enforces, and what it cannot, is listed in
 > [THREAT_MODEL](docs/THREAT_MODEL.md). [Roadmap](docs/ROADMAP.md).
 
@@ -149,15 +150,22 @@ the wrong file.
 (ADR-018). Commands the agent runs, and every script they start (`npm test`,
 `build.rs`, `make`), are then confined by the operating system: no secrets, no reads
 outside the project and `sandbox.read_roots`, no writes outside the project, and
-network only to allowlisted domains ([POLICY.md §9](docs/POLICY.md)).
+network only to allowlisted hosts, through a proxy ([POLICY.md §9](docs/POLICY.md)).
 
 - **Claude Code** (`settings.json`): the `sandbox` block (`enabled`,
   `failIfUnavailable: true`, `allowUnsandboxedCommands: false`, `excludedCommands: []`,
-  read and write lists, `network.allowedDomains` with `strictAllowlist`) and
+  read and write lists, `network.httpProxyPort` and `socksProxyPort` naming `moat
+  proxy`, `network.allowedDomains` with `strictAllowlist`) and
   `permissions.blockReadsOutsideWorkingDirectories: true`. Claude Code's file tools
   then refuse reads outside the working directories; `/add-dir` adds one.
 - **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =
-  "moat"` and `features.network_proxy = true`.
+  "moat"` and `features.network_proxy = true`. Codex's own proxy enforces the domains.
+
+Keep `moat proxy` running (a user service works): sandboxed commands reach the network
+only through it on `127.0.0.1:18080` (`sandbox.proxy_port`), and have none while it is
+stopped; `moat doctor` and `moat status` warn. Codex's proxy passes what it allows on to
+`moat proxy` when you start Codex with `HTTP_PROXY` and `HTTPS_PROXY` set to
+`http://127.0.0.1:18080`; Codex's own API hosts then need an allow rule.
 
 Other settings and comments are kept, and each file is copied to
 `<file>.moat-sandbox-backup` before moat changes it. `moat sandbox show` prints what

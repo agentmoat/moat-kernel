@@ -8,7 +8,7 @@
 //! serves the same proxy, secrets included, from a thread of its own.
 
 use std::io::Write as _;
-use std::net::TcpListener;
+use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::Mutex;
 
 use anyhow::{Context as _, Result, bail};
@@ -24,20 +24,17 @@ use crate::integrity;
 use crate::secrets;
 
 pub fn run(args: &ProxyArgs) -> Result<Code> {
-    if !args.listen.ip().is_loopback() {
-        bail!(
-            "--listen {} is not a loopback address; the proxy would serve other machines",
-            args.listen
-        );
+    if let Some(listen) = args.listen.filter(|a| !a.ip().is_loopback()) {
+        bail!("--listen {listen} is not a loopback address; the proxy would serve other machines");
     }
     let home = installed()?;
-    let exit = Exit::open(
-        &home,
-        home.load_policy()?,
-        context::eval_context(None, None)?,
-    )?;
-    let listener =
-        TcpListener::bind(args.listen).with_context(|| format!("listening on {}", args.listen))?;
+    let policy = home.load_policy()?;
+    let port = crate::sandbox::proxy_port(&policy);
+    let listen = args
+        .listen
+        .unwrap_or_else(|| SocketAddr::from((Ipv4Addr::LOCALHOST, port)));
+    let exit = Exit::open(&home, policy, context::eval_context(None, None)?)?;
+    let listener = TcpListener::bind(listen).with_context(|| format!("listening on {listen}"))?;
     let addr = listener
         .local_addr()
         .context("reading the listening address")?;
@@ -47,6 +44,12 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
         "moat proxy: listening on {addr} (audit session {})",
         exit.session()
     )?;
+    if addr.port() != port {
+        writeln!(
+            std::io::stderr(),
+            "moat proxy: note: the host sandboxes send traffic to port {port} (`sandbox.proxy_port`), not here"
+        )?;
+    }
     // Only what the agent may know: the id, host, header and placeholder.
     for s in exit.secrets() {
         writeln!(
@@ -62,6 +65,24 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
     drop(stdout);
     exit.serve(&listener)?;
     Ok(Code::Ok)
+}
+
+/// The `moat doctor` and `moat status` line for the proxy the host sandboxes
+/// send traffic to, and whether something listens there. A stopped proxy
+/// leaves those commands without network rather than with direct network.
+/// Found by trying to bind the port rather than connecting, so a running
+/// `moat proxy` records nothing.
+pub(super) fn listening_line(port: u16) -> (bool, String) {
+    let bound = TcpListener::bind((Ipv4Addr::LOCALHOST, port));
+    if matches!(bound, Err(e) if e.kind() == std::io::ErrorKind::AddrInUse) {
+        (true, format!("listening on 127.0.0.1:{port}"))
+    } else {
+        let text = format!(
+            "WARNING: nothing listens on 127.0.0.1:{port}, so sandboxed commands have no \
+             network; start `moat proxy` (keep it running as a user service)"
+        );
+        (false, text)
+    }
 }
 
 /// The installation, refused when it is missing or its policy lock shows

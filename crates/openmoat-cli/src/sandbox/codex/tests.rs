@@ -6,8 +6,8 @@ use crate::sandbox::{assert_golden, lower_for_hosts};
 
 pub(super) fn generated(yaml: &str) -> Generated {
     let policy = Policy::parse(yaml).expect("test policy lints");
-    generate(&lower_for_hosts(&policy, "/Users/me", None, false).expect("lowers"))
-        .expect("generates")
+    let ir = lower_for_hosts(&policy, "/Users/me", None, false).expect("lowers");
+    generate(&ir, crate::sandbox::proxy_port(&policy)).expect("generates")
 }
 
 fn mode<'a>(generated: &'a Generated, table: &[&str], key: &str) -> Option<&'a str> {
@@ -121,6 +121,32 @@ fn network_lists_domains_and_keeps_addresses_unlisted() {
     );
     let text = render(&out);
     assert!(!text.contains("169.254"), "{text}");
+}
+
+#[test]
+fn the_profile_hands_traffic_to_moat_proxy_and_weakening_it_is_reported() {
+    let out = generated("version: 1\nsandbox:\n  proxy_port: 18555\n");
+    let net = &out.profile["network"];
+    assert_eq!(net["allow_upstream_proxy"].as_bool(), Some(true));
+    assert_eq!(net["allow_local_binding"].as_bool(), Some(false));
+    let upstream = out
+        .report
+        .allowances
+        .iter()
+        .find(|a| a.rule == "codex.upstream");
+    assert!(upstream.is_some_and(|a| a.message.contains("http://127.0.0.1:18555")));
+
+    let mut doc = DocumentMut::new();
+    apply(&mut doc, &out).unwrap();
+    assert!(weaknesses(&doc).is_empty(), "{:?}", weaknesses(&doc));
+    let net = &mut doc["permissions"][PROFILE]["network"];
+    net["allow_upstream_proxy"] = toml_edit::value(false);
+    net["allow_local_binding"] = toml_edit::value(true);
+    let found = weaknesses(&doc).join("\n");
+    for key in ["allow_upstream_proxy", "allow_local_binding"] {
+        assert!(found.contains(key), "{key}: {found}");
+    }
+    assert!(!in_sync(&doc, &out));
 }
 
 #[test]

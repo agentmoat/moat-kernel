@@ -30,6 +30,19 @@ use serde::Serialize;
 /// directory: it only marks the patterns that name `${project}`.
 pub const PROJECT: &str = "/__moat_project__";
 
+/// The loopback port of `moat proxy` when the policy names none.
+pub const DEFAULT_PROXY_PORT: u16 = 18080;
+
+/// The loopback port `moat proxy` listens on and the host sandboxes send their
+/// commands' traffic to (`sandbox.proxy_port`).
+pub fn proxy_port(policy: &Policy) -> u16 {
+    policy
+        .sandbox
+        .as_ref()
+        .and_then(|s| s.proxy_port)
+        .map_or(DEFAULT_PROXY_PORT, std::num::NonZeroU16::get)
+}
+
 /// Lower `policy` for host-wide settings of a user whose home is `home`
 /// (`real_home`: the same with symlinks resolved, when that differs).
 pub fn lower_for_hosts(
@@ -56,6 +69,8 @@ pub fn lower_for_hosts(
 pub struct Plan {
     /// The policy had no `sandbox.read_roots`, so the default policy's apply.
     pub default_read_roots: bool,
+    /// The loopback port the host sandboxes send their commands' traffic to.
+    pub proxy_port: u16,
     /// Claude Code's settings.
     pub claude: claude::Generated,
     /// Codex's permissions profile.
@@ -141,15 +156,17 @@ impl Plan {
             real_home,
             crate::context::CASE_INSENSITIVE_PATHS,
         )?;
-        let mut claude = claude::generate(&ir)?;
+        let proxy_port = proxy_port(&policy);
+        let mut claude = claude::generate(&ir, proxy_port)?;
         let claude_settings = install::settings_path(openmoat_hosts::Host::ClaudeCode)?;
         claude::protect(&mut claude, &claude_settings);
-        let mut codex = codex::generate(&ir)?;
+        let mut codex = codex::generate(&ir, proxy_port)?;
         if let Some(codex_home) = codex_config_path()?.parent() {
             codex::protect(&mut codex, codex_home);
         }
         Ok(Self {
             default_read_roots,
+            proxy_port,
             claude,
             codex,
         })

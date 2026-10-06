@@ -183,9 +183,12 @@ pub fn run() -> Result<Code> {
 fn sandboxes(out: &mut impl io::Write, plan: &Plan, lock_path: &Path) -> Result<bool> {
     let lock = Lock::load(lock_path).ok();
     let mut healthy = true;
+    let mut present = false;
     for host in host_sandbox::HOSTS {
         let name = host.display_name();
-        match host_sandbox::problems(host, plan, lock.as_ref()) {
+        let problems = host_sandbox::problems(host, plan, lock.as_ref());
+        present |= !matches!(problems, Ok(None));
+        match problems {
             Ok(None) => {}
             Ok(Some(problems)) if problems.is_empty() => {
                 let report = host_sandbox::report(host, plan);
@@ -207,6 +210,15 @@ fn sandboxes(out: &mut impl io::Write, plan: &Plan, lock_path: &Path) -> Result<
                 writeln!(out, "{name:<16} ✗ sandbox: {error:#}")?;
             }
         }
+    }
+    if present {
+        // A warning that leaves `healthy` alone: a stopped proxy fails closed.
+        let (ok, text) = super::proxy::listening_line(plan.proxy_port);
+        writeln!(
+            out,
+            "moat proxy       {} {text}",
+            if ok { "✔" } else { "!" }
+        )?;
     }
     Ok(healthy)
 }

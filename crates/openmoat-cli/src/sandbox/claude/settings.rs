@@ -73,10 +73,17 @@ fn block_reads_on(root: &Value) -> bool {
 }
 
 /// Settings in `root` that weaken the sandbox, worded for `moat doctor`.
-pub fn weaknesses(root: &Value, expect_block_reads: bool) -> Vec<String> {
+pub fn weaknesses(root: &Value, expect_block_reads: bool, proxy_port: u16) -> Vec<String> {
     let at = |path: &str| root.pointer(path);
     let is = |path: &str, value: bool| at(path) == Some(&json!(value));
     let mut out = Vec::new();
+    for key in ["httpProxyPort", "socksProxyPort"] {
+        if at(&format!("/sandbox/network/{key}")) != Some(&json!(proxy_port)) {
+            out.push(format!(
+                "sandbox.network.{key} is not {proxy_port}: that traffic does not go through `moat proxy`"
+            ));
+        }
+    }
     let mut flag = |bad: bool, text: &str| {
         if bad {
             out.push(text.to_owned());
@@ -175,9 +182,9 @@ mod tests {
             json!(["/x.sock"])
         );
         assert!(
-            weaknesses(&root, true).is_empty(),
+            weaknesses(&root, true, 18080).is_empty(),
             "{:?}",
-            weaknesses(&root, true)
+            weaknesses(&root, true, 18080)
         );
         assert!(apply(&mut json!([]), &out).is_err());
         assert!(apply(&mut json!({"sandbox": 1}), &out).is_err());
@@ -194,8 +201,15 @@ mod tests {
         root["sandbox"]["excludedCommands"] = json!(["curl"]);
         root["sandbox"]["network"]["allowAllUnixSockets"] = json!(true);
         root["permissions"][BLOCK_READS] = json!(false);
-        let found = weaknesses(&root, true).join("\n");
+        root["sandbox"]["network"]["httpProxyPort"] = json!(8080);
+        root["sandbox"]["network"]
+            .as_object_mut()
+            .unwrap()
+            .remove("socksProxyPort");
+        let found = weaknesses(&root, true, 18080).join("\n");
         for key in [
+            "httpProxyPort",
+            "socksProxyPort",
             "sandbox.enabled",
             "failIfUnavailable",
             "allowUnsandboxedCommands",

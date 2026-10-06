@@ -92,6 +92,22 @@ pub fn weaknesses(doc: &DocumentMut) -> Vec<String> {
     if !enabled {
         out.push("features.network_proxy is off: the domain rules are not enforced".to_owned());
     }
+    let network = doc
+        .get("permissions")
+        .and_then(|p| p.get(PROFILE))
+        .and_then(|p| p.get("network"));
+    let set = |key: &str| network.and_then(|n| n.get(key)).and_then(Item::as_bool);
+    if set("allow_upstream_proxy") == Some(false) {
+        out.push(
+            "allow_upstream_proxy is false: Codex's proxy never hands traffic to `moat proxy`"
+                .to_owned(),
+        );
+    }
+    if set("allow_local_binding") == Some(true) {
+        out.push(
+            "allow_local_binding is true: commands connect to local services directly".to_owned(),
+        );
+    }
     out
 }
 

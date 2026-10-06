@@ -179,8 +179,20 @@ something the alpha claims to stop.
   - covert channels such as timing, or data hidden in requests to the owner host;
   - an agent that asks the user to paste the secret into the conversation;
   - the owner host itself misusing or reflecting the token;
-  - traffic that does not go through `moat proxy`. Nothing routes the agent through it
-    yet; the host sandbox settings will.
+  - traffic that does not go through `moat proxy`: the agent's own requests and
+    in-process tools, and under Codex every command whose Codex was started without
+    `HTTP(S)_PROXY` naming it (ARCHITECTURE.md §13). Claude Code's sandboxed
+    commands always go through it.
+- **Host sandbox network depends on a running `moat proxy`.** Claude Code's sandboxed
+  commands reach the network only through `moat proxy` on `sandbox.proxy_port`
+  (18080). While it is stopped they have none, and `moat doctor` and `moat status`
+  warn; nothing falls back to direct network. Programs that speak only SOCKS5 have
+  none at all. Codex's sandbox has no direct network either: Codex's own proxy
+  enforces the generated domain list and refuses link-local and private addresses,
+  and hands what it allows to `moat proxy` only when Codex runs with `HTTP(S)_PROXY`
+  naming it, which `config.toml` cannot set. Codex's own API requests then go
+  through `moat proxy` too, so its API hosts (`api.openai.com`, `chatgpt.com`) need a
+  `fetch` allow rule, or Codex cannot reach its model.
 - **Hosts proceed when the hook binary is missing.** Claude Code and Codex treat a
   hook that cannot start as a non-blocking error and run the tool call. Cursor blocks
   because `moat init` sets `failClosed`. `moat status` and `moat doctor` report a
