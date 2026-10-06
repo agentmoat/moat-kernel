@@ -305,3 +305,15 @@
   threat: T7
   action: { shell: "grep -c needle <<< 'a needle in ~/.ssh/id_rsa text'" }
   expect: { verdict: allow, rules: [dev-shell] }
+
+# Directories that `X/**` rules name only by their contents stay allowed.
+- id: benign-list-project-dir
+  action: { shell: "ls src" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-grep-project-recursively
+  action: { shell: "grep -r TODO ./src" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-home-session-read-project-file
+  context: { cwd: /Users/me, project: /Users/me/code/app }
+  action: { fs_read: "/Users/me/code/app/src/main.rs" }
+  expect: { verdict: allow, rules: [project-fs] }

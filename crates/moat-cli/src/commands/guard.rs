@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use anyhow::{Context as _, Result, bail};
 use moat_audit::{NewEvent, Store};
-use moat_core::{CompiledPolicy, Decision, EvalContext, Verdict};
+use moat_core::{CompiledPolicy, Decision, Verdict};
 use moat_hosts::{HookEvent, HookRequest, Host};
 
 use crate::approvals::Grants;
@@ -19,7 +19,6 @@ use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity::Lock;
-use crate::project;
 use crate::realpath::FsPathResolver;
 
 const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024;
@@ -113,12 +112,7 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
         .map(std::path::PathBuf::from)
         .map_or_else(std::env::current_dir, Ok)
         .context("resolving working directory")?;
-    let ctx = EvalContext {
-        home: context::path_string(&crate::home::user_home()?),
-        project: context::path_string(&project::root_of(&cwd)),
-        cwd: context::path_string(&cwd),
-        case_insensitive_paths: context::CASE_INSENSITIVE_PATHS,
-    };
+    let ctx = context::eval_context(Some(&cwd), None)?;
     let snapshot = Snapshot::load(&home.environment_path())?;
     let paths = FsPathResolver::new(&ctx);
     let mut decision =

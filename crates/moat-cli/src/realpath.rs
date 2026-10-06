@@ -31,8 +31,10 @@ pub struct FsPathResolver {
 
 impl FsPathResolver {
     pub fn new(ctx: &EvalContext) -> Self {
-        let mut roots: Vec<(String, String)> = [&ctx.project, &ctx.home]
-            .into_iter()
+        let mut roots: Vec<(String, String)> = ctx
+            .project
+            .iter()
+            .chain([&ctx.home])
             .filter_map(|logical| {
                 let canonical = path_string(&fs::canonicalize(logical).ok()?);
                 (&canonical != logical).then(|| (canonical, logical.clone()))
@@ -102,7 +104,7 @@ mod tests {
         fs::write(home.join(".ssh/id_rsa"), "key").unwrap();
         let ctx = EvalContext {
             home: path_string(&home),
-            project: path_string(&project),
+            project: Some(path_string(&project)),
             cwd: path_string(&project),
             case_insensitive_paths: false,
         };
@@ -114,7 +116,7 @@ mod tests {
     #[test]
     fn plain_paths_inside_the_project_resolve_to_themselves() {
         let (_dir, ctx, r) = setup();
-        let p = &ctx.project;
+        let p = ctx.project.as_deref().unwrap();
         assert_eq!(r.resolve(&format!("{p}/src")), None);
         assert_eq!(r.resolve(&format!("{p}/src/new/file.rs")), None);
     }
@@ -123,7 +125,7 @@ mod tests {
     #[test]
     fn linked_directories_and_files_resolve_to_their_target() {
         let (_dir, ctx, r) = setup();
-        let (h, p) = (&ctx.home, &ctx.project);
+        let (h, p) = (&ctx.home, ctx.project.as_deref().unwrap());
         symlink(format!("{h}/.ssh"), format!("{p}/s")).unwrap();
         assert_eq!(
             r.resolve(&format!("{p}/s/id_rsa")),
@@ -146,7 +148,7 @@ mod tests {
     #[test]
     fn link_loops_give_up() {
         let (_dir, ctx, r) = setup();
-        let p = &ctx.project;
+        let p = ctx.project.as_deref().unwrap();
         symlink(format!("{p}/b"), format!("{p}/a")).unwrap();
         symlink(format!("{p}/a"), format!("{p}/b")).unwrap();
         assert_eq!(r.resolve(&format!("{p}/a")), None);

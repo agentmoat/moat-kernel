@@ -57,7 +57,7 @@ pub enum ParseOutcome {
 #[derive(Debug, Clone, Copy)]
 pub struct ShellContext<'a> {
     pub home: &'a str,
-    pub project: &'a str,
+    pub project: Option<&'a str>,
     pub cwd: &'a str,
 }
 

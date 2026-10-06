@@ -36,19 +36,32 @@ pub fn load_policy(path: &Path) -> Result<Policy> {
 }
 
 /// Build the evaluation context from explicit flags and the process environment.
-/// The project root defaults to the git root above `cwd`.
+/// The project root defaults to the git root above `cwd` (`project::root_of`);
+/// an explicit `project` that could never be trusted is an error, not a
+/// silent change of meaning.
 pub fn eval_context(cwd: Option<&Path>, project: Option<&Path>) -> Result<EvalContext> {
     let cwd = match cwd {
         Some(dir) => absolute(dir)?,
         None => std::env::current_dir().context("determining the current directory")?,
     };
+    let home = home::user_home()?;
     let project = match project {
-        Some(dir) => absolute(dir)?,
-        None => project::root_of(&cwd),
+        Some(dir) => {
+            let dir = absolute(dir)?;
+            if !project::trusted(&dir, &home) {
+                bail!(
+                    "{} cannot be a project root: it is the home directory, one of its \
+                     ancestors or a filesystem root",
+                    dir.display()
+                );
+            }
+            Some(dir)
+        }
+        None => project::root_of(&cwd, &home),
     };
     Ok(EvalContext {
-        home: path_string(&home::user_home()?),
-        project: path_string(&project),
+        home: path_string(&home),
+        project: project.as_deref().map(path_string),
         cwd: path_string(&cwd),
         case_insensitive_paths: CASE_INSENSITIVE_PATHS,
     })
@@ -61,7 +74,7 @@ pub fn eval_context(cwd: Option<&Path>, project: Option<&Path>) -> Result<EvalCo
 /// action does: canonicalising only the roots turned `/tmp/p` into
 /// `/private/tmp/p` on macOS and `RUNNER~1` into the long name on Windows, so
 /// a file inside the project no longer matched `${project}/**`.
-fn absolute(path: &Path) -> Result<PathBuf> {
+pub fn absolute(path: &Path) -> Result<PathBuf> {
     let absolute =
         std::path::absolute(path).with_context(|| format!("resolving {}", path.display()))?;
     let mut normalised = PathBuf::new();

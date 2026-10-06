@@ -1,0 +1,70 @@
+//! End-to-end tests of where `moat guard` takes paths to be: the project root
+//! it trusts, and the home directory and symlinks it resolves through.
+
+use std::path::Path;
+
+use crate::common::{Sandbox, bash_payload, hook_output, stderr};
+
+/// The verdict and reason `guard` gives a Bash command run in `cwd`.
+fn verdict(sb: &Sandbox, cwd: &Path, command: &str) -> (String, String) {
+    let out = sb.guard("claude-code", &bash_payload("s-paths", cwd, command));
+    let d = hook_output(&out);
+    let verdict = d["permissionDecision"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(!verdict.is_empty(), "{command}: {}", stderr(&out));
+    (verdict, d["permissionDecisionReason"].to_string())
+}
+
+fn assert_verdict(sb: &Sandbox, cwd: &Path, command: &str, expected: &str, rule: &str) {
+    let (verdict, reason) = verdict(sb, cwd, command);
+    assert_eq!(verdict, expected, "{command}: {reason}");
+    assert!(reason.contains(rule), "{command}: {reason}");
+}
+
+/// A session started in the home directory, outside any repository, has no
+/// project: `project-fs` must not turn into "the whole home directory".
+#[test]
+fn a_session_in_home_has_no_project() {
+    let sb = Sandbox::installed(&[".claude"]);
+    std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
+    std::fs::create_dir_all(sb.home.join(".aws")).unwrap();
+    let home = sb.home.clone();
+    assert_verdict(&sb, &home, "grep -r . ~/.ssh", "deny", "secrets-paths");
+    assert_verdict(&sb, &home, "rg -uu . ~/.aws", "deny", "secrets-paths");
+    for command in [
+        "echo x > Library/LaunchAgents/evil.plist",
+        "echo x > ~/.gitconfig",
+    ] {
+        assert_verdict(&sb, &home, command, "ask", "default");
+    }
+    let project = sb.project();
+    assert_verdict(&sb, &project, "echo x > notes.txt", "allow", "project-fs");
+}
+
+/// A dotfiles repository in the home directory does not make it the project;
+/// the session's own directory is the project instead.
+#[test]
+fn a_repository_in_home_is_not_the_project() {
+    let sb = Sandbox::installed(&[".claude"]);
+    std::fs::create_dir_all(sb.home.join(".git")).unwrap();
+    let app = sb.home.join("code/app");
+    std::fs::create_dir_all(&app).unwrap();
+    assert_verdict(&sb, &sb.home, "echo x > ~/.gitconfig", "ask", "default");
+    assert_verdict(&sb, &app, "echo x > notes.txt", "allow", "project-fs");
+}
+
+/// `moat policy check --project ~` is refused rather than silently ignored.
+#[test]
+fn an_explicit_home_project_is_a_usage_error() {
+    let sb = Sandbox::installed(&[]);
+    let home = sb.home.to_string_lossy().into_owned();
+    let out = sb.moat(&["policy", "check", "ls", "--project", &home, "--cwd", &home]);
+    assert_eq!(out.status.code(), Some(64), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("cannot be a project root"),
+        "{}",
+        stderr(&out)
+    );
+}

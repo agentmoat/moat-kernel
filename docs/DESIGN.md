@@ -540,6 +540,12 @@ symlink from the project to `~/.ssh` hits the deny rule). `moat policy check` re
 the same way. Case-insensitive comparison on macOS/Windows volumes that are
 case-insensitive.
 
+`${project}` is the git root above the hook `cwd`, or `cwd` itself. The CLI never
+trusts the home directory, an ancestor of it or a filesystem root as the project
+(`project.rs`); such a session has no project and every `${project}` pattern matches
+nothing, so project-scoped allows fall through to `ask`. A glob `dir/**` also matches
+`dir`, so a recursive read or removal of a guarded directory meets its rule.
+
 ### 7.4 Performance budget
 
 | Stage | Budget |

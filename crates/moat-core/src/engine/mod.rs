@@ -20,8 +20,11 @@ use crate::{host, paths};
 pub struct EvalContext {
     /// The user's home directory, for `~` and `$HOME`.
     pub home: String,
-    /// The trusted project root, for `${project}`.
-    pub project: String,
+    /// The trusted project root, for `${project}`. `None` when the session has
+    /// no project the caller is willing to trust (it would be the home directory,
+    /// one of its ancestors or a filesystem root): every pattern naming
+    /// `${project}` then matches nothing, so project-scoped allows do not apply.
+    pub project: Option<String>,
     /// The directory relative paths are taken from.
     pub cwd: String,
     /// Whether file paths compare case-insensitively, as on the default macOS
@@ -123,12 +126,8 @@ impl<'p> CompiledGroup<'p> {
             globs[kind as usize] = group
                 .patterns(kind)
                 .iter()
-                .map(|p| {
-                    GlobPattern::compile(
-                        &paths::expand_pattern(p, &ctx.home, &ctx.project),
-                        case_insensitive,
-                    )
-                })
+                .filter_map(|p| paths::expand_pattern(p, &ctx.home, ctx.project.as_deref()))
+                .map(|p| GlobPattern::compile(&p, case_insensitive))
                 .collect::<Result<_, _>>()?;
         }
         Ok(Self {
@@ -157,7 +156,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
             command,
             &ShellContext {
                 home: &ctx.home,
-                project: &ctx.project,
+                project: ctx.project.as_deref(),
                 cwd: &ctx.cwd,
             },
         ),
@@ -165,10 +164,10 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
             reason: format!("{shell} commands are not parsed; only POSIX shell is classified"),
         },
         Action::FsRead { path } => ParseOutcome::Parsed(vec![AtomicAction::FsRead {
-            path: paths::normalise(path, &ctx.home, &ctx.project, &ctx.cwd),
+            path: paths::normalise(path, &ctx.home, ctx.project.as_deref(), &ctx.cwd),
         }]),
         Action::FsWrite { path } => ParseOutcome::Parsed(vec![AtomicAction::FsWrite {
-            path: paths::normalise(path, &ctx.home, &ctx.project, &ctx.cwd),
+            path: paths::normalise(path, &ctx.home, ctx.project.as_deref(), &ctx.cwd),
         }]),
         Action::Patch { writes } if writes.is_empty() => ParseOutcome::Unparseable {
             reason: "patch names no files".to_owned(),
@@ -177,7 +176,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
             writes
                 .iter()
                 .map(|p| AtomicAction::FsWrite {
-                    path: paths::normalise(p, &ctx.home, &ctx.project, &ctx.cwd),
+                    path: paths::normalise(p, &ctx.home, ctx.project.as_deref(), &ctx.cwd),
                 })
                 .collect(),
         ),
@@ -193,7 +192,8 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
             writes,
             hosts,
         } => {
-            let norm = |p: &String| paths::normalise(p, &ctx.home, &ctx.project, &ctx.cwd);
+            let norm =
+                |p: &String| paths::normalise(p, &ctx.home, ctx.project.as_deref(), &ctx.cwd);
             let mut atoms = vec![AtomicAction::McpTool { name: name.clone() }];
             atoms.extend(reads.iter().map(|p| AtomicAction::FsRead { path: norm(p) }));
             atoms.extend(

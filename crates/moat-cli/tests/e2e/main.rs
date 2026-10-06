@@ -13,4 +13,5 @@ mod config_change;
 mod cursor;
 mod guard;
 mod lock;
+mod paths;
 mod replay_report;
