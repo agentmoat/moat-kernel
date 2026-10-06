@@ -46,8 +46,14 @@ pub fn run(args: &GuardArgs) -> Code {
 fn decide_and_respond(host: Host) -> Code {
     let started = Instant::now();
 
-    let (request, mut decision) = match evaluate(host) {
-        Ok(outcome) => outcome,
+    // The event is read separately so a payload that cannot be parsed is still
+    // refused in the format its hook expects.
+    let mut event = HookEvent::default();
+    let (request, mut decision) = match read_stdin() {
+        Ok(payload) => {
+            event = host.event_of(&payload);
+            evaluate(host, &payload).unwrap_or_else(|error| (None, kernel_error(&error)))
+        }
         Err(error) => (None, kernel_error(&error)),
     };
 
@@ -57,10 +63,7 @@ fn decide_and_respond(host: Host) -> Code {
         decision = kernel_error(&error.context("audit log unavailable"));
     }
 
-    let event = request
-        .as_ref()
-        .map(|r| r.event.clone())
-        .unwrap_or_default();
+    let event = request.as_ref().map_or(event, |r| r.event.clone());
     let response = host.render_response(&event, &decision);
     let mut stdout = io::stdout().lock();
     let written = writeln!(stdout, "{response}").and_then(|()| stdout.flush());
@@ -80,21 +83,26 @@ fn decide_and_respond(host: Host) -> Code {
     }
 }
 
-fn evaluate(host: Host) -> Result<(Option<HookRequest>, Decision)> {
-    let payload = read_stdin()?;
+fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)> {
     let request = host
-        .parse_request(&payload)
+        .parse_request(payload)
         .context("parsing hook payload")?;
 
+    if let HookEvent::ConfigChange {
+        source,
+        change_type,
+    } = &request.event
+    {
+        let change = change_type.as_deref().unwrap_or("changed");
+        let decision =
+            config_change_decision(&Home::locate()?, request.action.as_ref(), source, change)?;
+        return Ok((Some(request), decision));
+    }
     let Some(action) = &request.action else {
         return Ok((Some(request), ungoverned()));
     };
 
     let home = Home::locate()?;
-    if let HookEvent::ConfigChange { change_type, .. } = &request.event {
-        let decision = config_change_decision(&home, action, change_type)?;
-        return Ok((Some(request), decision));
-    }
     if let Some(decision) = integrity_violation(&home)? {
         return Ok((Some(request), decision));
     }
@@ -196,44 +204,69 @@ fn integrity_violation(home: &Home) -> Result<Option<Decision>> {
 /// settings and the change is reported. Unpinned files are audited and allowed.
 fn config_change_decision(
     home: &Home,
-    action: &moat_core::Action,
-    change_type: &str,
+    action: Option<&moat_core::Action>,
+    source: &str,
+    change: &str,
 ) -> Result<Decision> {
-    let moat_core::Action::FsWrite { path } = action else {
-        bail!("config change without a file path");
-    };
     let lock_path = home.lock_path();
     if !lock_path.is_file() {
         bail!("no policy lock at {}; run `moat init`", lock_path.display());
     }
     let lock = Lock::load(&lock_path)?;
-    let path = std::path::Path::new(path);
+    let path = match action {
+        Some(moat_core::Action::FsWrite { path }) => std::path::Path::new(path),
+        Some(_) => bail!("config change for something other than a file"),
+        // Claude Code may report a change without naming the file. The veto
+        // exists to keep a tampered pinned file out of the session, and the
+        // change is already on disk, so check every pinned file: block when any
+        // drifted (every tool call is denied then anyway), load otherwise.
+        // Refusing every unnamed change would block the user's own edits while
+        // protecting nothing the lock does not already cover.
+        None => return Ok(unnamed_config_change(&lock, source, change)),
+    };
     let mut decision = Decision::new(Verdict::Allow);
     if !lock.pins(path) {
         decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
-        decision.reasons.push(format!(
-            "{} {change_type}; not pinned by moat",
-            path.display()
-        ));
+        decision
+            .reasons
+            .push(format!("{} {change}; not pinned by moat", path.display()));
         return Ok(decision);
     }
     match lock.verify_one(path) {
         None => {
             decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
             decision.reasons.push(format!(
-                "{} {change_type}; matches the policy lock",
+                "{} {change}; matches the policy lock",
                 path.display()
             ));
         }
-        Some(drift) => {
-            decision = Decision::new(Verdict::Deny);
-            decision.rules.push(INTEGRITY_RULE.to_owned());
-            decision.reasons.push(format!(
-                "{drift} outside moat; the change is not loaded into this session. Run `moat doctor` to inspect, `moat doctor --accept` to accept it"
-            ));
-        }
+        Some(drift) => decision = drift_blocks_change(&[drift]),
     }
     Ok(decision)
+}
+
+fn unnamed_config_change(lock: &Lock, source: &str, change: &str) -> Decision {
+    let drift = lock.verify();
+    if !drift.is_empty() {
+        return drift_blocks_change(&drift);
+    }
+    let mut decision = Decision::new(Verdict::Allow);
+    decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
+    decision.reasons.push(format!(
+        "{source} {change} (no file named); every file pinned by moat matches the policy lock"
+    ));
+    decision
+}
+
+fn drift_blocks_change(drift: &[crate::integrity::Drift]) -> Decision {
+    let mut decision = Decision::new(Verdict::Deny);
+    decision.rules.push(INTEGRITY_RULE.to_owned());
+    for d in drift {
+        decision.reasons.push(format!(
+            "{d} outside moat; the change is not loaded into this session. Run `moat doctor` to inspect, `moat doctor --accept` to accept it"
+        ));
+    }
+    decision
 }
 
 fn ungoverned() -> Decision {

@@ -3,6 +3,10 @@
 //! Blocking refuses to load the new settings into the running session; the
 //! file itself is left as written. The kernel uses this to keep a tampered hook
 //! file from taking effect even before the next tool call.
+//!
+//! Claude Code sends `source` (`user_settings`, `project_settings`,
+//! `local_settings`, `policy_settings`, `skills`) and an optional `file_path`;
+//! `change_type` came from earlier builds and is still accepted.
 
 use moat_core::{Action, Decision, Verdict};
 use serde::{Deserialize, Serialize};
@@ -18,8 +22,10 @@ struct Payload {
     #[serde(default)]
     cwd: Option<String>,
     source: String,
-    change_type: String,
-    file_path: String,
+    #[serde(default)]
+    change_type: Option<String>,
+    #[serde(default)]
+    file_path: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -30,7 +36,9 @@ struct Block<'a> {
 
 pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError> {
     let p: Payload = serde_json::from_str(payload)?;
-    if p.file_path.is_empty() {
+    // An absent path is a change Claude Code did not attribute to one file; an
+    // empty one is a malformed payload.
+    if p.file_path.as_deref() == Some("") {
         return Err(HostError::MissingField {
             tool: EVENT.to_owned(),
             field: "file_path",
@@ -42,7 +50,7 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
         call_id: None,
         cwd: p.cwd,
         tool: EVENT.to_owned(),
-        action: Some(Action::FsWrite { path: p.file_path }),
+        action: p.file_path.map(|path| Action::FsWrite { path }),
         event: HookEvent::ConfigChange {
             source: p.source,
             change_type: p.change_type,
@@ -69,6 +77,14 @@ pub(crate) fn render(decision: &Decision) -> String {
 mod tests {
     use super::*;
 
+    fn fixture(name: &str) -> String {
+        let dir = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/hosts/claude-code"
+        );
+        std::fs::read_to_string(format!("{dir}/{name}.json")).unwrap()
+    }
+
     const PAYLOAD: &str = r#"{
         "session_id": "abc123", "cwd": "/p", "hook_event_name": "ConfigChange",
         "source": "user_settings", "change_type": "modified",
@@ -88,8 +104,53 @@ mod tests {
         assert!(matches!(
             req.event,
             HookEvent::ConfigChange { ref source, ref change_type }
-                if source == "user_settings" && change_type == "modified"
+                if source == "user_settings" && change_type.as_deref() == Some("modified")
         ));
+    }
+
+    #[test]
+    fn current_payload_has_no_change_type() {
+        let req = Host::ClaudeCode
+            .parse_request(&fixture("config-change"))
+            .unwrap();
+        assert_eq!(
+            req.action,
+            Some(Action::FsWrite {
+                path: "/Users/me/.claude/settings.json".into()
+            })
+        );
+        assert_eq!(
+            req.event,
+            HookEvent::ConfigChange {
+                source: "user_settings".into(),
+                change_type: None,
+            }
+        );
+    }
+
+    #[test]
+    fn a_change_without_a_file_has_no_action() {
+        let req = Host::ClaudeCode
+            .parse_request(&fixture("config-change-no-file"))
+            .unwrap();
+        assert_eq!(req.action, None);
+        assert!(matches!(
+            req.event,
+            HookEvent::ConfigChange { ref source, .. } if source == "skills"
+        ));
+    }
+
+    #[test]
+    fn unreadable_payload_still_answers_in_config_change_shape() {
+        let bad = r#"{"hook_event_name":"ConfigChange","source":7}"#;
+        assert!(Host::ClaudeCode.parse_request(bad).is_err());
+        let event = Host::ClaudeCode.event_of(bad);
+        assert!(matches!(event, HookEvent::ConfigChange { .. }));
+        let out: serde_json::Value = serde_json::from_str(
+            &Host::ClaudeCode.render_response(&event, &Decision::new(Verdict::Deny)),
+        )
+        .unwrap();
+        assert_eq!(out["decision"], "block");
     }
 
     #[test]
@@ -108,7 +169,7 @@ mod tests {
     fn allow_is_empty_and_deny_blocks_with_reason() {
         let event = HookEvent::ConfigChange {
             source: "user_settings".into(),
-            change_type: "modified".into(),
+            change_type: Some("modified".into()),
         };
         assert_eq!(
             Host::ClaudeCode.render_response(&event, &Decision::new(Verdict::Allow)),
