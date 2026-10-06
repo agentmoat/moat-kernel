@@ -28,6 +28,22 @@ fn splits_unspaced_operators() {
 }
 
 #[test]
+fn single_quoted_spans_are_recorded() {
+    let spans = |input: &str| match lex(input).unwrap().pop() {
+        Some(Token::Word(w)) => w.literal,
+        other => panic!("expected a word, got {other:?}"),
+    };
+    assert_eq!(spans("x'$p'").split_first(), Some((&(1..3), &[][..])));
+    assert_eq!(spans("a'$b'\"$c\"'$d'"), [1..3, 5..7]);
+    assert!(spans("\"'$x'\"").is_empty());
+    assert!(
+        spans("$'$x'").is_empty(),
+        "ANSI-C quoting is not marked literal"
+    );
+    assert!(spans("''").is_empty());
+}
+
+#[test]
 fn quotes_and_escapes() {
     assert_eq!(
         words(r#"echo 'a b' "c d" e\ f"#),

@@ -461,6 +461,19 @@
 - id: benign-awk-in-pipeline
   action: { shell: "cut -d, -f2 data.csv | sort | uniq -c | awk '{print $2}'" }
   expect: { verdict: allow, rules: [text-tools, project-fs] }
+# the shell does not expand `$` inside single quotes, so it reads no variable
+- id: benign-sed-last-line-address
+  action: { shell: "sed -n '$p' src/lib.rs" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-last-field
+  action: { shell: "awk '{print $NF}' data.txt" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-awk-named-variable-in-program
+  action: { shell: "awk -F: '{ total += $NF } END { print total }' data.txt" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
+- id: benign-sed-single-quoted-dollar-in-pipeline
+  action: { shell: "grep -n fn src/lib.rs | sed -e '$d'" }
+  expect: { verdict: allow, rules: [text-tools, project-fs] }
 # a repository policy (ADR-022): a trusted file's allow rules apply; deny rules
 # for one command leave the rest as the user policy decides
 - id: benign-repo-trusted-allow

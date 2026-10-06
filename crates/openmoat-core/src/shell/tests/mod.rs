@@ -1,3 +1,4 @@
+mod quotes;
 mod stdin;
 mod text;
 

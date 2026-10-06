@@ -9,7 +9,7 @@ the verdict and rule ids the default policy must produce for it.
 |---|---|---|---|---|
 | T1 | Secret exfiltration via shell | 35 | 19 | 3 |
 | T2 | Secret exfiltration via file tools | 20 | 1 | 1 |
-| T3 | Secret exfiltration via environment | 15 | 3 | 0 |
+| T3 | Secret exfiltration via environment | 21 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 46 | 23 | 1 |
 | T5 | Supply-chain execution | 4 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 2 | 0 |
@@ -113,6 +113,12 @@ the verdict and rule ids the default policy must produce for it.
 - `T3-echo-api-key` (attacks): Deny [env-secrets]
 - `T3-braced-default-expansion` (attacks): Deny [env-secrets]
 - `T3-quoted-expansion` (attacks): Deny [env-secrets]
+- `T3-single-quoted-code-for-inner-shell` (attacks): Deny [env-secrets]
+- `T3-double-quotes-inside-single-quoted-shell-code` (attacks): Deny [env-secrets]
+- `T3-double-quoted-part-after-single-quoted-part` (attacks): Deny [env-secrets]
+- `T3-single-quote-inside-double-quotes-still-expands` (attacks): Deny [env-secrets]
+- `T3-eval-of-single-quoted-code` (attacks): Deny [env-secrets]
+- `T3-sudo-wrapped-unquoted-expansion` (attacks): Deny [env-secrets]
 - `T3-bare-env` (attacks): Deny [env-dump]
 - `T3-bare-printenv` (attacks): Deny [env-dump]
 - `T3-bare-set` (attacks): Deny [env-dump]
