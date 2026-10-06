@@ -475,7 +475,8 @@ hook JSON ─► adapter ─► ToolCall
 ### 7.2 Shell normalisation (the hard core of Phase 1)
 
 Parse with a POSIX-shell-aware tokenizer (bash grammar subset: pipelines, lists
-`&&`/`||`/`;`, redirections, subshells, command substitution, assignments, heredocs).
+`&&`/`||`/`;`, redirections, subshells, command substitution, assignments, heredocs,
+`<<<` here-strings).
 Rules:
 
 - Leading assignments (`FOO=bar cmd`) → `env.set` action for `FOO` + command.

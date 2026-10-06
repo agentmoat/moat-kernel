@@ -288,3 +288,11 @@
 - id: benign-pipe-all-build-log-into-grep
   action: { shell: "cargo build |& grep warning" }
   expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-here-string-to-cat
+  threat: T7
+  action: { shell: "cat <<< hi" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-here-string-to-grep
+  threat: T7
+  action: { shell: "grep -c needle <<< 'a needle in ~/.ssh/id_rsa text'" }
+  expect: { verdict: allow, rules: [dev-shell] }

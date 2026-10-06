@@ -13,17 +13,22 @@ use crate::host;
 use crate::lexer::{self, Operator, Token, Word};
 use crate::paths;
 
-/// One simple command: words (assignments + argv) and its redirection targets.
+/// One simple command: words (assignments + argv), its redirection targets and
+/// its `<<<` here-strings (stdin data).
 #[derive(Debug, Default)]
 struct SimpleCommand {
     words: Vec<Word>,
     reads: Vec<String>,
     writes: Vec<String>,
+    here_strings: Vec<Word>,
 }
 
 impl SimpleCommand {
     fn is_empty(&self) -> bool {
-        self.words.is_empty() && self.reads.is_empty() && self.writes.is_empty()
+        self.words.is_empty()
+            && self.reads.is_empty()
+            && self.writes.is_empty()
+            && self.here_strings.is_empty()
     }
 }
 
@@ -64,6 +69,7 @@ fn group_commands(tokens: &[Token]) -> Vec<SimpleCommand> {
             Token::HereDoc { .. } => {}
             Token::Word(w) => match pending_redirect.take() {
                 Some(Operator::RedirectIn) => current.reads.push(w.text.clone()),
+                Some(Operator::HereString) => current.here_strings.push(w.clone()),
                 Some(Operator::RedirectOut | Operator::RedirectAppend) => {
                     current.writes.push(w.text.clone());
                 }
@@ -93,9 +99,14 @@ fn classify_simple(
     sink: &mut Sink,
     depth: u8,
 ) -> Result<(), ClassifyError> {
-    for w in &cmd.words {
+    for w in cmd.words.iter().chain(&cmd.here_strings) {
         for inner in &w.substitutions {
             classify_into(inner, ctx, sink, depth + 1)?;
+        }
+    }
+    for w in &cmd.here_strings {
+        for name in env_refs(&w.text) {
+            sink.push(AtomicAction::EnvRead { name })?;
         }
     }
     for r in &cmd.reads {
@@ -161,7 +172,13 @@ fn classify_simple(
     }
     if SHELLS.contains(&program) {
         let run = invocation::parse(program, &argv)?;
-        for code in run.code {
+        // `bash <<< 'cmd'` runs the here-string as its program.
+        let stdin_code = cmd.here_strings.iter().filter(|_| run.reads_stdin);
+        for code in run
+            .code
+            .into_iter()
+            .chain(stdin_code.map(|w| w.text.as_str()))
+        {
             classify_into(code, ctx, sink, depth + 1)?;
         }
         if let Some(script) = run.script {
@@ -185,6 +202,11 @@ fn classify_simple(
         && let Some(payload) = flag_payload(&argv, flags)
     {
         scan_payload(payload, ctx, sink)?;
+    }
+    if INLINE_INTERPRETERS.iter().any(|(name, _)| *name == program) {
+        for w in &cmd.here_strings {
+            scan_payload(&w.text, ctx, sink)?;
+        }
     }
     options::classify(&argv, program, ctx, sink, depth)
 }
