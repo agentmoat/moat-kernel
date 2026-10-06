@@ -57,6 +57,9 @@ pub enum Command {
 pub enum SandboxCommand {
     /// Print the sandbox settings the policy compiles to and the translation losses; writes nothing.
     Show(SandboxShowArgs),
+    /// Write the sandbox settings from the current policy and re-pin them.
+    /// Refused unless run from an interactive terminal, and over a drifted lock.
+    Sync,
 }
 
 #[derive(Debug, Args)]

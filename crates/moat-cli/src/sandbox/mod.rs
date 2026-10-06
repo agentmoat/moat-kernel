@@ -10,6 +10,7 @@
 
 pub mod claude;
 pub mod codex;
+pub mod install;
 mod patterns;
 
 use moat_core::ir::{Allowance, Enforcement, Loss};
@@ -73,10 +74,17 @@ impl Plan {
             real_home,
             crate::context::CASE_INSENSITIVE_PATHS,
         )?;
+        let mut claude = claude::generate(&ir)?;
+        let claude_settings = install::settings_path(moat_hosts::Host::ClaudeCode)?;
+        claude::protect(&mut claude, &claude_settings);
+        let mut codex = codex::generate(&ir)?;
+        if let Some(codex_home) = codex_config_path()?.parent() {
+            codex::protect(&mut codex, codex_home);
+        }
         Ok(Self {
             default_read_roots,
-            claude: claude::generate(&ir)?,
-            codex: codex::generate(&ir)?,
+            claude,
+            codex,
         })
     }
 }
