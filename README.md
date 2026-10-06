@@ -127,6 +127,36 @@ from Claude Code's settings, and `default_permissions`, `[permissions.moat]` and
 `features.network_proxy` from Codex's `config.toml` (or restore the backups), then run
 `moat doctor --accept`.
 
+### `moat run` (Lightweight tier)
+
+Without a container or VM runtime, `moat run` puts a whole agent in a sandbox generated
+from the policy, with network only through a `moat proxy` it starts (ADR-018):
+
+```bash
+moat run --write ~/.claude --write ~/.claude.json -- claude
+```
+
+- **macOS:** a Seatbelt profile, started with `/usr/bin/sandbox-exec`.
+- **Linux 6.7 or later:** Landlock rules. Windows refuses.
+- The agent and every command it starts may read the project, `sandbox.read_roots`,
+  the temp directory and the agent's own executable; never the keychain. They may
+  write the project, the temp directory and each `--write` path (the agent's state).
+  Deny rules still win (`~/.claude/settings.json` stays unwritable).
+- Network goes only to the proxy on a loopback port (`HTTP_PROXY`, `HTTPS_PROXY`),
+  which allows the hosts the policy allows. A tool that ignores those variables has
+  no network.
+- Turn the agent's own sandbox off inside: sandboxes do not nest, so Claude Code's
+  `sandbox.enabled` (which `moat init` turns on) fails there and Codex needs
+  `--sandbox danger-full-access`. Credentials must not come from the keychain: use
+  an API key or `apiKeyHelper`.
+- Before the agent starts, `moat run` prints every place the sandbox is stricter or
+  wider than the policy (`moat sandbox show` prints the same for the current
+  directory). Linux is markedly wider than macOS (secrets inside the project stay
+  readable, UDP is open); see [THREAT_MODEL.md](docs/THREAT_MODEL.md).
+
+It is weaker per command than the Standard tier: the agent and its scripts share one
+sandbox, so whatever the agent needs, `npm test` gets too.
+
 ## Day to day
 
 ### What the default policy does
@@ -254,17 +284,20 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat trust [<repo>] [--revoke]` | let a repository's `.moat/policy.yaml` allow, until the file changes |
 | `moat policy lint` · `moat policy check "<cmd>"` | validate a policy · test an action against it |
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |
+| `moat run [--write PATH]… -- <agent> [args]` | run an agent in a sandbox generated from the policy (macOS, Linux) |
+| `moat proxy [--listen 127.0.0.1:<port>]` | run the egress proxy on its own |
 | `moat guard --host <id>` | the hook entry point; agents call it, you do not |
 
 Exit codes: 0 allow or success, 1 the agent `moat run` started exited non-zero, 2 deny,
-3 unresolved ask (`policy check`), 64 usage or configuration error. `moat guard` never exits 64: it denies with exit 2 instead,
-so a broken hook blocks rather than fails open (ADR-004, ADR-015).
+3 unresolved ask (`policy check`), 64 usage or configuration error. `moat guard` never
+exits 64: it denies with exit 2 instead, so a broken hook blocks rather than fails open
+(ADR-004, ADR-015).
 
 ## Limits
 
 - OS enforcement comes from the agents' own sandboxes (Claude Code's covers only
-  `Bash`, `PowerShell` and `Monitor`); moat has no sandbox or network proxy of its own
-  yet, and Cursor has none.
+  `Bash`, `PowerShell` and `Monitor`), or from `moat run`, which is weaker per command.
+  Cursor has no sandbox of its own.
 - Project scripts run whatever they contain: `npm test`, `cargo test` and `make test`
   are allowed, and the code they run is not inspected; the host sandbox bounds it.
 - Hosts the policy allows (`api.github.com`, the registries) can receive data from a
