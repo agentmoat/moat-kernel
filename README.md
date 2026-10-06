@@ -17,7 +17,7 @@ agent tool call ──► moat guard ──► allow ──► runs, logged
 > audit log, approvals and self-protection work today. Decisions are not yet enforced by
 > the operating system: an allowed command runs with your permissions, so a classifier
 > mistake is a security bug. OS enforcement (`moat exec`) and a network proxy gate the
-> beta; the public benchmark gates 1.0 (ADR-013). Expect breaking changes before v0.1.
+> beta; the public benchmark gates 1.0 (ADR-013). Expect breaking changes during the alpha (0.1.0-alpha.N).
 
 ## Why you would want this
 
