@@ -66,8 +66,9 @@ exits. There is no daemon.
    session with `moat allow` becomes `allow` with rule `approved-session`. A grant
    never touches a `deny` and expires 24 h after it was given; expired grants are
    ignored and pruned.
-9. **Record.** The event is written to the audit log. If it cannot be written, the
-   decision becomes a `kernel-error` deny: an unrecorded call is not allowed.
+9. **Record.** The event is appended to the audit log's hash chain (§7). If it cannot
+   be written, the decision becomes a `kernel-error` deny: an unrecorded call is not
+   allowed.
 10. **Respond.** The adapter renders the host's response document. `deny` also prints
     the reason line on stderr and exits 2.
 
@@ -235,6 +236,35 @@ reasons, latency). Every governed and ungoverned call is recorded. Command, path
 URL fields pass through `moat_audit::redact` first (bearer and basic auth,
 `key=value` credentials, common token shapes, URL passwords). `show`, `replay` and
 `report` read it; nothing leaves the machine.
+
+**Hash chain** (schema 2, `crates/moat-audit/src/store/chain.rs`). Each event also
+stores `prev_hash`, the `hash` of the event before it, and `hash`, the lowercase hex
+SHA-256 of its canonical encoding. The encoding (version 1) is the concatenation of:
+the domain tag `moat-audit-chain-v1` as a string; `id` and `ts_ms` as integers;
+`host` and `session_id` as strings; `call_id` and `cwd` as optional strings; `tool`,
+`action`, `verdict`, `rules` and `reasons` as strings, exactly as stored (the redacted
+JSON text for `action`, `rules`, `reasons`); `latency_us` as an integer; `prev_hash`
+as a string. An integer is 8 bytes big-endian; a string is its UTF-8 byte length as
+8 bytes big-endian followed by the bytes; an optional string is `0x00` when absent,
+else `0x01` and the string. The first chained event's `prev_hash` is 64 zeros. The
+encoding hashes stored cells, not re-serialised values, so a later build that
+serialises actions differently still verifies old events; changing the encoding
+needs a new domain tag.
+
+`guard` appends in one `BEGIN IMMEDIATE` transaction: read the newest event's id and
+hash, insert the next event with `id + 1` linked to it, commit. Concurrent `guard`
+processes serialise on SQLite's write lock (busy timeout 2 s), so the chain never
+forks; a write that fails or times out is a `kernel-error` deny as before. The
+transaction adds about 0.1 ms to a guard call. `moat doctor` re-hashes the whole log
+oldest first (about 0.15 s per 100 000 events) and reports the first event that was
+edited (contents do not match its hash), unlinked (an event before it was deleted or
+inserted, or events were reordered) or unhashed, and exits 64.
+
+The upgrade from schema 1 adds the two columns and records the last existing id as
+`legacy_last_id` in a `meta` table. Existing events are not hashed: they were written
+unprotected, and hashing them during the migration would vouch for whatever they hold
+at that moment. `doctor` counts them as not covered; an event without a hash after
+`legacy_last_id` is a break. What the chain does not detect is in [THREAT_MODEL.md](THREAT_MODEL.md) §5.
 
 ## 8. Files on disk
 

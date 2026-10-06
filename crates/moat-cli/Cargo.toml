@@ -26,6 +26,7 @@ serde_yaml_ng.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+moat-audit = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 
 [lints]

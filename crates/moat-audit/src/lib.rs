@@ -10,6 +10,8 @@
 mod query;
 mod redact;
 mod store;
+#[cfg(feature = "test-support")]
+pub mod testing;
 
 pub use query::{SessionSummary, Summary};
 pub use redact::{redact, redact_value};

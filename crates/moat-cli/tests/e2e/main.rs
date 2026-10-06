@@ -8,6 +8,7 @@ mod common;
 
 mod allow;
 mod approvals;
+mod audit;
 mod cli;
 mod closed_pipe;
 mod codex;
