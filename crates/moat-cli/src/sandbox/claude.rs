@@ -308,3 +308,6 @@ fn network(net: &Access, report: &mut Report) -> Value {
     }
     json!({ "allowedDomains": allowed, "deniedDomains": denied, "strictAllowlist": true })
 }
+
+#[cfg(test)]
+mod tests;
