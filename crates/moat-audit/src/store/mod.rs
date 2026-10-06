@@ -35,11 +35,14 @@ CREATE INDEX IF NOT EXISTS events_ts ON events(ts_ms);
 ";
 
 /// Why the audit database could not be used. `guard` denies on any of these.
+///
+/// Messages include their cause, so no variant also exposes it as `source`:
+/// a chained report (`{:#}`) would print it twice.
 #[derive(Debug, Error)]
 pub enum StoreError {
     /// `SQLite` failed (open, query, constraint).
     #[error("audit database: {0}")]
-    Sqlite(#[from] rusqlite::Error),
+    Sqlite(rusqlite::Error),
     /// The database was written by a newer `moat`.
     #[error(
         "audit database schema version {found} is newer than this build supports ({supported})"
@@ -55,10 +58,28 @@ pub enum StoreError {
     InvalidId(String),
     /// An event could not be encoded for storage.
     #[error("encoding event: {0}")]
-    Encode(#[from] serde_json::Error),
+    Encode(serde_json::Error),
     /// The database file could not be created or restricted.
     #[error("audit database file: {0}")]
-    Io(#[from] std::io::Error),
+    Io(std::io::Error),
+}
+
+impl From<rusqlite::Error> for StoreError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Sqlite(error)
+    }
+}
+
+impl From<serde_json::Error> for StoreError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Encode(error)
+    }
+}
+
+impl From<std::io::Error> for StoreError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
 }
 
 /// Row id, shown and parsed as lowercase hex (`moat show 1f`).

@@ -260,6 +260,25 @@ fn unparseable_guard_arguments_deny() {
 }
 
 #[test]
+fn malformed_payloads_name_their_cause_once() {
+    let sb = Sandbox::installed(&[".claude"]);
+    for (payload, problem, cause) in [
+        ("nope", "payload is not valid JSON", "expected ident"),
+        (
+            "[1]",
+            "payload is JSON but does not fit the hook schema",
+            "invalid type",
+        ),
+    ] {
+        let out = sb.guard("claude-code", payload);
+        assert_eq!(out.status.code(), Some(2), "payload {payload:?} must deny");
+        let reason = decision(&out)["permissionDecisionReason"].to_string();
+        assert!(reason.contains(problem), "{reason}");
+        assert_eq!(reason.matches(cause).count(), 1, "{reason}");
+    }
+}
+
+#[test]
 fn deleted_audit_log_denies_instead_of_recreating_it() {
     let sb = Sandbox::bare(&[".claude"]);
     sb.moat(&["init"]);

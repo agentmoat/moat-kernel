@@ -87,7 +87,7 @@ impl GlobPattern {
                 .build()
                 .map_err(|e| PolicyError::BadGlob {
                     pattern: raw.to_owned(),
-                    source: e,
+                    error: e,
                 })?;
             Ok(glob.compile_matcher())
         };
@@ -235,7 +235,7 @@ impl ShellPattern {
                     .map(|g| Token::One(g, w.clone()))
                     .map_err(|e| PolicyError::BadGlob {
                         pattern: raw.to_owned(),
-                        source: e,
+                        error: e,
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;

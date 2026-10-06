@@ -208,14 +208,17 @@ pub struct HookRequest {
 }
 
 /// Why a payload could not be turned into a request. `guard` denies on any of these.
+///
+/// Messages include their cause, so no variant also exposes it as `source`:
+/// a chained report (`{:#}`) would print it twice.
 #[derive(Debug, Error)]
 pub enum HostError {
     /// `--host` named no supported host.
     #[error("unknown host `{0}`; supported: claude-code, codex, cursor")]
     UnknownHost(String),
     /// The payload is not JSON or does not fit the host's schema.
-    #[error("payload is not valid JSON: {0}")]
-    Json(#[from] serde_json::Error),
+    #[error("{problem}: {0}", problem = json_problem(.0))]
+    Json(serde_json::Error),
     /// The payload is for a hook event this adapter does not handle.
     #[error("payload is for event `{0}`, which this host adapter does not handle")]
     WrongEvent(String),
@@ -235,4 +238,18 @@ pub enum HostError {
         /// What is wrong with the arguments.
         problem: String,
     },
+}
+
+impl From<serde_json::Error> for HostError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Json(error)
+    }
+}
+
+fn json_problem(error: &serde_json::Error) -> &'static str {
+    if error.is_data() {
+        "payload is JSON but does not fit the hook schema"
+    } else {
+        "payload is not valid JSON"
+    }
 }

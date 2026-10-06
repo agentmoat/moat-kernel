@@ -45,11 +45,14 @@ use crate::verdict::Verdict;
 pub const SUPPORTED_VERSION: u32 = 1;
 
 /// Why a policy file cannot be used. Any of these keeps `guard` from deciding.
+///
+/// Messages include their cause, so no variant also exposes it as `source`:
+/// a chained report (`{:#}`) would print it twice.
 #[derive(Debug, Error)]
 pub enum PolicyError {
     /// The file is not valid YAML or does not fit the schema.
     #[error("policy parse error: {0}")]
-    Parse(#[from] serde_yaml_ng::Error),
+    Parse(serde_yaml_ng::Error),
     /// The `version` key names a schema this build does not know.
     #[error("unsupported policy version {found}; this build supports {supported}")]
     Version {
@@ -68,12 +71,12 @@ pub enum PolicyError {
     #[error("empty pattern")]
     EmptyPattern,
     /// A glob does not compile.
-    #[error("bad glob `{pattern}`: {source}")]
+    #[error("bad glob `{pattern}`: {error}")]
     BadGlob {
         /// The pattern as written.
         pattern: String,
         /// The glob compiler's explanation.
-        source: globset::Error,
+        error: globset::Error,
     },
     /// A shell pattern does not tokenise (unbalanced quotes, a here-document).
     #[error("bad shell pattern `{pattern}` (unbalanced quotes?)")]
@@ -247,7 +250,7 @@ fn default_verdict() -> Defaults {
 impl Policy {
     /// Parse and lint a policy document. Pure: takes the YAML text.
     pub fn parse(yaml: &str) -> Result<Self, PolicyError> {
-        let policy: Self = serde_yaml_ng::from_str(yaml)?;
+        let policy: Self = serde_yaml_ng::from_str(yaml).map_err(PolicyError::Parse)?;
         policy.lint()?;
         Ok(policy)
     }
