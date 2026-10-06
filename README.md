@@ -33,7 +33,7 @@ Out of the box the default policy stops:
 - `curl … | sh`, decoded payloads piped to a shell, `eval`
 - environment poisoning: `export PATH=…`, `LD_PRELOAD`, `NODE_OPTIONS`
 - destructive git and filesystem operations: `push --force`, `reset --hard`, `rm -rf ~`
-- outbound network to any host you have not allowed
+- outbound network to any host you have not allowed (a `WebFetch` read of such a host asks instead)
 - the agent editing `moat`'s own policy, the agent's hook files, or your shell rc files
 
 ## Quick start
@@ -149,6 +149,7 @@ version: 1
 defaults:
   "*": ask          # anything unmatched pauses and asks
   net: deny         # network only to hosts listed under allow
+  fetch: ask        # WebFetch of an unlisted URL asks; curl/wget to it stays denied
 
 deny:
   - id: secrets-paths

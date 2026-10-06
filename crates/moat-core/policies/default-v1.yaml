@@ -7,6 +7,7 @@ version: 1
 defaults:
   "*": ask
   net: deny          # outbound network: only hosts listed under allow
+  fetch: ask         # a host fetch tool (WebFetch) reading an unlisted URL: no request body, so ask (ADR-017)
 
 deny:
   - id: secrets-paths

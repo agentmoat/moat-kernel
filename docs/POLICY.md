@@ -12,7 +12,8 @@ version: 1                          # required; only 1 is supported
 
 defaults:                           # verdict when no rule matches
   "*": ask                          #   one verdict for everything, or a map per kind
-  net: deny                         #   keys other than the seven kinds and "*" are accepted but never consulted
+  net: deny                         #   keys other than the eight kinds and "*" are accepted but never consulted
+  fetch: ask                        #   unset, a fetch takes the `net` default
 
 deny:   [ <rule group>, … ]         # evaluated first; a match here is final
 allow:  [ <rule group>, … ]         # evaluated second
@@ -39,6 +40,7 @@ not be empty; a rule group must contain at least one pattern.
   fs.write: ["~/.ssh/**"]
   shell:    ["curl * | sh"]
   net:      ["*.evil.example"]
+  fetch:    ["docs.rs"]
   env.read: ["*_TOKEN"]
   env.set:  ["PATH", "LD_PRELOAD"]
   mcp:      ["mcp__shell__*"]
@@ -51,7 +53,8 @@ kind. One tool call usually produces several atomic actions (see §4).
 |---|---|---|
 | `shell` | the normalised argument vector of a command, and of every pipeline suffix | token sequence (§3.1) |
 | `fs.read`, `fs.write` | the canonical absolute path | glob (§3.2) |
-| `net` | the host name only (no scheme, port or path), lowercase | glob, case-insensitive |
+| `net` | the host name only (no scheme, port or path), lowercase; also matches `fetch` actions | glob, case-insensitive |
+| `fetch` | the host of a URL a host's own fetch tool reads (Claude Code `WebFetch`), as for `net` | glob, case-insensitive |
 | `env.read`, `env.set` | the variable name | glob |
 | `mcp` | the full MCP tool name `mcp__<server>__<tool>` | glob |
 
@@ -100,6 +103,7 @@ tool call ──► atomic actions ──► per action: deny → allow → ask 
 Consequences worth remembering:
 
 - **Deny is absolute.** No allow rule can override a deny rule. To express "nothing of this kind except these", use `defaults` plus allow rules, as the default policy does for `net`.
+- A `fetch` is a narrower kind of `net` (ADR-017): `net` patterns in `deny`, `allow` and `ask` match it as well as `fetch` patterns, and with no `defaults.fetch` the `net` default decides it. A `fetch` pattern never matches other network access, so `curl`, `wget`, `nc`, a Claude Code `Monitor` WebSocket and MCP `url` arguments are only judged by `net` rules.
 - An allow rule on `shell` does not allow the paths or hosts the command touches; those are evaluated separately. `cat ~/.ssh/id_rsa` is denied by the path rule even though `cat *` is allowed.
 - Arguments that name files become `fs.read`/`fs.write` actions even when they are relative: any word containing `/` (`s/id_rsa`, `src/main.rs`, the value of `--in=keys/k`), and every operand of programs that read or write their operands (`cat`, `head`, `tail`, `less`, `grep`, `rg`, `wc`, `diff`, `base64`, `tar`, `ls`, `find`, `cp`, `mv`, `rm`, `tee`, … ; `shell/tables.rs`), so `cat k` is a read of `<cwd>/k`. Options before `--`, URLs, remote specs (`host:dir`) and the arguments of `echo`/`printf` are not files. Inside the project these reads cost nothing (`project-fs` allows them); an option value such as the `5` in `head -n 5 f` becomes a harmless read of `<cwd>/5`.
 - Relative paths follow `cd` and `pushd` earlier in the same command line: `cd ~/.ssh && cat id_rsa` is a read of `~/.ssh/id_rsa`. Which commands run after a `cd` succeeds is not modelled (`cd x || cat y`, a failed `cd` before `;`), so a relative path is checked in every directory the line may be in (the session's directory and each `cd` target), strictest wins. A subshell `( … )` restores the directory when it closes; `$( … )` and `sh -c` start from the directory where they appear. `cd` alone is `~`. A target that cannot be known (`cd "$DIR"`, `cd -`, `cd s*`, `pushd +1`, `popd`, and `eval`/`source`, which may `cd` themselves) makes every later relative path unresolvable, so the command asks with rule `unparseable`; absolute paths are still checked normally. More than 16 possible directories also asks. `cd` itself adds no new action (a path-looking target is an `fs.read` like any argument), and `CDPATH` is not consulted.
@@ -150,12 +154,12 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | allow | `dev-shell` | `git status/diff/log/show/branch/add/commit/checkout/switch/fetch/pull/stash`, `ls`, `cat`, `head`, `tail`, `grep`, `rg`, `find`, `pwd`, `echo`, `which`, `true`, `jq`; `cd`, `pushd`, `popd`, `mkdir`, `touch`, `cp`, `mv`, `rm` (their path operands are fs actions resolved through `cd` and symlinks, so outside `${project}` they ask or meet a deny); `npm test/run`, `pnpm test/run/build/lint/typecheck/exec`, `yarn test/run/build/lint/exec`, `npm exec`, `cargo build/test/check/clippy/fmt/run/doc/bench/nextest/tree/metadata`, `go test/build/vet`, `swift test/build`, `pytest`, `python3 -m pytest`, `make test/build/check/lint`. `exec` forms are allowed only because the wrapped program is evaluated on its own. Excluded (they ask): recursive `rm` (`-r`, `-R`, `-rf`, …), `git checkout .`, `git checkout -- …` and forced checkouts (they discard uncommitted work), `find -exec/-ok/-delete/-fprint/-fls`, `rg --pre`, `git --upload-pack/--receive-pack`, `go -exec/-toolexec/-vettool`, `cargo --config` |
 | allow | `dev-readonly` | `wc`, `diff`, `tree`; `docker ps/images/logs/version`; `gh pr view/list/diff/checks`, `gh issue view/list`, `gh run list/view`, `gh repo view` (not with `--output`/`-o`); reading `PATH`, `HOME`, `USER`, `SHELL`, `PWD`, `LANG`, `TERM`, `TMPDIR`, `EDITOR`. `sed` is not listed: a sed script can run commands (`e`) and write files (`w`) |
 | allow | `dev-tools` | `tsc`, `eslint`, `prettier`, `biome`, `vitest`, `jest`, `mocha`, `ruff`, `black`, `mypy`, `golangci-lint` |
-| allow | `registries` | `api.github.com`, `github.com`, npm, crates.io, Go proxy, PyPI |
+| allow | `registries` | `api.github.com`, `github.com`, npm, crates.io, Go proxy, PyPI (shell clients and `WebFetch` alike) |
 | allow | `safe-mcp` | read-only GitHub and filesystem MCP tools |
 | ask | `installs` | `npm install/i/ci`, `pnpm add/install/dlx`, `yarn add/install/dlx`, `npx`, `pip install`, `cargo add/install`, `brew install`, `gem install` |
-| ask | `local-net` | network to `localhost`, `127.0.0.1`, `::1` (a local service may expose a control API) |
+| ask | `local-net` | network to `localhost`, `127.0.0.1`, `::1`, fetches included (a local service may expose a control API) |
 | ask | `push` | `git push`, `npm/pnpm/yarn publish`, `cargo publish`, `gh release` |
-| defaults | `default`, `default.net` | everything else asks; outbound network to unlisted hosts is denied |
+| defaults | `default`, `default.net`, `default.fetch` | everything else asks; outbound network to unlisted hosts is denied, except a `WebFetch` read of an unlisted URL, which asks (ADR-017) |
 
 MCP calls are judged by name **and** by what their arguments touch: adapters map path-like arguments (`path`, `paths`, `file_path`, `source`, `destination`, …) to `fs.read`/`fs.write` atoms (write for `write_*`, `edit_*`, `move_*`, `delete_*`-shaped tools and for `destination`/`target`) and URL-like arguments (`url`, `uri`, `endpoint`) to `net` atoms, so `mcp__filesystem__read_file {path: ~/.aws/credentials}` is denied by `secrets-paths` even though `safe-mcp` allows the tool name. Arguments are searched at any depth (`{"options": {"path": …}}`), URL arguments count with or without a scheme, and arguments that cannot be read (a Cursor `tool_input` string that is not JSON, more than 1024 paths and URLs) deny the call instead of letting the name decide alone.
 
@@ -197,7 +201,8 @@ ids, empty rules, bad globs or shell patterns, `executables` paths that are not 
 (`/usr/bin/git` or `C:/…`). It prints warnings, and still exits 0, for rules that cannot
 decide anything because an earlier list already matches everything they match: an `ask`
 pattern covered by an `allow` pattern (allow is evaluated first, e.g. allow `cargo *` makes
-ask `cargo publish*` unreachable), an `allow` pattern covered by a `deny` pattern, and
+ask `cargo publish*` unreachable), an `allow` pattern covered by a `deny` pattern (a `net`
+pattern covers a `fetch` pattern, not the reverse), and
 `defaults` keys that are not a known kind (`netw: deny` is silently ignored otherwise). The
 check is conservative: a list with `!` exclusions is never assumed to cover anything, so no
 warning does not prove a rule is reachable.

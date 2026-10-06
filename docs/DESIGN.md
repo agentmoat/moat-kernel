@@ -180,7 +180,7 @@ its JSON to the kernel's internal `ToolCall`.
   (network), exactly one; PowerShell → `command`, recorded and always `ask` (`unparseable`:
   moat has no PowerShell parser); Edit/Write → `file_path`; NotebookEdit → `notebook_path`;
   Read → `file_path`; LSP → `filePath` (read); Glob/Grep → `path`, else `cwd` (read);
-  WebFetch → `url`; MCP tools named `mcp__<server>__<tool>`. Not governed: `WebSearch`
+  WebFetch → `url` (a `fetch`: a GET the agent cannot attach a body to, ADR-017); MCP tools named `mcp__<server>__<tool>`. Not governed: `WebSearch`
   (server-side), `SendFile` (sends files to another session; needs a multi-file read
   action), `Workflow` and other orchestration tools whose own tool calls are hooked.
 - Output: exit 0 + `{"hookSpecificOutput":{"hookEventName":"PreToolUse",
@@ -369,6 +369,7 @@ version: 1
 defaults:                       # verdict when nothing matches, per action kind
   "*": ask                      #   allow | ask | deny
   net: deny                     # outbound network is deny-by-default; allow rules are the holes
+  fetch: ask                    # a WebFetch read of an unlisted URL asks (ADR-017)
 scope:
   project_roots: ["."]          # what "inside the project" means (globs; "." = cwd of session)
 
@@ -423,6 +424,7 @@ executables:                    # pin basenames to absolute paths (defeats PATH 
 | `shell` | Normalised argv prefix (§7.2) | Token-prefix with `*` wildcard per token and trailing `*` for "anything after"; alternatives via `{a,b}`; quoting via YAML |
 | `fs.read` / `fs.write` | Canonical absolute path | Globs (`**`), `~` and `${project}` expansion, `!` negation inside allow lists |
 | `net` | Host (and optional path) from URL or from URL-like tokens in shell | Host globs (`*.github.com`), optional `host/path*` |
+| `fetch` | Host of a URL a host's own fetch tool reads (`WebFetch`); also matched by `net` rules, `defaults.net` when `defaults.fetch` is unset (ADR-017) | Host globs |
 | `env.read` / `env.set` | Variable names referenced or assigned | Globs |
 | `mcp` | `mcp__<server>__<tool>` | Globs; optional `args:` sub-matchers on JSON paths (`args.path`, `args.url`) |
 
@@ -433,7 +435,7 @@ executables:                    # pin basenames to absolute paths (defeats PATH 
 - **Deny is absolute.** An allow rule can never override a deny rule. Therefore
   "deny everything of kind X except these" is written as `defaults: {X: deny}` plus
   allow rules, never as a `deny: ["*"]` rule. `defaults` is either one verdict or a
-  map from kind (`shell`, `fs.read`, `fs.write`, `net`, `env.read`, `env.set`, `mcp`,
+  map from kind (`shell`, `fs.read`, `fs.write`, `net`, `fetch`, `env.read`, `env.set`, `mcp`,
   `"*"`) to a verdict; the synthetic rule id is `default` or `default.<kind>`.
 - Shell rules: a bare `*` token matches any number of argv tokens; other tokens are
   globs against exactly one token; a leading `!` makes a pattern an exclusion within its

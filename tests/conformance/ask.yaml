@@ -337,3 +337,17 @@
   threat: T1
   action: { shell: "cd ~ && ls" }
   expect: { verdict: ask, rules: [default] }
+
+# ADR-017 a host fetch tool reading an unlisted URL asks instead of being denied
+- id: ask-webfetch-docs
+  threat: T12
+  action: { fetch: "https://docs.rs/serde/latest/serde/" }
+  expect: { verdict: ask, rules: [default.fetch] }
+- id: ask-webfetch-unknown-host
+  threat: T12
+  action: { fetch: "https://evil.example.net/x?q=1" }
+  expect: { verdict: ask, rules: [default.fetch] }
+- id: ask-webfetch-localhost
+  threat: T12
+  action: { fetch: "http://localhost:3000/health" }
+  expect: { verdict: ask, rules: [local-net] }

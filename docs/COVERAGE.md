@@ -18,7 +18,7 @@ the verdict and rule ids the default policy must produce for it.
 | T9 | Hook / policy tampering by the agent | 37 | 8 | 1 |
 | T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
 | T11 | Time-of-check / time-of-use, symlinks | 13 | 1 | 0 |
-| T12 | Network to unknown hosts | 13 | 5 | 0 |
+| T12 | Network to unknown hosts | 14 | 8 | 0 |
 
 ## T1: Secret exfiltration via shell
 
@@ -335,6 +335,9 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-gh-api-can-write` (ask): Ask [default]
 - `ask-curl-localhost-dev-server` (ask): Ask [local-net]
 - `ask-curl-ipv6-loopback` (ask): Ask [local-net]
+- `ask-webfetch-docs` (ask): Ask [default.fetch]
+- `ask-webfetch-unknown-host` (ask): Ask [default.fetch]
+- `ask-webfetch-localhost` (ask): Ask [local-net]
 - `T12-webfetch-unknown-host` (attacks): Deny [default.net]
 - `T12-curl-unknown-host` (attacks): Deny [default.net]
 - `T12-netcat-ip` (attacks): Deny [default.net]
@@ -348,3 +351,4 @@ the verdict and rule ids the default policy must produce for it.
 - `T12-here-string-substitution-fetches` (attacks): Deny [default.net]
 - `T12-heredoc-substitution-fetches` (attacks): Deny [default.net]
 - `T12-heredoc-is-the-interpreter-program` (attacks): Deny [default.net]
+- `T12-curl-host-webfetch-may-read` (attacks): Deny [default.net]
