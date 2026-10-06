@@ -17,6 +17,8 @@ use serde::Deserialize;
 use crate::common::{Sandbox, bash_payload, hook_output, json};
 
 #[cfg(unix)]
+pub mod claude;
+#[cfg(unix)]
 pub mod codex;
 
 /// A layer's verdict. Sandboxes express only `Allow` (ran) and `Deny` (blocked);
@@ -74,6 +76,9 @@ pub struct Scenario {
     /// The expected outcome under `codex sandbox -P moat` (`allow` ran, `deny`
     /// blocked).
     pub codex: Verdict,
+    /// The expected outcome under a fake-API `claude -p` (`allow` ran, `deny`
+    /// blocked).
+    pub claude: Verdict,
     /// A layer where this scenario is a known gap: its verdict is reported in
     /// the matrix (never silently skipped) but not asserted, pending the issue.
     #[serde(default)]
