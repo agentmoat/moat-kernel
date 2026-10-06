@@ -1,6 +1,7 @@
 //! Conformance suite: every fixture in `tests/conformance/*.yaml` is evaluated
 //! against the shipped default policy (`moat_core::DEFAULT_POLICY`). A fixture passes when the verdict matches
-//! and every expected rule id is present in the decision.
+//! and every expected rule id is present in the decision. A fixture with `session` is
+//! decided with the taint its earlier calls leave (docs/POLICY.md §4.1).
 //!
 //! The suite is the executable form of the security claims in `docs/THREAT_MODEL.md` §3,
 //! so it is strict about its own inputs: unknown keys, duplicate ids and
@@ -15,7 +16,7 @@ use std::collections::BTreeMap;
 
 use moat_core::{
     Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, MapPathResolver, MapResolver, Policy,
-    Verdict,
+    Secret, Taint, Verdict,
 };
 use serde::Deserialize;
 
@@ -41,6 +42,11 @@ struct Fixture {
     links: BTreeMap<String, String>,
     /// Working directory and project for this fixture instead of `/p` and `/p`.
     context: Option<FixtureContext>,
+    /// Earlier calls of the same session that ran, oldest first: the action is
+    /// decided with the taint they leave (ADR-020). Their own verdicts do not
+    /// matter here; a person may have approved them.
+    #[serde(default)]
+    session: Vec<FixtureAction>,
 }
 
 /// `context: { cwd: /Users/me }` is a session in the home directory, which the
@@ -205,21 +211,34 @@ fn default_policy_conformance() {
         let links = MapPathResolver {
             links: fixture.links.clone(),
         };
-        let decision = match &fixture.context {
-            None => compiled.decide_with(&action, &resolver, &links),
-            Some(c) => {
-                let ctx = EvalContext {
-                    cwd: c.cwd.clone(),
-                    project: c.project.clone(),
-                    real_project: c.real_project.clone(),
-                    real_home: c.real_home.clone(),
-                    ..ctx.clone()
-                };
-                CompiledPolicy::compile(&policy, &ctx)
-                    .expect("default policy must compile")
-                    .decide_with(&action, &resolver, &links)
-            }
-        };
+        let own = fixture.context.as_ref().map(|c| {
+            let ctx = EvalContext {
+                cwd: c.cwd.clone(),
+                project: c.project.clone(),
+                real_project: c.real_project.clone(),
+                real_home: c.real_home.clone(),
+                ..ctx.clone()
+            };
+            CompiledPolicy::compile(&policy, &ctx).expect("default policy must compile")
+        });
+        let compiled = own.as_ref().unwrap_or(&compiled);
+        let plain = compiled.decide_with(&action, &resolver, &links);
+        // Taint only tightens: the worst session there is never loosens a verdict.
+        let worst = compiled.with_taint(plain.clone(), &action, &links, &worst_taint());
+        assert!(
+            worst.verdict >= plain.verdict,
+            "{}: taint loosened {:?} to {:?}",
+            fixture.id,
+            plain.verdict,
+            worst.verdict
+        );
+        let cwd = fixture.context.as_ref().map_or(&ctx.cwd, |c| &c.cwd);
+        let mut taint = Taint::default();
+        for (n, earlier) in fixture.session.into_iter().enumerate() {
+            let earlier = earlier.into_action(&format!("{}.session[{n}]", fixture.id));
+            taint.absorb(compiled.exposure(&earlier, cwd, &links));
+        }
+        let decision = compiled.with_taint(plain, &action, &links, &taint);
         let missing: Vec<&String> = fixture
             .expect
             .rules
@@ -245,6 +264,17 @@ fn default_policy_conformance() {
         failed == 0,
         "{failed} of {total} conformance fixtures failed:\n{report}"
     );
+}
+
+/// A session that read a secret and fetched untrusted content.
+fn worst_taint() -> Taint {
+    Taint {
+        secrets: vec![Secret {
+            source: "read /Users/me/.ssh/id_rsa".into(),
+            host: None,
+        }],
+        untrusted: Some("fetch evil.example".into()),
+    }
 }
 
 /// Threat classes of `docs/THREAT_MODEL.md` §3, as listed in `docs/COVERAGE.md`.
