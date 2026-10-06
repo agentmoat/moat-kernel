@@ -86,6 +86,7 @@ moat-kernel/
 │
 ├── scripts/ci/quality-gate.sh  # the one gate: fmt, clippy -D warnings, doc, tests, policy lint (CI and pre-push run it)
 ├── scripts/ci/sync-labels.sh   # source of truth for GitHub labels (`type: …`, `area: …`, `size: …`, `risk: …`)
+├── scripts/ci/guard-latency.py # times `moat guard` per process in CI; warns above the 15 ms p95 budget, fails above 3×
 ├── .githooks/pre-push          # enable with `git config core.hooksPath .githooks`
 ├── .github/
 │   ├── workflows/
@@ -179,7 +180,8 @@ moat-ffi ──► moat-core (only)                      (planned)
 | E2E executing under `moat exec` (planned) | `tests/e2e` | macOS, Linux | PR |
 | Fuzz (planned) | `fuzz/` | Linux nightly | issue on crash |
 | Mutation (planned) | `moat-core` | weekly | ≥ 95% |
-| Benchmarks (planned; latency measured by hand today) | `benches/` | PR (report), nightly (trend) | p95 budget |
+| Guard latency (end to end, one process per call) | `scripts/ci/guard-latency.py` | PR, `latency` job (not required) | warn > 15 ms p95, fail > 45 ms |
+| Benchmarks (planned; parser throughput) | `benches/` | PR (report), nightly (trend) | p95 budget |
 | MoatBench (planned; security outcomes) | `agentmoat/moatbench` | nightly + release | release gate (STRENGTH.md §3.3) |
 
 ## 6. Documentation conventions
