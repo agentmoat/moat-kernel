@@ -5,7 +5,10 @@ name: pr-review
 # approves, requests changes or pushes. Maintainers own the verdict (CODEOWNERS).
 #
 # Runs for same-repository pull requests. Fork PRs carry no secrets, so a
-# maintainer triggers a review there by commenting `@moat-reviewer`.
+# maintainer triggers a review there by commenting `@moat-reviewer`. That run
+# holds the model credential and the app token while the PR's code is checked
+# out, so it gets read-only tools: building or testing the PR (build scripts,
+# tests, the gate) would execute untrusted code next to those secrets.
 # Setup (secrets, variable, app): .github/moat-reviewer/README.md
 
 on:
@@ -53,6 +56,8 @@ jobs:
           private-key: ${{ secrets.MOAT_REVIEWER_PRIVATE_KEY }}
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
           toolchain: "1.95"
@@ -71,7 +76,7 @@ jobs:
           exclude_comments_by_actor: "*[bot]"
           claude_args: >-
             --max-turns 60
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr checks:*),Bash(scripts/ci/quality-gate.sh),Bash(cargo test:*),Bash(cargo clippy:*),Bash(cargo run --quiet -p moat-kernel -- policy:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr checks:*)${{ github.event_name == 'pull_request' && ',Bash(scripts/ci/quality-gate.sh),Bash(cargo test:*),Bash(cargo clippy:*),Bash(cargo run --quiet -p moat-kernel -- policy:*)' || '' }}"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
@@ -82,9 +87,12 @@ jobs:
 
             Read AGENTS.md first: its invariants (section 3), engineering rules (4) and
             definition of done (6) are the review standard. Then `gh pr view` and `gh pr diff`.
-            The PR branch is checked out; you may run `scripts/ci/quality-gate.sh`,
-            `cargo test`, `cargo clippy` and `cargo run --quiet -p moat-kernel -- policy check …`
-            to verify a claim instead of guessing. Never modify files, never push.
+            The PR branch is checked out. On same-repository PRs you may run
+            `scripts/ci/quality-gate.sh`, `cargo test`, `cargo clippy` and
+            `cargo run --quiet -p moat-kernel -- policy check …` to verify a claim instead of
+            guessing; on comment-triggered reviews only the read-only `gh` tools are available,
+            so reason from the diff and say what you could not verify. Never modify files,
+            never push.
 
             Check, in this order, and look for what is missing as much as what is wrong:
             1. Invariants: deny absolute, strictest wins, unparseable ⇒ ask, every `guard` error
