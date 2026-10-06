@@ -80,14 +80,11 @@ deny:
   - id: destructive
     reason: irreversible damage
     shell:
-      - "rm -rf /"
-      - "rm -fr /"
-      - "rm -rf /[*]"
+      # a recursive removal of the root or the home directory: `-r`, `-R` or
+      # `--recursive` in any cluster, before or after the operand, however it is spelt
+      - "rm * -*[rR]* * {/,//,/[*],~,~/,~/[*],$HOME,$HOME/,$HOME/[*]}"
+      - "rm * {/,//,/[*],~,~/,~/[*],$HOME,$HOME/,$HOME/[*]} * -*[rR]*"
       - "rm -rf --no-preserve-root*"
-      - "rm -rf ~"
-      - "rm -fr ~"
-      - "rm -rf ~/[*]"
-      - "rm -rf $HOME"
       # git takes an unambiguous prefix of a long option (`--del` is `--delete`), so
       # `--for*` and `--de*`: no other `git push` option starts with either
       - "git push --for*"
