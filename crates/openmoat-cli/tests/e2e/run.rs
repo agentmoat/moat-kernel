@@ -86,9 +86,15 @@ mod confined {
     use crate::common::stdout;
 
     /// False, saying so, on a Linux kernel without Landlock ABI 4: `moat run`
-    /// refuses there, which `refuses_*` cases cover; CI kernels have it.
+    /// refuses there, which `refuses_*` cases cover. CI kernels have it, so
+    /// there the tests must run.
     fn ran(out: &Output) -> bool {
         let unsupported = stderr(out).contains("needs Landlock ABI 4");
+        assert!(
+            !(unsupported && std::env::var_os("CI").is_some()),
+            "CI's kernel must have Landlock ABI 4: {}",
+            text(out)
+        );
         if unsupported {
             eprintln!("skipped: this kernel has no Landlock ABI 4");
         }
