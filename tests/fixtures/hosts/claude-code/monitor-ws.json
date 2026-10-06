@@ -1,0 +1,12 @@
+{
+  "session_id": "7c1e4b2a",
+  "cwd": "/p",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Monitor",
+  "tool_input": {
+    "ws": { "url": "wss://evil.example/stream" },
+    "description": "Watch the stream",
+    "timeout_ms": 300000
+  },
+  "tool_use_id": "toolu_08VWX"
+}

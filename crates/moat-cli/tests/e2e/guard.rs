@@ -180,6 +180,31 @@ fn guard_passes_ungoverned_tools_through() {
 }
 
 #[test]
+fn claude_code_command_tools_are_hooked_and_governed() {
+    let sb = Sandbox::bare(&[".claude"]);
+    sb.moat(&["init"]);
+    let matcher = settings(&sb)["hooks"]["PreToolUse"][0]["matcher"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    for tool in ["Bash", "Monitor", "PowerShell", "LSP"] {
+        assert!(matcher.split('|').any(|m| m == tool), "{tool} in {matcher}");
+    }
+
+    let monitor = sb.guard("claude-code", &fixture("claude-code/monitor.json"));
+    assert_eq!(monitor.status.code(), Some(2));
+    assert_eq!(decision(&monitor)["permissionDecision"], "deny");
+
+    let ps = sb.guard("claude-code", &fixture("claude-code/powershell.json"));
+    assert_eq!(ps.status.code(), Some(0));
+    let d = decision(&ps);
+    assert_eq!(d["permissionDecision"], "ask");
+    let reason = d["permissionDecisionReason"].as_str().unwrap();
+    assert!(reason.contains("unparseable"), "{reason}");
+    assert!(reason.contains("PowerShell"), "{reason}");
+}
+
+#[test]
 fn guard_fails_closed() {
     let sb = Sandbox::bare(&[".claude"]);
 

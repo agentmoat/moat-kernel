@@ -90,6 +90,15 @@ fn unparseable_is_never_allowed() {
     )
     .unwrap();
     assert_eq!(d.verdict, Verdict::Ask);
+    let powershell = Action::ForeignShell {
+        shell: "PowerShell".into(),
+        command: "Get-ChildItem".into(),
+    };
+    let d = evaluate(&p, &ctx(), &powershell).unwrap();
+    assert_eq!(
+        (d.verdict, d.rules),
+        (Verdict::Ask, vec!["unparseable".to_owned()])
+    );
 }
 
 #[test]

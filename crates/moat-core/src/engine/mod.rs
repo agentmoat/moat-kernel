@@ -161,6 +161,9 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
                 cwd: &ctx.cwd,
             },
         ),
+        Action::ForeignShell { shell, .. } => ParseOutcome::Unparseable {
+            reason: format!("{shell} commands are not parsed; only POSIX shell is classified"),
+        },
         Action::FsRead { path } => ParseOutcome::Parsed(vec![AtomicAction::FsRead {
             path: paths::normalise(path, &ctx.home, &ctx.project, &ctx.cwd),
         }]),

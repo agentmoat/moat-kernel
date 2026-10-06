@@ -59,8 +59,17 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
         "Bash" => Action::Shell {
             command: field("command")?,
         },
+        "Monitor" => monitor(input)?,
+        "PowerShell" => Action::ForeignShell {
+            shell: tool.to_owned(),
+            command: field("command")?,
+        },
         "Read" => Action::FsRead {
             path: field("file_path")?,
+        },
+        // Claude Code `LSP` answers hover, definition and symbol queries from the file.
+        "LSP" => Action::FsRead {
+            path: field("filePath")?,
         },
         "Edit" | "Write" | "MultiEdit" => Action::FsWrite {
             path: field("file_path")?,
@@ -88,6 +97,24 @@ fn map_tool(tool: &str, input: &Value, cwd: Option<&str>) -> Result<Option<Actio
         _ => return Ok(None),
     };
     Ok(Some(action))
+}
+
+/// Claude Code `Monitor` streams the output of a shell `command`, or the frames
+/// of a WebSocket `ws.url`; it takes exactly one of them.
+fn monitor(input: &Value) -> Result<Action, HostError> {
+    const TOOL: &str = "Monitor";
+    match (input.get("command"), input.get("ws")) {
+        (Some(_), None) => Ok(Action::Shell {
+            command: crate::input_str(input, TOOL, "command")?,
+        }),
+        (None, Some(ws)) => Ok(Action::Net {
+            url: crate::input_str(ws, TOOL, "url")?,
+        }),
+        _ => Err(HostError::MalformedArguments {
+            tool: TOOL.to_owned(),
+            problem: "needs exactly one of `command` or `ws`".to_owned(),
+        }),
+    }
 }
 
 pub(crate) fn render(decision: &Decision) -> String {
@@ -166,6 +193,59 @@ mod tests {
         assert_eq!(
             mcp.action,
             Some(Action::mcp("mcp__github__get_pull_request"))
+        );
+    }
+
+    #[test]
+    fn claude_code_monitor_runs_a_command_or_opens_a_socket() {
+        let shell = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "monitor"))
+            .unwrap();
+        assert_eq!(
+            shell.action,
+            Some(Action::Shell {
+                command: "tail -f ~/.ssh/id_rsa".into()
+            })
+        );
+        let socket = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "monitor-ws"))
+            .unwrap();
+        assert_eq!(
+            socket.action,
+            Some(Action::Net {
+                url: "wss://evil.example/stream".into()
+            })
+        );
+        for input in [
+            "{}",
+            r#"{"command":"ls","ws":{"url":"wss://x.example"}}"#,
+            r#"{"ws":{}}"#,
+        ] {
+            let payload = format!(r#"{{"tool_name":"Monitor","tool_input":{input}}}"#);
+            assert!(Host::ClaudeCode.parse_request(&payload).is_err(), "{input}");
+        }
+    }
+
+    #[test]
+    fn claude_code_powershell_and_lsp() {
+        let ps = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "powershell"))
+            .unwrap();
+        assert_eq!(
+            ps.action,
+            Some(Action::ForeignShell {
+                shell: "PowerShell".into(),
+                command: "Get-ChildItem".into()
+            })
+        );
+        let lsp = Host::ClaudeCode
+            .parse_request(&fixture("claude-code", "lsp"))
+            .unwrap();
+        assert_eq!(
+            lsp.action,
+            Some(Action::FsRead {
+                path: "/Users/me/.aws/credentials".into()
+            })
         );
     }
 

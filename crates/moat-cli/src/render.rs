@@ -165,7 +165,7 @@ fn verdict_glyph(verdict: Verdict) -> &'static str {
 
 fn kind_of(action: &Action) -> &'static str {
     match action {
-        Action::Shell { .. } => "shell",
+        Action::Shell { .. } | Action::ForeignShell { .. } => "shell",
         Action::FsRead { .. } => "fs.read",
         Action::FsWrite { .. } | Action::Patch { .. } => "fs.write",
         Action::Net { .. } => "net",
@@ -213,6 +213,7 @@ fn describe(event: &Event) -> String {
     let tool = &event.tool;
     match event.action.as_ref() {
         Some(Action::Shell { command }) => command.clone(),
+        Some(Action::ForeignShell { shell, command }) => format!("{shell}: {command}"),
         Some(Action::FsRead { path }) => format!("read {path}"),
         Some(Action::FsWrite { path }) => format!("write {path}"),
         Some(Action::Net { url }) => format!("fetch {url}"),

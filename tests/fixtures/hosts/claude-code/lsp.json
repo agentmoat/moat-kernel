@@ -1,0 +1,13 @@
+{
+  "session_id": "7c1e4b2a",
+  "cwd": "/p",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "LSP",
+  "tool_input": {
+    "operation": "hover",
+    "filePath": "/Users/me/.aws/credentials",
+    "line": 1,
+    "character": 1
+  },
+  "tool_use_id": "toolu_10BCD"
+}

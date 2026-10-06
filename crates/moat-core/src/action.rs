@@ -15,8 +15,16 @@ pub enum Action {
         /// The command line.
         command: String,
     },
+    /// A command for a shell the classifier cannot read (Claude Code `PowerShell`).
+    /// Never classified, so always `unparseable`: an `ask`, never an `allow`.
+    ForeignShell {
+        /// The shell's name, for reasons and the audit log.
+        shell: String,
+        /// The command line.
+        command: String,
+    },
     /// A direct file read through a host tool (e.g. Claude Code `Read`).
-    /// A file read by a host tool (`Read`, `Glob`, `Grep`, `beforeReadFile`).
+    /// A file read by a host tool (`Read`, `Glob`, `Grep`, `LSP`, `beforeReadFile`).
     FsRead {
         /// Path as the tool gave it; normalised during classification.
         path: String,
@@ -63,7 +71,7 @@ impl Action {
     #[must_use]
     pub fn kind(&self) -> Kind {
         match self {
-            Self::Shell { .. } => Kind::Shell,
+            Self::Shell { .. } | Self::ForeignShell { .. } => Kind::Shell,
             Self::FsRead { .. } => Kind::FsRead,
             Self::FsWrite { .. } | Self::Patch { .. } => Kind::FsWrite,
             Self::Net { .. } => Kind::Net,

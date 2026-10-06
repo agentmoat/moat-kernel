@@ -51,6 +51,15 @@ struct FixtureAction {
     mcp_tool: Option<McpFixture>,
     /// Files a multi-file patch writes (Codex `apply_patch`).
     patch: Option<Vec<String>>,
+    /// A command for a shell moat does not parse: `{ shell, command }`.
+    foreign_shell: Option<ForeignShellFixture>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ForeignShellFixture {
+    shell: String,
+    command: String,
 }
 
 /// `mcp_tool: "name"` or `mcp_tool: { name, reads, writes, hosts }`.
@@ -85,6 +94,10 @@ impl FixtureAction {
             self.fs_write.map(|path| Action::FsWrite { path }),
             self.net.map(|url| Action::Net { url }),
             self.patch.map(|writes| Action::Patch { writes }),
+            self.foreign_shell.map(|f| Action::ForeignShell {
+                shell: f.shell,
+                command: f.command,
+            }),
             self.mcp_tool.map(|m| match m {
                 McpFixture::Name(name) => Action::mcp(name),
                 McpFixture::Call {
