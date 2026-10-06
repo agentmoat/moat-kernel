@@ -320,3 +320,25 @@
 - id: benign-tilde-plus-is-the-working-directory
   action: { shell: "cat ~+/src/main.rs" }
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+
+# Relative operands are in-project paths; ordinary commands keep their verdicts
+- id: benign-cat-relative-file
+  action: { shell: "cat src/main.rs" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-head-plain-name
+  action: { shell: "head -n 20 README.md" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-grep-pattern-and-dir
+  action: { shell: "grep -rn TODO src" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-branch-name-is-in-project
+  action: { shell: "git checkout -b feat/relative-paths" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-echo-slash-text-is-not-a-read
+  action: { shell: "echo s/id_rsa" }
+  links: { /p/s: /Users/me/.ssh }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cat-link-inside-project
+  action: { shell: "cat docs/latest.md" }
+  links: { /p/docs/latest.md: /p/docs/v2.md }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }

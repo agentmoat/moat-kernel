@@ -93,6 +93,81 @@ pub const WRITE_ALL_PATHS: &[&str] = &[
 /// Programs for which the last operand is a write and the others are reads.
 pub const WRITE_LAST_PATH: &[&str] = &["cp", "ln", "rsync", "scp"];
 
+/// Programs whose operands are files they read, so a plain name (`cat s`) is a
+/// file read (`operands.rs`). Pattern operands (`grep foo .`) become reads of
+/// a path that usually does not exist, which only costs a project-local atom.
+pub const FILE_OPERANDS: &[&str] = &[
+    "cat",
+    "tac",
+    "head",
+    "tail",
+    "less",
+    "more",
+    "bat",
+    "nl",
+    "od",
+    "xxd",
+    "hexdump",
+    "strings",
+    "grep",
+    "egrep",
+    "fgrep",
+    "rg",
+    "ag",
+    "ack",
+    "wc",
+    "diff",
+    "cmp",
+    "sort",
+    "uniq",
+    "cut",
+    "paste",
+    "column",
+    "base64",
+    "base32",
+    "md5",
+    "md5sum",
+    "shasum",
+    "sha1sum",
+    "sha256sum",
+    "sha512sum",
+    "cksum",
+    "file",
+    "stat",
+    "ls",
+    "tree",
+    "find",
+    "du",
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "zcat",
+    "bzip2",
+    "xz",
+    "jq",
+    "yq",
+    "openssl",
+    "ssh-keygen",
+    "split",
+    "fold",
+    "fmt",
+    "iconv",
+    "awk",
+    "sed",
+    "vi",
+    "vim",
+    "nvim",
+    "nano",
+    "emacs",
+    "code",
+    "open",
+];
+
+/// Programs that only print their arguments; a `/` in them is text.
+pub const NO_FILE_OPERANDS: &[&str] = &["echo", "printf"];
+
 /// Special parameters that are not environment variables.
 pub const SPECIAL_PARAMS: &[char] = &['?', '$', '!', '#', '@', '*', '-', '0'];
 

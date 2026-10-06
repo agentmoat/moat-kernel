@@ -293,3 +293,9 @@
   threat: T1
   action: { shell: "cat ~-/.ssh/id_rsa" }
   expect: { verdict: ask, rules: [unparseable] }
+# T1: a relative read in a session with no project is not covered by project-fs
+- id: ask-home-session-relative-read
+  threat: T1
+  context: { cwd: /Users/me }
+  action: { shell: "cat notes.txt" }
+  expect: { verdict: ask, rules: [default] }

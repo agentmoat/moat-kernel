@@ -36,6 +36,7 @@ fn a_session_in_home_has_no_project() {
     for command in [
         "echo x > Library/LaunchAgents/evil.plist",
         "echo x > ~/.gitconfig",
+        "cat notes.txt",
     ] {
         assert_verdict(&sb, &home, command, "ask", "default");
     }
@@ -84,4 +85,32 @@ fn tilde_user_paths_are_home_directories() {
     );
     assert_verdict(&sb, &project, "cat ~alice/notes.txt", "ask", "default");
     assert_verdict(&sb, &project, "cat ~-/notes.txt", "ask", "unparseable");
+}
+
+/// After `ln -s ~/.ssh s` in the project, every spelling of a read through the
+/// link meets the deny, not only `./s/…` (POLICY.md §4). Symlinks are only
+/// created on Unix here; Windows needs a privilege for them.
+#[cfg(unix)]
+#[test]
+fn relative_operands_are_resolved_through_symlinks() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let project = sb.project();
+    std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
+    std::fs::write(sb.home.join(".ssh/id_rsa"), "key").unwrap();
+    std::os::unix::fs::symlink(sb.home.join(".ssh"), project.join("s")).unwrap();
+    std::os::unix::fs::symlink(sb.home.join(".ssh/id_rsa"), project.join("k")).unwrap();
+    for command in [
+        "cat s/id_rsa",
+        "head s/id_rsa",
+        "grep -r . s/",
+        "cat k",
+        "cp k out.txt",
+    ] {
+        assert_verdict(&sb, &project, command, "deny", "secrets-paths");
+    }
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    for command in ["cat src/main.rs", "ls src", "git status", "echo s/id_rsa"] {
+        assert_verdict(&sb, &project, command, "allow", "dev-shell");
+    }
+    assert_verdict(&sb, &project, "npm install left-pad", "ask", "installs");
 }

@@ -10,7 +10,7 @@
 //! | a decoder stage piped into an interpreter reading stdin (`decoders.rs`) | canonical `Pipeline { <decoder> -d \| <interpreter> }` |
 //! | leading `VAR=value`, `export`/`declare`/`set` assignments | `EnvSet` |
 //! | `$VAR` / `${VAR}` references, `printenv NAME` | `EnvRead` |
-//! | path-looking arguments, `<` targets, `source`/`.` files | `FsRead` |
+//! | path-looking arguments, relative operands (`operands.rs`), `<` targets, `source`/`.` files | `FsRead` |
 //! | `>`/`>>`/`&>` targets, `tee`, destructive/destination args | `FsWrite` |
 //! | URLs with any host, bare dotted names under a known TLD, IPv4 literals (`crate::host`) | `Net` |
 //! | `$( … )`, backticks, `sh -c` (any option spelling, `invocation.rs`), `eval`, `xargs`, `sudo`, `env`, … | nested classification |
@@ -28,6 +28,7 @@
 //! `tokens` recognises assignments and variable references inside one word;
 //! `invocation` parses a shell's own options (`bash -lc`, `sh -ec`, `--login`);
 //! `git` takes git's global options out of the command;
+//! `operands` decides which plain arguments name files;
 //! `decoders`, `make` and `options` handle constructs that hide a command or a
 //! write (decoded pipelines, make arguments, `find -exec`, `--output=`);
 //! `tables` holds the program lists that drive all of them.
@@ -37,6 +38,7 @@ mod decoders;
 mod git;
 mod invocation;
 mod make;
+mod operands;
 mod options;
 pub(crate) mod tables;
 #[cfg(test)]
