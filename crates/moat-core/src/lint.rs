@@ -125,7 +125,7 @@ fn covers(kind: Kind, by: &str, target: &str) -> bool {
 }
 
 fn glob(raw: &str) -> Option<GlobPattern> {
-    GlobPattern::compile(&paths::expand_pattern(raw, HOME, PROJECT), false).ok()
+    GlobPattern::compile(&paths::expand_pattern(raw, HOME, Some(PROJECT))?, false).ok()
 }
 
 #[cfg(test)]

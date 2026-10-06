@@ -16,7 +16,7 @@ fuzz_target!(|data: &[u8]| {
     let _ = lint::warnings(&policy);
     let ctx = EvalContext {
         home: "/home/me".into(),
-        project: "/home/me/p".into(),
+        project: Some("/home/me/p".into()),
         cwd: "/home/me/p".into(),
         case_insensitive_paths: true,
     };

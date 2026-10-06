@@ -5,7 +5,7 @@ use crate::action::AtomicAction;
 fn ctx() -> ShellContext<'static> {
     ShellContext {
         home: "/Users/me",
-        project: "/p",
+        project: Some("/p"),
         cwd: "/p",
     }
 }
@@ -408,7 +408,7 @@ fn drive_letter_paths_are_recognised() {
     // paths are recognised in shell commands.
     let ctx = ShellContext {
         home: "C:/Users/me",
-        project: "C:/p",
+        project: Some("C:/p"),
         cwd: "C:/p",
     };
     let ParseOutcome::Parsed(a) = classify("type C:/Users/me/.ssh/id_rsa", &ctx) else {

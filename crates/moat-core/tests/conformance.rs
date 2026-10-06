@@ -39,6 +39,18 @@ struct Fixture {
     /// Symlink path → target, as the filesystem would resolve it.
     #[serde(default)]
     links: BTreeMap<String, String>,
+    /// Working directory and project for this fixture instead of `/p` and `/p`.
+    context: Option<FixtureContext>,
+}
+
+/// `context: { cwd: /Users/me }` is a session in the home directory, which the
+/// CLI never trusts as a project; `project` names one explicitly.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FixtureContext {
+    cwd: String,
+    #[serde(default)]
+    project: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,7 +173,7 @@ fn default_policy_conformance() {
     let policy = Policy::parse(DEFAULT_POLICY).expect("default policy must lint");
     let ctx = EvalContext {
         home: "/Users/me".into(),
-        project: "/p".into(),
+        project: Some("/p".into()),
         cwd: "/p".into(),
         case_insensitive_paths: false,
     };
@@ -182,7 +194,19 @@ fn default_policy_conformance() {
         let links = MapPathResolver {
             links: fixture.links.clone(),
         };
-        let decision = compiled.decide_with(&action, &resolver, &links);
+        let decision = match &fixture.context {
+            None => compiled.decide_with(&action, &resolver, &links),
+            Some(c) => {
+                let ctx = EvalContext {
+                    cwd: c.cwd.clone(),
+                    project: c.project.clone(),
+                    ..ctx.clone()
+                };
+                CompiledPolicy::compile(&policy, &ctx)
+                    .expect("default policy must compile")
+                    .decide_with(&action, &resolver, &links)
+            }
+        };
         let missing: Vec<&String> = fixture
             .expect
             .rules

@@ -7,12 +7,13 @@
 //! [`crate::realpath::PathResolver`]; the engine checks both paths.
 
 /// Expand `~`, `$HOME`, `${project}` and make the path absolute against `cwd`,
-/// then collapse `.` and `..` lexically.
+/// then collapse `.` and `..` lexically. Without a project, `${project}` expands
+/// to nothing, as an unset shell variable does.
 #[must_use]
-pub fn normalise(raw: &str, home: &str, project: &str, cwd: &str) -> String {
+pub fn normalise(raw: &str, home: &str, project: Option<&str>, cwd: &str) -> String {
     let unified = raw.replace('\\', "/");
     let mut s = expand_home(&unified, home)
-        .replace("${project}", project)
+        .replace("${project}", project.unwrap_or_default())
         .replace("${HOME}", home)
         .replace("$HOME", home);
     if !is_absolute(&s) {
@@ -65,15 +66,23 @@ fn split_root(path: &str) -> (String, &str) {
 }
 
 /// Expand `~` and `${project}` inside a *pattern* (not a path), leaving globs intact.
+///
+/// `None` when the pattern names `${project}` and there is no project: such a
+/// pattern names no location, so it can match nothing (and exclude nothing).
 #[must_use]
-pub fn expand_pattern(raw: &str, home: &str, project: &str) -> String {
+pub fn expand_pattern(raw: &str, home: &str, project: Option<&str>) -> Option<String> {
     let (negated, body) = crate::pattern::split_negation(raw);
-    let expanded = expand_home(body, home).replace("${project}", project);
-    if negated {
+    let body = expand_home(body, home);
+    let expanded = match project {
+        Some(project) => body.replace("${project}", project),
+        None if body.contains("${project}") => return None,
+        None => body,
+    };
+    Some(if negated {
         format!("!{expanded}")
     } else {
         expanded
-    }
+    })
 }
 
 fn expand_home(raw: &str, home: &str) -> String {
@@ -140,16 +149,16 @@ mod tests {
     #[test]
     fn normalises_unix_paths() {
         assert_eq!(
-            normalise("~/.ssh/id_rsa", "/Users/me", "/p", "/p"),
+            normalise("~/.ssh/id_rsa", "/Users/me", Some("/p"), "/p"),
             "/Users/me/.ssh/id_rsa"
         );
         assert_eq!(
-            normalise("src/../.env", "/Users/me", "/p", "/p/app"),
+            normalise("src/../.env", "/Users/me", Some("/p"), "/p/app"),
             "/p/app/.env"
         );
-        assert_eq!(normalise("${project}/x", "/h", "/p", "/c"), "/p/x");
+        assert_eq!(normalise("${project}/x", "/h", Some("/p"), "/c"), "/p/x");
         assert_eq!(
-            normalise("$HOME/.aws/credentials", "/h", "/p", "/c"),
+            normalise("$HOME/.aws/credentials", "/h", Some("/p"), "/c"),
             "/h/.aws/credentials"
         );
         assert_eq!(collapse("/a//b/./c/../d"), "/a/b/d");
@@ -157,23 +166,37 @@ mod tests {
     }
 
     #[test]
+    fn project_patterns_match_nothing_without_a_project() {
+        assert_eq!(
+            expand_pattern("!${project}/.git/**", "/h", Some("/p")).as_deref(),
+            Some("!/p/.git/**")
+        );
+        assert_eq!(expand_pattern("${project}/**", "/h", None), None);
+        assert_eq!(
+            expand_pattern("~/.ssh/**", "/h", None).as_deref(),
+            Some("/h/.ssh/**")
+        );
+        assert_eq!(normalise("${project}/x", "/h", None, "/c"), "/x");
+    }
+
+    #[test]
     fn normalises_windows_paths() {
         let home = "C:/Users/me";
         assert_eq!(
-            normalise("~/.ssh/id_rsa", home, "C:/p", "C:/p"),
+            normalise("~/.ssh/id_rsa", home, Some("C:/p"), "C:/p"),
             "C:/Users/me/.ssh/id_rsa"
         );
         assert_eq!(
-            normalise(r"C:\p\src\main.rs", home, "C:/p", "C:/p"),
+            normalise(r"C:\p\src\main.rs", home, Some("C:/p"), "C:/p"),
             "C:/p/src/main.rs"
         );
         assert_eq!(
-            normalise(r"src\lib.rs", home, "C:/p", "C:/p"),
+            normalise(r"src\lib.rs", home, Some("C:/p"), "C:/p"),
             "C:/p/src/lib.rs"
         );
-        assert_eq!(normalise("c:/P/../q", home, "C:/p", "C:/p"), "C:/q");
+        assert_eq!(normalise("c:/P/../q", home, Some("C:/p"), "C:/p"), "C:/q");
         assert_eq!(
-            normalise(r"\\server\share\f.txt", home, "C:/p", "C:/p"),
+            normalise(r"\\server\share\f.txt", home, Some("C:/p"), "C:/p"),
             "//server/share/f.txt"
         );
         assert!(is_absolute("D:/x") && is_absolute("//srv/s") && !is_absolute("x/y"));

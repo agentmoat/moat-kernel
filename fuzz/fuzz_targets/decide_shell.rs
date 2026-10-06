@@ -16,7 +16,7 @@ fn compiled() -> &'static CompiledPolicy<'static> {
         let policy = POLICY.get_or_init(|| Policy::parse(DEFAULT_POLICY).expect("default policy"));
         let ctx = EvalContext {
             home: "/home/me".into(),
-            project: "/home/me/p".into(),
+            project: Some("/home/me/p".into()),
             cwd: "/home/me/p".into(),
             case_insensitive_paths: false,
         };

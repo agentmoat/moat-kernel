@@ -3,7 +3,7 @@ use super::*;
 fn ctx() -> EvalContext {
     EvalContext {
         home: "/h".into(),
-        project: "/p".into(),
+        project: Some("/p".into()),
         cwd: "/p".into(),
         case_insensitive_paths: false,
     }
@@ -51,6 +51,37 @@ fn per_kind_defaults_apply_with_synthetic_ids() {
     let d = evaluate(&p, &ctx(), &shell("ls")).unwrap();
     assert_eq!(d.verdict, Verdict::Allow);
     assert_eq!(d.rules, ["default"]);
+}
+
+#[test]
+fn project_patterns_match_nothing_without_a_project() {
+    let p = policy(
+        "version: 1\ndefaults: ask\ndeny:\n  - id: keys\n    fs.read: ['~/.ssh/**']\n\
+         allow:\n  - id: proj\n    fs.read: ['${project}/**', '!${project}/.env']\n",
+    );
+    let read = |path: &str| Action::FsRead {
+        path: path.to_owned(),
+    };
+    let home = EvalContext {
+        project: None,
+        cwd: "/h".into(),
+        ..ctx()
+    };
+    for path in ["/h/notes.txt", "/.env", "/x"] {
+        let d = evaluate(&p, &home, &read(path)).unwrap();
+        assert_eq!(
+            (d.verdict, d.rules),
+            (Verdict::Ask, vec!["default".to_owned()]),
+            "{path}"
+        );
+    }
+    let d = evaluate(&p, &home, &shell("grep -r . ~/.ssh")).unwrap();
+    assert_eq!(
+        (d.verdict, d.rules),
+        (Verdict::Deny, vec!["keys".to_owned()])
+    );
+    let d = evaluate(&p, &ctx(), &read("/p/notes.txt")).unwrap();
+    assert_eq!(d.verdict, Verdict::Allow);
 }
 
 #[test]
