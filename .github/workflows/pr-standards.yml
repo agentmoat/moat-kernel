@@ -45,7 +45,7 @@ jobs:
           has '^crates/moat-hosts/'     && areas+=("area: hosts")
           has '^crates/moat-audit/'     && areas+=("area: audit")
           has '^crates/moat-cli/'       && areas+=("area: cli")
-          has '^(policies/|tests/conformance/)' && areas+=("area: policy")
+          has '^(crates/moat-core/policies/|tests/conformance/)' && areas+=("area: policy")
           has '^(\.github/|scripts/)'   && areas+=("area: ci")
           has '(^docs/|\.md$)'          && areas+=("area: docs")
           has '^(Cargo\.(toml|lock)|crates/[^/]+/Cargo\.toml|deny\.toml)$' && areas+=("area: deps")
@@ -58,10 +58,10 @@ jobs:
 
           risk="risk: low"
           if has '^(crates/moat-hosts/|crates/moat-cli/src/install/|crates/moat-audit/)'; then risk="risk: medium"; fi
-          if has '^(crates/moat-core/src/(engine|policy|shell|lexer|pattern|paths)|policies/|\.github/workflows/|SECURITY\.md|crates/moat-cli/src/commands/guard\.rs|crates/moat-cli/src/exit\.rs)'; then risk="risk: high"; fi
+          if has '^(crates/moat-core/src/(engine|policy|shell|lexer|pattern|paths)|crates/moat-core/policies/|\.github/workflows/|SECURITY\.md|crates/moat-cli/src/commands/guard\.rs|crates/moat-cli/src/exit\.rs)'; then risk="risk: high"; fi
 
           behaviour_change=false
-          has '^(crates/moat-core/src/|policies/)' && behaviour_change=true
+          has '^crates/moat-core/(src|policies)/' && behaviour_change=true
           fixture_touched=false
           has '^tests/conformance/' && fixture_touched=true
 

@@ -37,6 +37,7 @@ moat-kernel/
 │   │   ├── src/{lib,policy,engine,pattern,paths,programs,action,verdict}.rs
 │   │   ├── src/lexer/{mod,tests}.rs
 │   │   ├── src/shell/{mod,commands,tokens,tables,tests}.rs
+│   │   ├── policies/default-v1.yaml   # shipped defaults, exported as DEFAULT_POLICY (changelog entry on change)
 │   │   └── tests/{conformance,architecture}.rs
 │   ├── moat-hosts/             # src/{lib,pre_tool_use,config_change,cursor}.rs; openclaw, mcp_proxy (planned)
 │   ├── moat-audit/             # src/{lib,store,query,redact}.rs: SQLite (WAL) store, time-window and session queries, redaction; export, hash chain (planned)
@@ -60,10 +61,9 @@ moat-kernel/
 │
 ├── sdks/                       # (planned) typescript/ (@agentmoat/sdk), python/ (agentmoat)
 │
-├── policies/
-│   ├── default-v1.yaml         # shipped defaults (versioned, changelog entry on change)
-│   ├── schema/policy.v1.schema.json   # (planned) JSON Schema for editors and `policy lint`
-│   └── examples/               # (planned) minimal, strict, team examples
+├── policies/                   # (planned)
+│   ├── schema/policy.v1.schema.json   # JSON Schema for editors and `policy lint`
+│   └── examples/               # minimal, strict, team examples
 │
 ├── tests/
 │   ├── conformance/{attacks,benign,ask}.yaml   # decide-only fixtures; runner is crates/moat-core/tests/conformance.rs

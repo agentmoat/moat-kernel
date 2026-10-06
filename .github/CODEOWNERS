@@ -4,7 +4,7 @@
 # Trusted core and anything that changes what is allowed: two-maintainer review
 # once a second maintainer exists (see GOVERNANCE in CONTRIBUTING.md).
 /crates/moat-core/              @iamdotk
-/policies/                      @iamdotk
+/crates/moat-core/policies/     @iamdotk
 /tests/conformance/             @iamdotk
 /SECURITY.md                    @iamdotk
 /.github/workflows/             @iamdotk

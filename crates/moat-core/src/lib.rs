@@ -35,3 +35,7 @@ pub use policy::{Defaults, Policy, PolicyError, RuleGroup};
 pub use programs::{MapResolver, NoResolver, ProgramResolver};
 pub use realpath::{MapPathResolver, PathResolver};
 pub use verdict::{Decision, UnknownVerdict, Verdict};
+
+/// The shipped default policy, as YAML: what `moat init` installs and what the
+/// conformance suite pins. Parse it with [`Policy::parse`].
+pub const DEFAULT_POLICY: &str = include_str!("../policies/default-v1.yaml");

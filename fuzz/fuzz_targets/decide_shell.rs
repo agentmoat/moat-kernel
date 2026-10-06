@@ -6,16 +6,14 @@
 use std::sync::OnceLock;
 
 use libfuzzer_sys::fuzz_target;
-use moat_core::{Action, CompiledPolicy, EvalContext, Policy};
+use moat_core::{Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, Policy};
 
 /// The default policy, compiled once: compilation dominates a single decision.
 fn compiled() -> &'static CompiledPolicy<'static> {
     static POLICY: OnceLock<Policy> = OnceLock::new();
     static COMPILED: OnceLock<CompiledPolicy<'static>> = OnceLock::new();
     COMPILED.get_or_init(|| {
-        let policy = POLICY.get_or_init(|| {
-            Policy::parse(include_str!("../../policies/default-v1.yaml")).expect("default policy")
-        });
+        let policy = POLICY.get_or_init(|| Policy::parse(DEFAULT_POLICY).expect("default policy"));
         let ctx = EvalContext {
             home: "/home/me".into(),
             project: "/home/me/p".into(),
