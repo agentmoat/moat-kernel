@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::common::{Sandbox, bash_payload, hook_output, text};
+use crate::common::{Sandbox, bash_payload, hook_output, output, stdout, text};
 
 const DEPLOY: &str = "version: 1\nallow:\n  - id: deploy\n    shell: ['make deploy']\n";
 
@@ -145,4 +145,38 @@ fn trust_refuses_a_repo_policy_that_does_not_parse() {
         "{}",
         text(&out)
     );
+}
+
+/// `moat status` and `moat doctor`, run inside `project`.
+fn reports(sb: &Sandbox, project: &Path) -> [(Option<i32>, String); 2] {
+    ["status", "doctor"].map(|command| {
+        let out = output(sb.command().arg(command).current_dir(project), None);
+        (out.status.code(), stdout(&out))
+    })
+}
+
+#[test]
+fn status_and_doctor_say_which_form_applies() {
+    let (sb, project) = repo();
+    let dir = project.to_string_lossy().into_owned();
+    for (_, out) in reports(&sb, &project) {
+        assert!(out.contains("repo policy"), "{out}");
+        assert!(out.contains("not trusted: tightening only"), "{out}");
+    }
+    assert_eq!(trust(&sb, &[&dir]).status.code(), Some(0));
+    for (_, out) in reports(&sb, &project) {
+        assert!(out.contains("trusted (0 deny, 0 ask, 1 allow)"), "{out}");
+    }
+    write_policy(&project, &format!("{DEPLOY}# edited\n"));
+    for (_, out) in reports(&sb, &project) {
+        assert!(out.contains("changed since `moat trust`"), "{out}");
+    }
+    write_policy(&project, "version: 1\ndeny: [\n");
+    for (code, out) in reports(&sb, &project) {
+        assert_eq!(code, Some(64), "{out}");
+        assert!(
+            out.contains("every call in this project is denied"),
+            "{out}"
+        );
+    }
 }

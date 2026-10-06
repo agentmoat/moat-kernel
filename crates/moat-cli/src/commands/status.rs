@@ -41,6 +41,17 @@ pub fn run() -> Result<Code> {
             writeln!(out, "policy           ✗ {error:#}")?;
         }
     }
+    match crate::repo::summary(&home) {
+        Ok(Some(line)) => writeln!(out, "repo policy      {line}")?,
+        Ok(None) => {}
+        Err(error) => {
+            healthy = false;
+            writeln!(
+                out,
+                "repo policy      ✗ {error:#}; every call in this project is denied"
+            )?;
+        }
+    }
 
     let lock_path = home.lock_path();
     match Lock::load(&lock_path) {

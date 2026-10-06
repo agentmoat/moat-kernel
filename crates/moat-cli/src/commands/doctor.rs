@@ -116,6 +116,15 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         }
     };
     let policy_lints = policy.is_some();
+    match crate::repo::summary(&home) {
+        Ok(Some(line)) => report.note(&format!("repo policy      {line}")),
+        Ok(None) => {}
+        Err(e) => report.line(
+            Area::Policy,
+            false,
+            format!("repo policy      {e:#}; every call in this project is denied"),
+        ),
+    }
 
     let lock_path = home.lock_path();
     let lock = match Lock::load(&lock_path) {

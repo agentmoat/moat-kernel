@@ -89,3 +89,34 @@ pub fn effective_policy(home: &Home, ctx: &EvalContext) -> Result<Policy> {
         .merge(&user, trusted)
         .with_context(|| format!("merging repository policy {}", found.path.display()))
 }
+
+/// One line for `status` and `doctor` about the repository policy of the
+/// project around the current directory: its digest and which form applies.
+pub fn summary(home: &Home) -> Result<Option<String>> {
+    let Some(root) = context::eval_context(None, None)?.project else {
+        return Ok(None);
+    };
+    let Some(found) = find(home, Path::new(&root))? else {
+        return Ok(None);
+    };
+    let p = &found.policy;
+    let rules = format!(
+        "{} deny, {} ask, {} allow",
+        p.deny.len(),
+        p.ask.len(),
+        p.allow.len()
+    );
+    let form = match trust(home)?.repos.get(&found.root) {
+        Some(digest) if *digest == found.digest => format!("trusted ({rules})"),
+        Some(_) => {
+            format!("changed since `moat trust`: tightening only, allow rules ignored ({rules})")
+        }
+        None if p.allow.is_empty() => format!("tightening only ({rules})"),
+        None => format!("not trusted: tightening only, allow rules ignored ({rules})"),
+    };
+    Ok(Some(format!(
+        "{}  sha256:{}  {form}",
+        found.path.display(),
+        found.digest
+    )))
+}

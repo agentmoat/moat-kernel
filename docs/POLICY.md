@@ -526,6 +526,12 @@ allow`, `moat trust` must be run from a terminal, refuses while the lock shows d
 (exit 64), and is denied to agents by `kernel-self`. A `trust.json` the lock does not
 pin is ignored.
 
+`moat status` and `moat doctor`, run inside the project, name the repository policy and
+its digest, and say which form applies: `trusted`, `not trusted: tightening only`,
+`changed since moat trust: tightening only`, or `tightening only` for a file without
+allow rules. A file that does not parse is reported as a problem (exit 64), because
+every call in the project is denied.
+
 ## 11. Planned, not yet available
 
 A prompt of moat's own for `ask`, managed organisation policy and Telegram
