@@ -529,11 +529,11 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
 ADR-018's tier for machines without a container or VM runtime puts the whole agent in
 one sandbox generated from the policy. The code is in `crates/openmoat-cli/src/commands/run.rs`
 (with `run/{macos,linux,unsupported}.rs`, chosen by `cfg` in one place) and
-`crates/openmoat-cli/src/sandbox/{seatbelt,landlock}.rs`.
+`crates/openmoat-cli/src/sandbox/{seatbelt,landlock,seccomp}.rs`.
 
 ```
 policy.yaml ─► ir::lower (this project) ─► Enforcement + Grants ─┬─► seatbelt::generate ─► sandbox-exec -p <profile> <agent>
-                                                                 └─► landlock::generate ─► restricted thread ─► <agent>
+                                                                 └─► landlock::generate + seccomp ─► restricted thread ─► <agent>
 moat run ─► moat proxy (thread, 127.0.0.1:<ephemeral>) ◄── HTTP(S)_PROXY ── agent and its commands
 ```
 
@@ -584,12 +584,29 @@ moat run ─► moat proxy (thread, 127.0.0.1:<ephemeral>) ◄── HTTP(S)_PRO
   scoping (ABI 6) are added where the kernel has them. The rules are applied to a
   thread that then starts the agent: Landlock restricts the calling thread and its
   children, so the proxy thread keeps its audit log and network. Landlock only grants.
-  A deny rule or `!` exception inside a granted tree, the proxy's port on other hosts,
-  and UDP and Unix-socket connections stay open. Each is listed as an allowance
-  (`landlock.inside-grants`, `landlock.tcp-port`, `landlock.sockets`). A grant inside
-  a denied path is not made, and a glob cannot be granted (losses).
+  A deny rule or `!` exception inside a granted tree and the proxy's port on other
+  hosts stay open. Each is listed as an allowance (`landlock.inside-grants`,
+  `landlock.tcp-port`). A grant inside a denied path is not made, and a glob cannot be
+  granted (losses).
+- **seccomp (Linux).** Landlock does not restrict UDP, raw or Unix sockets, so the same
+  thread applies a seccomp filter after the Landlock rules (`seccompiler`, built in
+  `run/linux.rs` from `sandbox/seccomp.rs`). `socket()` is allowed only for an IPv4 or
+  IPv6 stream with protocol 0 or TCP (with or without `SOCK_NONBLOCK`/`SOCK_CLOEXEC`);
+  every other `socket()` fails with `EPERM`: Unix (the user's D-Bus session bus, nscd,
+  systemd-resolved), netlink, packet, raw, UDP, SCTP and MPTCP. `socketpair()` stays
+  allowed: its sockets are connected only to each other, and Node uses them for its
+  children's pipes. `io_uring_setup`, `io_uring_enter` and `io_uring_register` fail too,
+  because a ring creates sockets (`IORING_OP_SOCKET`) without a `socket()` call the
+  filter sees; so do `ptrace` and `process_vm_readv`/`writev`, so that a command cannot
+  read or change the agent's memory (its tokens), and debuggers do not work. x32 calls
+  of the same are refused, and a call under another architecture (32-bit `int 0x80`,
+  which has `socketcall`) kills the process. Name resolution needs a Unix socket or UDP,
+  so only the proxy resolves names, as on macOS: a tool that ignores `HTTP(S)_PROXY`
+  cannot resolve them. Programs that list network interfaces (`getifaddrs`, netlink)
+  get an error.
 - **Windows** refuses with exit 64; the Standard tier is the answer there.
 - `moat sandbox show` prints both lightweight outputs for the current directory, before
   the session's grants are added. The executing tests in `tests/e2e/run.rs` run
-  `/bin/sh` payloads under the real sandbox on macOS and Linux.
-- **Not yet:** a seccomp filter on Linux for UDP, raw and Unix sockets.
+  `/bin/sh` payloads under the real sandbox on macOS and Linux; on Linux they show Unix
+  and UDP sockets and `io_uring` failing with `EPERM` while TCP to the proxy works, and
+  `run/linux.rs` applies the filter to a test thread.

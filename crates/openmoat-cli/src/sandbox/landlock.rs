@@ -10,8 +10,8 @@
 //! - a glob cannot be granted, so it stays denied (a loss);
 //! - TCP connections are restricted by port only (ABI 4): the proxy's port is
 //!   reachable on any host;
-//! - Landlock does not restrict UDP or connecting to Unix sockets, which a
-//!   seccomp filter will close.
+//! - Landlock does not restrict UDP or connecting to Unix sockets: `moat run`'s
+//!   seccomp filter (`super::seccomp`) closes them, so they are not listed.
 
 use openmoat_core::ir::{Access, Checker, Effect, Enforcement};
 use openmoat_core::{AtomicAction, Kind};
@@ -108,11 +108,6 @@ pub fn generate(ir: &Enforcement, grants: &Grants) -> anyhow::Result<Generated> 
         g.report
             .allowance(Kind::Net, "landlock.tcp-port", Vec::new(), message);
     }
-    let message = "Landlock does not restrict UDP or connecting to Unix sockets (the user's \
-                   D-Bus session bus can start processes outside the sandbox); a seccomp filter \
-                   will close them";
-    g.report
-        .allowance(Kind::Net, "landlock.sockets", Vec::new(), message);
     g.report.proxy_only(&ir.egress.net);
     Ok(g)
 }
