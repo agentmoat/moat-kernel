@@ -1,0 +1,219 @@
+//! The proxy end to end on loopback: a real listener, a local upstream server
+//! and a resolver map instead of DNS. No external network.
+
+use std::collections::HashMap;
+use std::io::{self, Read as _, Write as _};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::sync::Mutex;
+use std::sync::mpsc::{self, Receiver};
+use std::thread;
+use std::time::Duration;
+
+use moat_core::{CompiledPolicy, EvalContext, Policy, Verdict};
+use moat_proxy::{Connection, Limits, Proxy, RecordError, Recorder, Resolve};
+
+const POLICY: &str = r#"
+version: 1
+defaults: { "*": deny, fetch: ask }
+allow:
+  - id: test-hosts
+    net: ["allowed.test", "rebind.test", "mixed.test", "loop.test", "169.254.169.254"]
+"#;
+
+const UPSTREAM_REPLY: &[u8] =
+    b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok";
+const WAIT: Duration = Duration::from_secs(5);
+
+/// Names to addresses, standing in for DNS.
+struct MapResolver(HashMap<&'static str, Vec<IpAddr>>);
+
+impl Resolve for MapResolver {
+    fn resolve(&self, host: &str, port: u16) -> io::Result<Vec<SocketAddr>> {
+        let ips = self.0.get(host).ok_or(io::ErrorKind::NotFound)?;
+        Ok(ips.iter().map(|ip| SocketAddr::new(*ip, port)).collect())
+    }
+}
+
+/// One recorded decision, as the audit log would store it.
+#[derive(Debug, Clone)]
+struct Row {
+    tool: Option<String>,
+    dest: Option<(String, u16)>,
+    verdict: Verdict,
+    rules: Vec<String>,
+    reasons: Vec<String>,
+}
+
+#[derive(Default)]
+struct MemoryRecorder(Mutex<Vec<Row>>);
+
+impl Recorder for MemoryRecorder {
+    fn record(&self, c: &Connection<'_>) -> Result<(), RecordError> {
+        self.0.lock().unwrap().push(Row {
+            tool: c.method.map(str::to_owned),
+            dest: c.destination.map(|(h, p)| (h.to_owned(), p)),
+            verdict: c.decision.verdict,
+            rules: c.decision.rules.clone(),
+            reasons: c.decision.reasons.clone(),
+        });
+        Ok(())
+    }
+}
+
+struct FailingRecorder;
+
+impl Recorder for FailingRecorder {
+    fn record(&self, _: &Connection<'_>) -> Result<(), RecordError> {
+        Err(RecordError("disk full".to_owned()))
+    }
+}
+
+/// A local server that reports the first bytes of each connection and answers
+/// with `UPSTREAM_REPLY`.
+fn upstream() -> (SocketAddr, Receiver<Vec<u8>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { return };
+            stream
+                .set_read_timeout(Some(Duration::from_millis(500)))
+                .unwrap();
+            let mut buf = vec![0; 65536];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            buf.truncate(n);
+            let _ = tx.send(buf);
+            let _ = stream.write_all(UPSTREAM_REPLY);
+        }
+    });
+    (addr, rx)
+}
+
+struct Harness {
+    proxy: SocketAddr,
+    upstream: SocketAddr,
+    received: Receiver<Vec<u8>>,
+    rows: &'static MemoryRecorder,
+}
+
+fn start(recorder: Option<&'static dyn Recorder>, limits: Limits) -> Harness {
+    let (upstream, received) = upstream();
+    let rows: &'static MemoryRecorder = Box::leak(Box::default());
+    let recorder = recorder.unwrap_or(rows);
+    let local = IpAddr::V4(Ipv4Addr::LOCALHOST);
+    let metadata: IpAddr = "169.254.169.254".parse().unwrap();
+    let resolver = MapResolver(HashMap::from([
+        ("allowed.test", vec![local]),
+        ("rebind.test", vec![metadata]),
+        ("mixed.test", vec![local, metadata]),
+        ("loop.test", vec![local]),
+        ("unknown.test", vec![local]),
+    ]));
+    let policy: &'static Policy = Box::leak(Box::new(Policy::parse(POLICY).unwrap()));
+    let ctx = EvalContext {
+        home: "/home/u".to_owned(),
+        project: None,
+        real_home: None,
+        real_project: None,
+        cwd: "/home/u".to_owned(),
+        case_insensitive_paths: false,
+    };
+    let proxy = Proxy {
+        policy: Box::leak(Box::new(CompiledPolicy::compile(policy, &ctx).unwrap())),
+        resolver: Box::leak(Box::new(resolver)),
+        recorder,
+        limits: Box::leak(Box::new(limits)),
+        loopback_ok: Box::leak(Box::new([upstream])),
+    };
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    thread::spawn(move || proxy.serve(&listener));
+    Harness {
+        proxy: addr,
+        upstream,
+        received,
+        rows,
+    }
+}
+
+impl Harness {
+    fn connect(&self) -> TcpStream {
+        let s = TcpStream::connect(self.proxy).unwrap();
+        s.set_read_timeout(Some(WAIT)).unwrap();
+        s
+    }
+
+    /// Send `request` and read until the proxy closes the connection.
+    fn exchange(&self, request: &str) -> String {
+        let mut s = self.connect();
+        s.write_all(request.as_bytes()).unwrap();
+        read_all(&mut s)
+    }
+
+    fn port(&self) -> u16 {
+        self.upstream.port()
+    }
+
+    fn rows(&self) -> Vec<Row> {
+        self.rows.0.lock().unwrap().clone()
+    }
+
+    fn nothing_forwarded(&self) -> bool {
+        match self.received.recv_timeout(Duration::from_millis(300)) {
+            Ok(bytes) => bytes.is_empty(),
+            Err(_) => true,
+        }
+    }
+}
+
+fn read_all(s: &mut TcpStream) -> String {
+    let mut out = Vec::new();
+    let _ = s.read_to_end(&mut out);
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// A minimal TLS `ClientHello` record naming `sni`.
+fn client_hello(sni: &str) -> Vec<u8> {
+    let be = |n: usize| u16::try_from(n).unwrap().to_be_bytes();
+    let mut entry = vec![0];
+    entry.extend(be(sni.len()));
+    entry.extend(sni.as_bytes());
+    let mut ext = vec![0, 0];
+    ext.extend(be(entry.len() + 2));
+    ext.extend(be(entry.len()));
+    ext.extend(entry);
+    let mut body = vec![3, 3];
+    body.extend([1; 32]);
+    body.extend([0, 0, 2, 0x13, 0x01, 1, 0]);
+    body.extend(be(ext.len()));
+    body.extend(ext);
+    let mut hs = vec![1, 0];
+    hs.extend(be(body.len()));
+    hs.extend(body);
+    let mut record = vec![22, 3, 1];
+    record.extend(be(hs.len()));
+    record.extend(hs);
+    record
+}
+
+/// Open a CONNECT tunnel to `host` and send a `ClientHello` naming `sni`.
+fn tunnel(h: &Harness, host: &str, sni: &str) -> (TcpStream, String) {
+    let mut s = h.connect();
+    write!(
+        s,
+        "CONNECT {host}:{} HTTP/1.1\r\nHost: {host}\r\n\r\n",
+        h.port()
+    )
+    .unwrap();
+    let mut established = [0u8; 39];
+    s.read_exact(&mut established).unwrap();
+    assert_eq!(&established, b"HTTP/1.1 200 Connection Established\r\n\r\n");
+    s.write_all(&client_hello(sni)).unwrap();
+    let rest = read_all(&mut s);
+    (s, rest)
+}
+
+mod http;
+mod limits;
+mod tunnel;
