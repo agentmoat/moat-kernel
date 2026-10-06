@@ -90,7 +90,7 @@
   expect: { verdict: ask, rules: [default] }
 - id: ask-create-symlink-and-read-through-it
   threat: T11
-  action: { shell: "ln -s ~/.ssh ./s && cat ./s/id_rsa" }
+  action: { shell: "ln -s ~/notes ./n && cat ./n/todo.txt" }
   expect: { verdict: ask, rules: [default] }
 # T3: env with arguments sets variables for one command; it is not a dump
 - id: ask-env-assignment-wrapper-is-not-a-dump
