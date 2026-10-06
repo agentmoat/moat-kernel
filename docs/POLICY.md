@@ -27,6 +27,8 @@ executables:                        # pin program names to absolute paths (enfor
 
 sandbox:                            # optional: what the host sandboxes may read beyond the rules (§9)
   read_roots: ["/usr", "~/.cargo"]
+
+secrets:    [ <secret>, … ]         # values moat keeps from the agent (§2.1)
 ```
 
 `approval:` (`channel`, `remember`, `timeout_s`) and `scope:` (`project_roots`) are reserved:
@@ -63,6 +65,34 @@ kind. One tool call usually produces several atomic actions (see §4).
 | `fetch` | the host of a URL a host's own fetch tool reads (Claude Code `WebFetch`), as for `net` | glob, case-insensitive |
 | `env.read`, `env.set` | the variable name | glob |
 | `mcp` | the full MCP tool name `mcp__<server>__<tool>` | glob |
+
+### 2.1 Brokered secrets (`secrets:`)
+
+```yaml
+secrets:
+  - id: gh                          # lowercase letters, digits, `-`; unique
+    host: api.github.com            # one host, exact: lowercase DNS name or IPv4, no pattern or port
+    header: Authorization           # the request header the value goes in
+    source: { env: GITHUB_TOKEN }   # or { file: ~/.config/moat/gh } or { keychain: { service: moat, account: gh } }
+```
+
+A brokered secret is kept by moat, not by the agent (ADR-020). The agent holds the
+placeholder `moat-secret:<id>:placeholder` instead of the value. `moat proxy` reads the
+value from `source` and is the only component that uses it.
+
+- **`source`.** `file` is absolute or under `~/`; the value is its contents without the
+  trailing newline. `env` is a variable of the `moat proxy` process. `keychain` is an item
+  in the operating system's keychain.
+- **`header`** must be an HTTP header name. Headers that frame the request or the
+  connection (`Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Proxy-*`, …)
+  are refused. Two secrets cannot set the same header for the same host.
+- **Never wider.** A secret opens nothing: its host still needs a `net` or `fetch` allow
+  rule, or the proxy refuses it.
+- **Lint.** `moat policy lint` warns when no allow rule names the host, and when no deny
+  rule covers a `file` source (`fs.read`) or an `env` source (`env.read`), since the agent
+  could then read the value itself.
+
+The proxy does not use `secrets:` yet; #172 tracks injection and leak blocking.
 
 ## 3. Pattern syntax
 
