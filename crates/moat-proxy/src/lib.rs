@@ -18,5 +18,7 @@
 #![warn(missing_docs)]
 
 mod request;
+mod sni;
 
 pub use request::{MAX_HEADERS, Request, RequestError, Target, parse as parse_request};
+pub use sni::{Hello, HelloError, MAX_HELLO, server_name};
