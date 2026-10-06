@@ -9,10 +9,10 @@
 //!   says, by name and on every address the proxy resolves.
 //! - A tunnel's TLS `ClientHello` must name the CONNECT host (SNI); nothing is
 //!   decrypted.
-//! - Every decision is recorded through a `Recorder`; a failed record is a
+//! - Every decision is recorded through a [`Recorder`]; a failed record is a
 //!   refused connection.
 //!
-//! Plain `std::net` and one thread per connection, capped by `Limits`; the
+//! Plain `std::net` and one thread per connection, capped by [`Limits`]; the
 //! choice is explained in `docs/notes/proxy-evaluation.md`.
 
 #![warn(missing_docs)]
@@ -20,7 +20,9 @@
 mod audit;
 mod decide;
 mod request;
+mod server;
 mod sni;
+mod tunnel;
 mod upstream;
 
 pub use audit::{Connection, RecordError, Recorder};
@@ -29,5 +31,6 @@ pub use decide::{
     host as decide_host,
 };
 pub use request::{MAX_HEADERS, Request, RequestError, Target, parse as parse_request};
+pub use server::{Limits, Proxy};
 pub use sni::{Hello, HelloError, MAX_HELLO, server_name};
 pub use upstream::{Refusal, Resolve, SystemResolver, connect};
