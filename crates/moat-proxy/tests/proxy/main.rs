@@ -215,3 +215,5 @@ fn tunnel(h: &Harness, host: &str, sni: &str) -> (TcpStream, String) {
 }
 
 mod http;
+mod limits;
+mod tunnel;
