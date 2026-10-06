@@ -142,6 +142,24 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | `approved-session` | allow | an `ask` for a shell command that a person granted with `moat allow` for this host session (§8.2) |
 | `approved-<n>` | allow | a permanent rule in `~/.moat/policy.d/approved.yaml` written by `moat allow --always` |
 
+### 5.2 What an operating-system layer can enforce
+
+The alpha only decides; nothing below is enforced yet. The policy compiler (ADR-019)
+already derives from `policy.yaml` what an OS layer (a host's sandbox, Seatbelt,
+Landlock, the egress proxy) will enforce. `moat policy compile [--format json]` prints it.
+
+- **OS-enforceable:** `fs.read`, `fs.write`, `net` and `fetch` rules and their defaults.
+  Patterns are expanded for the session (`~`, `${project}`, both spellings of a linked
+  root), and `!` exclusions are kept.
+- **Decide-only:** `shell`, `env.read`, `env.set`, `mcp` and `executables`. An OS layer
+  cannot see a command line, a variable or a tool name, so only the hook applies these.
+- **`ask` becomes deny.** An OS layer can only allow or deny. An `ask` rule, or an `ask`
+  default, is denied there. The hook still asks for the tool calls it sees. Each such
+  narrowing is listed as a loss.
+- **Never wider.** Whatever a backend cannot represent exactly, it narrows and reports.
+  Network to the cloud-metadata hosts (`moat.cloud-metadata`) is denied whatever the
+  policy says.
+
 ## 6. The default policy, in one table
 
 | List | Rule id | What it covers |
