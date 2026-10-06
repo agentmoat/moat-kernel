@@ -116,9 +116,11 @@ mod confined {
         }
         let shown = text(&out);
         assert_eq!(out.status.code(), Some(0), "{shown}");
-        for expected in ["read=1", "write=1", "project=0", "git=0"] {
+        for expected in ["read=1", "project=0", "git=0"] {
             assert!(stdout(&out).contains(expected), "{expected}: {shown}");
         }
+        // A failed redirection is 1 in bash (macOS `sh`) and 2 in dash (Debian `sh`).
+        assert!(!stdout(&out).contains("write=0"), "{shown}");
         assert!(
             shown.contains("Operation not permitted") || shown.contains("Permission denied"),
             "EPERM or EACCES: {shown}"
