@@ -13,6 +13,7 @@ mod cli;
 mod closed_pipe;
 mod codex;
 mod config_change;
+mod continue_cli;
 mod cursor;
 mod differential;
 mod export;

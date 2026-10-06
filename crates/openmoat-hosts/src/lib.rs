@@ -7,12 +7,14 @@
 #![warn(missing_docs)]
 
 mod config_change;
+mod continue_cli;
 mod cursor;
 mod mcp;
 mod patch;
 mod pre_tool_use;
 
 pub use config_change::proposal_target;
+pub use continue_cli::CONTINUE_ENV;
 
 use std::fmt;
 use std::str::FromStr;
@@ -27,6 +29,11 @@ const UNKNOWN_SESSION: &str = "unknown";
 /// Appended to an `ask` that Codex receives as a `deny` ([`Host::answer`]).
 const CODEX_ASK: &str = "this needs your approval and Codex hooks cannot ask: run \
      `moat allow --last` (this session) or `moat allow --last --always`, then retry";
+
+/// Appended to an `ask` that the Continue CLI receives as a `deny` ([`Host::answer`]).
+const CONTINUE_ASK: &str = "this needs your approval and the Continue CLI runs a call its \
+     hook asks about: run `moat allow --last` (this session) or `moat allow --last --always`, \
+     then retry";
 
 /// One line the model can act on: verdict, rule ids, then the reasons.
 #[must_use]
@@ -121,10 +128,14 @@ pub enum Host {
     Codex,
     /// Cursor (`beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse`).
     Cursor,
+    /// The Continue CLI (`cn`), which runs the Claude Code hooks. It has no hook
+    /// of its own to install, so it is not in [`Host::ALL`]; `guard` recognises
+    /// it with [`Host::sender`].
+    Continue,
 }
 
 impl Host {
-    /// Every supported host, in the order commands list them.
+    /// Every host with a hook to install, in the order commands list them.
     pub const ALL: [Host; 3] = [Host::ClaudeCode, Host::Codex, Host::Cursor];
 
     /// The identifier used on the command line and in the audit log.
@@ -134,6 +145,7 @@ impl Host {
             Self::ClaudeCode => "claude-code",
             Self::Codex => "codex",
             Self::Cursor => "cursor",
+            Self::Continue => "continue",
         }
     }
 
@@ -144,6 +156,15 @@ impl Host {
             Self::ClaudeCode => "Claude Code",
             Self::Codex => "Codex",
             Self::Cursor => "Cursor",
+            Self::Continue => "Continue CLI",
+        }
+    }
+
+    /// The host whose hook format this host speaks: `cn` sends Claude Code's.
+    fn wire(self) -> Self {
+        match self {
+            Self::Continue => Self::ClaudeCode,
+            other => other,
         }
     }
 
@@ -156,7 +177,7 @@ impl Host {
             hook_event_name: Option<String>,
         }
         let envelope: Envelope = serde_json::from_str(payload)?;
-        match (self, envelope.hook_event_name.as_deref()) {
+        match (self.wire(), envelope.hook_event_name.as_deref()) {
             (Self::Cursor, Some(event)) if cursor::EVENTS.contains(&event) => {
                 cursor::parse(self, payload)
             }
@@ -179,7 +200,9 @@ impl Host {
             hook_event_name: String,
         }
         match serde_json::from_str::<Envelope>(payload) {
-            Ok(e) if self == Self::ClaudeCode && e.hook_event_name == config_change::EVENT => {
+            Ok(e)
+                if self.wire() == Self::ClaudeCode && e.hook_event_name == config_change::EVENT =>
+            {
                 HookEvent::ConfigChange {
                     source: String::new(),
                     change_type: None,
@@ -190,18 +213,21 @@ impl Host {
     }
 
     /// The decision as this host has to receive it. Codex's `PreToolUse` rejects
-    /// `permissionDecision: "ask"` as unsupported and then runs the call, so an
-    /// `ask` reaches Codex as a `deny` that says how to approve it; the audit log
-    /// keeps the `ask`, which is what `moat allow --last` looks for.
+    /// `permissionDecision: "ask"` as unsupported and then runs the call, and the
+    /// Continue CLI ignores it and runs the call, so an `ask` reaches either as a
+    /// `deny` that says how to approve it; the audit log keeps the `ask`, which is
+    /// what `moat allow --last` looks for.
     #[must_use]
     pub fn answer(self, event: &HookEvent, decision: &Decision) -> Decision {
         let mut answer = decision.clone();
-        if self == Self::Codex
-            && matches!(event, HookEvent::PreToolUse)
-            && decision.verdict == Verdict::Ask
-        {
+        let how_to_approve = match self {
+            Self::Codex => CODEX_ASK,
+            Self::Continue => CONTINUE_ASK,
+            Self::ClaudeCode | Self::Cursor => return answer,
+        };
+        if matches!(event, HookEvent::PreToolUse) && decision.verdict == Verdict::Ask {
             answer.verdict = Verdict::Deny;
-            answer.reasons.push(CODEX_ASK.to_owned());
+            answer.reasons.push(how_to_approve.to_owned());
         }
         answer
     }

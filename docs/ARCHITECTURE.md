@@ -211,7 +211,7 @@ Two tests prove agreement with the engine:
 
 | Host event | Response | Exit |
 |---|---|---|
-| Claude Code, Codex `PreToolUse` | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":…,"permissionDecisionReason":…}}` | 0, or 2 on deny |
+| Claude Code, Codex, Continue CLI `PreToolUse` | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":…,"permissionDecisionReason":…}}` | 0, or 2 on deny |
 | Cursor `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` | `{"permission":…,"user_message":…,"agent_message":…}` | 0, or 2 on deny |
 | Claude Code `ConfigChange` | `{}` or `{"decision":"block","reason":…}` | 0, or 2 on block |
 
@@ -220,6 +220,20 @@ its `PreToolUse` rejects `permissionDecision: "ask"` as unsupported and then run
 call. So for Codex an `ask` is sent as a `deny` (exit 2) whose reason says to approve
 it with `moat allow --last`. The audit log keeps the `ask`, which is what `--last` finds
 (`Host::answer`).
+
+The Continue CLI (`cn`) cannot ask either, and it runs the Claude Code hook: it merges
+hooks from `~/.claude/settings.json` and `.claude/settings.json` with its own files.
+Its runner (`extensions/cli/src/hooks/hookRunner.ts` in continuedev/continue) blocks
+only on exit 2, `decision: "block"` or `permissionDecision: "deny"`, so an `ask` would
+run the call. `guard --host claude-code` treats a call as host `continue` when
+`CONTINUE_PROJECT_DIR` is set (`cn` sets it for every command hook; Claude Code never
+does) or when the payload's `transcript_path` is empty (`cn` keeps no transcript file;
+Claude Code always sends a path). Either sign is enough, because a Claude Code call
+mistaken for `cn` only turns an ask into a deny. For `continue` an `ask` is sent as a
+`deny` with the same `moat allow --last` instruction as for Codex, and the audit log
+records host `continue` with the `ask`. Everything else is decided as for Claude Code
+(`Host::sender`, `tests/fixtures/hosts/continue/`, built from `cn`'s hook source).
+`continue` is not in `Host::ALL`: it has no hook file of its own to install.
 
 Codex's `PermissionRequest` hook does not change this (#178, checked against
 openai/codex `ff9ab4a` and codex-cli 0.160.1). Codex runs it only from

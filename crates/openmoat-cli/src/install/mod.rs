@@ -5,7 +5,7 @@ mod hook_file;
 
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use openmoat_hosts::Host;
 
 pub use binary::{hook_binary, stale_hint};
@@ -126,6 +126,9 @@ impl HostConfig {
                 hooks: CURSOR_HOOKS,
                 format: HookFormat::Cursor,
             },
+            Host::Continue => {
+                bail!("the Continue CLI runs the Claude Code hook; it has none of its own")
+            }
         };
         Ok(config)
     }

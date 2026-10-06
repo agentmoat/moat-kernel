@@ -44,14 +44,18 @@ pub fn run(args: &GuardArgs) -> Code {
     Code::Deny
 }
 
-fn decide_and_respond(host: Host) -> Code {
+fn decide_and_respond(installed_for: Host) -> Code {
     let started = Instant::now();
 
     // The event is read separately so a payload that cannot be parsed is still
     // refused in the format its hook expects.
+    let mut host = installed_for;
     let mut event = HookEvent::default();
     let (request, mut decision) = match read_stdin() {
         Ok(payload) => {
+            // The Continue CLI runs the Claude Code hook but cannot ask.
+            let continue_env = std::env::var_os(openmoat_hosts::CONTINUE_ENV).is_some();
+            host = installed_for.sender(&payload, continue_env);
             event = host.event_of(&payload);
             evaluate(host, &payload).unwrap_or_else(|error| (None, kernel_error(&error)))
         }
@@ -66,7 +70,7 @@ fn decide_and_respond(host: Host) -> Code {
 
     let event = request.as_ref().map_or(event, |r| r.event.clone());
     // What the host receives can be stricter than what was decided and recorded
-    // (Codex cannot ask, so an `ask` reaches it as a `deny`).
+    // (Codex and the Continue CLI cannot ask, so an `ask` reaches them as a `deny`).
     let decision = host.answer(&event, &decision);
     let response = host.render_response(&event, &decision);
     let mut stdout = io::stdout().lock();
