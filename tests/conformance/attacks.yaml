@@ -882,6 +882,14 @@
   threat: T7
   action: { shell: "bash <<'EOF'\ncat ~/.ssh/id_rsa\nEOF" }
   expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-heredoc-piped-through-cat-is-the-shell-program
+  threat: T7
+  action: { shell: "cat <<'EOF' | sh\ncat ~/.ssh/id_rsa\nEOF" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-echo-piped-into-shell-is-its-program
+  threat: T7
+  action: { shell: "echo 'cat ~/.ssh/id_rsa' | sh" }
+  expect: { verdict: deny, rules: [secrets-paths] }
 - id: T7-dash-heredoc-strips-tabs-before-the-shell-runs-it
   threat: T7
   action: { shell: "bash <<-'EOF'\n\tcat <<'X'\n\tdata\n\tX\n\tcat ~/.ssh/id_rsa\n\tEOF" }

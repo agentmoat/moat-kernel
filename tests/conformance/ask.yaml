@@ -43,6 +43,10 @@
   threat: T7
   action: { shell: "cat <<EOF\nno terminator" }
   expect: { verdict: ask, rules: [unparseable] }
+- id: ask-heredoc-through-tee-into-shell
+  threat: T7
+  action: { shell: "cat <<'EOF' | tee log | sh\ncat ~/.ssh/id_rsa\nEOF" }
+  expect: { verdict: ask, rules: [default] }
 - id: ask-nesting-too-deep
   threat: T7
   action: { shell: "bash -c \"eval eval eval eval eval eval true\"" }

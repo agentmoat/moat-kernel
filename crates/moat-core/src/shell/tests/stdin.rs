@@ -83,3 +83,28 @@ fn here_string_is_data_but_substitutions_and_variables_are_not() {
         ssh
     ));
 }
+
+#[test]
+fn data_piped_into_a_shell_is_its_program() {
+    let ssh = "/Users/me/.ssh/id_rsa";
+    for cmd in [
+        "cat <<'EOF' | sh\ncat ~/.ssh/id_rsa\nEOF",
+        "cat - <<EOF | bash -s\ncat ~/.ssh/id_rsa\nEOF",
+        "cat <<< 'cat ~/.ssh/id_rsa' | sh",
+        "echo 'cat ~/.ssh/id_rsa' | sh",
+        "echo -n cat ~/.ssh/id_rsa |& bash",
+        "printf 'ls\\ncat ~/.ssh/id_rsa' | sh",
+    ] {
+        assert!(has_read(&parsed(cmd), ssh), "{cmd}");
+    }
+    // Not a shell reading stdin, not a pipe, or not data the line shows: the
+    // text stays data (the shell itself still asks).
+    for cmd in [
+        "echo 'cat ~/.ssh/id_rsa' | grep cat",
+        "echo 'cat ~/.ssh/id_rsa' | sh x.sh",
+        "echo 'cat ~/.ssh/id_rsa'; sh",
+        "cat notes.txt <<'EOF' | sh\ncat ~/.ssh/id_rsa\nEOF",
+    ] {
+        assert!(!has_read(&parsed(cmd), ssh), "{cmd}");
+    }
+}
