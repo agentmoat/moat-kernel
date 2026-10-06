@@ -9,17 +9,44 @@
 /// Expand `~`, `$HOME`, `${project}` and make the path absolute against `cwd`,
 /// then collapse `.` and `..` lexically. Without a project, `${project}` expands
 /// to nothing, as an unset shell variable does.
+///
+/// A path that depends on a directory nobody knows here (`~-`, the shell's
+/// previous directory) is taken literally, relative to `cwd`; shell words go
+/// through [`resolve`] instead, which refuses it.
 #[must_use]
 pub fn normalise(raw: &str, home: &str, project: Option<&str>, cwd: &str) -> String {
+    resolve(raw, home, project, Some(cwd)).unwrap_or_else(|| collapse(&format!("{cwd}/{raw}")))
+}
+
+/// [`normalise`] for a word a shell will expand, against a working directory
+/// that may be unknown (`None`). `None` when the result depends on a directory
+/// that is not known: a relative path and an unknown `cwd`, or `~-`.
+#[must_use]
+pub fn resolve(raw: &str, home: &str, project: Option<&str>, cwd: Option<&str>) -> Option<String> {
     let unified = raw.replace('\\', "/");
-    let mut s = expand_home(&unified, home)
+    let expanded = match dir_stack_tilde(&unified) {
+        Some(('+', rest)) => format!("{}{rest}", cwd?),
+        Some(_) => return None,
+        None => expand_home(&unified, home),
+    };
+    let s = expanded
         .replace("${project}", project.unwrap_or_default())
         .replace("${HOME}", home)
         .replace("$HOME", home);
-    if !is_absolute(&s) {
-        s = format!("{cwd}/{s}");
+    if is_absolute(&s) {
+        Some(collapse(&s))
+    } else {
+        Some(collapse(&format!("{}/{s}", cwd?)))
     }
-    collapse(&s)
+}
+
+/// `~+` (the working directory) and `~-` (the previous one), alone or before
+/// `/`: the sign and the rest of the word.
+fn dir_stack_tilde(raw: &str) -> Option<(char, &str)> {
+    let rest = raw.strip_prefix('~')?;
+    let sign = rest.chars().next().filter(|c| matches!(c, '+' | '-'))?;
+    let rest = &rest[1..];
+    (rest.is_empty() || rest.starts_with('/')).then_some((sign, rest))
 }
 
 /// Absolute in canonical form: `/…`, `X:/…`, or UNC `//…`.
@@ -85,14 +112,34 @@ pub fn expand_pattern(raw: &str, home: &str, project: Option<&str>) -> Option<St
     })
 }
 
+/// Expand a leading `~` or `~name`, as a POSIX shell does.
+///
+/// `~` is `home`. `~name` is `home` when `name` is the last component of
+/// `home` (the current user), and otherwise the directory `name` next to it:
+/// homes sit side by side under `/Users`, `/home` or `C:/Users`, so
+/// `~alice/.ssh` is read as `/Users/alice/.ssh`. A name that is not a valid
+/// login name leaves the word alone.
 fn expand_home(raw: &str, home: &str) -> String {
-    if let Some(rest) = raw.strip_prefix("~/") {
-        format!("{home}/{rest}")
-    } else if raw == "~" {
-        home.to_owned()
+    let Some((name, tail)) = home_prefix(raw) else {
+        return raw.to_owned();
+    };
+    let (parent, user) = home.rsplit_once('/').unwrap_or(("", home));
+    if name.is_empty() || name == user {
+        format!("{home}{tail}")
     } else {
-        raw.to_owned()
+        format!("{parent}/{name}{tail}")
     }
+}
+
+/// `~` or `~name` followed by nothing or `/…`: the name (empty for `~`) and
+/// the rest of the word.
+fn home_prefix(raw: &str) -> Option<(&str, &str)> {
+    let rest = raw.strip_prefix('~')?;
+    let (name, tail) = rest.split_at(rest.find('/').unwrap_or(rest.len()));
+    let login = name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+    (login && !name.starts_with('-')).then_some((name, tail))
 }
 
 /// Heuristic: does this shell token look like a filesystem path?
@@ -108,8 +155,8 @@ pub fn looks_like_path(token: &str) -> bool {
         return false;
     }
     token.starts_with('/')
-        || token.starts_with("~/")
-        || token == "~"
+        || home_prefix(token).is_some()
+        || dir_stack_tilde(token).is_some()
         || token.starts_with("./")
         || token.starts_with("../")
         || token.starts_with(".\\")
@@ -177,6 +224,42 @@ mod tests {
             Some("/h/.ssh/**")
         );
         assert_eq!(normalise("${project}/x", "/h", None, "/c"), "/x");
+    }
+
+    #[test]
+    fn tilde_names_a_home_directory() {
+        let n = |raw: &str| normalise(raw, "/Users/me", Some("/p"), "/p/app");
+        assert_eq!(n("~me/.ssh/id_rsa"), "/Users/me/.ssh/id_rsa");
+        assert_eq!(n("~me"), "/Users/me");
+        assert_eq!(n("~alice/.ssh/id_rsa"), "/Users/alice/.ssh/id_rsa");
+        assert_eq!(n("~+/x"), "/p/app/x");
+        assert_eq!(n("~+"), "/p/app");
+        assert_eq!(n("a/~me"), "/p/app/a/~me", "only a leading tilde expands");
+        assert_eq!(n("~a$b/x"), "/p/app/~a$b/x", "not a login name");
+        assert_eq!(
+            normalise("~bob/x", "C:/Users/me", None, "C:/p"),
+            "C:/Users/bob/x"
+        );
+        let r = |raw: &str| resolve(raw, "/Users/me", Some("/p"), Some("/p/app"));
+        assert_eq!(
+            r("~-/.ssh/id_rsa"),
+            None,
+            "the previous directory is unknown"
+        );
+        assert_eq!(r("~-"), None);
+        assert_eq!(r("~-x/y").as_deref(), Some("/p/app/~-x/y"));
+        assert_eq!(resolve("src", "/h", None, None), None);
+        assert_eq!(
+            resolve("/etc/hosts", "/h", None, None).as_deref(),
+            Some("/etc/hosts")
+        );
+        assert_eq!(resolve("~+/x", "/h", None, None), None);
+        for token in ["~me/.ssh/id_rsa", "~alice", "~+/x", "~-", "~"] {
+            assert!(looks_like_path(token), "{token}");
+        }
+        for token in ["~a$b", "x~y"] {
+            assert!(!looks_like_path(token), "{token}");
+        }
     }
 
     #[test]

@@ -68,3 +68,20 @@ fn an_explicit_home_project_is_a_usage_error() {
         stderr(&out)
     );
 }
+
+/// `~name` is expanded the way the shell does it; the sandbox user is `home`,
+/// the last component of its home directory.
+#[test]
+fn tilde_user_paths_are_home_directories() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let project = sb.project();
+    assert_verdict(
+        &sb,
+        &project,
+        "cat ~home/.ssh/id_rsa",
+        "deny",
+        "secrets-paths",
+    );
+    assert_verdict(&sb, &project, "cat ~alice/notes.txt", "ask", "default");
+    assert_verdict(&sb, &project, "cat ~-/notes.txt", "ask", "unparseable");
+}

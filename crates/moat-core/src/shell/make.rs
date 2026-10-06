@@ -11,7 +11,6 @@
 use super::commands::classify_into;
 use super::{ClassifyError, ShellContext, Sink};
 use crate::action::AtomicAction;
-use crate::paths;
 
 /// Command-line variables that decide how recipes are executed.
 const RECIPE_VARS: &[&str] = &["SHELL", ".SHELLFLAGS", "MAKESHELL", "MAKEFLAGS", "MFLAGS"];
@@ -67,7 +66,7 @@ pub(super) fn classify(
             }
         } else if let Some(path) = PATH_OPTIONS.iter().find_map(|p| arg.strip_prefix(p)) {
             sink.push(AtomicAction::FsRead {
-                path: paths::normalise(path, ctx.home, ctx.project, ctx.cwd),
+                path: ctx.path(path)?,
             })?;
         }
     }
