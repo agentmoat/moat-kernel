@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/moat-core", "crates/moat-hosts", "crates/moat-audit", "crates/moat-cli"]
+# Fuzz targets build with nightly and `cargo fuzz`; they are their own workspace.
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.1.0-dev"
