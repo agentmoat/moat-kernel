@@ -20,6 +20,10 @@ use toml_edit::{Item, Table, value};
 use super::patterns::{Spot, domain, literal_tree, split, spot};
 use super::{PROJECT, Report};
 
+mod config;
+
+pub use config::apply;
+
 /// The profile name moat owns and sets as `default_permissions`.
 pub const PROFILE: &str = "moat";
 
@@ -371,3 +375,6 @@ fn network(net: &Access, report: &mut Report) -> Table {
     table.insert("domains", Item::Table(domains));
     table
 }
+
+#[cfg(test)]
+mod tests;
