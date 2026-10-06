@@ -12,6 +12,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
+use moat_core::{Decision, Verdict};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
@@ -19,6 +20,8 @@ use crate::home::{Home, write_private};
 use crate::install::{HookState, HostConfig};
 
 const LOCK_VERSION: u32 = 1;
+/// Rule id of every decision the lock forces.
+pub const INTEGRITY_RULE: &str = "kernel-integrity";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lock {
@@ -49,6 +52,27 @@ pub fn repin(home: &Home, binary: &Path) -> Result<Lock> {
     let lock = Lock::pin(binary, &paths)?;
     lock.save(&home.lock_path())?;
     Ok(lock)
+}
+
+/// `Some(deny)` when the pinned policy or hook files changed since `moat init`.
+pub fn violation(home: &Home) -> Result<Option<Decision>> {
+    let lock_path = home.lock_path();
+    if !lock_path.is_file() {
+        bail!("no policy lock at {}; run `moat init`", lock_path.display());
+    }
+    let drift = Lock::load(&lock_path)?.verify();
+    if drift.is_empty() {
+        return Ok(None);
+    }
+    let mut decision = Decision::new(Verdict::Deny);
+    decision.rules.push(INTEGRITY_RULE.to_owned());
+    for d in drift {
+        decision.reasons.push(format!("{d}"));
+    }
+    decision.reasons.push(
+        "run `moat doctor` to inspect; `moat doctor --accept` or `moat init` to re-pin".to_owned(),
+    );
+    Ok(Some(decision))
 }
 
 /// One way a pinned file differs from the lock.

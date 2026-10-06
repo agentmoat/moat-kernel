@@ -16,6 +16,7 @@ fn init_creates_state_and_installs_claude_code_hook() {
     let sb = Sandbox::bare(&[".claude"]);
     let out = sb.moat(&["init"]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(stdout(&out).contains("installed: PreToolUse, ConfigChange →"));
     assert!(sb.home.join(".moat/policy.yaml").is_file());
     assert!(sb.home.join(".moat/audit.db").is_file());
 
@@ -97,6 +98,7 @@ fn guard_denies_secret_exfiltration_and_records_it() {
     let events: Value = serde_json::from_slice(&json.stdout).unwrap();
     assert_eq!(events[0]["verdict"], "deny");
     assert_eq!(events[0]["tool"], "Bash");
+    assert_eq!(events[0]["id"], id.as_str());
 }
 
 #[test]
@@ -257,6 +259,25 @@ fn unparseable_guard_arguments_deny() {
         Some(64),
         "other commands keep the usage code"
     );
+}
+
+#[test]
+fn malformed_payloads_name_their_cause_once() {
+    let sb = Sandbox::installed(&[".claude"]);
+    for (payload, problem, cause) in [
+        ("nope", "payload is not valid JSON", "expected ident"),
+        (
+            "[1]",
+            "payload is JSON but does not fit the hook schema",
+            "invalid type",
+        ),
+    ] {
+        let out = sb.guard("claude-code", payload);
+        assert_eq!(out.status.code(), Some(2), "payload {payload:?} must deny");
+        let reason = decision(&out)["permissionDecisionReason"].to_string();
+        assert!(reason.contains(problem), "{reason}");
+        assert_eq!(reason.matches(cause).count(), 1, "{reason}");
+    }
 }
 
 #[test]
@@ -429,4 +450,5 @@ fn status_reports_missing_installation() {
     let out = sb.moat(&["status"]);
     assert_eq!(out.status.code(), Some(64));
     assert!(stdout(&out).contains("run `moat init`"));
+    assert!(!stdout(&out).contains("os error"), "{}", stdout(&out));
 }

@@ -35,11 +35,14 @@ CREATE INDEX IF NOT EXISTS events_ts ON events(ts_ms);
 ";
 
 /// Why the audit database could not be used. `guard` denies on any of these.
+///
+/// Messages include their cause, so no variant also exposes it as `source`:
+/// a chained report (`{:#}`) would print it twice.
 #[derive(Debug, Error)]
 pub enum StoreError {
     /// `SQLite` failed (open, query, constraint).
     #[error("audit database: {0}")]
-    Sqlite(#[from] rusqlite::Error),
+    Sqlite(rusqlite::Error),
     /// The database was written by a newer `moat`.
     #[error(
         "audit database schema version {found} is newer than this build supports ({supported})"
@@ -55,20 +58,63 @@ pub enum StoreError {
     InvalidId(String),
     /// An event could not be encoded for storage.
     #[error("encoding event: {0}")]
-    Encode(#[from] serde_json::Error),
+    Encode(serde_json::Error),
     /// The database file could not be created or restricted.
     #[error("audit database file: {0}")]
-    Io(#[from] std::io::Error),
+    Io(std::io::Error),
 }
 
-/// Row id, shown and parsed as lowercase hex (`moat show 1f`).
+impl From<rusqlite::Error> for StoreError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Sqlite(error)
+    }
+}
+
+impl From<serde_json::Error> for StoreError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Encode(error)
+    }
+}
+
+impl From<std::io::Error> for StoreError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+/// Row id, shown, parsed and serialised as lowercase hex (`moat show 1f`,
+/// `"id": "1f"`). The integers older builds serialised still deserialise.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(into = "String", try_from = "WireId")]
 pub struct EventId(pub i64);
+
+impl From<EventId> for String {
+    fn from(id: EventId) -> Self {
+        id.to_string()
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum WireId {
+    Hex(String),
+    Row(i64),
+}
+
+impl TryFrom<WireId> for EventId {
+    type Error = StoreError;
+
+    fn try_from(wire: WireId) -> Result<Self, Self::Error> {
+        match wire {
+            WireId::Hex(text) => text.parse(),
+            WireId::Row(id) => Ok(Self(id)),
+        }
+    }
+}
 
 impl fmt::Display for EventId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:x}", self.0)
+        fmt::LowerHex::fmt(&self.0, f)
     }
 }
 

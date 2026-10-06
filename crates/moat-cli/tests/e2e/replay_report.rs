@@ -1,8 +1,10 @@
 //! `moat replay` and `moat report` over events produced by real `guard` calls.
 
+use std::process::Stdio;
+
 use serde_json::Value;
 
-use crate::common::{Sandbox, bash_payload, text};
+use crate::common::{Sandbox, bash_payload, stdout, text};
 
 /// An installed sandbox with two sessions of recorded decisions.
 fn seeded() -> Sandbox {
@@ -89,4 +91,31 @@ fn report_summarises_the_window() {
 
     let empty = text(&sb.moat(&["report", "--host", "codex"]));
     assert!(empty.contains("0 decisions"), "{empty}");
+}
+
+#[test]
+fn show_aligns_columns_and_stops_quietly_when_the_reader_does() {
+    let sb = seeded();
+    let table = stdout(&sb.moat(&["show"]));
+    let lines: Vec<&str> = table.lines().collect();
+    let host_column = |line: &str| line.find("claude-code").or_else(|| line.find("host"));
+    assert!(lines.len() > 1, "{table}");
+    assert!(
+        lines
+            .iter()
+            .all(|l| host_column(l) == host_column(lines[0])),
+        "{table}"
+    );
+
+    let mut child = sb
+        .command()
+        .arg("show")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take());
+    let out = child.wait_with_output().unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(out.stderr.is_empty(), "{}", text(&out));
 }

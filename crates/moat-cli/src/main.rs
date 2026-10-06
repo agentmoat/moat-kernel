@@ -48,6 +48,8 @@ fn main() -> ExitCode {
     };
     match commands::run(cli) {
         Ok(code) => code.into(),
+        // Never for `guard`: a hook that cannot answer must not exit 0 (ADR-015).
+        Err(error) if !invoked_as_hook() && broken_pipe(&error) => exit::Code::Ok.into(),
         Err(error) => {
             eprintln!("moat: {error:#}");
             failed.into()
@@ -58,4 +60,16 @@ fn main() -> ExitCode {
 /// True when the first argument is `guard`, the subcommand host hooks run.
 fn invoked_as_hook() -> bool {
     std::env::args_os().nth(1).is_some_and(|arg| arg == "guard")
+}
+
+/// A reader that stops early (`moat show | head`) closes the pipe. Like other
+/// command-line tools, stop quietly instead of reporting it as an error.
+fn broken_pipe(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        let kind = cause
+            .downcast_ref::<std::io::Error>()
+            .map(std::io::Error::kind)
+            .or_else(|| cause.downcast_ref::<serde_json::Error>()?.io_error_kind());
+        kind == Some(std::io::ErrorKind::BrokenPipe)
+    })
 }

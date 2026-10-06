@@ -74,6 +74,31 @@ fn allow_always_writes_the_overlay_and_keeps_the_lock_intact() {
 }
 
 #[test]
+fn allow_explains_missing_flags_and_shadowed_rules() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let out = sb.moat_as_person(&["allow", "ls"]);
+    assert_eq!(out.status.code(), Some(64));
+    assert!(
+        text(&out).contains("--always for a permanent rule"),
+        "{}",
+        text(&out)
+    );
+
+    let out = sb.moat_as_person(&["allow", "rm -rf /", "--always"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(
+        text(&out).contains("warning: rule `approved-1`") && text(&out).contains("unreachable"),
+        "{}",
+        text(&out)
+    );
+    assert_eq!(guard(&sb, "s1", "rm -rf /").0, "deny");
+
+    guard(&sb, "s1", INSTALL);
+    let out = sb.moat_as_person(&["allow", "--last"]);
+    assert!(text(&out).contains("wanted to run"), "{}", text(&out));
+}
+
+#[test]
 fn doctor_accept_repins_after_a_person_edits_the_policy() {
     let sb = Sandbox::installed(&[".claude"]);
     let policy = sb.home.join(".moat/policy.yaml");

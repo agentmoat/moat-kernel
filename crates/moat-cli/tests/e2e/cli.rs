@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::process::Output;
 
-use crate::common::{Sandbox, stdout};
+use crate::common::{Sandbox, stderr, stdout};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -153,6 +153,12 @@ fn lint_rejects_missing_and_invalid_files() {
     let out = sb.moat(&["policy", "lint", bad.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(64));
     assert!(String::from_utf8_lossy(&out.stderr).contains("unsupported policy version"));
+
+    std::fs::write(&bad, "rules: [x\n").unwrap();
+    let out = sb.moat(&["policy", "lint", bad.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(64));
+    let err = stderr(&out);
+    assert_eq!(err.matches("unknown field").count(), 1, "{err}");
 }
 
 #[test]

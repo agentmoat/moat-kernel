@@ -3,13 +3,14 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use moat_core::{Action, CompiledPolicy, NoResolver, Policy, ProgramResolver};
+use moat_core::{Action, CompiledPolicy, Decision, NoResolver, Policy, ProgramResolver};
 
 use crate::cli::{ActionKind, CheckArgs, Format, LintArgs};
 use crate::context;
 use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
+use crate::integrity;
 use crate::realpath::FsPathResolver;
 use crate::render;
 
@@ -33,6 +34,13 @@ pub fn lint(args: &LintArgs) -> Result<Code> {
 }
 
 pub fn check(args: &CheckArgs) -> Result<Code> {
+    // The installed policy decides nothing while the lock is broken: report the
+    // `kernel-integrity` deny `guard` would answer instead of the policy's verdict.
+    if args.policy.is_none()
+        && let Some(decision) = integrity::violation(&Home::locate()?)?
+    {
+        return report(&decision, args.format);
+    }
     let (policy, _) = load(args.policy.clone())?;
     let ctx = context::eval_context(args.cwd.as_deref(), args.project.as_deref())?;
     // Decide the way `guard` would: symlinks resolved on this machine, and
@@ -50,9 +58,13 @@ pub fn check(args: &CheckArgs) -> Result<Code> {
         programs,
         &paths,
     );
-    match args.format {
-        Format::Text => render::decision_text(&decision)?,
-        Format::Json => render::decision_json(&decision)?,
+    report(&decision, args.format)
+}
+
+fn report(decision: &Decision, format: Format) -> Result<Code> {
+    match format {
+        Format::Text => render::decision_text(decision)?,
+        Format::Json => render::decision_json(decision)?,
     }
     Ok(decision.verdict.into())
 }
