@@ -1,36 +1,81 @@
 # OpenMoat
 
-**A firewall and seatbelt for AI coding agents.** By Crocodile Labs; the command is `moat`.
+**Security for AI coding agents.** OpenMoat checks every action an AI coding agent
+takes on your computer and stops the dangerous ones before they run.
 
-AI coding agents run commands, edit files and call the network on your machine with
-your permissions. One prompt injection in a README, an issue or a web page is enough
-to make an agent read `~/.ssh` and send it somewhere, or wipe a directory. OpenMoat sits
-between the agent and your machine and enforces one policy you control, for Claude
-Code, Codex and Cursor alike.
+Works with **Claude Code**, **Codex** and **Cursor**. Built by Crocodile Labs. The
+command is `moat`.
+
+## Why you need it
+
+AI coding agents run commands, edit files and connect to the internet with your
+account and your permissions. Agents also read untrusted text all day: READMEs,
+issues, web pages, package code. One hidden instruction in that text can make an agent:
+
+- copy your SSH keys, cloud credentials or `.env` secrets to someone else;
+- delete files, force-push over your branch, or rewrite your shell startup files;
+- change its own settings so that it can do more next time.
+
+The agent's built-in "allow this?" prompt shows you a command, not what that command
+does. A harmless-looking `npm test` can run code that reads `~/.ssh`. And in
+auto-approve modes, in CI and in background agents, there is no prompt at all.
+
+## How it works
+
+Before the agent runs a command, reads or writes a file, opens a web page or calls an
+MCP tool, OpenMoat checks the action against one policy that you control:
+
+| Decision | What happens |
+|---|---|
+| **Allow** | Normal work runs without interruption. |
+| **Ask** | You are asked first, and told why. |
+| **Deny** | The action is blocked. The agent is told which rule matched and why. |
 
 ```
-agent tool call ──► moat guard ──► allow ──► the host runs it; logged
-                                 ├► deny  ──► blocked; the agent sees the rule and the reason
-                                 └► ask   ──► the agent's own permission prompt, with the reason
+agent action ──► OpenMoat ──► allow ──► runs, and is recorded
+                           ├► ask   ──► you decide, with the reason shown
+                           └► deny  ──► blocked, with the rule and the reason
 ```
 
-## What it does
+The same policy also configures the operating system's sandbox for each agent. Code
+hidden inside an approved command (a test script, a build step) still cannot read your
+secrets or write outside the project.
 
-| Layer | What it stops | State |
-|---|---|---|
-| **Hook decisions** | Every shell command, file read and write, web fetch and MCP call is allowed, asked about or denied before it runs: secret files, destructive commands, `curl \| sh`, edits to the agent's own settings | on `main` |
-| **Host sandboxes** (Standard tier) | The same policy configures Claude Code's and Codex's own OS sandboxes, so scripts hidden inside `npm test` or `build.rs` cannot read secrets or write outside the project | on `main` |
-| **Egress proxy** | `moat proxy`: default-deny network, TLS SNI checked against the host, local, private and cloud-metadata addresses refused | on `main`; hosts are not routed through it yet |
-| **Self-protection** | The policy, hook files and moat's own state are pinned by a lock checked on every call; an agent cannot edit, approve or turn off moat | on `main` |
-| **Audit log** | Every decision in a local SQLite log with a SHA-256 hash chain, so edits in the middle are detected | on `main` |
-| Secrets broker, session taint, audit export, `moat run` (Seatbelt and Landlock), repository policy | Agents that never hold your tokens; exfiltration chains; team reports; a sandbox for agents without one; per-repo rules | in review |
+## What it protects
 
-Decisions are deterministic: no model is involved. Errors fail closed.
+- **Your secrets.** SSH keys, cloud credentials, tokens and `.env` files stay out of
+  reach. The secrets broker gives the agent a placeholder instead of the real token and
+  blocks any request that would carry it to the wrong host.
+- **Your files and history.** Recursive deletes of your home directory, force pushes,
+  hard resets and edits to shell startup files are blocked.
+- **Your network.** Agents connect only to destinations the policy allows. Cloud
+  metadata and local network addresses are refused.
+- **OpenMoat itself.** The agent cannot edit, approve or switch off OpenMoat. If its
+  policy or settings change behind its back, everything is blocked until you review.
+- **A record of everything.** Every decision goes into a local audit log that detects
+  tampering and can be exported and verified by your team.
 
-> **Status: alpha, not released.** The workspace is at `0.1.0-alpha.0`. Expect breaking
-> changes until the beta. What the OS layers enforce, and what they cannot, is listed
-> per host in [THREAT_MODEL](docs/THREAT_MODEL.md); `moat sandbox show` prints it for
-> your policy. [Roadmap](docs/ROADMAP.md).
+## Features
+
+| Feature | What it gives you |
+|---|---|
+| Policy decisions | Allow, ask or deny for every shell command, file access, web fetch and MCP call, with the reason |
+| Host sandboxes (Standard tier) | Claude Code's and Codex's own OS sandboxes, configured from your policy (`moat sandbox show`) |
+| `moat run` (Lightweight tier) | A generated sandbox (Seatbelt on macOS, Landlock on Linux) for any agent, with network only through OpenMoat |
+| Egress proxy and secrets broker | `moat proxy`: only allowed destinations; the agent sees a placeholder, never the token. Adding the token to HTTPS requests is planned (#247) |
+| Session awareness | After an agent reads secrets or untrusted content, risky follow-up actions are asked about |
+| Repository policy | A project can make the rules stricter; it can loosen them only after you run `moat trust` |
+| Audit log | Tamper-evident history, `moat audit export`, `moat audit verify`, and team reports |
+| Benchmarks | MoatBench (40 attack and everyday scenarios) and tests across every enforcement layer |
+
+**Principles.** Decisions are deterministic: no AI model decides. When OpenMoat is
+unsure or something fails, it blocks. Everything runs locally and nothing leaves your
+machine unless you export it. Open source under Apache-2.0 and MIT.
+
+> **Status: alpha, not yet released.** The workspace is at `0.1.0-alpha.0`; expect
+> changes until the beta. Hosts are not yet routed through `moat proxy`. Exactly what
+> each operating-system layer enforces, and what it cannot, is listed in
+> [THREAT_MODEL](docs/THREAT_MODEL.md). [Roadmap](docs/ROADMAP.md).
 
 ## Install
 
