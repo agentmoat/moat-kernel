@@ -483,7 +483,9 @@ Rules:
   are first-class actions (CVE-2026-22708 lesson): `export PATH=…` → `env.set PATH`;
   `alias git=…` → deny by default; `eval`/`source` of non-project files → ask.
 - Interpreters with inline code (`bash -c`, `sh -c`, `zsh -c`, `python -c`, `node -e`,
-  `perl -e`, `ruby -e`, `osascript -e`): recursively parse `-c` payloads for shell;
+  `perl -e`, `ruby -e`, `osascript -e`): recursively parse `-c` payloads for shell,
+  reading the shell's options the way it does (`bash -lc`, `sh -ec`, `--login`, `-o opt`,
+  `--`; an option that cannot be read → `ask`, `shell/invocation.rs`);
   for other languages, scan payload for `os.system`, `subprocess`, `child_process`,
   `exec`, URLs and secret paths; unknown → `ask`.
 - Command substitution `$(…)` and backticks: evaluate inner command as its own action.

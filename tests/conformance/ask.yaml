@@ -209,3 +209,16 @@
   threat: T12
   action: { shell: "curl http://[::1]:8080/" }
   expect: { verdict: ask, rules: [local-net] }
+# T7: a shell's options are parsed, not guessed; the inner command is evaluated on its own
+- id: ask-bash-login-c-ordinary-command
+  threat: T7
+  action: { shell: "bash -lc 'cargo test'" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-shell-option-unknown
+  threat: T7
+  action: { shell: "bash --frobnicate -c 'cargo test'" }
+  expect: { verdict: ask, rules: [unparseable] }
+- id: ask-bash-option-value-is-not-a-script
+  threat: T7
+  action: { shell: "bash -o pipefail build.sh" }
+  expect: { verdict: ask, rules: [default] }

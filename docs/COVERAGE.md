@@ -13,9 +13,9 @@ the verdict and rule ids the default policy must produce for it.
 | T4 | Destructive git / filesystem operations | 9 | 4 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 0 | 0 |
-| T7 | Obfuscation and nested execution | 30 | 24 | 0 |
+| T7 | Obfuscation and nested execution | 38 | 27 | 0 |
 | T8 | MCP tool poisoning / over-privileged tools | 4 | 0 | 0 |
-| T9 | Hook / policy tampering by the agent | 23 | 3 | 0 |
+| T9 | Hook / policy tampering by the agent | 24 | 3 | 0 |
 | T10 | Hook supply chain (trojaned hook binary) | 4 | 0 | 0 |
 | T11 | Time-of-check / time-of-use, symlinks | 5 | 1 | 0 |
 | T12 | Network to unknown hosts | 10 | 5 | 0 |
@@ -142,6 +142,9 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-cargo-config-override` (ask): Ask [default]
 - `ask-sed-script-can-execute` (ask): Ask [default]
 - `ask-patch-without-files` (ask): Ask [unparseable]
+- `ask-bash-login-c-ordinary-command` (ask): Ask [default]
+- `ask-shell-option-unknown` (ask): Ask [unparseable]
+- `ask-bash-option-value-is-not-a-script` (ask): Ask [default]
 - `T7-bash-c` (attacks): Deny [secrets-paths]
 - `T7-sh-c-nested-twice` (attacks): Deny [secrets-paths]
 - `T7-eval` (attacks): Deny [pipe-to-shell]
@@ -172,6 +175,14 @@ the verdict and rule ids the default policy must produce for it.
 - `T7-find-exec-reads-key` (attacks): Deny [secrets-paths]
 - `T7-pipe-all-decoded-into-sh` (attacks): Deny [pipe-to-shell]
 - `T7-pipe-all-curl-into-bash` (attacks): Deny [pipe-to-shell]
+- `T7-bash-login-c` (attacks): Deny [secrets-paths]
+- `T7-zsh-interactive-c` (attacks): Deny [secrets-paths]
+- `T7-sh-errexit-c` (attacks): Deny [secrets-paths]
+- `T7-absolute-bash-login-c-pipe-to-shell` (attacks): Deny [pipe-to-shell]
+- `T7-bash-c-double-dash` (attacks): Deny [secrets-paths]
+- `T7-bash-long-login-c` (attacks): Deny [secrets-paths]
+- `T7-dash-set-option-c` (attacks): Deny [secrets-paths]
+- `T7-decoded-into-bash-with-option` (attacks): Deny [pipe-to-shell]
 
 ## T8: MCP tool poisoning / over-privileged tools
 
@@ -208,6 +219,7 @@ the verdict and rule ids the default policy must produce for it.
 - `T9-export-moat-home` (attacks): Deny [env-poison]
 - `T9-assume-tty-prefix-on-allow` (attacks): Deny [env-poison, kernel-self]
 - `T9-patch-edits-codex-hooks` (attacks): Deny [kernel-self]
+- `T9-zsh-interactive-moat-doctor-accept` (attacks): Deny [kernel-self]
 
 ## T10: Hook supply chain (trojaned hook binary)
 

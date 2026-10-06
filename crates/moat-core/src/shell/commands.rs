@@ -7,7 +7,7 @@ use super::tables::{
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
-use super::{decoders, make, options};
+use super::{decoders, invocation, make, options};
 use crate::action::AtomicAction;
 use crate::host;
 use crate::lexer::{self, Operator, Token, Word};
@@ -160,10 +160,11 @@ fn classify_simple(
         return classify_into(&argv[1..].join(" "), ctx, sink, depth + 1);
     }
     if SHELLS.contains(&program) {
-        if let Some(payload) = flag_payload(&argv, &["-c"]) {
-            return classify_into(payload, ctx, sink, depth + 1);
+        let run = invocation::parse(program, &argv)?;
+        for code in run.code {
+            classify_into(code, ctx, sink, depth + 1)?;
         }
-        if let Some(script) = argv.iter().skip(1).find(|a| !a.starts_with('-')) {
+        if let Some(script) = run.script {
             sink.push(AtomicAction::FsRead {
                 path: normalise(script, ctx),
             })?;
