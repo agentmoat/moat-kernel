@@ -81,6 +81,11 @@ pub enum Drift {
     Modified(PathBuf),
     Missing(PathBuf),
     Unreadable(PathBuf, String),
+    /// A staged copy (`proposal`) that would change the pinned `target`.
+    Proposed {
+        proposal: PathBuf,
+        target: PathBuf,
+    },
 }
 
 impl fmt::Display for Drift {
@@ -89,6 +94,12 @@ impl fmt::Display for Drift {
             Self::Modified(p) => write!(f, "{} was modified", p.display()),
             Self::Missing(p) => write!(f, "{} is missing", p.display()),
             Self::Unreadable(p, why) => write!(f, "{} is unreadable: {why}", p.display()),
+            Self::Proposed { proposal, target } => write!(
+                f,
+                "{} would change {}",
+                proposal.display(),
+                target.display()
+            ),
         }
     }
 }
@@ -158,6 +169,24 @@ impl Lock {
             Ok(actual) if &actual == expected => None,
             Ok(_) => Some(Drift::Modified(path)),
             Err(e) => Some(Drift::Unreadable(path, format!("{e:#}"))),
+        }
+    }
+
+    /// Drift that renaming `proposal` over the pinned `target` would leave: the
+    /// target's own drift, else any difference between the proposal and the
+    /// pinned contents. `None` when the target is not pinned.
+    pub fn verify_proposal(&self, proposal: &Path, target: &Path) -> Option<Drift> {
+        let expected = self.entries.get(&key(target))?;
+        if let Some(drift) = self.verify_one(target) {
+            return Some(drift);
+        }
+        match digest(proposal) {
+            Ok(actual) if &actual == expected => None,
+            Ok(_) => Some(Drift::Proposed {
+                proposal: proposal.to_path_buf(),
+                target: PathBuf::from(key(target)),
+            }),
+            Err(e) => Some(Drift::Unreadable(proposal.to_path_buf(), format!("{e:#}"))),
         }
     }
 

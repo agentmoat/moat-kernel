@@ -198,7 +198,12 @@ its JSON to the kernel's internal `ToolCall`.
   `change_type`, still accepted). A pinned settings file that no longer matches the lock is
   refused for the session (`{"decision":"block"}`), unpinned files load and are audited. A
   change without a `file_path` is checked against every pinned file: blocked if any drifted,
-  loaded otherwise. A `ConfigChange` payload that cannot be parsed is blocked in the same
+  loaded otherwise. A `/settings-review` accept writes the new contents to
+  `<file>.proposed-<8 hex>` next to the settings file, fires `ConfigChange` for that copy, and
+  renames it over the file only if no hook blocks; when `<file>` is pinned, the copy is
+  blocked unless the file still matches the lock and the copy's bytes equal the pinned ones.
+  The lock pins whole files, and only a person re-pins, so the hook cannot let a reviewed
+  edit of a pinned file through. A `ConfigChange` payload that cannot be parsed is blocked in the same
   `{"decision":"block"}` shape, exit 2. `PermissionDenied`, `PostToolUse` remain available for audit enrichment.
 - Install form: exec form with `args` (no shell), `command: "/abs/path/moat"`,
   `args: ["guard","--host","claude-code"]`, `timeout: 600`.

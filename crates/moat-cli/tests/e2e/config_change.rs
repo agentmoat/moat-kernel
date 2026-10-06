@@ -152,3 +152,37 @@ fn unreadable_payload_is_blocked_in_config_change_shape() {
     assert!(doc["reason"].as_str().unwrap().contains("kernel-error"));
     assert!(doc.get("hookSpecificOutput").is_none());
 }
+
+/// A `/settings-review` accept writes the new contents to a `.proposed-` copy
+/// and fires `ConfigChange` for it before renaming it over the settings file.
+#[test]
+fn settings_review_copy_is_judged_as_its_pinned_target() {
+    let sb = sandbox();
+    let copy = sb.home.join(".claude/settings.json.proposed-0a1b2c3d");
+    let pinned = std::fs::read_to_string(settings(&sb)).unwrap();
+
+    std::fs::write(&copy, &pinned).unwrap();
+    let (code, doc) = current_payload(&sb, "user_settings", Some(&copy));
+    assert_eq!((code, doc), (Some(0), serde_json::json!({})), "no change");
+
+    let mut root: Value = serde_json::from_str(&pinned).unwrap();
+    root["hooks"].as_object_mut().unwrap().remove("PreToolUse");
+    std::fs::write(&copy, root.to_string()).unwrap();
+    let (code, doc) = current_payload(&sb, "user_settings", Some(&copy));
+    assert_eq!(code, Some(2));
+    let reason = doc["reason"].as_str().unwrap();
+    assert!(reason.contains("kernel-integrity"), "{reason}");
+    assert!(reason.contains("would change"), "{reason}");
+
+    std::fs::write(&copy, &pinned).unwrap();
+    tamper(&sb);
+    let (code, doc) = current_payload(&sb, "user_settings", Some(&copy));
+    assert_eq!(code, Some(2), "the target itself drifted: {doc}");
+
+    let local = sb
+        .home
+        .join(".claude/settings.local.json.proposed-0a1b2c3d");
+    std::fs::write(&local, "{}").unwrap();
+    let (code, doc) = current_payload(&sb, "local_settings", Some(&local));
+    assert_eq!((code, doc), (Some(0), serde_json::json!({})), "unpinned");
+}

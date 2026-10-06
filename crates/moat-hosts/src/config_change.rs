@@ -58,6 +58,27 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
     })
 }
 
+/// Separates a settings file's name from the random suffix of its staged copy.
+const PROPOSED: &str = ".proposed-";
+
+/// The settings file a settings-review proposal will replace, when `path` is one.
+///
+/// When the owner accepts a staged change in `/settings-review`, Claude Code
+/// writes the new contents to `<file>.proposed-<8 hex digits>` next to the
+/// settings file and fires `ConfigChange` for that copy; only if no hook blocks
+/// does it rename the copy over the file, after checking the copy's bytes did
+/// not change. So the copy's contents are exactly what the file will hold.
+#[must_use]
+pub fn proposal_target(path: &str) -> Option<String> {
+    let (target, suffix) = path.rsplit_once(PROPOSED)?;
+    let named = !target.is_empty() && !target.ends_with(['/', '\\']);
+    let random = suffix.len() == 8
+        && suffix
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+    (named && random).then(|| target.to_owned())
+}
+
 /// `{}` lets the change load; anything else blocks it with a reason.
 pub(crate) fn render(decision: &Decision) -> String {
     match decision.verdict {
@@ -126,6 +147,28 @@ mod tests {
                 change_type: None,
             }
         );
+    }
+
+    #[test]
+    fn a_settings_review_copy_names_its_target() {
+        let req = Host::ClaudeCode
+            .parse_request(&fixture("config-change-proposed"))
+            .unwrap();
+        let Some(Action::FsWrite { path }) = req.action else {
+            panic!("{:?}", req.action);
+        };
+        assert_eq!(
+            proposal_target(&path).as_deref(),
+            Some("/Users/me/.claude/settings.json")
+        );
+        for other in [
+            "/Users/me/.claude/settings.json",
+            "/Users/me/.claude/settings.json.proposed-1234567",
+            "/Users/me/.claude/settings.json.proposed-1234567G",
+            "/Users/me/.claude/.proposed-0a1b2c3d",
+        ] {
+            assert_eq!(proposal_target(other), None, "{other}");
+        }
     }
 
     #[test]

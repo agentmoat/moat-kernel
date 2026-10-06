@@ -12,6 +12,8 @@ mod mcp;
 mod patch;
 mod pre_tool_use;
 
+pub use config_change::proposal_target;
+
 use std::fmt;
 use std::str::FromStr;
 
