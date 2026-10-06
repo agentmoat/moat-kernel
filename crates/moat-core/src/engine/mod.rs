@@ -165,7 +165,8 @@ impl<'p> CompiledGroup<'p> {
 impl EvalContext {
     /// `raw` expanded once per spelling of the home directory and project root
     /// it names ([`paths::expand_pattern`]); empty when it names no location.
-    fn spellings(&self, raw: &str) -> Vec<String> {
+    /// The policy compiler (`ir`) lowers patterns through the same expansion.
+    pub(crate) fn spellings(&self, raw: &str) -> Vec<String> {
         let projects: Vec<Option<&str>> = match &self.project {
             Some(p) => [Some(p), self.real_project.as_ref()]
                 .into_iter()

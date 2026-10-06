@@ -81,6 +81,13 @@ impl fmt::Display for Kind {
     }
 }
 
+/// Serialised as its policy-file name (`fs.read`), as in the compiled IR.
+impl serde::Serialize for Kind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
 /// A name that is not one of [`Kind::ALL`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("unknown action kind `{0}`")]
