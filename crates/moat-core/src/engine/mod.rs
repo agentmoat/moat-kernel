@@ -15,6 +15,10 @@ use crate::shell::{ParseOutcome, ShellContext, classify};
 use crate::verdict::{Decision, Verdict};
 use crate::{host, paths};
 
+mod taint;
+
+pub use taint::{Secret, Taint};
+
 /// Everything the engine needs from the environment. Supplied by the caller.
 #[derive(Debug, Clone)]
 pub struct EvalContext {
@@ -53,6 +57,8 @@ pub struct CompiledPolicy<'p> {
     deny: Vec<CompiledGroup<'p>>,
     allow: Vec<CompiledGroup<'p>>,
     ask: Vec<CompiledGroup<'p>>,
+    /// Paths a write to asks once the session read untrusted content (`taint`).
+    protected: Vec<GlobPattern>,
 }
 
 #[derive(Debug)]
@@ -78,6 +84,7 @@ impl<'p> CompiledPolicy<'p> {
             deny: compile_list(&policy.deny)?,
             allow: compile_list(&policy.allow)?,
             ask: compile_list(&policy.ask)?,
+            protected: taint::compile_protected(ctx)?,
         })
     }
 

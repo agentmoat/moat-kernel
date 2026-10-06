@@ -1,4 +1,5 @@
 mod fetch;
+mod taint;
 
 use super::*;
 

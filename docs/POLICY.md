@@ -117,6 +117,32 @@ Consequences worth remembering:
 - `moat guard` checks a path where it really points as well as where it was written: after `ln -s ~/.ssh ./s`, `cat ./s/id_rsa`, `cat s/id_rsa`, `head s/id_rsa` and `grep -r . s/` are denied by `secrets-paths`. A link inside the project that points elsewhere inside the project stays allowed; one that points outside it is checked at its target (`ln -s /etc e; cat e/hosts` asks), also when the project itself sits under a linked directory (§3.2). `moat policy check` resolves symlinks the same way. Hard links and a link swapped after the check are not seen (ADR-009).
 - The explanation names the rules that produced the final verdict; weaker matches are shown as context (`also:` lines, `context` in JSON).
 
+### 4.1 Session taint
+
+Earlier calls of the same session can make a later call stricter (ADR-020). Taint never
+loosens a decision: it adds an `ask` with rule id `session-taint` and merges it like any
+other atomic action, so an `allow` becomes `ask` and a `deny` stays `deny`.
+
+| Once the session has… | …these atomic actions ask |
+|---|---|
+| read secret material: an `fs.read` that the group with id `secrets-paths` names, in whichever list it sits | `net` and `fetch` to every host except the secret's own, and every `mcp` call (moat cannot see an MCP server's hosts) |
+| read untrusted content: a `fetch`, or the result of an `mcp` call | `fs.write` to a protected path |
+
+- A secret read from a file belongs to no host, so every host asks. A secret the secrets
+  broker (#172) injects will carry its own host, and only that host stays as decided.
+- In the default policy `secrets-paths` denies, so no secret read runs and none taints.
+  The trigger matters when your policy moves `secrets-paths` to `ask`: once you approve
+  the read, the session is tainted.
+- Protected paths are fixed in `engine/taint.rs`: files whose change runs code or steers the
+  agent later. They are CI (`.github/workflows/**`, `.gitlab-ci.yml`, `.circleci/**`), git
+  hooks (`.husky/**`, `.githooks/**`), editor tasks (`.vscode/**`), build scripts the
+  allowed dev commands run (`package.json`, `Makefile`, `build.rs`), and agent instructions
+  and settings (`CLAUDE.md`, `AGENTS.md`, `.claude/**`, `.codex/**`, `.cursor/**`,
+  `.cursorrules`, `.mcp.json`), at any depth.
+- Shell network to an allowed host (`git fetch`, `gh pr view`) is not counted as untrusted
+  content, and a command moat cannot classify taints nothing it can name.
+- Conformance fixtures express a chain with `session:`, the earlier calls that ran.
+
 ## 5. Verdicts and what the host does
 
 The verdict is the same for every host; the response document is the host's own format.
@@ -142,6 +168,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | `kernel-error` | deny | `moat guard` could not evaluate at all: missing state directory, malformed payload, unreadable policy; exit 2 |
 | `ungoverned` | allow | the host tool is outside policy scope (for example Claude Code `Task`, or `Shell` under Cursor's `preToolUse`, which `beforeShellExecution` already governs); recorded, not evaluated |
 | `config-change` | allow | a Claude Code `ConfigChange` for a settings file that is not pinned, or still matches the lock; a change that names no file is allowed only while every pinned file matches the lock; recorded |
+| `session-taint` | ask | earlier calls of the session read secret material or untrusted content, and this call could carry the secret out or persist the content (§4.1) |
 | `approved-session` | allow | an `ask` for a shell command that a person granted with `moat allow` for this host session (§8.2) |
 | `approved-<n>` | allow | a permanent rule in `~/.moat/policy.d/approved.yaml` written by `moat allow --always` |
 | `proxy-address`, `proxy-sni`, `proxy-request`, `proxy-upstream` | deny | `moat proxy` refused a connection: a loopback, link-local, metadata, or unnamed private destination, a TLS server name that does not match the CONNECT host, a request it does not serve, or a destination it could not reach (§5.2) |
