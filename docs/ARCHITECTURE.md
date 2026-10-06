@@ -422,7 +422,8 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
 - **Losses and allowances.** A backend narrows what it cannot express and reports it
   as a loss. It may widen only where the host cannot run otherwise (the read roots,
   Codex `:minimal` and `:tmpdir`, Claude Code's working directories and unblocked
-  system paths, directory nodes left out of `denyWrite`), and each of those is
+  system paths, directory nodes left out of `denyWrite`, `.git` outside its
+  code-execution paths so `git commit` works), and each of those is
   listed. `moat sandbox show`, `sandbox sync` and `doctor` print both.
 - **Traps the generators handle** (found in the spike, re-verified on Claude Code
   2.1.290 and codex-cli 0.160.1): a relative pattern in Claude Code user settings

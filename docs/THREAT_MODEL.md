@@ -90,12 +90,18 @@ something the alpha claims to stop.
   and allowance; ADR-018 lists the open risks.
 - **Translation losses (stricter than the policy).** Neither host can re-allow
   `.env.example`, `.env.sample` or `.env.template` inside the `**/.env.*` deny, so
-  sandboxed commands cannot read them. Both keep `.git` read-only for sandboxed
-  commands (Claude Code because user settings cannot name the project, so `.git` is
-  denied in every directory), so `git commit` fails inside Claude Code's sandbox and
-  Codex asks to run it outside. Claude Code's file tools refuse reads outside the
+  sandboxed commands cannot read them. Codex keeps `.git` read-only for sandboxed
+  commands and asks to run `git commit` outside. Claude Code's file tools refuse reads outside the
   working directories (`permissions.blockReadsOutsideWorkingDirectories`) where the
   hook would ask.
+- **Claude Code's sandbox writes `.git`.** So that `git commit` works, sandboxed
+  commands may write any `.git` except `hooks`, `config`, `config.worktree`,
+  `info/attributes`, a linked worktree's `commondir` and the same in submodules
+  (ADR-021, #203); renaming `.git` or `.git/hooks` is refused too. A script can still
+  rewrite refs and objects (history tampering, which `git log`, signatures and review
+  can show), write a rebase todo that a person later continues, or write a `.git`
+  *file* (`gitdir: …`) below the project, which the hook allows as well. The hook
+  still asks for file-tool writes to the project's `.git`.
 - **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
   `cargo run`, `make test`, `pytest` and similar are allowed by `dev-shell`. They run
   whatever the project's scripts, build files and test files say, and `moat` sees

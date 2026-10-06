@@ -43,3 +43,34 @@ tier (ADR-018) showed where that cannot hold:
   suite (#170) can treat an allowance as an expected disagreement instead of a bug.
 - A policy written before the key existed gets the default policy's list, and the
   tools say so; a policy that sets `sandbox: {}` gets none.
+
+## Amendment 2026-10-06 (#203)
+
+Decided by the owner. The policy keeps the project's `.git` from writes
+(`!${project}/.git/**`), and Claude Code user settings cannot name the project, so
+the generator denied every `.git` and `git commit` failed in Claude Code's sandbox.
+Commits are a core Claude Code workflow, so the Claude Code backend now denies only
+the paths that make git run code or read another repository's, and lists the rest of
+`.git` as the allowance `claude-code.git-internals`:
+
+- `/**/.git/hooks` (a directory in `denyWrite` covers its subtree) and `hooks/**`:
+  hooks run on commit, checkout, merge and push;
+- `/**/.git/config`: `core.hooksPath`, `core.fsmonitor`, `core.sshCommand`, filter,
+  diff and merge drivers, aliases, `include.path`;
+- `/**/.git/config.worktree`, `/**/.git/worktrees/*/config.worktree`: per-worktree
+  config, read like `config`;
+- `/**/.git/info/attributes`: selects filter and diff drivers;
+- `/**/.git/worktrees/*/commondir`: points a linked worktree at another repository,
+  whose config and hooks it then uses;
+- the same paths under `/**/.git/modules/**`, the repositories of submodules.
+
+Verified with Claude Code 2.1.290 on macOS (fake `HOME`, local fake API): `git commit`,
+`git branch`, `git tag`, `git gc` work; writing any path above, `git config`, and
+renaming `.git`, and renaming or deleting `.git/hooks` fail with `Operation not permitted`.
+
+Residual risk: a sandboxed script can rewrite refs and objects (history tampering,
+which `git log`, signatures and review can detect), write a rebase todo that a person
+later continues, and write a `.git` file (`gitdir: …`) below the project, which the
+hook allows too. It cannot install hooks or change config. The hook is unchanged: it
+still asks for file-tool writes to the project's `.git`. Codex keeps `.git` read-only
+by its own design, and that stays a listed loss.
