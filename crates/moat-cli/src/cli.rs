@@ -158,6 +158,8 @@ pub enum PolicyCommand {
     Lint(LintArgs),
     /// Decide one action against a policy and explain the result.
     Check(CheckArgs),
+    /// Print what OS layers enforce for a policy: the compiled IR and its losses.
+    Compile(CompileArgs),
 }
 
 #[derive(Debug, Args)]
@@ -184,6 +186,25 @@ pub struct CheckArgs {
     pub project: Option<PathBuf>,
 
     /// Working directory the action runs in. Defaults to the current directory.
+    #[arg(long)]
+    pub cwd: Option<PathBuf>,
+
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
+}
+
+#[derive(Debug, Args)]
+pub struct CompileArgs {
+    /// Policy file to compile. Defaults to the installed user policy.
+    #[arg(long, short)]
+    pub policy: Option<PathBuf>,
+
+    /// Trusted project root that `${project}` expands to. Defaults to the git root of --cwd.
+    #[arg(long)]
+    pub project: Option<PathBuf>,
+
+    /// Working directory to compile for. Defaults to the current directory.
     #[arg(long)]
     pub cwd: Option<PathBuf>,
 

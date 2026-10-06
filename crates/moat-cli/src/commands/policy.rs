@@ -1,12 +1,13 @@
-//! `moat policy lint` and `moat policy check`.
+//! `moat policy lint`, `moat policy check` and `moat policy compile`.
 
 use std::io::{self, Write as _};
 use std::path::PathBuf;
 
 use anyhow::Result;
+use moat_core::ir::{self, Access, Enforcement};
 use moat_core::{Action, CompiledPolicy, Decision, NoResolver, Policy, ProgramResolver};
 
-use crate::cli::{ActionKind, CheckArgs, Format, LintArgs};
+use crate::cli::{ActionKind, CheckArgs, CompileArgs, Format, LintArgs};
 use crate::context;
 use crate::environment::Snapshot;
 use crate::exit::Code;
@@ -61,6 +62,71 @@ pub fn check(args: &CheckArgs) -> Result<Code> {
         &FsPathResolver,
     );
     report(&decision, args.format)
+}
+
+pub fn compile(args: &CompileArgs) -> Result<Code> {
+    let (policy, _) = load(args.policy.clone())?;
+    let ctx = context::eval_context(args.cwd.as_deref(), args.project.as_deref())?;
+    let ir = ir::lower(&policy, &ctx)?;
+    match args.format {
+        Format::Json => render::json(&ir)?,
+        Format::Text => compile_text(&ir)?,
+    }
+    Ok(Code::Ok)
+}
+
+fn compile_text(ir: &Enforcement) -> Result<()> {
+    let mut out = io::stdout().lock();
+    let case = if ir.fs.case_insensitive {
+        "case-insensitive"
+    } else {
+        "case-sensitive"
+    };
+    writeln!(out, "filesystem ({case} paths)")?;
+    access_text(&mut out, "fs.read", &ir.fs.read)?;
+    access_text(&mut out, "fs.write", &ir.fs.write)?;
+    writeln!(out, "egress")?;
+    access_text(&mut out, "net", &ir.egress.net)?;
+    access_text(&mut out, "fetch", &ir.egress.fetch)?;
+    writeln!(
+        out,
+        "decide-only (the hook applies these; OS layers cannot see them)"
+    )?;
+    for d in &ir.decide_only {
+        writeln!(out, "  {}: {}", d.kind, d.rules.join(", "))?;
+    }
+    writeln!(
+        out,
+        "losses ({}; OS layers deny where the hook would not)",
+        ir.losses.len()
+    )?;
+    for loss in &ir.losses {
+        writeln!(out, "  {loss}")?;
+    }
+    Ok(())
+}
+
+fn access_text(out: &mut impl io::Write, kind: &str, access: &Access) -> Result<()> {
+    writeln!(out, "  {kind}: default {}", effect(access.default))?;
+    for (label, rules) in [("deny", &access.deny), ("allow", &access.allow)] {
+        for rule in rules {
+            writeln!(
+                out,
+                "    {label} {} ({}): {}",
+                rule.id,
+                rule.list,
+                rule.patterns.join(" ")
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn effect(effect: ir::Effect) -> &'static str {
+    match effect {
+        ir::Effect::Allow => "allow",
+        ir::Effect::Deny => "deny",
+    }
 }
 
 fn report(decision: &Decision, format: Format) -> Result<Code> {

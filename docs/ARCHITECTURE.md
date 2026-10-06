@@ -16,7 +16,7 @@ moat-cli ──► moat-hosts ──► moat-core
 
 | Crate | Role | Rules |
 |---|---|---|
-| `moat-core` | Policy model and lint, POSIX lexer (`lexer/`), shell classifier (`shell/`), URL host parser (`host.rs`), patterns, path normalisation, the engine, `ProgramResolver` and `PathResolver` traits | Pure: no I/O, no `unsafe`, depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Builds for `wasm32-unknown-unknown` in CI; `tests/architecture.rs` enforces the dependency allowlist and the 500-line file budget |
+| `moat-core` | Policy model and lint, POSIX lexer (`lexer/`), shell classifier (`shell/`), URL host parser (`host.rs`), patterns, path normalisation, the engine, the policy compiler (`ir/`), `ProgramResolver` and `PathResolver` traits | Pure: no I/O, no `unsafe`, depends only on `serde`, `serde_yaml_ng`, `globset`, `thiserror`. Builds for `wasm32-unknown-unknown` in CI; `tests/architecture.rs` enforces the dependency allowlist and the 500-line file budget |
 | `moat-hosts` | Host adapters: `pre_tool_use.rs` (Claude Code and Codex `PreToolUse`), `config_change.rs` (Claude Code `ConfigChange`), `cursor.rs`, `mcp.rs` (MCP arguments to paths and URLs), `patch.rs` (Codex `apply_patch` file list) | Translate payload to `Action` and `Decision` to response. Never decide |
 | `moat-audit` | SQLite store, time-window and session queries, redaction | Redact before persisting. Typed `thiserror` errors |
 | `moat-cli` | The `moat` binary (crate `moat-kernel`): commands, hook installation, the policy lock, approvals, the environment snapshot, the filesystem resolvers, rendering, exit codes | The only crate that touches files, the environment and the terminal |
@@ -152,6 +152,38 @@ spelling of the root, so a project under macOS `/tmp` → `/private/tmp` matches
 way. `moat policy check` uses the same resolvers (the snapshot only when an
 installation exists) and, against the installed policy, the same lock check.
 
+### Policy compiler
+
+ADR-019 makes `policy.yaml` the single source for every enforcement point.
+`moat_core::ir::lower(policy, ctx)` derives the `Enforcement` IR from the same policy
+and `EvalContext` the engine compiles. The engine is the hook backend. OS backends (host
+sandbox settings, Seatbelt, Landlock, the egress proxy) will be generated from the IR
+(#168, #169, #176).
+
+| IR part | Contents |
+|---|---|
+| `fs.read`, `fs.write` | per kind: a default (`allow`/`deny`), deny rules, allow rules. Each rule is one policy group's list, expanded like the engine's patterns (both root spellings, `!` exclusions kept) |
+| `egress.net`, `egress.fetch` | the same for hosts. `fetch` takes rules from `fetch` and `net` lists. Both always deny `moat.cloud-metadata` (ADR-020) |
+| `secrets`, `limits` | empty until the policy schema defines them (#172) |
+| `decide_only` | rule ids per kind the IR cannot carry: `shell`, `env.read`, `env.set`, `mcp`, and `executables` program names |
+| `losses` | every place the IR is stricter than the hook, with a message |
+
+Per access the IR applies deny rules, then allow rules, then the default.
+`ir::Checker` is that reference evaluation.
+
+**Lowering never widens.** An `ask` default lowers to deny. An `ask` rule disappears
+under a deny default, where the outcome is the same. Under an allow default it becomes a
+deny rule, which also denies where an allow matches. Each case is a loss.
+
+Two tests prove agreement with the engine:
+- `tests/ir_consistency.rs` checks every fs, net, fetch and patch conformance fixture.
+  The IR verdict on the engine's own atoms (`CompiledPolicy::atoms`, symlinks included)
+  must equal the engine verdict, with `ask` read as deny.
+- `tests/ir_never_widens.rs` lowers generated policies and checks that an IR allow is
+  always an engine allow.
+
+`moat policy compile` prints the IR.
+
 ## 5. Hook responses and exit codes
 
 | Host event | Response | Exit |
@@ -253,6 +285,7 @@ scripts/ci/sync-labels.sh      the repository's label set
 | Unit | next to the code (`#[cfg(test)]`, `tests.rs` modules) | every PR, all OS |
 | Architecture invariants | `crates/moat-core/tests/architecture.rs` | every PR |
 | Conformance (decide) | `tests/conformance/` through `crates/moat-core/tests/conformance.rs`; generates `docs/COVERAGE.md` and fails on a threat class without an attack fixture | every PR, all OS |
+| Policy compiler | `crates/moat-core/tests/ir_consistency.rs` (IR against the engine on the conformance fixtures), `ir_never_widens.rs` (generated policies) | every PR, all OS |
 | Golden host payloads | `tests/fixtures/hosts/` | every PR |
 | End to end | `crates/moat-cli/tests/e2e/` (real binary, isolated `HOME`/`MOAT_HOME`) | every PR, all OS |
 | `wasm32` purity build | CI job | every PR |

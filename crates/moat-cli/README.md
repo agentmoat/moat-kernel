@@ -15,6 +15,7 @@ host configuration. Decisions come from `moat-core`.
 | `moat doctor [--accept]` | verify state dir, policy, lock, hooks, binary, audit; `--accept` re-pins (terminal only) |
 | `moat policy lint [file]` | validate a policy |
 | `moat policy check <action> [--kind …] [--policy …]` | explain a decision |
+| `moat policy compile [--policy …] [--format json]` | print what OS layers enforce (the compiled IR) and its losses |
 
 Exit codes are a contract (ADR-004): 0 allow/ok, 2 deny, 3 unresolved ask,
 64 usage or configuration error.

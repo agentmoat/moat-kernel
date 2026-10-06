@@ -255,3 +255,56 @@ fn unknown_kind_is_a_usage_error() {
     );
     assert!(String::from_utf8_lossy(&out.stderr).contains("invalid value"));
 }
+
+/// `policy compile` prints the enforcement IR: paths expanded for the project,
+/// decide-only kinds, and every ask reported as a loss.
+#[test]
+fn compile_prints_the_enforcement_ir_and_its_losses() {
+    let sb = Sandbox::bare(&[]);
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().to_string_lossy().replace('\\', "/");
+    let policy = default_policy();
+    let compile = |format: &str| {
+        sb.moat(&[
+            "policy",
+            "compile",
+            "--policy",
+            policy.to_str().unwrap(),
+            "--project",
+            &project,
+            "--cwd",
+            &project,
+            "--format",
+            format,
+        ])
+    };
+    let out = compile("json");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let ir: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let allow = &ir["fs"]["write"]["allow"][0];
+    assert_eq!(allow["id"], "project-fs");
+    let excluded = format!("!{project}/.git/**");
+    let patterns = allow["patterns"].as_array().unwrap();
+    assert!(
+        patterns
+            .iter()
+            .any(|p| p.as_str() == Some(excluded.as_str())),
+        "{patterns:?}"
+    );
+    assert_eq!(ir["egress"]["fetch"]["default"], "deny");
+    assert_eq!(ir["decide_only"][0]["kind"], "shell");
+    let losses = ir["losses"].as_array().unwrap();
+    assert!(
+        losses.iter().any(|l| l["rule"] == "default.fetch"),
+        "{losses:?}"
+    );
+
+    let out = compile("text");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let text = stdout(&out);
+    assert!(text.contains("  fetch: default deny"), "{text}");
+    assert!(
+        text.contains("fetch `default.fetch`: no rule matches: the hook asks, OS layers deny"),
+        "{text}"
+    );
+}
