@@ -12,27 +12,9 @@ use thiserror::Error;
 
 use crate::{redact, redact_value};
 
-const SCHEMA_VERSION: i64 = 1;
-const BUSY_TIMEOUT_MS: u64 = 2000;
+mod schema;
 
-const SCHEMA: &str = "
-CREATE TABLE IF NOT EXISTS events (
-    id          INTEGER PRIMARY KEY,
-    ts_ms       INTEGER NOT NULL,
-    host        TEXT    NOT NULL,
-    session_id  TEXT    NOT NULL,
-    call_id     TEXT,
-    cwd         TEXT,
-    tool        TEXT    NOT NULL,
-    action      TEXT    NOT NULL,
-    verdict     TEXT    NOT NULL CHECK (verdict IN ('allow','ask','deny')),
-    rules       TEXT    NOT NULL,
-    reasons     TEXT    NOT NULL,
-    latency_us  INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS events_session ON events(session_id, id);
-CREATE INDEX IF NOT EXISTS events_ts ON events(ts_ms);
-";
+const BUSY_TIMEOUT_MS: u64 = 2000;
 
 /// Why the audit database could not be used. `guard` denies on any of these.
 ///
@@ -227,17 +209,7 @@ impl Store {
         conn.busy_timeout(std::time::Duration::from_millis(BUSY_TIMEOUT_MS))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
-        let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version > SCHEMA_VERSION {
-            return Err(StoreError::SchemaTooNew {
-                found: version,
-                supported: SCHEMA_VERSION,
-            });
-        }
-        if version < SCHEMA_VERSION {
-            conn.execute_batch(SCHEMA)?;
-            conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
-        }
+        schema::migrate(&conn)?;
         Ok(Self { conn })
     }
 
