@@ -1,0 +1,38 @@
+proxy: listening on 127.0.0.1:18080, 10 hosts allowed
+
+$ GET https://example.com via proxy (allowlisted for the demo)
+proxy: ALLOW CONNECT example.com:443
+http=200
+[exit 0]
+
+$ GET https://example.org via proxy (not on the allowlist)
+proxy: DENY CONNECT example.org:443
+curl: (56) CONNECT tunnel failed, response 403
+http=000
+[exit 56]
+
+$ issue payload via proxy: npm run test:loud (exfil to example.invalid)
+cat: $SPIKE/.work/home/.ssh/id_rsa: Operation not permitted
+proxy: DENY CONNECT example.invalid:443
+curl: (56) CONNECT tunnel failed, response 403
+[exit 56]
+
+$ bypass the proxy: curl --noproxy '*' https://example.com
+curl: (6) Could not resolve host: example.com
+http=000
+[exit 6]
+
+$ bypass the proxy: node raw socket to an IP (attack.js)
+read blocked .ssh/id_rsa EPERM
+read blocked .aws/credentials EPERM
+write blocked ~/.zshrc EPERM
+connect blocked EPERM
+[exit 0]
+
+$ localhost on another port (allowed port is 18080 only)
+curl: (7) Failed to connect to 127.0.0.1 port 18081 after 0 ms: Couldn't connect to server
+http=000
+[exit 7]
+
+$ same request outside the sandbox (control: the service on 18081 is up)
+http=200

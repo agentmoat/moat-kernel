@@ -38,6 +38,10 @@ that run other programs), and no amount of parser work closes that gap. So:
   a new grammar. The time saved goes into enforcement.
 - From the beta on, allowed commands run under OS enforcement derived from the same
   policy. A parser mistake then costs a prompt or a confusing message, not a breach.
+  Every layer is generated from the one policy and the layers are tested against each
+  other (ADR-018 to ADR-020): the host's own sandbox, configured and pinned by moat, by
+  default; a container or VM with moat outside it for strict use; one egress proxy and a
+  secrets broker so the agent never holds credentials.
 
 ## Stages
 
@@ -71,12 +75,16 @@ Milestone `v0.1.0-beta`; #144 section P2.
 
 | Issue | Work |
 |---|---|
-| #119 | Spike: the host's own sandbox configured by `moat`, or `moat` as the outer sandbox (`moat exec`). Outcome recorded as ADR-018 |
-| #126 | OS enforcement on macOS, using the approach the spike picks |
-| #127 | Egress proxy and minimal session taint: once a session read a secret, later network access asks |
+| #119 | Spike (done): Seatbelt does not nest, host defaults leak; outcome in ADR-018, evidence in `spikes/sandbox/` |
+| #167 | Policy compiler: one IR, the hook backend over it, "never widens" property tests (ADR-019) |
+| #168, #169 | Standard tier: generated and pinned Claude Code `sandbox` settings and Codex permissions (ADR-018) |
+| #170 | Executing differential fixtures across the hook, both host sandboxes and every tier, with public CVE replays (ADR-019) |
+| #171, #172, #173 | `moat proxy` (default deny, SNI, own DNS), secrets broker, minimal session taint (ADR-020) |
+| #174, #175 | Isolated tier: `moat run --isolate` in a rootless container (Linux) or an Apple Virtualization guest (macOS) |
+| #176 | Lightweight tier: generated Seatbelt or Landlock and seccomp around the agent |
+| #177, #129 | Hash-chained audit log; audit export and a team report |
+| #178 | Codex asks through its own `PermissionRequest` prompt |
 | #128 | Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` |
-| #129 | Audit export and a team report |
-| #130 | Linux enforcement (bubblewrap, or Landlock and seccomp) |
 | #131 | Bypass challenge with 5–10 security people |
 | #132 | MoatBench mini (about 40 scenarios) and the launch demo |
 

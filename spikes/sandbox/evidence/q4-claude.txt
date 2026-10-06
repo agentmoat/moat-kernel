@@ -1,0 +1,66 @@
+claude: 2.1.290 (Claude Code)
+settings.json (generated):
+{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,"excludedCommands":[],"filesystem":{"denyRead":["~/.ssh/**","~/.aws/**","~/.gnupg/**","~/.config/gh/**","~/.netrc","~/.docker/config.json","~/.kube/**","~/.config/gcloud/**","~/.azure/**","~/.git-credentials","~/.npmrc","~/.pypirc","~/.cargo/credentials","~/.cargo/credentials.toml","~/.zsh_history","~/.bash_histor
+
+
+##### option (b): Claude Code sandbox from the moat policy (agent not wrapped by moat)
+
+$ issue payload
+  (Bash tool: npm run --silent test:loud; echo exit=$?)
+  tool result: cat: $SPIKE/.work/home/.ssh/id_rsa: Operation not permitted
+  curl: (56) CONNECT tunnel failed, response 403
+  exit=56
+  <sandbox_violations>
+  deny network-outbound example.invalid:443 (host is not on the allow list)
+  </sandbox_violations>
+
+$ node attack
+  (Bash tool: node attack.js)
+  tool result: read blocked .ssh/id_rsa EPERM
+  read blocked .aws/credentials EPERM
+  write blocked ~/.zshrc EPERM
+  connect blocked EPERM
+
+$ make attack
+  (Bash tool: make -s test)
+  tool result: read blocked ~/.aws/credentials
+  /bin/sh: $SPIKE/.work/home/.zshrc: Operation not permitted
+  write blocked ~/.zshrc
+  write blocked outside project
+  read blocked .env
+  project write ok
+
+$ egress to an unlisted host
+  (Bash tool: curl -sS -o /dev/null -m 8 -w "http=%{http_code}\n" https://example.com; echo exit=$?)
+  tool result: curl: (56) CONNECT tunnel failed, response 403
+  http=000
+  exit=56
+  <sandbox_violations>
+  deny network-outbound example.com:443 (host is not on the allow list)
+  </sandbox_violations>
+
+$ kernel-self write in the project
+  (Bash tool: mkdir -p .claude && echo {} > .claude/settings.json && echo WROTE; echo exit=$?)
+  tool result: (eval):1: operation not permitted: .claude/settings.json
+  exit=1
+
+$ ordinary work: git commit
+  (Bash tool: echo "// e" >> src/main.rs && git -c user.name=s -c user.email=s@example.invalid commit -qam e && echo committed; echo exit=$?)
+  tool result: committed
+  exit=0
+
+$ template read (.env.example)
+  (Bash tool: cat .env.example; echo exit=$?)
+  tool result: FAKE_TOKEN=
+  exit=0
+
+$ escape hatch: model sets dangerouslyDisableSandbox
+  (Bash tool: UNSANDBOXED:cat ~/.ssh/id_rsa; echo exit=$?)
+  tool result: cat: $SPIKE/.work/home/.ssh/id_rsa: Operation not permitted
+  exit=1
+
+##### nesting: the same Claude Code, but itself inside moat's Seatbelt profile (option a + b)
+
+$ Bash tool while both sandboxes are on
+  (Bash tool: echo hello; echo exit=$?)
+  tool result: Sandbox is required but failed to initialize: EPERM: operation not permitted, listen '/var/folders/y8/gmwlp5t57bdd6mbbb1gt3mn40000gn/T/srt-mux-78272-2.sock'. Restart to retry.

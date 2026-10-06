@@ -23,6 +23,9 @@ refines them. To add one, copy the shape of ADR-004 and take the next number.
 | [015](ADR-015-guard-usage-errors-deny.md) | `moat guard` exits 2 (deny) when it cannot parse its own arguments | accepted; amends ADR-004 |
 | [016](ADR-016-stable-hook-binary-path.md) | Hooks and the lock record the stable install path of `moat`; `doctor` names a missing or different hook binary | accepted; refines ADR-006 |
 | [017](ADR-017-fetch-kind.md) | `fetch`, a narrower kind of `net` for a host's own read-only fetch tool (`WebFetch`); the default asks for unlisted hosts | accepted |
+| [018](ADR-018-enforcement-approach.md) | Enforcement tiers: Standard (the host's own sandbox, generated and pinned by moat), Isolated (container or VM with moat outside), Lightweight (generated Seatbelt or Landlock); Seatbelt does not nest | accepted |
+| [019](ADR-019-one-policy-compiled-to-every-enforcement-point.md) | One policy compiled to every enforcement point through one IR; lossy targets narrow, never widen; differential executing tests prove the layers agree | accepted |
+| [020](ADR-020-egress-proxy-and-secrets-broker.md) | `moat proxy` is the only network exit; the secrets broker injects credentials so the agent never holds them; minimal session taint | accepted |
 
 ## References to retired documents
 

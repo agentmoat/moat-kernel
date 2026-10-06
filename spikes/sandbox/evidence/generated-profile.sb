@@ -1,0 +1,112 @@
+(version 1)
+(deny default)
+; --- platform basics: enough for shells, node, git, cargo/rustc to start ---
+(allow process-exec process-fork)
+(allow signal (target same-sandbox))
+(allow process-info* (target same-sandbox))
+(allow sysctl-read)
+(allow file-read*)                       ; reads are open; secrets are denied below
+(allow file-ioctl)
+(allow pseudo-tty)
+(allow ipc-posix-shm* ipc-posix-sem)
+(allow user-preference-read)
+(allow iokit-open (iokit-registry-entry-class "RootDomainUserClient"))
+; mach services a CLI toolchain needs. Not the keychain (com.apple.SecurityServer,
+; com.apple.securityd) and not the pasteboard: a project script gets neither.
+(allow mach-lookup
+  (global-name "com.apple.system.opendirectoryd.libinfo")
+  (global-name "com.apple.system.opendirectoryd.membership")
+  (global-name "com.apple.system.notification_center")
+  (global-name "com.apple.system.logger")
+  (global-name "com.apple.logd")
+  (global-name "com.apple.diagnosticd")
+  (global-name "com.apple.CoreServices.coreservicesd")
+  (global-name "com.apple.coreservices.launchservicesd")
+  (global-name "com.apple.lsd.mapdb")
+  (global-name "com.apple.trustd.agent")
+  (global-name "com.apple.analyticsd")
+  (global-name "com.apple.dnssd.service"))
+(allow file-write-data file-write-create
+  (literal "/dev/null") (literal "/dev/zero") (literal "/dev/tty") (literal "/dev/dtracehelper")
+  (regex #"^/dev/ttys[0-9]+$") (regex #"^/dev/fd/[0-9]+$"))
+; --- allow holes ---
+; allow project-fs: writes inside the project
+(allow file-write*
+  (subpath "$SPIKE/.work/project"))
+; writes the agent and toolchains need: temp dirs, the agent's own state dir, caches
+(allow file-write*
+  (subpath "/private/var/folders/y8/gmwlp5t57bdd6mbbb1gt3mn40000gn/T")
+  (subpath "/private/tmp")
+  (subpath "$SPIKE/.work/home/.agent-state"))
+
+; --- policy denies, last so nothing above overrides them (ADR-002) ---
+; project-fs exclusions (.moat) and git code-execution paths
+(deny file-write*
+  (subpath "$SPIKE/.work/project/.moat")
+  (subpath "$SPIKE/.work/project/.git/hooks")
+  (literal "$SPIKE/.work/project/.git/config"))
+; deny kernel-self
+(deny file-write*
+  (literal "$SPIKE/.work/home/.moat")
+  (literal "$SPIKE/.work/home/.claude")
+  (literal "$SPIKE/.work/home/.codex")
+  (literal "$SPIKE/.work/home/.cursor")
+  (regex #"/\.moat$")
+  (regex #"/\.claude$")
+  (regex #"/\.codex$")
+  (regex #"/\.cursor$")
+  (subpath "$SPIKE/.work/home/.moat")
+  (literal "$SPIKE/.work/home/.claude/settings.json")
+  (literal "$SPIKE/.work/home/.claude/settings.local.json")
+  (subpath "$SPIKE/.work/home/.codex")
+  (literal "$SPIKE/.work/home/.cursor/hooks.json")
+  (regex #"/\.claude/settings\.json$")
+  (regex #"/\.claude/settings\.local\.json$")
+  (regex #"/\.cursor/hooks\.json$")
+  (regex #"/\.codex/hooks\.json$")
+  (regex #"/\.moat(/.*)?$")
+  (regex #"/bin/moat$")
+  (regex #"/bin/moat\.exe$"))
+; deny shell-rc
+(deny file-write*
+  (literal "$SPIKE/.work/home/.zshrc")
+  (literal "$SPIKE/.work/home/.bashrc")
+  (literal "$SPIKE/.work/home/.bash_profile")
+  (literal "$SPIKE/.work/home/.profile")
+  (literal "$SPIKE/.work/home/.zprofile")
+  (literal "$SPIKE/.work/home/.zshenv"))
+; deny secrets-paths (contents; stat metadata stays visible so git status works)
+(deny file-read-data file-write*
+  (subpath "$SPIKE/.work/home/.ssh")
+  (subpath "$SPIKE/.work/home/.aws")
+  (subpath "$SPIKE/.work/home/.gnupg")
+  (subpath "$SPIKE/.work/home/.config/gh")
+  (literal "$SPIKE/.work/home/.netrc")
+  (literal "$SPIKE/.work/home/.docker/config.json")
+  (subpath "$SPIKE/.work/home/.kube")
+  (subpath "$SPIKE/.work/home/.config/gcloud")
+  (subpath "$SPIKE/.work/home/.azure")
+  (literal "$SPIKE/.work/home/.git-credentials")
+  (literal "$SPIKE/.work/home/.npmrc")
+  (literal "$SPIKE/.work/home/.pypirc")
+  (literal "$SPIKE/.work/home/.cargo/credentials")
+  (literal "$SPIKE/.work/home/.cargo/credentials.toml")
+  (literal "$SPIKE/.work/home/.zsh_history")
+  (literal "$SPIKE/.work/home/.bash_history")
+  (regex #"/\.env$")
+  (regex #"/\.env\.[^/]*$")
+  (regex #"/\.envrc$")
+  (subpath "$SPIKE/.work/home/Library/Keychains"))
+; secrets-paths negations (!**/.env.example ...)
+(allow file-read-data
+  (regex #"/\.env\.example$")
+  (regex #"/\.env\.sample$")
+  (regex #"/\.env\.template$"))
+(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))
+
+; --- network: defaults net: deny ---
+; policy allowlist (registries): api.github.com, github.com, registry.npmjs.org, crates.io, static.crates.io, index.crates.io, proxy.golang.org, pypi.org, files.pythonhosted.org
+; SBPL cannot name a host or an IP (only `*` or `localhost`), so the allowlist
+; is enforced by the proxy; the sandbox only guarantees the proxy is the sole way out.
+(deny network*)
+(allow network-outbound (remote ip "localhost:18080"))
