@@ -18,10 +18,9 @@
 
 - id: wipe-home
   threat: T4
-  gap: "#210"
   why: >-
-    A cleanup step with a wrong variable expands to the home directory. Only the exact
-    spellings `rm -rf ~` and `rm -rf ~/*` are denied today; the trailing slash asks.
+    A cleanup step with a wrong variable expands to the home directory. `destructive`
+    denies a write to the home directory itself however it is spelt (#210).
   steps:
     - { shell: "rm -rf ~/", expect: deny, rule: destructive }
 

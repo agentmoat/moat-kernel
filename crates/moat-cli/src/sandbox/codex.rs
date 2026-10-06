@@ -17,7 +17,7 @@ use moat_core::ir::{Access, Effect, Enforcement};
 use moat_core::{AtomicAction, Kind};
 use toml_edit::{Item, Table, value};
 
-use super::patterns::{Spot, domain, literal_tree, split, spot};
+use super::patterns::{Spot, domain, is_below, literal_tree, split, spot};
 use super::{PROJECT, Report};
 
 mod config;
@@ -277,10 +277,8 @@ impl Filesystem {
     /// Like Claude Code, a denied directory covers its subtree, so a node deny
     /// (`**/.claude`: no rename) with entries below it is left out and listed.
     fn drop_directory_nodes(&mut self, report: &mut Report) {
-        let below = |list: &[(String, Mode)], node: &str| {
-            let prefix = format!("{node}/");
-            list.iter().any(|(k, _)| k.starts_with(&prefix))
-        };
+        let below =
+            |list: &[(String, Mode)], node: &str| list.iter().any(|(k, _)| is_below(k, node));
         let dropped: Vec<String> = self
             .nodes
             .iter()

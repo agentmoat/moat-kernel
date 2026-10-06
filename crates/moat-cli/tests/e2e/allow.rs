@@ -84,13 +84,16 @@ fn allow_explains_missing_flags_and_shadowed_rules() {
         text(&out)
     );
 
-    let out = sb.moat_as_person(&["allow", "rm -rf /", "--always"]);
+    // A shell deny pattern shadows the new allow, so the linter names it.
+    let out = sb.moat_as_person(&["allow", "git reset --hard", "--always"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     assert!(
         text(&out).contains("warning: rule `approved-1`") && text(&out).contains("unreachable"),
         "{}",
         text(&out)
     );
+    assert_eq!(guard(&sb, "s1", "git reset --hard").0, "deny");
+    // A path deny wins over a shell allow too (the linter compares shell rules only).
     assert_eq!(guard(&sb, "s1", "rm -rf /").0, "deny");
 
     guard(&sb, "s1", INSTALL);

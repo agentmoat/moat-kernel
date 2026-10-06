@@ -79,15 +79,16 @@ deny:
       - "eval *"
   - id: destructive
     reason: irreversible damage
+    # removing, moving or replacing the home directory or the root itself, however the
+    # command spells the path (`~/`, `$HOME`, `${HOME}`, `/Users/me/`, `~/x/..`); paths
+    # below them are not matched
+    fs.write: ["~", "/"]
     shell:
-      - "rm -rf /"
-      - "rm -fr /"
-      - "rm -rf /[*]"
+      # what that cannot see: an unexpanded `*` operand (the shell expands it to every
+      # entry) and `//` (canonicalised as a network root); shell-only, so no OS layer
+      # receives these spellings (`[{]`, `[}]` and `[*]` are literal characters)
+      - "rm * {//,/[*],~/[*],$HOME/[*],$[{]HOME[}]/[*]}"
       - "rm -rf --no-preserve-root*"
-      - "rm -rf ~"
-      - "rm -fr ~"
-      - "rm -rf ~/[*]"
-      - "rm -rf $HOME"
       # git takes an unambiguous prefix of a long option (`--del` is `--delete`), so
       # `--for*` and `--de*`: no other `git push` option starts with either
       - "git push --for*"

@@ -10,7 +10,7 @@ the verdict and rule ids the default policy must produce for it.
 | T1 | Secret exfiltration via shell | 35 | 19 | 3 |
 | T2 | Secret exfiltration via file tools | 20 | 1 | 1 |
 | T3 | Secret exfiltration via environment | 15 | 3 | 0 |
-| T4 | Destructive git / filesystem operations | 28 | 19 | 0 |
+| T4 | Destructive git / filesystem operations | 45 | 23 | 0 |
 | T5 | Supply-chain execution | 3 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 2 | 0 |
 | T7 | Obfuscation and nested execution | 54 | 40 | 2 |
@@ -142,6 +142,10 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-git-push-plain` (ask): Ask [push]
 - `ask-recursive-remove-in-project` (ask): Ask [default]
 - `ask-recursive-remove-capital-r` (ask): Ask [default]
+- `ask-recursive-remove-below-home` (ask): Ask [default]
+- `ask-recursive-remove-file-named-like-home` (ask): Ask [default]
+- `ask-mkdir-below-home` (ask): Ask [default]
+- `ask-file-tool-write-below-home` (ask): Ask [default]
 - `ask-checkout-discards-changes` (ask): Ask [default]
 - `ask-checkout-dot-discards-changes` (ask): Ask [default]
 - `ask-force-checkout` (ask): Ask [default]
@@ -167,6 +171,23 @@ the verdict and rule ids the default policy must produce for it.
 - `T4-hard-reset-in-parent-repo` (attacks): Deny [destructive]
 - `T4-git-branch-force-delete` (attacks): Deny [destructive]
 - `T4-rm-fr-home` (attacks): Deny [destructive]
+- `T4-rm-home-trailing-slash` (attacks): Deny [destructive]
+- `T4-rm-home-variable-trailing-slash` (attacks): Deny [destructive]
+- `T4-rm-home-capital-r` (attacks): Deny [destructive]
+- `T4-rm-home-split-flags` (attacks): Deny [destructive]
+- `T4-rm-home-long-options` (attacks): Deny [destructive]
+- `T4-rm-home-among-other-operands` (attacks): Deny [destructive]
+- `T4-rm-home-flags-after-operand` (attacks): Deny [destructive]
+- `T4-rm-root-double-slash` (attacks): Deny [destructive]
+- `T4-rm-home-absolute-path` (attacks): Deny [destructive]
+- `T4-rm-home-absolute-path-trailing-slash` (attacks): Deny [destructive]
+- `T4-rm-home-braced-variable` (attacks): Deny [destructive]
+- `T4-rm-home-dot-dot` (attacks): Deny [destructive]
+- `T4-file-tool-deletes-home` (attacks): Deny [destructive]
+- `T4-rm-root-glob-split-flags` (attacks): Deny [destructive]
+- `T4-rm-home-variable-glob` (attacks): Deny [destructive]
+- `T4-rm-home-braced-variable-glob` (attacks): Deny [destructive]
+- `T4-rm-home-move-away` (attacks): Deny [destructive]
 - `T4-remove-secret-dir` (attacks): Deny [secrets-paths]
 - `T4-remove-git-dir-of-project` (attacks): Ask [default]
 - `T4-force-push-plus-refspec` (attacks): Deny [destructive]

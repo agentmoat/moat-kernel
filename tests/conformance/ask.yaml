@@ -338,6 +338,23 @@
   threat: T4
   action: { shell: "rm -Rf dist" }
   expect: { verdict: ask, rules: [default] }
+# a directory below the home is not the home: these stay at ask, not destructive
+- id: ask-recursive-remove-below-home
+  threat: T4
+  action: { shell: "rm -rf ~/tmp/build" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-recursive-remove-file-named-like-home
+  threat: T4
+  action: { shell: "rm -r ./~" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-mkdir-below-home
+  threat: T4
+  action: { shell: "mkdir ~/x" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-file-tool-write-below-home
+  threat: T4
+  action: { fs_write: "/Users/me/notes.txt" }
+  expect: { verdict: ask, rules: [default] }
 - id: ask-checkout-discards-changes
   threat: T4
   action: { shell: "git checkout -- ." }
