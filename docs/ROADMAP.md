@@ -14,16 +14,30 @@ so the only way to install it is to build from a clone. What exists:
 - Policy kinds `shell`, `fs.read`, `fs.write`, `net`, `fetch`, `env.read`, `env.set`, `mcp`.
 - An own POSIX lexer and shell classifier, executable pins (ADR-008) and symlink
   resolution (ADR-009).
-- A redacted local audit log with `show`, `replay` and `report`.
+- A redacted, hash-chained local audit log with `show`, `replay` and `report`, and
+  `moat audit export`, `verify` and `report` for a team (#129).
 - Approvals through `moat allow` (ADR-007).
 - Self-protection: a policy lock checked on every call (ADR-006), `kernel-self`
   rules, the Claude Code `ConfigChange` veto, and stable hook binary paths (ADR-016).
+- Session taint: after a secret read or untrusted content, risky follow-up calls ask
+  (ADR-020).
+- Repository policy (`<repo>/.moat/policy.yaml`) that only tightens until `moat trust`
+  (ADR-022).
+- Standard tier: Claude Code's and Codex's own sandboxes configured and pinned from
+  the policy (ADR-018).
+- Lightweight tier: `moat run` with a generated Seatbelt profile (macOS) or Landlock
+  rules (Linux) around the whole agent.
+- `moat proxy`: default-deny egress with an SNI check, its own DNS and an audit row
+  per connection, and a secrets broker that blocks a brokered secret on its way to the
+  wrong host (ADR-020). HTTPS injection is not built yet (#247).
 - Fail-closed exit codes (ADR-004, ADR-015), a conformance suite tagged by threat
-  ([COVERAGE.md](COVERAGE.md)), and fuzz targets that run in CI.
+  ([COVERAGE.md](COVERAGE.md)), a differential suite across the hook and the host
+  sandboxes, MoatBench mini, and fuzz targets that run in CI.
 
-What it is not: an enforcement layer. A decision is not backed by the operating
-system. An allowed command runs with your permissions, so a classifier mistake is a
-security bug.
+What it is not yet: enforcement for every call. The hook's decision is not backed by
+the operating system; only commands inside the host sandboxes or `moat run` are
+confined. Outside them an allowed command runs with your permissions, so a classifier
+mistake is a security bug.
 
 ## Positioning
 
@@ -31,8 +45,9 @@ The shell classifier triages and the operating system is the boundary. A policy
 decision on a command string can be wrong (quoting, encodings, interpreters, programs
 that run other programs), and no amount of parser work closes that gap. So:
 
-- During the alpha the classifier is the only layer. Bypass reports are in scope
-  ([SECURITY.md](../SECURITY.md)) and become fixtures.
+- Where no OS layer applies (Claude Code's file tools, `WebFetch` and MCP calls, and
+  Cursor, unless the agent runs under `moat run`), the classifier is the only layer.
+  Bypass reports are in scope ([SECURITY.md](../SECURITY.md)) and become fixtures.
 - The parser is frozen (AGENTS.md §5, CONTRIBUTING.md "Decisions"). A newly found
   bypass gets an attack fixture and the smallest change that turns it into `ask`, not
   a new grammar. The time saved goes into enforcement.
@@ -135,8 +150,8 @@ A team gets value when one policy and one record cover everyone's agents:
 2. **Audit export** (#129). Decisions exported in a stable format, plus a team report
    built from them.
 
-Neither exists today. Only the user policy (`~/.moat/policy.yaml` plus the
-`policy.d/approved.yaml` overlay) is loaded, and the audit log is per machine.
+Both exist on `main`: `moat trust` for repository policy, and `moat audit export`,
+`verify` and `report` for a team report over several machines.
 
 ## Not planned
 

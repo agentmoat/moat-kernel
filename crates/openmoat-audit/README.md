@@ -1,6 +1,7 @@
 # openmoat-audit
 
-Append-only local audit log for kernel decisions.
+Append-only local audit log for [OpenMoat](https://github.com/crocodile-labs/openmoat)
+decisions.
 
 One SQLite database in WAL mode with a busy timeout, safe for several concurrent
 `moat guard` processes. Every stored command and reason passes `redact()` first,

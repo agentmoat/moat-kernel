@@ -1,25 +1,31 @@
 # openmoat-core
 
-The trusted decision core of OpenMoat: policy model, POSIX shell lexer and
-classifier, pattern matching, path normalisation and the decision engine.
+The decision core of [OpenMoat](https://github.com/crocodile-labs/openmoat): policy
+model, POSIX shell lexer and classifier, pattern matching, path normalisation, the
+decision engine and the policy compiler for OS layers.
 
 **Pure by construction.** No I/O, no OS calls, no `unsafe`, no internal
-dependencies. The crate builds for `wasm32-unknown-unknown` in CI, and
-`tests/architecture.rs` pins the dependency allowlist and a 500-line file budget.
+dependencies. The crate builds for `wasm32-unknown-unknown` in CI, and an
+architecture test pins the dependency allowlist and a 500-line file budget.
 
 ```rust
-use openmoat_core::{Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, Policy};
+use openmoat_core::{Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, Policy, Verdict};
 
 let policy = Policy::parse(DEFAULT_POLICY)?;
-let ctx = EvalContext { home: "/Users/me".into(), project: Some("/p".into()), cwd: "/p".into(), case_insensitive_paths: false };
+let ctx = EvalContext {
+    home: "/Users/me".into(),
+    project: Some("/p".into()),
+    real_home: None,
+    real_project: None,
+    cwd: "/p".into(),
+    case_insensitive_paths: false,
+};
 let compiled = CompiledPolicy::compile(&policy, &ctx)?;
 let decision = compiled.decide(&Action::Shell { command: "cat ~/.ssh/id_rsa".into() });
-assert_eq!(decision.verdict, openmoat_core::Verdict::Deny);
+assert_eq!(decision.verdict, Verdict::Deny);
 ```
 
-Modules: `policy` (schema, lint), `lexer/` (tokens), `shell/` (classification),
-`pattern` (globs and shell patterns), `paths` (canonical paths), `engine`
-(deny → allow → ask → defaults, strictest wins), `verdict`, `action`.
-
-Semantics are specified in `docs/POLICY.md` and `docs/ARCHITECTURE.md` §3–4 and
-enforced by `tests/conformance/`.
+Policy semantics are specified in
+[docs/POLICY.md](https://github.com/crocodile-labs/openmoat/blob/main/docs/POLICY.md)
+and [docs/ARCHITECTURE.md](https://github.com/crocodile-labs/openmoat/blob/main/docs/ARCHITECTURE.md)
+§3–4, and checked by the conformance fixtures in the repository's `tests/conformance/`.
