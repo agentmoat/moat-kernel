@@ -357,17 +357,20 @@ policy:
 | | Claude Code (`Bash`, `PowerShell`, `Monitor`) | Codex (every command) |
 |---|---|---|
 | Read | project, read roots, paths outside the user directories; never `secrets-paths` | project, read roots, Codex's minimal system paths; never `secrets-paths` |
-| Write | working directories, temp; never `secrets-paths`, `kernel-self`, `shell-rc`, `.git`, `.moat` | project, temp; the same denies; `.git` read-only |
+| Write | working directories, temp; never `secrets-paths`, `kernel-self`, `shell-rc`, `.moat`, or what in `.git` makes git run code (`hooks`, `config`, `config.worktree`, `info/attributes`, a worktree's `commondir`, the same in submodules) | project, temp; the same denies; `.git` read-only |
 | Network | `registries` domains only (`strictAllowlist`); `cloud-metadata` denied | the same, through Codex's network proxy |
 | Escape hatches | `allowUnsandboxedCommands: false`, `failIfUnavailable: true`, no `excludedCommands` | `default_permissions = "moat"`; Codex asks before running outside the sandbox |
 
 Losses (stricter than the policy): the `.env.example`, `.env.sample` and `.env.template`
 exceptions cannot be re-allowed inside the `**/.env.*` deny; `.git` is read-only for
-sandboxed commands (so is every `.git` and `.moat` under Claude Code, whose user
-settings cannot name the project); Claude Code's file tools refuse reads outside the
+Codex's sandboxed commands; every `.moat` is denied under Claude Code, whose user
+settings cannot name the project; Claude Code's file tools refuse reads outside the
 working directories. Allowances (wider): the read roots, Codex `:minimal` and
-`:tmpdir`, Claude Code's working directories, system paths and the directory-node
-rules of `kernel-self` (`**/.claude` itself; the files below stay denied). Run
+`:tmpdir`, Claude Code's working directories, system paths, the directory-node
+rules of `kernel-self` (`**/.claude` itself; the files below stay denied) and, so
+that `git commit` works, writes to every `.git` under Claude Code except the paths
+above (`claude-code.git-internals`; the hook still asks for file-tool writes to the
+project's `.git`). Run
 `moat sandbox show` for the exact list your policy produces.
 
 ## 10. Planned, not yet available

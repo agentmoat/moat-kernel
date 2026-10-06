@@ -110,8 +110,9 @@ Other settings and comments are kept, and each file is copied to
 the policy compiles to, with every place a host is stricter or wider than the policy;
 `moat sandbox sync` rewrites both after you edit the policy and re-pins them. Editing
 the generated parts by hand is drift (`kernel-integrity`), and `moat doctor` names any
-weakened setting. Sandboxed commands cannot write `.git`: commit outside the sandbox
-(Codex asks to; under Claude Code, run `git commit` yourself).
+weakened setting. Under Claude Code, sandboxed commands can run `git commit` but cannot
+write `.git/hooks`, `.git/config` or the other paths that make git run code (ADR-021).
+Codex keeps `.git` read-only: commit outside its sandbox (Codex asks to).
 
 To undo, delete the `sandbox` key and `permissions.blockReadsOutsideWorkingDirectories`
 from Claude Code's settings, and `default_permissions`, `[permissions.moat]` and
