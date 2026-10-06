@@ -364,3 +364,19 @@ fn atom_bound_holds_on_every_classification_path() {
     let few: Vec<String> = (0..10).map(|i| format!("./f{i}")).collect();
     assert_eq!(parsed(&format!("cat {}", few.join(" "))).len(), 11);
 }
+
+#[test]
+fn escaped_separator_words_do_not_break_pipelines() {
+    // escaped `&` words were
+    // trimmed as trailing operators and the pipeline slice went out of range.
+    for input in [r"Z;\&;\&", r"a | \|", r"x && \&&"] {
+        let atoms = parsed(input);
+        assert!(
+            atoms
+                .iter()
+                .any(|a| matches!(a, AtomicAction::Pipeline { .. })),
+            "{input}: {atoms:?}"
+        );
+    }
+    assert!(has_shell(&parsed(r"Z;\&;\&"), "&"));
+}

@@ -112,12 +112,52 @@ impl GlobPattern {
     }
 }
 
+/// Stands in for a literal backslash while matching one shell word. globset
+/// rewrites `\` to `/` in every candidate on Windows (it assumes paths), so a
+/// backslash would match nothing there; swapping it on both sides first makes
+/// shell words match byte for byte on every platform. It is ASCII because
+/// globset's character classes do not match characters outside it.
+const BACKSLASH: &str = "\u{1}";
+
+/// A glob for one shell word. A backslash escapes the next character on every
+/// platform, as in a POSIX shell, so `\\` is a literal backslash.
+#[derive(Debug, Clone)]
+struct WordGlob(GlobMatcher);
+
+impl WordGlob {
+    fn new(word: &str) -> Result<Self, globset::Error> {
+        let mut glob = String::with_capacity(word.len());
+        let mut chars = word.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\\' && chars.peek() == Some(&'\\') {
+                chars.next();
+                glob.push_str(BACKSLASH);
+            } else {
+                glob.push(c);
+            }
+        }
+        GlobBuilder::new(&glob)
+            .literal_separator(false)
+            .backslash_escape(true)
+            .build()
+            .map(|g| Self(g.compile_matcher()))
+    }
+
+    fn is_match(&self, word: &str) -> bool {
+        if word.contains('\\') {
+            self.0.is_match(word.replace('\\', BACKSLASH))
+        } else {
+            self.0.is_match(word)
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 enum Token {
     /// A bare `*`: matches zero or more argv tokens.
     Any,
     /// A glob matched against exactly one argv token, with its source text.
-    One(GlobMatcher, String),
+    One(WordGlob, String),
     /// A trailing `$`: argv must end here.
     End,
 }
@@ -176,10 +216,8 @@ impl ShellPattern {
                 if w == "*" {
                     return Ok(Token::Any);
                 }
-                GlobBuilder::new(w)
-                    .literal_separator(false)
-                    .build()
-                    .map(|g| Token::One(g.compile_matcher(), w.clone()))
+                WordGlob::new(w)
+                    .map(|g| Token::One(g, w.clone()))
                     .map_err(|e| PolicyError::BadGlob {
                         pattern: raw.to_owned(),
                         source: e,
@@ -275,7 +313,7 @@ fn has_glob_syntax(text: &str) -> bool {
 
 /// A glob covers a word when the word is literal and matches, the word is the
 /// same glob, or the glob is `prefix*` and the word starts with `prefix`.
-fn glob_covers(glob: &GlobMatcher, source: &str, word: &str) -> bool {
+fn glob_covers(glob: &WordGlob, source: &str, word: &str) -> bool {
     if !has_glob_syntax(word) {
         return glob.is_match(word);
     }
@@ -291,6 +329,18 @@ mod tests {
 
     fn argv(s: &str) -> Vec<String> {
         s.split_whitespace().map(str::to_owned).collect()
+    }
+
+    /// globset turns `\` into `/` in candidates on Windows; shell words are
+    /// not paths and must match the same everywhere.
+    #[test]
+    fn backslashes_in_shell_words_match_on_every_platform() {
+        let p = ShellPattern::compile(r"type 'C:\\temp\\*'").unwrap();
+        assert!(p.is_match(&argv(r"type C:\temp\notes.txt")));
+        assert!(!p.is_match(&argv("type C:/temp/notes.txt")));
+        let star = ShellPattern::compile(r"echo '\*'").unwrap();
+        assert!(star.is_match(&argv("echo *")));
+        assert!(!star.is_match(&argv("echo x")), "an escaped `*` is literal");
     }
 
     #[test]
