@@ -1,5 +1,6 @@
 //! Host hook installation.
 
+mod binary;
 mod hook_file;
 
 use std::path::PathBuf;
@@ -7,6 +8,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use moat_hosts::Host;
 
+pub use binary::{hook_binary, stale_hint};
 pub use hook_file::{HookState, Outcome};
 
 use crate::home::user_home;

@@ -1,13 +1,13 @@
 //! `moat doctor`: verify the installation and, from a terminal, accept changes.
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Result, bail};
 use moat_audit::Store;
 use moat_hosts::Host;
 
 use crate::cli::DoctorArgs;
 use crate::exit::Code;
 use crate::home::Home;
-use crate::install::{HookState, HostConfig};
+use crate::install::{HookState, HostConfig, stale_hint};
 use crate::integrity::{self, Lock};
 
 /// What a check is about, so accepting changes clears exactly the problems a
@@ -42,7 +42,7 @@ impl Report {
 
 pub fn run(args: &DoctorArgs) -> Result<Code> {
     let home = Home::locate()?;
-    let binary = std::env::current_exe().context("locating the moat binary")?;
+    let binary = crate::install::hook_binary()?;
     let mut report = Report {
         problems: Vec::new(),
     };
@@ -106,7 +106,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
                 Area::Binary,
                 false,
                 format!(
-                    "binary           lock expects {}, running {}",
+                    "binary           lock expects {}, running {}; run `moat init`",
                     lock.binary,
                     binary.display()
                 ),
@@ -161,7 +161,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
                 report.line(
                     Area::Hook,
                     false,
-                    format!("{name:<16} hook points at {command}; run `moat init`"),
+                    format!("{name:<16} {}", stale_hint(&command)),
                 );
             }
             HookState::Unreadable(e) => {

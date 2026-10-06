@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use moat_audit::Store;
 use moat_hosts::Host;
 
@@ -14,7 +14,7 @@ use crate::render;
 
 pub fn run() -> Result<Code> {
     let home = Home::locate()?;
-    let binary = std::env::current_exe().context("locating the moat binary")?;
+    let binary = crate::install::hook_binary()?;
     let mut healthy = true;
 
     println!("state directory  {}", home.root().display());
@@ -73,7 +73,7 @@ pub fn run() -> Result<Code> {
             }
             HookState::Stale { command } => {
                 healthy = false;
-                format!("✗ hook points at {command} (run `moat init`)")
+                format!("✗ {}", crate::install::stale_hint(&command))
             }
             HookState::Unreadable(error) => {
                 healthy = false;

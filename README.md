@@ -42,6 +42,11 @@ moat init                               # policy + audit log + hooks for every a
 moat status                             # confirm: policy, lock, hooks, audit
 ```
 
+Hooks record the stable path of the `moat` you ran (for Homebrew `<prefix>/bin/moat`, not
+the versioned `Cellar/moat/<version>` file), so upgrading through a package manager keeps
+them working; `moat doctor` names a hook whose binary is missing or is a different `moat`.
+Run `moat init` with the `moat` the hooks should use.
+
 That is the whole setup. `moat init` writes `~/.moat/policy.yaml`, pins it with a lock,
 and registers hooks with the agents it finds. It never overwrites an existing policy and
 never duplicates a hook, so it is safe to run again.

@@ -79,11 +79,7 @@ pub fn state(config: &HostConfig, binary: &Path) -> HookState {
             Some(entry) if *entry == desired_entry(config, spec, binary) => found += 1,
             Some(entry) => {
                 stale_command.get_or_insert_with(|| {
-                    entry
-                        .pointer("/hooks/0/command")
-                        .and_then(Value::as_str)
-                        .unwrap_or("?")
-                        .to_owned()
+                    hook_binary(entry, config).unwrap_or_else(|| "?".into())
                 });
             }
             None => {}
@@ -122,6 +118,23 @@ fn desired_entry(config: &HostConfig, spec: &HookSpec, binary: &Path) -> Value {
 fn cursor_command(config: &HostConfig, binary: &Path) -> String {
     let path = binary.to_string_lossy().replace('"', "\\\"");
     format!("\"{path}\" guard --host {}", config.host.id())
+}
+
+/// The binary one of our entries runs, unquoted from Cursor's shell string.
+fn hook_binary(entry: &Value, config: &HostConfig) -> Option<String> {
+    if config.format == HookFormat::Cursor {
+        let suffix = format!(" guard --host {}", config.host.id());
+        let quoted = entry
+            .get("command")?
+            .as_str()?
+            .trim_end()
+            .strip_suffix(&suffix)?;
+        return Some(quoted.trim().trim_matches('"').replace("\\\"", "\""));
+    }
+    entry
+        .pointer("/hooks/0/command")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
 }
 
 fn is_ours(entry: &Value, config: &HostConfig) -> bool {
@@ -256,7 +269,12 @@ mod tests {
         assert_eq!(entry["timeout"], 600);
         assert!(entry.get("args").is_none());
         let moved = Path::new("/usr/local/bin/moat");
-        assert!(matches!(state(&cfg, moved), HookState::Stale { .. }));
+        assert_eq!(
+            state(&cfg, moved),
+            HookState::Stale {
+                command: "/Applications/My Tools/moat".into()
+            }
+        );
         assert_eq!(install(&cfg, moved, false).unwrap(), Outcome::Updated);
         assert_eq!(
             root(&cfg)["hooks"]["beforeShellExecution"]
