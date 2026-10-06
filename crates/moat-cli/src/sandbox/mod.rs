@@ -68,20 +68,21 @@ fn with_read_roots(policy: &Policy) -> anyhow::Result<(Policy, bool)> {
     Ok((policy, filled))
 }
 
-/// The Seatbelt profile `moat run` applies in the current directory, with
-/// `proxy_port` as its only network destination.
+/// The Seatbelt profile `moat run` applies to a session in `ctx`: `grants`
+/// plus this process's temp directory.
 pub fn seatbelt_profile(
     policy: &Policy,
-    proxy_port: Option<u16>,
+    ctx: &EvalContext,
+    grants: seatbelt::Grants,
 ) -> anyhow::Result<seatbelt::Generated> {
     let (policy, _) = with_read_roots(policy)?;
-    let ir = moat_core::ir::lower(&policy, &crate::context::eval_context(None, None)?)?;
+    let ir = moat_core::ir::lower(&policy, ctx)?;
     let tmpdir = std::fs::canonicalize(std::env::temp_dir())
         .ok()
         .map(|dir| crate::context::path_string(&dir));
     Ok(seatbelt::generate(
         &ir,
-        &seatbelt::Grants { proxy_port, tmpdir },
+        &seatbelt::Grants { tmpdir, ..grants },
     ))
 }
 

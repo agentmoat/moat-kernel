@@ -4,6 +4,16 @@ use super::*;
 use crate::sandbox::assert_golden;
 
 fn generated(yaml: &str, proxy_port: Option<u16>) -> Generated {
+    let grants = Grants {
+        proxy_port,
+        tmpdir: Some("/private/var/folders/xy/T".into()),
+        program: Some("/Users/me/.local/share/agent/1.0/agent".into()),
+        writes: vec!["/Users/me/.agent".into()],
+    };
+    generated_with(yaml, &grants)
+}
+
+fn generated_with(yaml: &str, grants: &Grants) -> Generated {
     let policy = Policy::parse(yaml).expect("test policy lints");
     let ctx = EvalContext {
         home: "/Users/me".into(),
@@ -13,12 +23,10 @@ fn generated(yaml: &str, proxy_port: Option<u16>) -> Generated {
         cwd: "/Users/me/proj".into(),
         case_insensitive_paths: true,
     };
-    let ir = moat_core::ir::lower(&policy, &ctx).expect("lowers");
-    let grants = Grants {
-        proxy_port,
-        tmpdir: Some("/private/var/folders/xy/T".into()),
-    };
-    generate(&ir, &grants)
+    generate(
+        &moat_core::ir::lower(&policy, &ctx).expect("lowers"),
+        grants,
+    )
 }
 
 /// The profile and report for the default policy, as a reviewer reads them.
@@ -88,8 +96,26 @@ fn losses_and_allowances_are_listed() {
         "fs.read sandbox.read_roots",
         "fs.write seatbelt.tmpdir",
         "fs.read seatbelt.case",
+        "fs.read seatbelt.program",
+        "fs.write seatbelt.write",
     ] {
         assert!(rules.contains(&rule.to_owned()), "{rule}: {rules:?}");
+    }
+}
+
+#[test]
+fn run_grants_open_the_program_and_the_written_paths_but_deny_rules_win() {
+    let profile = generated(DEFAULT_POLICY, None).profile;
+    let program = r#"(allow file-read*
+  (literal "/Users/me/.local/share/agent/1.0/agent"))"#;
+    let write = profile
+        .find("(subpath \"/Users/me/.agent\")")
+        .expect("--write");
+    assert!(profile.contains(program), "{profile}");
+    assert!(write < profile.find("(deny file-").unwrap_or_default());
+    let bare = generated_with(DEFAULT_POLICY, &Grants::default());
+    for absent in ["seatbelt.program", "seatbelt.write", "seatbelt.tmpdir"] {
+        assert!(!bare.profile.contains(absent), "{absent}");
     }
 }
 

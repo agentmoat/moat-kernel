@@ -38,6 +38,7 @@ regex = "1"
 sha2 = "0.11"
 tempfile = "3"
 httparse = "1.10"
+signal-hook = { version = "0.4", default-features = false }
 toml_edit = { version = "0.25", default-features = false, features = ["parse", "display"] }
 zeroize = "1"
 

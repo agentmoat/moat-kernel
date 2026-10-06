@@ -32,6 +32,9 @@
   (literal "/dev/dtracehelper")
   (regex "^/dev/ttys[0-9][^/]*$")
   (subpath "/dev/fd"))
+; seatbelt.program
+(allow file-read*
+  (literal "/Users/me/.local/share/agent/1.0/agent"))
 ; allow project-fs (fs.read)
 (allow file-read*
   (subpath "/Users/me/proj"))
@@ -73,6 +76,9 @@
 ; seatbelt.tmpdir
 (allow file-read* file-write*
   (subpath "/private/var/folders/xy/T"))
+; seatbelt.write
+(allow file-read* file-write*
+  (subpath "/Users/me/.agent"))
 ; deny secrets-paths (fs.read)
 (deny file-read-data file-read-xattr
   (require-all
@@ -168,6 +174,8 @@
 ; wider: fs.read `seatbelt.metadata`: the existence, size and times of every file stay visible (stat); contents follow the rules
 ; wider: fs.read `seatbelt.platform`: every process reads these to start
 ; wider: fs.write `seatbelt.platform`: the devices every process writes
+; wider: fs.read `seatbelt.program`: the program `moat run` starts, which must be readable to start
 ; wider: fs.read `sandbox.read_roots`: the hook decides these reads by the rules (ask by default); OS layers allow them so commands can run, and deny rules still win
 ; wider: fs.write `seatbelt.tmpdir`: commands may read and write the temp directory; the hook asks
+; wider: fs.write `seatbelt.write`: `moat run --write`: commands may read and write these; deny rules still win
 ; wider: fs.read `seatbelt.case`: Seatbelt compares paths in their on-disk spelling, so a pattern spelled in another case than the file on disk does not match it

@@ -9,6 +9,7 @@ mod policy;
 mod proxy;
 mod replay;
 mod report;
+mod run;
 mod sandbox;
 mod show;
 mod status;
@@ -37,6 +38,7 @@ pub fn run(cli: Cli) -> Result<Code> {
             AuditCommand::Verify(args) => audit::verify(&args),
             AuditCommand::Report(args) => team::run(&args),
         },
+        Command::Run(args) => run::run(&args),
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),
             PolicyCommand::Check(args) => policy::check(&args),
