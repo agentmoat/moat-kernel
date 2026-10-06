@@ -7,11 +7,19 @@ use super::tables::{
 };
 use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
-use super::{decoders, git, invocation, make, operands, options};
+use super::{cwd, decoders, git, invocation, make, operands, options};
 use crate::action::AtomicAction;
 use crate::host;
 use crate::lexer::{self, Operator, Token, Word};
 use crate::paths;
+
+/// A simple command, or the opening or closing parenthesis of a subshell.
+#[derive(Debug)]
+enum Item {
+    Command(SimpleCommand),
+    Open,
+    Close,
+}
 
 /// One simple command: words (assignments + argv), its redirection targets and
 /// its stdin data.
@@ -51,17 +59,28 @@ pub(super) fn classify_into(
         return Err(ClassifyError::TooDeep);
     }
     let tokens = lexer::lex(command)?;
-    let commands = group_commands(&tokens);
-    for cmd in &commands {
-        classify_simple(cmd, ctx, sink, depth)?;
+    let mut dirs = ctx.cwd.to_vec();
+    let mut saved = Vec::new();
+    for item in group_commands(&tokens) {
+        match item {
+            Item::Open => saved.push(dirs.clone()),
+            Item::Close => dirs = saved.pop().unwrap_or(dirs),
+            Item::Command(cmd) => {
+                let here = ShellContext { cwd: &dirs, ..*ctx };
+                classify_simple(&cmd, &here, sink, depth)?;
+                let moved = cwd::targets(&cmd.words, &here);
+                cwd::merge(&mut dirs, moved)?;
+            }
+        }
     }
     push_pipelines(&tokens, sink)?;
     decoders::push(&tokens, sink)
 }
 
-/// Group tokens into simple commands. Subshell parentheses are flattened: the
-/// commands inside are governed exactly like top-level ones.
-fn group_commands(tokens: &[Token]) -> Vec<SimpleCommand> {
+/// Group tokens into simple commands. The commands inside subshell
+/// parentheses are governed exactly like top-level ones; the parentheses are
+/// kept only to scope `cd`.
+fn group_commands(tokens: &[Token]) -> Vec<Item> {
     let mut commands = Vec::new();
     let mut current = SimpleCommand::default();
     let mut pending_redirect: Option<Operator> = None;
@@ -71,7 +90,12 @@ fn group_commands(tokens: &[Token]) -> Vec<SimpleCommand> {
             Token::Operator(op) if op.is_separator() || op.is_grouping() => {
                 pending_redirect = None;
                 if !current.is_empty() {
-                    commands.push(std::mem::take(&mut current));
+                    commands.push(Item::Command(std::mem::take(&mut current)));
+                }
+                match op {
+                    Operator::OpenParen => commands.push(Item::Open),
+                    Operator::CloseParen => commands.push(Item::Close),
+                    _ => {}
                 }
             }
             Token::Operator(op) => pending_redirect = Some(*op),
@@ -101,7 +125,7 @@ fn group_commands(tokens: &[Token]) -> Vec<SimpleCommand> {
         }
     }
     if !current.is_empty() {
-        commands.push(current);
+        commands.push(Item::Command(current));
     }
     commands
 }
@@ -123,10 +147,10 @@ fn classify_simple(
         }
     }
     for r in &cmd.reads {
-        sink.push(AtomicAction::FsRead { path: ctx.path(r)? })?;
+        sink.read(ctx, r)?;
     }
     for w in &cmd.writes {
-        sink.push(AtomicAction::FsWrite { path: ctx.path(w)? })?;
+        sink.write(ctx, w)?;
     }
 
     let mut idx = 0;
@@ -170,9 +194,7 @@ fn classify_simple(
     if SOURCE_BUILTINS.contains(&program)
         && let Some(file) = argv.get(1)
     {
-        sink.push(AtomicAction::FsRead {
-            path: ctx.path(file)?,
-        })?;
+        sink.read(ctx, file)?;
     }
     classify_arguments(&argv, program, words, ctx, sink)?;
 
@@ -191,9 +213,7 @@ fn classify_simple(
             classify_into(code, ctx, sink, depth + 1)?;
         }
         if let Some(script) = run.script {
-            sink.push(AtomicAction::FsRead {
-                path: ctx.path(script)?,
-            })?;
+            sink.read(ctx, script)?;
         }
         return Ok(());
     }
@@ -333,10 +353,9 @@ fn classify_arguments(
         } else if program == "dd"
             && let Some((key, value)) = tok.split_once('=')
         {
-            let path = ctx.path(value)?;
             match key {
-                "if" => sink.push(AtomicAction::FsRead { path })?,
-                "of" => sink.push(AtomicAction::FsWrite { path })?,
+                "if" => sink.read(ctx, value)?,
+                "of" => sink.write(ctx, value)?,
                 _ => {}
             }
             continue;
@@ -353,12 +372,11 @@ fn classify_arguments(
             let is_write = WRITE_ALL_PATHS.contains(&program)
                 || in_place_edit
                 || (WRITE_LAST_PATH.contains(&program) && Some(i) == destination);
-            let path = ctx.path(file)?;
-            sink.push(if is_write {
-                AtomicAction::FsWrite { path }
+            if is_write {
+                sink.write(ctx, file)?;
             } else {
-                AtomicAction::FsRead { path }
-            })?;
+                sink.read(ctx, file)?;
+            }
         }
     }
     Ok(())
@@ -375,9 +393,7 @@ fn scan_payload(
         |c: char| c.is_whitespace() || matches!(c, '(' | ')' | ',' | ';' | '\'' | '"' | '`');
     for raw in payload.split(is_separator).filter(|s| !s.is_empty()) {
         if paths::looks_like_path(raw) {
-            sink.push(AtomicAction::FsRead {
-                path: ctx.path(raw)?,
-            })?;
+            sink.read(ctx, raw)?;
         } else if let Some(host) = host::of_word(raw) {
             sink.push(AtomicAction::Net { host })?;
         }

@@ -104,6 +104,8 @@ fn relative_operands_are_resolved_through_symlinks() {
         "head s/id_rsa",
         "grep -r . s/",
         "cat k",
+        "cd s && cat id_rsa",
+        "cd ~ && cat .ssh/id_rsa",
         "cp k out.txt",
     ] {
         assert_verdict(&sb, &project, command, "deny", "secrets-paths");

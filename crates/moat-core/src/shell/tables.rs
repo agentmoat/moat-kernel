@@ -168,6 +168,17 @@ pub const FILE_OPERANDS: &[&str] = &[
 /// Programs that only print their arguments; a `/` in them is text.
 pub const NO_FILE_OPERANDS: &[&str] = &["echo", "printf"];
 
+/// Words before a command that leave it running in the current shell, so a
+/// `cd` after them still moves it (`builtin cd`, `if cd x; then`, `{ cd x; }`).
+pub const CWD_PREFIXES: &[&str] = &[
+    "builtin", "command", "time", "{", "!", "if", "then", "else", "elif", "while", "until", "do",
+];
+
+/// Builtins that may move the shell somewhere the classifier cannot see
+/// (`cwd.rs`): `eval` and `source` may run a `cd`; `popd` returns to a
+/// directory pushed before this command line.
+pub const MAY_CHANGE_CWD: &[&str] = &["eval", "source", ".", "popd"];
+
 /// Special parameters that are not environment variables.
 pub const SPECIAL_PARAMS: &[char] = &['?', '$', '!', '#', '@', '*', '-', '0'];
 

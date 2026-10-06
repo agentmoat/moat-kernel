@@ -7,7 +7,6 @@
 
 use super::commands::classify_wrapped;
 use super::{ClassifyError, ShellContext, Sink};
-use crate::action::AtomicAction;
 
 /// `find` actions whose arguments, up to `;` or `+`, are a command to run.
 const FIND_EXEC: &[&str] = &["-exec", "-execdir", "-ok", "-okdir"];
@@ -52,9 +51,7 @@ pub(super) fn classify(
             None => None,
         };
         if let Some(path) = target.filter(|p| !p.is_empty() && *p != "-") {
-            sink.push(AtomicAction::FsWrite {
-                path: ctx.path(path)?,
-            })?;
+            sink.write(ctx, path)?;
         }
     }
     Ok(())

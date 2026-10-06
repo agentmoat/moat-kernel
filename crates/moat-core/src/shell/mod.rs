@@ -10,7 +10,7 @@
 //! | a decoder stage piped into an interpreter reading stdin (`decoders.rs`) | canonical `Pipeline { <decoder> -d \| <interpreter> }` |
 //! | leading `VAR=value`, `export`/`declare`/`set` assignments | `EnvSet` |
 //! | `$VAR` / `${VAR}` references, `printenv NAME` | `EnvRead` |
-//! | path-looking arguments, relative operands (`operands.rs`), `<` targets, `source`/`.` files | `FsRead` |
+//! | path-looking arguments, relative operands (`operands.rs`), `<` targets, `source`/`.` files | `FsRead`, one per directory `cd` may have moved to (`cwd.rs`) |
 //! | `>`/`>>`/`&>` targets, `tee`, destructive/destination args | `FsWrite` |
 //! | URLs with any host, bare dotted names under a known TLD, IPv4 literals (`crate::host`) | `Net` |
 //! | `$( … )`, backticks, `sh -c` (any option spelling, `invocation.rs`), `eval`, `xargs`, `sudo`, `env`, … | nested classification |
@@ -34,6 +34,7 @@
 //! `tables` holds the program lists that drive all of them.
 
 mod commands;
+mod cwd;
 mod decoders;
 mod git;
 mod invocation;
@@ -61,15 +62,27 @@ pub enum ParseOutcome {
 pub struct ShellContext<'a> {
     pub home: &'a str,
     pub project: Option<&'a str>,
-    pub cwd: &'a str,
+    /// Every directory the command may be running in: the session's working
+    /// directory, plus wherever an earlier `cd` may have moved (`cwd.rs`).
+    /// `None` is a directory that cannot be known (`cd "$X"`, `cd -`).
+    pub cwd: &'a [Option<String>],
 }
 
 impl ShellContext<'_> {
-    /// The canonical path a shell word names, or an error when it depends on a
-    /// directory that is not known (`~-`), which makes the command `ask`.
-    pub(crate) fn path(&self, word: &str) -> Result<String, ClassifyError> {
-        paths::resolve(word, self.home, self.project, Some(self.cwd))
-            .ok_or_else(|| ClassifyError::UnknownDirectory(word.to_owned()))
+    /// Every canonical path a shell word may name: one per possible working
+    /// directory for a relative word. An error when one of them is not known
+    /// (`~-`, or a relative word after `cd "$X"`), which makes the command `ask`.
+    pub(crate) fn paths(&self, word: &str) -> Result<Vec<String>, ClassifyError> {
+        if let Some(path) = paths::resolve(word, self.home, self.project, None) {
+            return Ok(vec![path]);
+        }
+        self.cwd
+            .iter()
+            .map(|cwd| {
+                paths::resolve(word, self.home, self.project, cwd.as_deref())
+                    .ok_or_else(|| ClassifyError::UnknownDirectory(word.to_owned()))
+            })
+            .collect()
     }
 }
 
@@ -77,6 +90,8 @@ impl ShellContext<'_> {
 pub const MAX_DEPTH: u8 = 4;
 /// Upper bound on atomic actions per command line, to bound work on hostile input.
 pub const MAX_ATOMS: usize = 2048;
+/// Upper bound on the directories one command line may be running in after `cd`.
+pub const MAX_DIRS: usize = 16;
 
 /// Classify a shell command string into atomic actions.
 #[must_use]
@@ -106,6 +121,8 @@ pub(crate) enum ClassifyError {
     ShellOption { program: String, option: String },
     #[error("`{0}` names a path relative to a directory that is not known")]
     UnknownDirectory(String),
+    #[error("`cd` may lead to more than {MAX_DIRS} directories")]
+    TooManyDirectories,
 }
 
 /// Accumulates atomic actions with de-duplication and a hard size bound.
@@ -126,6 +143,26 @@ impl Sink {
             return Err(ClassifyError::TooManyActions);
         }
         self.atoms.push(atom);
+        Ok(())
+    }
+
+    /// An `FsRead` for every path `word` may name.
+    pub(crate) fn read(&mut self, ctx: &ShellContext<'_>, word: &str) -> Result<(), ClassifyError> {
+        for path in ctx.paths(word)? {
+            self.push(AtomicAction::FsRead { path })?;
+        }
+        Ok(())
+    }
+
+    /// An `FsWrite` for every path `word` may name.
+    pub(crate) fn write(
+        &mut self,
+        ctx: &ShellContext<'_>,
+        word: &str,
+    ) -> Result<(), ClassifyError> {
+        for path in ctx.paths(word)? {
+            self.push(AtomicAction::FsWrite { path })?;
+        }
         Ok(())
     }
 }

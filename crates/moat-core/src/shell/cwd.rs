@@ -1,0 +1,180 @@
+//! Working directories moved to by `cd` and `pushd` within one command line.
+//!
+//! `cd ~/.ssh && cat id_rsa` reads `~/.ssh/id_rsa`, so relative paths after a
+//! `cd` resolve against its target. Whether a later command runs before or
+//! after the move (`cd x || cat y`, `false || cd x && cat y`, a failed `cd`
+//! before `;`) is not tracked: every directory the command line may be in is
+//! kept, and a relative path becomes one action per directory, so the
+//! strictest verdict covers all of them. A subshell `( … )` restores the set
+//! when it closes, and `$( … )`, `sh -c` and other nested commands start from
+//! the set in effect where they appear.
+//!
+//! A target that cannot be known (`cd "$DIR"`, `cd -`, `cd s*`, `popd`, and
+//! `eval` or `source`, which can run a `cd` of their own) adds an unknown
+//! directory: relative paths after it cannot be resolved and the command asks.
+//! Entering a directory reads nothing, so `cd` adds no action of its own beyond
+//! what any argument gets (a path-looking target is still an `fs.read`, as
+//! before); what is read after it is checked at its resolved location.
+//! `CDPATH` is not consulted.
+
+use super::tables::{CWD_PREFIXES, MAY_CHANGE_CWD};
+use super::tokens::assignment_name;
+use super::{ClassifyError, MAX_DIRS, ShellContext};
+use crate::lexer::Word;
+
+/// Add `moved` to the directories the command line may be in.
+pub(super) fn merge(
+    dirs: &mut Vec<Option<String>>,
+    moved: Vec<Option<String>>,
+) -> Result<(), ClassifyError> {
+    for dir in moved {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    if dirs.len() > MAX_DIRS {
+        return Err(ClassifyError::TooManyDirectories);
+    }
+    Ok(())
+}
+
+/// The directories the simple command `words`, run with `ctx`, may leave the
+/// shell in; empty when it does not move it.
+pub(super) fn targets(words: &[Word], ctx: &ShellContext<'_>) -> Vec<Option<String>> {
+    let mut rest = words
+        .iter()
+        .skip_while(|w| assignment_name(&w.text).is_some())
+        .skip_while(|w| CWD_PREFIXES.contains(&w.text.as_str()));
+    let Some(program) = rest.next().map(|w| w.text.as_str()) else {
+        return Vec::new();
+    };
+    if MAY_CHANGE_CWD.contains(&program) {
+        return vec![None];
+    }
+    if program != "cd" && program != "pushd" {
+        return Vec::new();
+    }
+    let mut options_ended = false;
+    let target = rest.find(|w| {
+        if !options_ended && w.text == "--" {
+            options_ended = true;
+            return false;
+        }
+        options_ended || !w.text.starts_with('-') || w.text == "-"
+    });
+    match target {
+        None if program == "cd" => vec![Some(ctx.home.to_owned())],
+        Some(word) if knowable(word) => ctx.paths(&word.text).map_or_else(
+            |_| vec![None],
+            |paths| paths.into_iter().map(Some).collect(),
+        ),
+        _ => vec![None],
+    }
+}
+
+/// A target whose text is the directory: no expansion, no glob, not `-` and
+/// not a `pushd +N` stack index.
+fn knowable(word: &Word) -> bool {
+    word.substitutions.is_empty()
+        && word.text != "-"
+        && !word.text.starts_with('+')
+        && !word.text.contains(['$', '`', '*', '?', '['])
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::action::AtomicAction;
+    use crate::shell::{ParseOutcome, ShellContext, classify};
+
+    fn classified(cmd: &str) -> ParseOutcome {
+        let cwd = [Some("/p".to_owned())];
+        let ctx = ShellContext {
+            home: "/Users/me",
+            project: Some("/p"),
+            cwd: &cwd,
+        };
+        classify(cmd, &ctx)
+    }
+
+    fn reads(cmd: &str) -> Vec<String> {
+        match classified(cmd) {
+            ParseOutcome::Parsed(atoms) => atoms
+                .into_iter()
+                .filter_map(|a| match a {
+                    AtomicAction::FsRead { path } => Some(path),
+                    _ => None,
+                })
+                .collect(),
+            ParseOutcome::Unparseable { reason } => panic!("`{cmd}`: {reason}"),
+        }
+    }
+
+    #[test]
+    fn relative_paths_follow_cd() {
+        for cmd in [
+            "cd ~/.ssh && cat id_rsa",
+            "cd /tmp; cd ~/.ssh && head id_rsa",
+            "cd -- ~/.ssh && cat id_rsa",
+            "cd -P ~/.ssh || cat id_rsa",
+            "builtin cd ~/.ssh; cat id_rsa",
+            "{ cd ~/.ssh; }; cat id_rsa",
+            "if cd ~/.ssh; then cat ./id_rsa; fi",
+            "pushd ~/.ssh && cat id_rsa",
+            "cd ~ && cat .ssh/id_rsa",
+            "cd && cat .ssh/id_rsa",
+            "cd ~/x && cd ../.ssh && cat id_rsa",
+            "cd ~/.ssh && echo $(cat id_rsa)",
+            "cd ~/.ssh && sh -c 'cat id_rsa'",
+            "(cd ~/.ssh && cat id_rsa)",
+        ] {
+            let r = reads(cmd);
+            assert!(
+                r.contains(&"/Users/me/.ssh/id_rsa".to_owned()),
+                "{cmd}: {r:?}"
+            );
+        }
+        let r = reads("cd src && cat main.rs");
+        assert!(r.contains(&"/p/src/main.rs".to_owned()), "{r:?}");
+    }
+
+    #[test]
+    fn subshells_restore_and_nothing_else_moves() {
+        for cmd in ["(cd ~/.ssh); cat id_rsa", "/bin/cd ~/.ssh; cat id_rsa"] {
+            let r = reads(cmd);
+            assert!(
+                !r.contains(&"/Users/me/.ssh/id_rsa".to_owned()),
+                "{cmd}: {r:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_targets_make_relative_paths_unresolvable() {
+        for cmd in [
+            "cd \"$DIR\" && cat id_rsa",
+            "cd - && cat id_rsa",
+            "cd $(dirname x) && cat id_rsa",
+            "cd s* && cat id_rsa",
+            "popd; cat id_rsa",
+            "pushd && cat id_rsa",
+            "pushd +1 && cat id_rsa",
+            "source env.sh && cat id_rsa",
+            "cd ~-/x && cat id_rsa",
+        ] {
+            assert!(
+                matches!(classified(cmd), ParseOutcome::Unparseable { .. }),
+                "{cmd}"
+            );
+        }
+        reads("cd \"$DIR\" && cat /etc/hosts && cargo test");
+    }
+
+    #[test]
+    fn directory_set_is_bounded() {
+        let many: Vec<String> = (0..super::MAX_DIRS).map(|i| format!("cd /d{i}")).collect();
+        assert!(matches!(
+            classified(&format!("{}; ls", many.join("; "))),
+            ParseOutcome::Unparseable { .. }
+        ));
+    }
+}
