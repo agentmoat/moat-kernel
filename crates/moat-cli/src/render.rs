@@ -72,6 +72,17 @@ pub fn json<T: Serialize + ?Sized>(value: &T) -> Result<()> {
     Ok(())
 }
 
+/// One compact JSON document per line, for exports a script reads line by line.
+pub fn json_lines<T: Serialize>(values: &[T]) -> Result<()> {
+    let mut out = io::BufWriter::new(io::stdout().lock());
+    for value in values {
+        serde_json::to_writer(&mut out, value)?;
+        writeln!(out)?;
+    }
+    out.flush()?;
+    Ok(())
+}
+
 /// A decision as `policy check --format json` reports it: `context` is always
 /// present so scripts need not special-case it.
 pub fn decision_json(decision: &Decision) -> Result<()> {

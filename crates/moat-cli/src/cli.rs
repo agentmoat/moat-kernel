@@ -41,6 +41,11 @@ pub enum Command {
     Report(ReportArgs),
     /// Run the default-deny egress proxy: only hosts the policy allows, every connection recorded.
     Proxy(ProxyArgs),
+    /// Export the audit log for review elsewhere.
+    Audit {
+        #[command(subcommand)]
+        command: AuditCommand,
+    },
     /// Inspect and test policy files.
     Policy {
         #[command(subcommand)]
@@ -180,6 +185,27 @@ pub struct ShowArgs {
     /// Output format.
     #[arg(long, value_enum, default_value_t = Format::Text)]
     pub format: Format,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AuditCommand {
+    /// Write events to stdout as JSON Lines, oldest first, each with its chain hashes.
+    Export(ExportArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ExportArgs {
+    /// Window start: all, today, yesterday, 12h, 7d, 2w or YYYY-MM-DD (UTC).
+    #[arg(long, default_value = "all")]
+    pub since: String,
+
+    /// Only this host.
+    #[arg(long, value_parser = parse_host)]
+    pub host: Option<Host>,
+
+    /// Only this session id.
+    #[arg(long)]
+    pub session: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
