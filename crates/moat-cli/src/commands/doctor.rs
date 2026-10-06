@@ -3,7 +3,7 @@
 use std::io::Write as _;
 
 use anyhow::{Result, bail};
-use moat_audit::Store;
+use moat_audit::{ChainReport, Store};
 use moat_hosts::Host;
 
 use crate::cli::DoctorArgs;
@@ -196,17 +196,9 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         }
     }
 
-    match Store::open_read_only(&home.audit_path()) {
-        Ok(store) => {
-            report.line(
-                Area::Audit,
-                true,
-                format!("audit log        {} events", store.count()?),
-            );
-        }
-        Err(e) => {
-            report.line(Area::Audit, false, format!("audit log        {e}"));
-        }
+    match Store::open_read_only(&home.audit_path()).and_then(|store| store.verify_chain()) {
+        Ok(chain) => audit_line(&mut report, &chain),
+        Err(e) => report.line(Area::Audit, false, format!("audit log        {e}")),
     }
 
     if args.accept {
@@ -247,4 +239,34 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
     )?;
     report.out.finish()?;
     Ok(Code::Usage)
+}
+
+/// The audit log line: event count and whether the hash chain holds.
+fn audit_line(report: &mut Report, chain: &ChainReport) {
+    if let Some(broken) = &chain.broken {
+        report.line(
+            Area::Audit,
+            false,
+            format!(
+                "audit log        hash chain broken at event {}: {}; keep the file as evidence",
+                broken.id,
+                broken.kind.describe()
+            ),
+        );
+        return;
+    }
+    report.line(
+        Area::Audit,
+        true,
+        format!(
+            "audit log        {} events, hash chain intact",
+            chain.events
+        ),
+    );
+    if chain.unchained > 0 {
+        report.note(&format!(
+            "audit log        {} events written before the hash chain existed are not covered",
+            chain.unchained
+        ));
+    }
 }

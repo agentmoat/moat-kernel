@@ -115,6 +115,17 @@ something the alpha claims to stop.
   the lock already pins, whatever the shell's environment, and `doctor`/`status` report
   an installed hook file the lock does not pin (#158).
 
+- **The audit chain is tamper-evident, not tamper-proof.** The hash chain
+  ([ARCHITECTURE.md](ARCHITECTURE.md) §7) makes an edit, a deletion or a reordering in the middle of the
+  log visible to `moat doctor`. It is unkeyed and lives in the file it protects, so
+  whoever can write `~/.moat/audit.db` (the user's account, or an allowed command
+  running as the user, see "Decide-only") can delete the newest events and leave a
+  valid shorter chain, or rewrite events and recompute every hash after them. Keeping
+  the head hash or count elsewhere on the same machine would need a second write on
+  every `guard` call and could be rewritten by the same attacker, so it is not done;
+  anchoring the head hash off the machine is #129. Events written before audit
+  schema 2 are not covered.
+
 ## 6. How the claims are tested
 
 - **Conformance suite.** `tests/conformance/{attacks,benign,ask}.yaml`: one tool

@@ -21,12 +21,12 @@ Specs: `docs/ARCHITECTURE.md` (crates, data flow, hooks, self-protection),
 |---|---|---|
 | `crates/moat-core` | policy model (`policy.rs`, `lint.rs`), lexer (`lexer/`), classifier (`shell/`), patterns (`pattern/`), URL hosts (`host.rs`), paths, engine, policy compiler (`ir/`), executable pins (`programs.rs`, `ProgramResolver`), symlink resolution (`realpath.rs`, `PathResolver`), actions, verdict | **pure**: no I/O, no `unsafe`, no internal deps; builds for `wasm32`; architecture tests enforce it |
 | `crates/moat-hosts` | host adapters: `pre_tool_use.rs` (Claude Code, Codex), `config_change.rs` (Claude Code), `cursor.rs`; `mcp.rs` (MCP arguments), `patch.rs` (Codex `apply_patch`) | translate payload ⇄ `Action`/`Decision`; never decide |
-| `crates/moat-audit` | SQLite store (`store.rs`), time-window and session queries (`query.rs`), redaction (`redact.rs`) | typed `thiserror` errors; redact before persisting; never log secrets |
+| `crates/moat-audit` | SQLite store (`store/`: schema, hash chain), time-window and session queries (`query.rs`), redaction (`redact.rs`) | typed `thiserror` errors; redact before persisting; never log secrets |
 | `crates/moat-cli` | the `moat` binary: `cli.rs` grammar, `commands/{init,guard,show,status,doctor,allow,replay,report,policy}.rs`, `install/{mod,hook_file,binary}.rs`, `home.rs`, `context.rs`, `project.rs`, `time.rs`, `environment.rs` (search-path snapshot), `realpath.rs` (symlink resolution), `integrity.rs` (policy lock), `approvals.rs` (grants and overlay), `terminal.rs` (terminal check), `render.rs`, `exit.rs` | the only crate that touches files, env, terminal; `anyhow` allowed; all user output goes through `render.rs` or the command module |
 | `crates/moat-core/policies/default-v1.yaml` | shipped default policy | every change needs a conformance fixture and a CHANGELOG line |
 | `tests/conformance/{attacks,benign,ask}.yaml` | executable security claims | ids unique, one action each, `rules` must appear in the decision; attacks and asks carry `threat: T1…T12`; `docs/COVERAGE.md` is generated from them (`MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`) and every threat needs an attack |
 | `tests/fixtures/hosts/<host>/*.json` | real host payloads | golden inputs; never include real tokens or personal paths |
-| `crates/*/tests/` | end-to-end tests of the binary in one target, `crates/moat-cli/tests/e2e/` (one module per area: `cli`, `guard`, `cursor`, `config_change`, `lock`, `install_path`, `approvals`, `allow`, `paths`, `replay_report`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
+| `crates/*/tests/` | end-to-end tests of the binary in one target, `crates/moat-cli/tests/e2e/` (one module per area: `cli`, `guard`, `cursor`, `config_change`, `lock`, `install_path`, `approvals`, `allow`, `audit`, `paths`, `replay_report`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
 | `docs/` | ARCHITECTURE, POLICY, THREAT_MODEL, ROADMAP, COVERAGE (generated), `adr/` | describe what the code does today; ADRs are immutable, superseded by new ADRs |
 | `scripts/ci/quality-gate.sh` | the one gate | CI and the pre-push hook run exactly this |
 
@@ -92,7 +92,7 @@ invariant moves. Put the saved time into enforcement (#119, #126).
 4. End-to-end test in `crates/moat-cli/tests/e2e/cli.rs` using an isolated `HOME`.
 
 ### Change the audit schema
-Bump `SCHEMA_VERSION` in `store.rs`, add a migration step, keep `Event` deserialisation backward compatible, and add a test that opens a database written by the previous version.
+Bump `SCHEMA_VERSION` in `store/schema.rs`, add a migration step, keep `Event` deserialisation backward compatible, and add a test that opens a database written by the previous version.
 
 ### Record a decision
 Copy the shape of `docs/adr/ADR-004-exit-code-contract.md`: Context, Decision, Consequences, status, date. Number sequentially. Never edit an accepted ADR; supersede it.
