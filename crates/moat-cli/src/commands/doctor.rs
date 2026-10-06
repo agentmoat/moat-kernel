@@ -4,6 +4,7 @@ use std::io::Write as _;
 
 use anyhow::{Result, bail};
 use moat_audit::{ChainReport, Store};
+use moat_core::Policy;
 use moat_hosts::Host;
 
 use crate::cli::DoctorArgs;
@@ -12,6 +13,9 @@ use crate::home::Home;
 use crate::install::{HookState, HostConfig, stale_hint};
 use crate::integrity::{self, HookPinGap, HookPins, Lock};
 use crate::render::Deferred;
+use crate::sandbox::{Plan, install as host_sandbox};
+
+use super::sandbox::write_report;
 
 /// What a check is about, so accepting changes clears exactly the problems a
 /// re-pin fixes.
@@ -23,7 +27,44 @@ enum Area {
     Binary,
     Environment,
     Hook,
+    Sandbox,
     Audit,
+}
+
+/// The Standard tier: each present host's sandbox settings against the policy,
+/// then what the translation loses or widens.
+fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>) {
+    let plan = match Plan::new(policy) {
+        Ok(plan) => plan,
+        Err(e) => {
+            report.line(Area::Sandbox, false, format!("sandbox          {e:#}"));
+            return;
+        }
+    };
+    for host in host_sandbox::HOSTS {
+        let name = host.display_name();
+        match host_sandbox::problems(host, &plan, lock) {
+            Ok(None) => continue,
+            Ok(Some(problems)) if problems.is_empty() => {
+                report.line(
+                    Area::Sandbox,
+                    true,
+                    format!("{name:<16} sandbox matches the policy"),
+                );
+            }
+            Ok(Some(problems)) => {
+                for problem in problems {
+                    report.line(
+                        Area::Sandbox,
+                        false,
+                        format!("{name:<16} sandbox: {problem}"),
+                    );
+                }
+            }
+            Err(e) => report.line(Area::Sandbox, false, format!("{name:<16} sandbox: {e:#}")),
+        }
+        let _ = write_report(&mut report.out, host_sandbox::report(host, &plan));
+    }
 }
 
 struct Report {
@@ -59,7 +100,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         format!("state directory  {}", home.root().display()),
     );
 
-    let policy_lints = match home.load_policy() {
+    let policy = match home.load_policy() {
         Ok(policy) => {
             let (deny, allow, ask) = policy.rule_count();
             report.line(
@@ -67,13 +108,14 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
                 true,
                 format!("policy           lints ({deny} deny, {allow} allow, {ask} ask)"),
             );
-            true
+            Some(policy)
         }
         Err(e) => {
             report.line(Area::Policy, false, format!("policy           {e:#}"));
-            false
+            None
         }
     };
+    let policy_lints = policy.is_some();
 
     let lock_path = home.lock_path();
     let lock = match Lock::load(&lock_path) {
@@ -194,6 +236,10 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
                 path.display()
             ));
         }
+    }
+
+    if let Some(policy) = &policy {
+        sandboxes(&mut report, policy, lock.as_ref());
     }
 
     match Store::open_read_only(&home.audit_path()).and_then(|store| store.verify_chain()) {

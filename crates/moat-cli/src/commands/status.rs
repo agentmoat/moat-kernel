@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::io::{self, Write as _};
+use std::path::Path;
 
 use anyhow::Result;
 use moat_audit::Store;
@@ -12,6 +13,7 @@ use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig};
 use crate::integrity::{self, HookPinGap, Lock};
+use crate::sandbox::{Plan, install as host_sandbox};
 use crate::{render, time};
 
 pub fn run() -> Result<Code> {
@@ -131,6 +133,10 @@ pub fn run() -> Result<Code> {
         )?;
     }
 
+    if let Ok(policy) = home.load_policy() {
+        healthy &= sandboxes(&mut out, &Plan::new(&policy)?, &lock_path)?;
+    }
+
     let audit_path = home.audit_path();
     if audit_path.is_file() {
         let store = Store::open_read_only(&audit_path)?;
@@ -151,4 +157,36 @@ pub fn run() -> Result<Code> {
     }
 
     Ok(if healthy { Code::Ok } else { Code::Usage })
+}
+
+/// One line per present host's sandbox (Standard tier); `false` on any problem.
+fn sandboxes(out: &mut impl io::Write, plan: &Plan, lock_path: &Path) -> Result<bool> {
+    let lock = Lock::load(lock_path).ok();
+    let mut healthy = true;
+    for host in host_sandbox::HOSTS {
+        let name = host.display_name();
+        match host_sandbox::problems(host, plan, lock.as_ref()) {
+            Ok(None) => {}
+            Ok(Some(problems)) if problems.is_empty() => {
+                let report = host_sandbox::report(host, plan);
+                writeln!(
+                    out,
+                    "{name:<16} ✔ sandbox matches the policy ({} stricter, {} wider: `moat sandbox show`)",
+                    report.losses.len(),
+                    report.allowances.len()
+                )?;
+            }
+            Ok(Some(problems)) => {
+                healthy = false;
+                for problem in problems {
+                    writeln!(out, "{name:<16} ✗ sandbox: {problem}")?;
+                }
+            }
+            Err(error) => {
+                healthy = false;
+                writeln!(out, "{name:<16} ✗ sandbox: {error:#}")?;
+            }
+        }
+    }
+    Ok(healthy)
 }
