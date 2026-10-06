@@ -81,6 +81,11 @@ pub struct Grants {
     pub proxy_port: Option<u16>,
     /// The temp directory, resolved, which commands may read and write.
     pub tmpdir: Option<String>,
+    /// The program `moat run` starts, resolved: it must be readable to start.
+    pub program: Option<String>,
+    /// Paths given to `moat run --write`, resolved, which commands may read
+    /// and write (the agent's own state).
+    pub writes: Vec<String>,
 }
 
 /// A generated profile.
@@ -127,6 +132,16 @@ pub fn generate(ir: &Enforcement, grants: &Grants) -> Generated {
         platform(&PLATFORM_WRITE),
         devices,
     );
+    if let Some(program) = &grants.program {
+        let message = "the program `moat run` starts, which must be readable to start";
+        p.grant(
+            read,
+            "seatbelt.program",
+            "file-read*",
+            vec![program.clone()],
+            message,
+        );
+    }
     p.allows(&ir.fs.read, "allow file-read*");
     for allowance in &ir.allowances {
         rule(
@@ -148,6 +163,11 @@ pub fn generate(ir: &Enforcement, grants: &Grants) -> Generated {
             vec![format!("{tmpdir}/**")],
             message,
         );
+    }
+    if !grants.writes.is_empty() {
+        let trees = grants.writes.iter().map(|w| format!("{w}/**")).collect();
+        let message = "`moat run --write`: commands may read and write these; deny rules still win";
+        p.grant(write, "seatbelt.write", both, trees, message);
     }
     rules(
         &mut p.profile,

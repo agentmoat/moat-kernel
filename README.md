@@ -227,8 +227,8 @@ for. The policy language, the full default policy and recipes are in
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |
 | `moat guard --host <id>` | the hook entry point; agents call it, you do not |
 
-Exit codes: 0 allow or success, 2 deny, 3 unresolved ask (`policy check`), 64 usage
-or configuration error. `moat guard` never exits 64: it denies with exit 2 instead,
+Exit codes: 0 allow or success, 1 the agent `moat run` started exited non-zero, 2 deny,
+3 unresolved ask (`policy check`), 64 usage or configuration error. `moat guard` never exits 64: it denies with exit 2 instead,
 so a broken hook blocks rather than fails open (ADR-004, ADR-015).
 
 ## Limits

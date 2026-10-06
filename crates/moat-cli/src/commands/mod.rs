@@ -8,6 +8,7 @@ mod policy;
 mod proxy;
 mod replay;
 mod report;
+mod run;
 mod sandbox;
 mod show;
 mod status;
@@ -28,6 +29,7 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Replay(args) => replay::run(&args),
         Command::Report(args) => report::run(&args),
         Command::Proxy(args) => proxy::run(&args),
+        Command::Run(args) => run::run(&args),
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),
             PolicyCommand::Check(args) => policy::check(&args),

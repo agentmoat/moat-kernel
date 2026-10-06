@@ -14,6 +14,7 @@ use crate::home::Home;
 use crate::install::HostConfig;
 use crate::integrity::{self, HookPins};
 use crate::render::{self, Deferred};
+use crate::sandbox::seatbelt::Grants;
 use crate::sandbox::{Plan, Report, claude, codex, codex_config_path, install, seatbelt_profile};
 
 /// One host's generated settings, ready to print.
@@ -28,7 +29,8 @@ struct Shown<'a> {
 pub fn show(args: &SandboxShowArgs) -> Result<Code> {
     let policy = Home::locate()?.load_policy()?;
     let plan = Plan::new(&policy)?;
-    let seatbelt = seatbelt_profile(&policy, None)?;
+    let ctx = crate::context::eval_context(None, None)?;
+    let seatbelt = seatbelt_profile(&policy, &ctx, Grants::default())?;
     let mut codex_doc = DocumentMut::new();
     codex::apply(&mut codex_doc, &plan.codex)?;
     let hosts = [
@@ -80,7 +82,8 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
     }
     writeln!(
         out,
-        "Seatbelt  Lightweight tier (macOS), for the project in this directory"
+        "Seatbelt  `moat run` in this directory (Lightweight tier, macOS), before it adds the \
+         agent, `--write` paths and its proxy's port"
     )?;
     writeln!(out, "{}", seatbelt.profile.trim_end())?;
     write_report(&mut out, &seatbelt.report)?;

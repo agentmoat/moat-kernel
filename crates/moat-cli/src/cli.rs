@@ -13,7 +13,8 @@ use moat_hosts::Host;
     long_about = "Decides what AI agents may do on this machine and records every decision.\n\
                   Alpha: decisions are not enforced by the operating system; an allowed\n\
                   command runs with your permissions.\n\
-                  Exit codes: 0 allow/ok, 2 deny, 3 ask (unresolved), 64 usage or configuration error\n\
+                  Exit codes: 0 allow/ok, 1 the agent `run` started failed, 2 deny, 3 ask (unresolved),\n\
+                  64 usage or configuration error\n\
                   (`guard` exits 2 instead, so a broken hook blocks rather than fails open)."
 )]
 pub struct Cli {
@@ -41,6 +42,9 @@ pub enum Command {
     Report(ReportArgs),
     /// Run the default-deny egress proxy: only hosts the policy allows, every connection recorded.
     Proxy(ProxyArgs),
+    /// Run an agent in a sandbox generated from the policy, its network only through
+    /// moat's proxy (Lightweight tier, ADR-018; macOS). The agent's own sandbox must be off.
+    Run(RunArgs),
     /// Inspect and test policy files.
     Policy {
         #[command(subcommand)]
@@ -150,6 +154,18 @@ pub struct ProxyArgs {
     /// Address to listen on. Must be a loopback address: the proxy serves this machine only.
     #[arg(long, default_value = "127.0.0.1:18080")]
     pub listen: std::net::SocketAddr,
+}
+
+#[derive(Debug, Args)]
+pub struct RunArgs {
+    /// A file or directory the agent and its commands may also read and write, such as
+    /// the agent's own state (`~/.claude`); deny rules still win. Repeatable.
+    #[arg(long = "write", value_name = "PATH")]
+    pub writes: Vec<PathBuf>,
+
+    /// The agent and its arguments, after `--`.
+    #[arg(required = true, last = true, value_name = "AGENT")]
+    pub command: Vec<std::ffi::OsString>,
 }
 
 #[derive(Debug, Args)]

@@ -3,7 +3,8 @@
 //!
 //! Starts only from an intact installation: the policy lock must match, so a
 //! tampered policy is never compiled into a long-running proxy. The policy is
-//! read once; restart the proxy after changing it.
+//! read once; restart the proxy after changing it. `moat run` serves the same
+//! proxy from a thread of its own.
 
 use std::io::Write as _;
 use std::net::TcpListener;
@@ -11,7 +12,7 @@ use std::sync::Mutex;
 
 use anyhow::{Context as _, Result, bail};
 use moat_audit::{NewEvent, Store};
-use moat_core::{Action, CompiledPolicy};
+use moat_core::{Action, CompiledPolicy, EvalContext, Policy};
 use moat_proxy::{Connection, Limits, Proxy, RecordError, Recorder, SystemResolver};
 
 use crate::cli::ProxyArgs;
@@ -27,24 +28,12 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
             args.listen
         );
     }
-    let home = Home::locate()?;
-    if !home.exists() {
-        bail!("{} does not exist; run `moat init`", home.root().display());
-    }
-    if let Some(drift) = integrity::violation(&home)? {
-        bail!("policy lock drift: {}", drift.reasons.join("; "));
-    }
-    let policy = home.load_policy()?;
-    let ctx = context::eval_context(None, None)?;
-    let compiled = CompiledPolicy::compile(&policy, &ctx)?;
-    let audit_path = home.audit_path();
-    let store = Store::open_existing(&audit_path)
-        .with_context(|| format!("opening {}", audit_path.display()))?;
-    let session = format!("proxy-{}", crate::time::now_ms());
-    let recorder = AuditLog {
-        store: Mutex::new(store),
-        session: session.clone(),
-    };
+    let home = installed()?;
+    let exit = Exit::open(
+        &home,
+        home.load_policy()?,
+        context::eval_context(None, None)?,
+    )?;
     let listener =
         TcpListener::bind(args.listen).with_context(|| format!("listening on {}", args.listen))?;
     let addr = listener
@@ -53,21 +42,70 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
     let mut stdout = std::io::stdout().lock();
     writeln!(
         stdout,
-        "moat proxy: listening on {addr} (audit session {session})"
+        "moat proxy: listening on {addr} (audit session {})",
+        exit.session()
     )?;
     stdout.flush()?;
     drop(stdout);
-
-    let limits = Limits::default();
-    let proxy = Proxy {
-        policy: &compiled,
-        resolver: &SystemResolver,
-        recorder: &recorder,
-        limits: &limits,
-        loopback_ok: &[],
-    };
-    proxy.serve(&listener).context("accepting connections")?;
+    exit.serve(&listener)?;
     Ok(Code::Ok)
+}
+
+/// The installation, refused when it is missing or its policy lock shows
+/// drift, so a tampered policy is never compiled into a sandbox or a proxy.
+pub(super) fn installed() -> Result<Home> {
+    let home = Home::locate()?;
+    if !home.exists() {
+        bail!("{} does not exist; run `moat init`", home.root().display());
+    }
+    if let Some(drift) = integrity::violation(&home)? {
+        bail!("policy lock drift: {}", drift.reasons.join("; "));
+    }
+    Ok(home)
+}
+
+/// What one proxy serves with: the policy and the audit log. It owns them, so
+/// `moat run` can serve from another thread.
+pub(super) struct Exit {
+    policy: Policy,
+    ctx: EvalContext,
+    recorder: AuditLog,
+}
+
+impl Exit {
+    /// Fails when the policy does not compile or the audit log cannot be opened.
+    pub(super) fn open(home: &Home, policy: Policy, ctx: EvalContext) -> Result<Self> {
+        CompiledPolicy::compile(&policy, &ctx)?;
+        let audit_path = home.audit_path();
+        let store = Store::open_existing(&audit_path)
+            .with_context(|| format!("opening {}", audit_path.display()))?;
+        Ok(Self {
+            policy,
+            ctx,
+            recorder: AuditLog {
+                store: Mutex::new(store),
+                session: format!("proxy-{}", crate::time::now_ms()),
+            },
+        })
+    }
+
+    /// The audit session the proxy records under.
+    pub(super) fn session(&self) -> &str {
+        &self.recorder.session
+    }
+
+    /// Serve `listener` until accepting fails.
+    pub(super) fn serve(&self, listener: &TcpListener) -> Result<()> {
+        let compiled = CompiledPolicy::compile(&self.policy, &self.ctx)?;
+        let proxy = Proxy {
+            policy: &compiled,
+            resolver: &SystemResolver,
+            recorder: &self.recorder,
+            limits: &Limits::default(),
+            loopback_ok: &[],
+        };
+        proxy.serve(listener).context("accepting connections")
+    }
 }
 
 /// Proxy decisions in the audit log: host `proxy`, the method as the tool, and

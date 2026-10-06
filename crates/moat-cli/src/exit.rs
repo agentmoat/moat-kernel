@@ -8,6 +8,9 @@ use moat_core::Verdict;
 pub enum Code {
     /// Success, or verdict `allow`.
     Ok = 0,
+    /// The program `moat run` started exited with another status or was
+    /// killed. Never a verdict.
+    Failed = 1,
     /// Verdict `deny`. Claude Code and Codex treat exit 2 as a blocking hook result.
     Deny = 2,
     /// Verdict `ask` that was not resolved; adapters treat it as deny.
