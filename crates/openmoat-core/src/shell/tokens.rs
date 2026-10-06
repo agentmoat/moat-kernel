@@ -1,7 +1,10 @@
 //! Recognisers for what a single shell word can name: an assignment or
 //! variable references. Hosts are recognised by `crate::host`.
 
+use std::ops::Range;
+
 use super::tables::{IGNORED_VARS, SPECIAL_PARAMS};
+use crate::lexer::Word;
 
 /// `NAME=value` or `NAME+=value` → `NAME`.
 pub fn assignment_name(word: &str) -> Option<&str> {
@@ -17,14 +20,26 @@ pub fn assignment_name(word: &str) -> Option<&str> {
         .then_some(name)
 }
 
+/// Names a shell word expands: [`env_refs`] of its text, skipping every `$`
+/// that came from single quotes.
+pub fn word_env_refs(word: &Word) -> Vec<String> {
+    expanded_refs(&word.text, &word.literal)
+}
+
 /// Names referenced as `$NAME` or `${NAME…}`, excluding special and positional
 /// parameters and well-known non-secret variables. Order-preserving, unique.
 pub fn env_refs(token: &str) -> Vec<String> {
+    expanded_refs(token, &[])
+}
+
+fn expanded_refs(token: &str, literal: &[Range<usize>]) -> Vec<String> {
     let is_name_char = |c: char| c.is_ascii_alphanumeric() || c == '_';
     let mut names: Vec<String> = Vec::new();
-    let mut rest = token;
-    while let Some(pos) = rest.find('$') {
-        rest = &rest[pos + 1..];
+    for (pos, _) in token.match_indices('$') {
+        if literal.iter().any(|span| span.contains(&pos)) {
+            continue;
+        }
+        let rest = &token[pos + 1..];
         let body = rest.strip_prefix('{').unwrap_or(rest);
         if body
             .chars()

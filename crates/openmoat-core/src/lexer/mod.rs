@@ -28,6 +28,7 @@ mod heredoc;
 mod tests;
 
 use std::fmt;
+use std::ops::Range;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
@@ -102,6 +103,9 @@ pub struct Word {
     pub text: String,
     /// True if any part of the word was quoted (affects glob/host heuristics).
     pub quoted: bool,
+    /// Byte ranges of `text` that came from single quotes: the shell does not
+    /// expand a `$` inside them, so it names no variable.
+    pub literal: Vec<Range<usize>>,
     /// Inner text of every `$( … )` / `` ` … ` `` found inside the word.
     pub substitutions: Vec<String>,
 }
@@ -223,8 +227,11 @@ impl Lexer {
                     }
                 }
                 '\'' => {
+                    // `$'…'` (ANSI-C quoting) decodes escapes such as `\x24`; its
+                    // text is not marked literal, so it is scanned as before.
+                    let ansi_c = self.pos > 0 && self.chars[self.pos - 1] == '$';
                     self.bump();
-                    self.single_quoted()?;
+                    self.single_quoted(ansi_c)?;
                 }
                 '"' => {
                     self.bump();
@@ -353,11 +360,19 @@ impl Lexer {
         self.push_operator(op);
     }
 
-    fn single_quoted(&mut self) -> Result<(), LexError> {
-        self.word().quoted = true;
+    fn single_quoted(&mut self, ansi_c: bool) -> Result<(), LexError> {
+        let word = self.word();
+        word.quoted = true;
+        let start = word.text.len();
         loop {
             match self.bump() {
-                Some('\'') => return Ok(()),
+                Some('\'') => {
+                    let word = self.word();
+                    if !ansi_c && word.text.len() > start {
+                        word.literal.push(start..word.text.len());
+                    }
+                    return Ok(());
+                }
                 Some(c) => self.word().text.push(c),
                 None => return Err(LexError::UnterminatedSingleQuote),
             }

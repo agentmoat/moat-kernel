@@ -5,7 +5,7 @@ use super::tables::{
     WRAPPER_OPTIONS_WITH_VALUE, WRAPPER_SUBCOMMANDS, WRAPPERS, WRAPPERS_WITH_VALUE,
     WRITE_ALL_PATHS, WRITE_LAST_PATH,
 };
-use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at};
+use super::tokens::{assignment_name, basename, env_refs, flag_payload, strip_at, word_env_refs};
 use super::{ClassifyError, MAX_DEPTH, ShellContext, Sink};
 use super::{cwd, decoders, git, invocation, make, operands, options, text};
 use crate::action::AtomicAction;
@@ -146,7 +146,7 @@ fn classify_simple(
         }
     }
     for w in &cmd.stdin {
-        for name in env_refs(&w.text) {
+        for name in word_env_refs(w) {
             sink.push(AtomicAction::EnvRead { name })?;
         }
     }
@@ -165,7 +165,7 @@ fn classify_simple(
         sink.push(AtomicAction::EnvSet {
             name: name.to_owned(),
         })?;
-        for name in env_refs(&word.text) {
+        for name in word_env_refs(word) {
             sink.push(AtomicAction::EnvRead { name })?;
         }
         idx += 1;
@@ -280,11 +280,14 @@ pub(super) fn classify_wrapped(
     if depth >= MAX_DEPTH {
         return Err(ClassifyError::TooDeep);
     }
+    // The wrapping command already recorded the variables these words expand,
+    // with their quoting; the inner words carry none, so they are not rescanned.
     let cmd = SimpleCommand {
         words: inner
             .iter()
             .map(|t| Word {
                 text: t.clone(),
+                literal: std::iter::once(0..t.len()).collect(),
                 ..Word::default()
             })
             .collect(),
@@ -363,7 +366,7 @@ fn classify_arguments(
     let options_end = argv.iter().position(|a| a == "--");
 
     for (i, (tok, word)) in argv.iter().zip(words).enumerate() {
-        for name in env_refs(tok) {
+        for name in word_env_refs(word) {
             sink.push(AtomicAction::EnvRead { name })?;
         }
         if program == "env"
