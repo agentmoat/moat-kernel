@@ -1,4 +1,4 @@
-use moat_core::{DEFAULT_POLICY, Policy};
+use openmoat_core::{DEFAULT_POLICY, Policy};
 use toml_edit::DocumentMut;
 
 use super::*;

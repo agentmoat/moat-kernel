@@ -4,8 +4,8 @@ use std::io::{self, Write as _};
 use std::path::PathBuf;
 
 use anyhow::Result;
-use moat_core::ir::{self, Access, Enforcement};
-use moat_core::{Action, CompiledPolicy, Decision, NoResolver, Policy, ProgramResolver};
+use openmoat_core::ir::{self, Access, Enforcement};
+use openmoat_core::{Action, CompiledPolicy, Decision, NoResolver, Policy, ProgramResolver};
 
 use crate::cli::{ActionKind, CheckArgs, CompileArgs, Format, LintArgs};
 use crate::context;
@@ -18,7 +18,7 @@ use crate::render;
 
 pub fn lint(args: &LintArgs) -> Result<Code> {
     let (policy, path) = load(args.file.clone())?;
-    let warnings = moat_core::lint::warnings(&policy);
+    let warnings = openmoat_core::lint::warnings(&policy);
     let mut out = io::stdout().lock();
     for warning in &warnings {
         writeln!(out, "warning: {warning}")?;

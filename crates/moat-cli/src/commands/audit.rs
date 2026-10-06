@@ -3,8 +3,8 @@
 use std::io::{self, Write as _};
 
 use anyhow::{Context as _, Result};
-use moat_audit::{ExportFilter, ExportReport};
-use moat_hosts::Host;
+use openmoat_audit::{ExportFilter, ExportReport};
+use openmoat_hosts::Host;
 
 use crate::cli::{ExportArgs, Format, VerifyArgs};
 use crate::exit::Code;
@@ -29,7 +29,7 @@ pub fn verify(args: &VerifyArgs) -> Result<Code> {
     let text = std::fs::read_to_string(&args.file)
         .with_context(|| format!("reading {}", args.file.display()))?;
     let anchor = args.anchor.as_deref().map(str::trim);
-    let report = moat_audit::verify_export(&text, anchor);
+    let report = openmoat_audit::verify_export(&text, anchor);
     match args.format {
         Format::Json => render::json(&report)?,
         Format::Text => verify_text(&report, anchor)?,

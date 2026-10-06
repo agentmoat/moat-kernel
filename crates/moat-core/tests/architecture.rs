@@ -1,6 +1,6 @@
 //! Architecture invariants for the trusted core (`docs/ARCHITECTURE.md` §1).
 //!
-//! `moat-core` must stay pure: no internal crates, no I/O or runtime crates.
+//! `openmoat-core` must stay pure: no internal crates, no I/O or runtime crates.
 //! The wasm32 build in CI catches most OS calls; `std::fs`/`std::env` still
 //! compile there, so the source scan below is what actually enforces purity.
 
@@ -17,7 +17,7 @@ fn core_depends_only_on_pure_crates() {
     for name in deps {
         assert!(
             ALLOWED_DEPENDENCIES.contains(&name.as_str()),
-            "moat-core gained dependency `{name}`; the core must stay free of I/O and internal crates"
+            "openmoat-core gained dependency `{name}`; the core must stay free of I/O and internal crates"
         );
     }
 }
@@ -29,7 +29,7 @@ fn core_forbids_unsafe() {
     let combined = fs::read_to_string(lib).unwrap() + &fs::read_to_string(root).unwrap();
     assert!(
         combined.contains("unsafe_code = \"forbid\"") || combined.contains("forbid(unsafe_code)"),
-        "unsafe must be forbidden for moat-core"
+        "unsafe must be forbidden for openmoat-core"
     );
 }
 
@@ -86,7 +86,7 @@ fn core_sources_do_no_io() {
     });
     assert!(
         offenders.is_empty(),
-        "moat-core must stay free of I/O; inject it from the CLI through a trait:\n{}",
+        "openmoat-core must stay free of I/O; inject it from the CLI through a trait:\n{}",
         offenders.join("\n")
     );
 }

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
-use moat_hosts::Host;
+use openmoat_hosts::Host;
 use toml_edit::DocumentMut;
 
 use super::{Plan, Report, claude, codex, codex_config_path};

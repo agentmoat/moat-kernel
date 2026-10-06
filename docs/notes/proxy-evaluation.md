@@ -101,7 +101,7 @@ Two options:
 | New crates | 100+ incl. tokio, rama alpha | Node runtime + npm | 1 (`httparse`) |
 | `deny.toml` change | wrappers + git source | n/a | none |
 | SNI = CONNECT host | not found | MITM path only | yes |
-| Same host matcher as `moat guard` | no (own globs) | no | yes (moat-core) |
+| Same host matcher as `moat guard` | no (own globs) | no | yes (openmoat-core) |
 | Code we must trust | ~830 KB | ~1 MB TS + runtime | ~1.5 k lines, fuzzed parsers |
 
 ## Recommendation
@@ -109,7 +109,7 @@ Two options:
 Choose **(c) on the standard library plus `httparse`**, in a new library crate,
 `crates/moat-proxy`. The CLI exposes it as `moat proxy`. Reasons:
 
-- It decides with moat-core's `CompiledPolicy`, so a host the proxy allows is exactly a host
+- It decides with openmoat-core's `CompiledPolicy`, so a host the proxy allows is exactly a host
   `moat guard` allows for a fetch (`fetch` and `net` lists, deny first).
 - It adds one dependency with no transitive crates, needs no `deny.toml` change and keeps the
   async-runtime ban intact.

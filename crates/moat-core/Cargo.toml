@@ -1,6 +1,6 @@
 [package]
-name = "moat-core"
-description = "Policy model and decision engine for agentmoat. Pure: no I/O, no OS calls."
+name = "openmoat-core"
+description = "Policy model and decision engine for OpenMoat. Pure: no I/O, no OS calls."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

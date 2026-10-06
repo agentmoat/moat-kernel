@@ -148,7 +148,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "moat-core"
+name = "openmoat-core"
 version = "0.1.0-alpha.0"
 dependencies = [
  "globset",
@@ -158,32 +158,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "moat-fuzz"
+name = "openmoat-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
- "moat-core",
- "moat-hosts",
- "moat-proxy",
+ "openmoat-core",
+ "openmoat-hosts",
+ "openmoat-proxy",
 ]
 
 [[package]]
-name = "moat-hosts"
+name = "openmoat-hosts"
 version = "0.1.0-alpha.0"
 dependencies = [
- "moat-core",
+ "openmoat-core",
  "serde",
  "serde_json",
  "thiserror",
 ]
 
 [[package]]
-name = "moat-proxy"
+name = "openmoat-proxy"
 version = "0.1.0-alpha.0"
 dependencies = [
  "httparse",
- "moat-core",
+ "openmoat-core",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
@@ -337,6 +338,12 @@ name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
+
+[[package]]
+name = "zeroize"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 
 [[package]]
 name = "zmij"

@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::ProgramResolver;
+use openmoat_core::ProgramResolver;
 use serde::{Deserialize, Serialize};
 
 use crate::context::path_string;

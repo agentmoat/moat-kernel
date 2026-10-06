@@ -1,4 +1,4 @@
-//! Symlink resolution of action paths for the engine (`moat_core::PathResolver`).
+//! Symlink resolution of action paths for the engine (`openmoat_core::PathResolver`).
 //!
 //! `moat guard` checks every path a tool call reads or writes where it really
 //! points as well as where it was written, so `cat ./s/id_rsa` after
@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use moat_core::PathResolver;
+use openmoat_core::PathResolver;
 
 use crate::context::path_string;
 

@@ -21,11 +21,11 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
-# moat-core must stay free of I/O and runtime crates (docs/ARCHITECTURE.md §1).
+# openmoat-core must stay free of I/O and runtime crates (docs/ARCHITECTURE.md §1).
 deny = [
-    { crate = "tokio", wrappers = ["moat-kernel"] },
-    { crate = "rusqlite", wrappers = ["moat-audit"] },
-    { crate = "reqwest", wrappers = ["moat-kernel"] },
+    { crate = "tokio", wrappers = ["openmoat"] },
+    { crate = "rusqlite", wrappers = ["openmoat-audit"] },
+    { crate = "reqwest", wrappers = ["openmoat"] },
 ]
 
 [sources]

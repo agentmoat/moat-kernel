@@ -22,7 +22,7 @@ backports before 1.0.
 ## Reporting
 
 Use GitHub's private advisory form:
-https://github.com/agentmoat/moat-kernel/security/advisories/new
+https://github.com/crocodile-labs/openmoat/security/advisories/new
 
 Do not open public issues or pull requests for bypasses. A useful report contains:
 
@@ -91,7 +91,7 @@ every attempt. Full version: `docs/THREAT_MODEL.md`.
 ## Verifying a release
 
 Releases will carry SHA-256 checksums and GitHub build provenance attestations. Verify a
-downloaded artefact with `gh attestation verify <file> --repo agentmoat/moat-kernel`
+downloaded artefact with `gh attestation verify <file> --repo crocodile-labs/openmoat`
 before installing it by hand.
 
 ## Hardening already in place

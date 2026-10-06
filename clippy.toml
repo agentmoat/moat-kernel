@@ -2,6 +2,8 @@ msrv = "1.95"
 too-many-lines-threshold = 200
 cognitive-complexity-threshold = 30
 too-many-arguments-threshold = 7
+# The product name in prose, not code; ".." keeps clippy's default list.
+doc-valid-idents = ["OpenMoat", ".."]
 disallowed-macros = [
     { path = "anyhow::anyhow", reason = "use `bail!`/`ensure!` in the CLI and typed `thiserror` errors in libraries" },
 ]

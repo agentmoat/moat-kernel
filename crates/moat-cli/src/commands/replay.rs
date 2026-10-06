@@ -1,8 +1,8 @@
 //! `moat replay`: what each agent session did, as a timeline.
 
 use anyhow::{Result, bail};
-use moat_audit::SessionSummary;
-use moat_hosts::Host;
+use openmoat_audit::SessionSummary;
+use openmoat_hosts::Host;
 
 use crate::cli::{Format, ReplayArgs};
 use crate::exit::Code;

@@ -4,7 +4,7 @@ use std::io::{self, Write as _};
 use std::path::PathBuf;
 
 use anyhow::{Result, bail};
-use moat_hosts::Host;
+use openmoat_hosts::Host;
 use serde_json::{Value, json};
 use toml_edit::DocumentMut;
 

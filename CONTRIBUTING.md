@@ -19,7 +19,7 @@ purpose; the detail lives in `docs/`.
 ## Setup
 
 ```bash
-git clone https://github.com/agentmoat/moat-kernel && cd moat-kernel
+git clone https://github.com/crocodile-labs/openmoat && cd openmoat
 git config core.hooksPath .githooks        # runs the quality gate before every push
 scripts/ci/quality-gate.sh                 # fmt, clippy -D warnings, doc, tests, policy lint
 ```
@@ -57,7 +57,7 @@ is pushed to `main` directly.
 
 Checks that must pass before merge (enforced by the `main` ruleset; names as shown on the
 PR): `macos-14`, `macos-15-intel`, `ubuntu-latest`, `windows-latest` (the quality gate),
-`moat-core builds for wasm32 (no I/O)`, `cargo-deny`, `crates package and build from
+`openmoat-core builds for wasm32 (no I/O)`, `cargo-deny`, `crates package and build from
 their tarballs`, `workflows (actionlint, zizmor)`, `conventional` (title) and
 `labels · size · risk · body` (pr-standards). The branch must be up to date with `main`
 (strict checks), so rebase before merging. `fuzz (smoke)` and `latency` run on every PR
@@ -97,9 +97,9 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
 - Commit and PR titles follow Conventional Commits:
   `feat`, `fix`, `sec`, `policy`, `host(claude-code)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`.
   Squash-merge; the PR title becomes the commit.
-- Library crates (`moat-core`, `moat-hosts`, `moat-audit`) use typed `thiserror`
+- Library crates (`openmoat-core`, `openmoat-hosts`, `openmoat-audit`) use typed `thiserror`
   errors and never print. `anyhow` and terminal output live only in `moat-cli`.
-- `moat-core` has no I/O, no `unsafe`, and no internal dependencies; CI builds it
+- `openmoat-core` has no I/O, no `unsafe`, and no internal dependencies; CI builds it
   for `wasm32` to prove it.
 - Files stay under 500 lines; functions under 200 (clippy enforces the latter).
 - Comments explain *why*. Code says *what*.
@@ -131,14 +131,14 @@ crash becomes a unit test or fixture next to the fix.
 `.github/workflows/release.yml` is driven by [dist](https://opensource.axo.dev/cargo-dist/)
 (config in `dist-workspace.toml`). A `v*` tag builds the seven targets, writes the shell and
 PowerShell installers, the Homebrew formula and `sha256.sum`, attests every file, creates
-the GitHub release, pushes `Formula/moat.rb` to `agentmoat/homebrew-tap` and, after an owner
+the GitHub release, pushes `Formula/moat.rb` to `crocodile-labs/homebrew-tap` and, after an owner
 approves the `release` environment, publishes the crates to crates.io. Pull requests that
 touch the manifests or the workflow run `dist plan` only. Running the workflow by hand
 (Actions → release → Run workflow) is a dry run: it builds every target and publishes nothing.
 
 1. Dry-run the workflow on `main` if the build changed since the last release.
 2. In a PR (`build: release vX.Y.Z-alpha.N`): bump `version` in `[workspace.package]` and
-   the three `moat-*` entries of `[workspace.dependencies]` in `Cargo.toml`, run
+   the four `openmoat-*` entries of `[workspace.dependencies]` in `Cargo.toml`, run
    `cargo check` to update `Cargo.lock`, move the `[Unreleased]` entries of `CHANGELOG.md`
    under `## [X.Y.Z-alpha.N] - YYYY-MM-DD`, and update the version in the README install
    commands. The release fails without that CHANGELOG section; its text becomes the
@@ -146,19 +146,19 @@ touch the manifests or the workflow run `dist plan` only. Running the workflow b
 3. After the merge, tag the merge commit: `git tag -s vX.Y.Z-alpha.N -m vX.Y.Z-alpha.N`
    and `git push origin vX.Y.Z-alpha.N`.
 4. Check the GitHub release and the tap commit, then approve the `release` environment in
-   the workflow run; `publish-crates` publishes moat-core, then moat-hosts and moat-audit,
-   then moat-kernel.
+   the workflow run; `publish-crates` publishes openmoat-core, then openmoat-hosts,
+   openmoat-audit and openmoat-proxy, then openmoat.
 
 The first crates.io publish is manual, because trusted publishing can only be configured
 for a crate that exists: reject the `release` deployment, run `cargo publish --locked
---workspace` from the tag with a short-lived token, then for each of the four crates add a
-trusted publisher on crates.io (GitHub, `agentmoat/moat-kernel`, workflow `release.yml`,
+--workspace` from the tag with a short-lived token, then for each of the five crates add a
+trusted publisher on crates.io (GitHub, `crocodile-labs/openmoat`, workflow `release.yml`,
 environment `release`), revoke the token and run `cargo logout`. Later releases need no
 crates.io token.
 
 One-time repository setup: a `release` environment with the maintainer as required
 reviewer and deployments limited to `v*` tags, and `HOMEBREW_TAP_TOKEN`, a fine-grained
-token with contents write on `agentmoat/homebrew-tap` only (the tap needs one commit).
+token with contents write on `crocodile-labs/homebrew-tap` only (the tap needs one commit).
 
 ## Decisions
 

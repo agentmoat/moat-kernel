@@ -2,7 +2,7 @@
 # Source of truth for repository labels. Idempotent: run after editing.
 #   scripts/ci/sync-labels.sh [owner/repo]
 set -euo pipefail
-repo="${1:-agentmoat/moat-kernel}"
+repo="${1:-crocodile-labs/openmoat}"
 
 label() { # name color description
     gh label create "$1" --repo "$repo" --color "$2" --description "$3" --force >/dev/null

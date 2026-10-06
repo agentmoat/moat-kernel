@@ -4,7 +4,7 @@
 //! cannot be recorded is not made. The CLI records into the moat audit log;
 //! this crate stays free of storage.
 
-use moat_core::Decision;
+use openmoat_core::Decision;
 
 /// One connection decision.
 #[derive(Debug, Clone, Copy)]

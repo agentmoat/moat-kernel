@@ -9,7 +9,7 @@ all in one audit log.
 ## Run it
 
 ```bash
-cargo build -p moat-kernel
+cargo build -p openmoat
 scripts/demo/launch-demo.sh                # or: scripts/demo/launch-demo.sh path/to/moat
 DEMO_PACE=0 scripts/demo/launch-demo.sh    # no pauses
 ```

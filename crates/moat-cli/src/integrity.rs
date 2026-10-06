@@ -12,7 +12,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::{Decision, Verdict};
+use openmoat_core::{Decision, Verdict};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
@@ -112,7 +112,7 @@ fn state_files(home: &Home) -> Vec<PathBuf> {
 /// Hook files with a current `moat` hook under this shell's environment.
 pub fn installed_hook_files(binary: &Path) -> Result<Vec<PathBuf>> {
     let mut paths = Vec::new();
-    for host in moat_hosts::Host::ALL {
+    for host in openmoat_hosts::Host::ALL {
         let config = HostConfig::for_host(host)?;
         if config.state(binary) == HookState::Installed {
             paths.push(config.settings_path);

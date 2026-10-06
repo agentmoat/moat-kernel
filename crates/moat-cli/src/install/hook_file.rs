@@ -217,7 +217,7 @@ pub fn read_or_empty(path: &Path) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use moat_hosts::Host;
+    use openmoat_hosts::Host;
 
     const SPECS: &[HookSpec] = &[
         HookSpec {

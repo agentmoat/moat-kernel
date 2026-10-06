@@ -80,7 +80,7 @@ jobs:
           exclude_comments_by_actor: "*[bot]"
           claude_args: >-
             --max-turns 60
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr checks:*)${{ github.event_name == 'pull_request' && ',Bash(scripts/ci/quality-gate.sh),Bash(cargo test:*),Bash(cargo clippy:*),Bash(cargo run --quiet -p moat-kernel -- policy:*)' || '' }}"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr checks:*)${{ github.event_name == 'pull_request' && ',Bash(scripts/ci/quality-gate.sh),Bash(cargo test:*),Bash(cargo clippy:*),Bash(cargo run --quiet -p openmoat -- policy:*)' || '' }}"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
@@ -93,7 +93,7 @@ jobs:
             definition of done (6) are the review standard. Then `gh pr view` and `gh pr diff`.
             The PR branch is checked out. On same-repository PRs you may run
             `scripts/ci/quality-gate.sh`, `cargo test`, `cargo clippy` and
-            `cargo run --quiet -p moat-kernel -- policy check …` to verify a claim instead of
+            `cargo run --quiet -p openmoat -- policy check …` to verify a claim instead of
             guessing; on comment-triggered reviews only the read-only `gh` tools are available,
             so reason from the diff and say what you could not verify. Never modify files,
             never push.
@@ -104,7 +104,7 @@ jobs:
                re-pin only from a terminal, nothing secret written to the audit log.
             2. Fail-open paths: a new `Ok(())`, default, `unwrap_or`, early `return`, or
                ignored error that lets an action through when something is wrong.
-            3. Core purity: `moat-core` gains no I/O, `unsafe`, or dependency; host adapters
+            3. Core purity: `openmoat-core` gains no I/O, `unsafe`, or dependency; host adapters
                do not decide; library crates do not print.
             4. Shell and path handling: quoting, nesting, wrappers, redirects, `..`, symlinks,
                Windows `C:/` roots, UNC paths; anything an agent could phrase differently to

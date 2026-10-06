@@ -12,7 +12,7 @@
 //! Values are zeroed when dropped and never formatted: [`Debug`] and every
 //! reason this module writes name the secret's id and host only.
 
-use moat_core::{Decision, Secret, Verdict};
+use openmoat_core::{Decision, Secret, Verdict};
 use zeroize::Zeroizing;
 
 /// Rule id for a request refused because it carries a brokered secret to a

@@ -1,5 +1,5 @@
 //! Conformance suite: every fixture in `tests/conformance/*.yaml` is evaluated
-//! against the shipped default policy (`moat_core::DEFAULT_POLICY`), with the
+//! against the shipped default policy (`openmoat_core::DEFAULT_POLICY`), with the
 //! fixture's repository policy merged in when it names one. A fixture passes
 //! when the verdict matches and every expected rule id is present in the decision.
 //! A fixture with `session` is decided with the taint its earlier calls leave
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use std::collections::BTreeMap;
 
-use moat_core::{
+use openmoat_core::{
     Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, MapPathResolver, MapResolver, Policy,
     RepoPolicy, Taint, TaintSecret, Verdict,
 };
@@ -318,7 +318,7 @@ const THREATS: [(&str, &str); 12] = [
 
 /// Every attack and ask fixture names a known threat, every threat has at least
 /// one attack fixture, and `docs/COVERAGE.md` is the table generated from them.
-/// Regenerate with `MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`.
+/// Regenerate with `MOAT_UPDATE_COVERAGE=1 cargo test -p openmoat-core --test conformance`.
 #[test]
 fn threat_coverage_is_complete_and_documented() {
     let root = repo_root();
@@ -355,7 +355,7 @@ fn threat_coverage_is_complete_and_documented() {
     let mut doc = String::from(
         "# Threat coverage\n\n\
          Generated from `tests/conformance/*.yaml` by the conformance suite; do not edit.\n\
-         Regenerate with `MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`.\n\
+         Regenerate with `MOAT_UPDATE_COVERAGE=1 cargo test -p openmoat-core --test conformance`.\n\
          Threat classes are defined in `docs/THREAT_MODEL.md` §3. A fixture is one tool call and\n\
          the verdict and rule ids the default policy must produce for it.\n\n\
          | Threat | Class | Attacks | Asks | Benign |\n|---|---|---|---|---|\n",
@@ -390,6 +390,6 @@ fn threat_coverage_is_complete_and_documented() {
     assert!(
         current.replace("\r\n", "\n") == doc,
         "docs/COVERAGE.md is out of date; run \
-         `MOAT_UPDATE_COVERAGE=1 cargo test -p moat-core --test conformance`"
+         `MOAT_UPDATE_COVERAGE=1 cargo test -p openmoat-core --test conformance`"
     );
 }

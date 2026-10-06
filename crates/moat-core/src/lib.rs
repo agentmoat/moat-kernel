@@ -1,4 +1,4 @@
-//! `moat-core`: the trusted decision core of agentmoat.
+//! `openmoat-core`: the trusted decision core of OpenMoat.
 //!
 //! This crate is **pure**: it performs no I/O and makes no OS calls. Callers
 //! (the CLI, host adapters) read files, resolve the environment and pass

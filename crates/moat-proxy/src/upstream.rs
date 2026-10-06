@@ -8,7 +8,7 @@ use std::io;
 use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs as _};
 use std::time::Duration;
 
-use moat_core::{CompiledPolicy, Decision, Verdict};
+use openmoat_core::{CompiledPolicy, Decision, Verdict};
 
 use crate::decide::{self, Forbidden, RULE_ADDRESS, RULE_UPSTREAM};
 

@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use libfuzzer_sys::fuzz_target;
-use moat_core::{
+use openmoat_core::{
     Action, CompiledPolicy, Defaults, EvalContext, Policy, RuleGroup, Verdict, literal_shell_pattern,
 };
 
@@ -36,6 +36,7 @@ fuzz_target!(|data: &[u8]| {
         approval: None,
         executables: BTreeMap::new(),
         sandbox: None,
+        secrets: Vec::new(),
         repo_ask: Vec::new(),
     };
     if let Err(e) = policy.lint() {

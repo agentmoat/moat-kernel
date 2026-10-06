@@ -13,8 +13,8 @@
 //! - `network.domains` is enforced by Codex's proxy (`features.network_proxy`).
 
 use anyhow::Result;
-use moat_core::ir::{Access, Effect, Enforcement};
-use moat_core::{AtomicAction, Kind};
+use openmoat_core::ir::{Access, Effect, Enforcement};
+use openmoat_core::{AtomicAction, Kind};
 use toml_edit::{Item, Table, value};
 
 use super::patterns::{Spot, domain, is_below, literal_tree, split, spot};

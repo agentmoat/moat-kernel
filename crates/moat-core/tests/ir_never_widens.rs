@@ -8,8 +8,8 @@
 
 use std::fmt::Write as _;
 
-use moat_core::ir::{Effect, lower};
-use moat_core::{AtomicAction, CompiledPolicy, EvalContext, Policy, Verdict};
+use openmoat_core::ir::{Effect, lower};
+use openmoat_core::{AtomicAction, CompiledPolicy, EvalContext, Policy, Verdict};
 
 struct Rng(u64);
 

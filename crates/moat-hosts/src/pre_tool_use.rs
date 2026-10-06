@@ -4,7 +4,7 @@
 //! Output: JSON on stdout with `hookSpecificOutput.permissionDecision`
 //! (`allow` | `deny` | `ask`) and a reason the model gets to see.
 
-use moat_core::{Action, Decision};
+use openmoat_core::{Action, Decision};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -150,7 +150,7 @@ pub(crate) fn render(decision: &Decision) -> String {
 
 #[cfg(test)]
 mod tests {
-    use moat_core::Verdict;
+    use openmoat_core::Verdict;
 
     use super::*;
 

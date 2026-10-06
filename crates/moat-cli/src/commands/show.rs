@@ -1,7 +1,7 @@
 //! `moat show`: inspect audit events.
 
 use anyhow::{Result, bail};
-use moat_audit::{Event, EventId};
+use openmoat_audit::{Event, EventId};
 
 use crate::cli::{Format, ShowArgs};
 use crate::exit::Code;

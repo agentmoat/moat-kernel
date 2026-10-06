@@ -19,8 +19,8 @@ pub mod landlock;
 mod patterns;
 pub mod seatbelt;
 
-use moat_core::ir::{Access, Allowance, Effect, Enforcement, Loss};
-use moat_core::{EvalContext, Policy, PolicyError};
+use openmoat_core::ir::{Access, Allowance, Effect, Enforcement, Loss};
+use openmoat_core::{EvalContext, Policy, PolicyError};
 use serde::Serialize;
 
 /// Stand-in for the session's project in a host-wide lowering. Never a real
@@ -35,7 +35,7 @@ pub fn lower_for_hosts(
     real_home: Option<String>,
     case_insensitive_paths: bool,
 ) -> Result<Enforcement, PolicyError> {
-    moat_core::ir::lower(
+    openmoat_core::ir::lower(
         policy,
         &EvalContext {
             home: home.to_owned(),
@@ -65,7 +65,7 @@ fn with_read_roots(policy: &Policy) -> anyhow::Result<(Policy, bool)> {
     let mut policy = policy.clone();
     let filled = policy.sandbox.is_none();
     if filled {
-        policy.sandbox = Policy::parse(moat_core::DEFAULT_POLICY)?.sandbox;
+        policy.sandbox = Policy::parse(openmoat_core::DEFAULT_POLICY)?.sandbox;
     }
     Ok((policy, filled))
 }
@@ -96,7 +96,7 @@ fn lower_for_session(
         .ok()
         .map(|dir| crate::context::path_string(&dir));
     Ok((
-        moat_core::ir::lower(&policy, ctx)?,
+        openmoat_core::ir::lower(&policy, ctx)?,
         Grants { tmpdir, ..grants },
     ))
 }
@@ -123,7 +123,7 @@ pub fn landlock_rules(
 
 /// Codex's `config.toml`, next to the hook file (`$CODEX_HOME` or `~/.codex`).
 pub fn codex_config_path() -> anyhow::Result<std::path::PathBuf> {
-    let hooks = crate::install::HostConfig::for_host(moat_hosts::Host::Codex)?.settings_path;
+    let hooks = crate::install::HostConfig::for_host(openmoat_hosts::Host::Codex)?.settings_path;
     Ok(hooks.with_file_name("config.toml"))
 }
 
@@ -139,7 +139,7 @@ impl Plan {
             crate::context::CASE_INSENSITIVE_PATHS,
         )?;
         let mut claude = claude::generate(&ir)?;
-        let claude_settings = install::settings_path(moat_hosts::Host::ClaudeCode)?;
+        let claude_settings = install::settings_path(openmoat_hosts::Host::ClaudeCode)?;
         claude::protect(&mut claude, &claude_settings);
         let mut codex = codex::generate(&ir)?;
         if let Some(codex_home) = codex_config_path()?.parent() {
@@ -163,7 +163,7 @@ pub struct Report {
 }
 
 impl Report {
-    fn loss(&mut self, kind: moat_core::Kind, rule: &str, message: String) {
+    fn loss(&mut self, kind: openmoat_core::Kind, rule: &str, message: String) {
         let loss = Loss {
             kind,
             rule: rule.to_owned(),
@@ -176,7 +176,7 @@ impl Report {
 
     fn allowance(
         &mut self,
-        kind: moat_core::Kind,
+        kind: openmoat_core::Kind,
         rule: &str,
         patterns: Vec<String>,
         message: &str,
@@ -194,12 +194,12 @@ impl Report {
     fn proxy_only(&mut self, net: &Access) {
         if net.default == Effect::Allow {
             let message = "every host is reachable only through moat's proxy";
-            self.loss(moat_core::Kind::Net, "default.net", message.into());
+            self.loss(openmoat_core::Kind::Net, "default.net", message.into());
         }
         for rule in &net.allow {
             let message = "these hosts are reachable only through moat's proxy: a program that \
                            ignores HTTP(S)_PROXY cannot reach them";
-            self.loss(moat_core::Kind::Net, &rule.id, message.into());
+            self.loss(openmoat_core::Kind::Net, &rule.id, message.into());
         }
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! An adapter translates a host payload into a [`HookRequest`] and a
 //! [`Decision`] back into the host's response document. Adapters never
-//! decide; `moat-core` does.
+//! decide; `openmoat-core` does.
 
 #![warn(missing_docs)]
 
@@ -17,7 +17,7 @@ pub use config_change::proposal_target;
 use std::fmt;
 use std::str::FromStr;
 
-use moat_core::{Action, Decision, Verdict};
+use openmoat_core::{Action, Decision, Verdict};
 use serde_json::Value;
 use thiserror::Error;
 

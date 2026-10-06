@@ -41,7 +41,7 @@ fn export_writes_one_chained_redacted_line_per_event() {
     let lines = export(&sb, &[]);
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["format"], "moat-audit-export-v1");
-    assert_eq!(lines[0]["prev_hash"], moat_audit::GENESIS);
+    assert_eq!(lines[0]["prev_hash"], openmoat_audit::GENESIS);
     for pair in lines.windows(2) {
         assert_eq!(pair[1]["prev_hash"], pair[0]["hash"]);
     }

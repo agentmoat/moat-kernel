@@ -8,8 +8,8 @@
 mod keychain;
 
 use anyhow::{Context as _, Result};
-use moat_core::{Secret, SecretSource};
-use moat_proxy::Broker;
+use openmoat_core::{Secret, SecretSource};
+use openmoat_proxy::Broker;
 use zeroize::Zeroizing;
 
 /// A broker holding the value of every secret in `secrets`. `home` is the
@@ -49,7 +49,7 @@ fn read(source: &SecretSource, home: &str) -> Result<Zeroizing<String>> {
 
 #[cfg(test)]
 mod tests {
-    use moat_core::Policy;
+    use openmoat_core::Policy;
 
     use super::*;
 

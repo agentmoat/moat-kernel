@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::{Command, ExitStatus};
 
 use anyhow::Result;
-use moat_core::{EvalContext, Policy};
+use openmoat_core::{EvalContext, Policy};
 
 use crate::sandbox::{Grants, Report, seatbelt_profile};
 

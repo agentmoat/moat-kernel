@@ -1,7 +1,7 @@
 //! `moat report`: how the policy behaved over a window.
 
 use anyhow::Result;
-use moat_hosts::Host;
+use openmoat_hosts::Host;
 
 use crate::cli::{Format, ReportArgs};
 use crate::exit::Code;

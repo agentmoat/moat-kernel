@@ -11,7 +11,7 @@ use landlock::{
     ABI, Access, AccessFs, AccessNet, CompatLevel, Compatible, NetPort, Ruleset, RulesetAttr,
     RulesetCreated, RulesetCreatedAttr, RulesetError, Scope, path_beneath_rules,
 };
-use moat_core::{EvalContext, Policy};
+use openmoat_core::{EvalContext, Policy};
 
 use crate::sandbox::{Grants, Report, landlock_rules};
 

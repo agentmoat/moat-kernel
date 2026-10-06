@@ -1,6 +1,6 @@
 [package]
-name = "moat-audit"
-description = "Append-only local audit log for agentmoat decisions (SQLite, WAL, redacted)."
+name = "openmoat-audit"
+description = "Append-only local audit log for OpenMoat decisions (SQLite, WAL, redacted)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-moat-core.workspace = true
+openmoat-core.workspace = true
 rusqlite.workspace = true
 regex.workspace = true
 serde.workspace = true

@@ -3,7 +3,7 @@
 use std::io::Write as _;
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::{Action, Verdict};
+use openmoat_core::{Action, Verdict};
 
 use crate::approvals::{GRANT_TTL_MS, Grants, Overlay};
 use crate::cli::AllowArgs;
@@ -88,7 +88,7 @@ fn warn_if_shadowed(home: &Home, id: &str, out: &mut Deferred) -> Result<()> {
     let Ok(policy) = home.load_policy() else {
         return Ok(());
     };
-    for warning in moat_core::lint::warnings(&policy) {
+    for warning in openmoat_core::lint::warnings(&policy) {
         if warning.rule == id {
             writeln!(out, "warning: {warning}")?;
         }

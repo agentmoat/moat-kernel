@@ -1,4 +1,4 @@
-use moat_core::{Action, Decision, Verdict};
+use openmoat_core::{Action, Decision, Verdict};
 
 use super::*;
 

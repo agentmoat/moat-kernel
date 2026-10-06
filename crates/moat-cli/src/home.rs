@@ -5,7 +5,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use moat_core::{DEFAULT_POLICY, Policy};
+use openmoat_core::{DEFAULT_POLICY, Policy};
 
 use crate::context;
 
@@ -97,12 +97,12 @@ impl Home {
     }
 
     /// The audit log, read-only; an error naming `moat init` when it is missing.
-    pub fn open_audit(&self) -> Result<moat_audit::Store> {
+    pub fn open_audit(&self) -> Result<openmoat_audit::Store> {
         let path = self.audit_path();
         if !path.is_file() {
             bail!("no audit log at {}; run `moat init`", path.display());
         }
-        moat_audit::Store::open_read_only(&path)
+        openmoat_audit::Store::open_read_only(&path)
             .with_context(|| format!("opening {}", path.display()))
     }
 

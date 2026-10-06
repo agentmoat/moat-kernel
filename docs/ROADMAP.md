@@ -2,7 +2,7 @@
 
 Where `moat` is, what comes next, and in which order. The release stages and their
 exit criteria come from ADR-013. The live, ordered work list is the pinned issue
-[#144](https://github.com/agentmoat/moat-kernel/issues/144), and each stage is a
+[#144](https://github.com/crocodile-labs/openmoat/issues/144), and each stage is a
 GitHub milestone. Neither carries dates.
 
 ## Where it is today
@@ -53,7 +53,6 @@ Milestone `v0.1.0-alpha`; #144 section P1.
 |---|---|
 | #89 | Release workflow: installers for macOS (arm64, x64), Linux (x64, arm64, musl) and Windows (x64), Homebrew tap, crates.io trusted publishing, attestations |
 | #91 | Tag ruleset and strict required checks |
-| #122 | Rename to OpenMoat before the first publish (the binary stays `moat`) |
 | #94 | This documentation restructure |
 | #95 | `moat guard` p95 within 15 ms, with a CI latency check |
 | #137–#143 | Host and CLI follow-ups: Claude Code `SendFile`, Cursor payload schema, `Glob` patterns with a directory, `.proposed-*` settings files, exit on a closed pipe, Scoop path in `kernel-self`, shell hardening |

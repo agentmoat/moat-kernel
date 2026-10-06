@@ -5,7 +5,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use moat_proxy::{Hello, Target, parse_request, server_name};
+use openmoat_proxy::{Hello, Target, parse_request, server_name};
 
 fuzz_target!(|data: &[u8]| {
     if let Ok(Some(request)) = parse_request(data) {

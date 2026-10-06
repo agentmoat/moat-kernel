@@ -9,8 +9,8 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::Duration;
 
-use moat_core::{CompiledPolicy, EvalContext, Policy, Verdict};
-use moat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, Resolve};
+use openmoat_core::{CompiledPolicy, EvalContext, Policy, Verdict};
+use openmoat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, Resolve};
 
 const POLICY: &str = r#"
 version: 1

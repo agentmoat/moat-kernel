@@ -1,4 +1,4 @@
-use moat_core::{DEFAULT_POLICY, EvalContext, Policy};
+use openmoat_core::{DEFAULT_POLICY, EvalContext, Policy};
 
 use super::*;
 
@@ -18,7 +18,7 @@ fn generated(yaml: &str) -> Generated {
         program: Some("/home/me/.local/bin/agent".into()),
         writes: vec!["/home/me/.agent".into()],
     };
-    let ir = moat_core::ir::lower(&policy, &ctx).expect("lowers");
+    let ir = openmoat_core::ir::lower(&policy, &ctx).expect("lowers");
     generate(&ir, &grants).expect("generates")
 }
 

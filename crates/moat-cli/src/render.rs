@@ -3,8 +3,8 @@
 use std::io::{self, Write};
 
 use anyhow::Result;
-use moat_audit::{Event, SessionSummary, Summary};
-use moat_core::{Action, Decision, Verdict};
+use openmoat_audit::{Event, SessionSummary, Summary};
+use openmoat_core::{Action, Decision, Verdict};
 use serde::Serialize;
 
 use crate::time::{clock, timestamp};

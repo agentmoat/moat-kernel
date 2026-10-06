@@ -6,7 +6,7 @@ mod hook_file;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use moat_hosts::Host;
+use openmoat_hosts::Host;
 
 pub use binary::{hook_binary, stale_hint};
 pub use hook_file::{HookState, Outcome, read_or_empty};
@@ -30,7 +30,7 @@ const TOOL_HOOK_TIMEOUT_S: u64 = 600;
 /// Seconds for the settings-change veto, which never waits for a person.
 const CONFIG_HOOK_TIMEOUT_S: u64 = 60;
 
-/// Every Claude Code tool `moat-hosts` maps to an action; a tool missing here
+/// Every Claude Code tool `openmoat-hosts` maps to an action; a tool missing here
 /// never reaches `moat guard`.
 const TOOL_MATCHER: &str = "Bash|Monitor|PowerShell|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LSP|SendFile|WebFetch|mcp__.*";
 

@@ -16,8 +16,8 @@
 
 use std::fmt::Write as _;
 
-use moat_core::Kind;
-use moat_core::ir::{Access, Effect, Enforcement, Rule};
+use openmoat_core::Kind;
+use openmoat_core::ir::{Access, Effect, Enforcement, Rule};
 
 use super::patterns::{literal_tree, split};
 use super::{Grants, Report};

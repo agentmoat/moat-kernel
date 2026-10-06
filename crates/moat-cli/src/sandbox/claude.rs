@@ -16,8 +16,8 @@
 mod settings;
 
 use anyhow::Result;
-use moat_core::ir::{Access, Effect, Enforcement, Rule};
-use moat_core::{AtomicAction, Kind};
+use openmoat_core::ir::{Access, Effect, Enforcement, Rule};
+use openmoat_core::{AtomicAction, Kind};
 use serde_json::{Map, Value, json};
 
 pub use settings::{apply, in_sync, protect, weaknesses};

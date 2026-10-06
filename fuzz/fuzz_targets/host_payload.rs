@@ -5,8 +5,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use moat_core::{Decision, Verdict};
-use moat_hosts::Host;
+use openmoat_core::{Decision, Verdict};
+use openmoat_hosts::Host;
 
 fuzz_target!(|data: &[u8]| {
     let Ok(payload) = std::str::from_utf8(data) else {
