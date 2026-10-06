@@ -94,3 +94,61 @@ fn unpinned_project_settings_load_and_are_audited() {
     let shown = sb.moat(&["show", "--recent", "1"]);
     assert!(String::from_utf8_lossy(&shown.stdout).contains("allow"));
 }
+
+/// The payload Claude Code 2.1.x sends: no `change_type`, `file_path` optional.
+fn current_payload(sb: &Sandbox, source: &str, path: Option<&Path>) -> (Option<i32>, Value) {
+    let mut payload = serde_json::json!({
+        "session_id": "cfg", "transcript_path": "/t.jsonl", "cwd": sb.home.to_string_lossy(),
+        "hook_event_name": "ConfigChange", "source": source,
+    });
+    if let Some(path) = path {
+        payload["file_path"] = path.to_string_lossy().into();
+    }
+    let out = sb.guard("claude-code", &payload.to_string());
+    (out.status.code(), json(&out))
+}
+
+fn tamper(sb: &Sandbox) {
+    let mut root: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings(sb)).unwrap()).unwrap();
+    root["hooks"].as_object_mut().unwrap().remove("PreToolUse");
+    std::fs::write(settings(sb), root.to_string()).unwrap();
+}
+
+#[test]
+fn current_payload_without_change_type_is_decided() {
+    let sb = sandbox();
+    let (code, doc) = current_payload(&sb, "user_settings", Some(&settings(&sb)));
+    assert_eq!((code, doc), (Some(0), serde_json::json!({})));
+    tamper(&sb);
+    let (code, doc) = current_payload(&sb, "user_settings", Some(&settings(&sb)));
+    assert_eq!(code, Some(2));
+    assert_eq!(doc["decision"], "block");
+}
+
+#[test]
+fn change_without_a_file_is_checked_against_every_pin() {
+    let sb = sandbox();
+    let (code, doc) = current_payload(&sb, "project_settings", None);
+    assert_eq!((code, doc), (Some(0), serde_json::json!({})));
+    tamper(&sb);
+    let (code, doc) = current_payload(&sb, "project_settings", None);
+    assert_eq!(code, Some(2));
+    let reason = doc["reason"].as_str().unwrap();
+    assert!(reason.contains("kernel-integrity"), "{reason}");
+    assert!(reason.contains("settings.json"), "{reason}");
+}
+
+#[test]
+fn unreadable_payload_is_blocked_in_config_change_shape() {
+    let sb = sandbox();
+    let out = sb.guard(
+        "claude-code",
+        r#"{"hook_event_name":"ConfigChange","source":["user_settings"]}"#,
+    );
+    assert_eq!(out.status.code(), Some(2));
+    let doc = json(&out);
+    assert_eq!(doc["decision"], "block");
+    assert!(doc["reason"].as_str().unwrap().contains("kernel-error"));
+    assert!(doc.get("hookSpecificOutput").is_none());
+}

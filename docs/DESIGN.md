@@ -184,9 +184,14 @@ its JSON to the kernel's internal `ToolCall`.
   Other non-zero = **non-blocking** (action proceeds) → we must never rely on it.
 - Timeout: 600 s default (plenty for human approval).
 - Extra: `ConfigChange` event (can block) is installed with matcher
-  `user_settings|project_settings|local_settings`; a pinned settings file that no longer
-  matches the lock is refused for the session (`{"decision":"block"}`), unpinned files load
-  and are audited. `PermissionDenied`, `PostToolUse` remain available for audit enrichment.
+  `user_settings|project_settings|local_settings`. Input: `session_id`, `transcript_path`,
+  `cwd`, `source` (`user_settings`, `project_settings`, `local_settings`, `policy_settings`,
+  `skills`) and an optional `file_path` (Claude Code 2.1.x; earlier builds also sent
+  `change_type`, still accepted). A pinned settings file that no longer matches the lock is
+  refused for the session (`{"decision":"block"}`), unpinned files load and are audited. A
+  change without a `file_path` is checked against every pinned file: blocked if any drifted,
+  loaded otherwise. A `ConfigChange` payload that cannot be parsed is blocked in the same
+  `{"decision":"block"}` shape, exit 2. `PermissionDenied`, `PostToolUse` remain available for audit enrichment.
 - Install form: exec form with `args` (no shell), `command: "/abs/path/moat"`,
   `args: ["guard","--host","claude-code"]`, `timeout: 600`.
 

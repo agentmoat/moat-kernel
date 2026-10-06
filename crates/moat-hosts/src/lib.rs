@@ -111,6 +111,26 @@ impl Host {
         }
     }
 
+    /// The event a payload claims to be for, read as leniently as possible, so a
+    /// payload that fails [`Host::parse_request`] is still answered in its event's
+    /// response format.
+    #[must_use]
+    pub fn event_of(self, payload: &str) -> HookEvent {
+        #[derive(serde::Deserialize)]
+        struct Envelope {
+            hook_event_name: String,
+        }
+        match serde_json::from_str::<Envelope>(payload) {
+            Ok(e) if self == Self::ClaudeCode && e.hook_event_name == config_change::EVENT => {
+                HookEvent::ConfigChange {
+                    source: String::new(),
+                    change_type: None,
+                }
+            }
+            _ => HookEvent::PreToolUse,
+        }
+    }
+
     /// Render the response document the host expects on stdout for `event`.
     #[must_use]
     pub fn render_response(self, event: &HookEvent, decision: &Decision) -> String {
@@ -149,8 +169,8 @@ pub enum HookEvent {
     ConfigChange {
         /// Which settings scope changed (`user_settings`, `project_settings`, …).
         source: String,
-        /// The kind of change Claude Code reports.
-        change_type: String,
+        /// The kind of change, when the host reports one (earlier Claude Code builds).
+        change_type: Option<String>,
     },
 }
 
