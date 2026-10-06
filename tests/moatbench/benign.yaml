@@ -1,0 +1,37 @@
+# Ordinary developer work that must stay allowed; anything stricter is counted
+# as a false positive. `threat` names the rule family each one must not trip.
+# Format: docs/MOATBENCH.md.
+
+- id: inspect-and-commit
+  threat: T4
+  why: >-
+    The everyday loop: look at the change, stage it, commit it.
+  steps:
+    - { shell: "git status --short", expect: allow, rule: dev-shell }
+    - { shell: "git diff --stat", expect: allow, rule: dev-shell }
+    - { shell: "git add src/lib.rs && git commit -m 'fix: handle empty input'", expect: allow, rule: dev-shell }
+
+- id: edit-and-test
+  threat: T2
+  why: >-
+    Read a source file, write the fix, run the tests: all inside the project.
+  steps:
+    - { read: "src/lib.rs", expect: allow, rule: project-fs }
+    - { write: "src/lib.rs", expect: allow, rule: project-fs }
+    - { shell: "cargo test --workspace", expect: allow, rule: dev-shell }
+
+- id: env-example-is-not-a-secret
+  threat: T1
+  why: >-
+    .env.example is a committed template with no values; the .env rule excludes it.
+  steps:
+    - { shell: "cat .env.example", expect: allow, rule: dev-shell }
+
+- id: search-the-tree
+  threat: T7
+  why: >-
+    Pipelines of read-only tools stay allowed; the pipe alone is not suspicious.
+  steps:
+    - { shell: "grep -rn 'TODO' src | head -20", expect: allow, rule: dev-shell }
+    - { shell: "find . -name '*.rs' -newer Cargo.toml", expect: allow, rule: dev-shell }
+

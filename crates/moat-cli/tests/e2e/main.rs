@@ -18,6 +18,7 @@ mod guard;
 #[cfg(unix)]
 mod install_path;
 mod lock;
+mod moatbench;
 mod paths;
 mod proxy;
 mod replay_report;
