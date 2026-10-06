@@ -21,6 +21,7 @@ mod audit;
 mod decide;
 mod request;
 mod sni;
+mod tunnel;
 mod upstream;
 
 pub use audit::{Connection, RecordError, Recorder};
