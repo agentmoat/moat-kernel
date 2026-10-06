@@ -6,7 +6,7 @@
 //! record is written; a failed record closes the connection.
 
 use std::io::{self, ErrorKind, Read as _, Write as _};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -19,6 +19,10 @@ use crate::request::{self, Request, Target};
 use crate::sni::{self, Hello};
 use crate::tunnel;
 use crate::upstream::{self, Refusal, Resolve};
+
+/// How long, and how much input, a refused connection is drained for.
+const LINGER: Duration = Duration::from_secs(1);
+const LINGER_BYTES: usize = 1 << 20;
 
 /// Bounds on what one client can make the proxy hold.
 #[derive(Debug, Clone)]
@@ -112,7 +116,7 @@ impl Proxy<'_> {
             Err(why) => {
                 let decision = Decision::single(Verdict::Deny, RULE_REQUEST, why);
                 self.record(None, &decision, started);
-                respond(client, 400, &decision.reasons[0]);
+                refuse(client, 400, &decision.reasons[0]);
                 return;
             }
         };
@@ -120,7 +124,7 @@ impl Proxy<'_> {
         let decision = decide::host(self.policy, request.host());
         if decision.verdict != Verdict::Allow {
             self.record(Some(&request), &decision, started);
-            respond(client, 403, &summary(&decision));
+            refuse(client, 403, &summary(&decision));
             return;
         }
         let upstream = match upstream::connect(
@@ -139,7 +143,7 @@ impl Proxy<'_> {
                 } else {
                     502
                 };
-                respond(client, status, &summary(&decision));
+                refuse(client, status, &summary(&decision));
                 return;
             }
         };
@@ -152,7 +156,7 @@ impl Proxy<'_> {
             }
             Target::Http { head, .. } => {
                 if !self.record(Some(&request), &decision, started) {
-                    respond(client, 403, "audit log unavailable");
+                    refuse(client, 403, "audit log unavailable");
                     return;
                 }
                 [head.as_slice(), &rest].concat()
@@ -314,6 +318,31 @@ fn summary(decision: &Decision) -> String {
         decision.reasons.join("; "),
         decision.rules.join(", ")
     )
+}
+
+/// Answer `status` from a connection's own thread, then close it so the
+/// client can read the answer.
+///
+/// Closing a socket with unread input resets the connection, and on Windows
+/// the reset discards the answer before the client reads it. So stop writing,
+/// then drain what the client still sends, bounded by [`LINGER`] and
+/// [`LINGER_BYTES`], before the socket is dropped.
+fn refuse(client: &TcpStream, status: u16, message: &str) {
+    respond(client, status, message);
+    let _ = client.shutdown(Shutdown::Write);
+    let until = Instant::now() + LINGER;
+    let mut left = LINGER_BYTES;
+    let mut sink = [0; 8192];
+    while left > 0 {
+        let rest = until.saturating_duration_since(Instant::now());
+        if rest.is_zero() || client.set_read_timeout(Some(rest)).is_err() {
+            return;
+        }
+        match (&*client).read(&mut sink) {
+            Ok(0) | Err(_) => return,
+            Ok(n) => left = left.saturating_sub(n),
+        }
+    }
 }
 
 fn respond(client: &TcpStream, status: u16, message: &str) {

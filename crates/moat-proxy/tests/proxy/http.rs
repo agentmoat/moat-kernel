@@ -75,3 +75,21 @@ fn loopback_is_refused_unless_it_is_the_listed_server() {
         "{reply}"
     );
 }
+
+#[test]
+fn a_refused_upload_still_reads_the_403() {
+    // The proxy refuses before reading the body. Closing with that body
+    // unread resets the connection, and the client loses the 403 it was sent.
+    let h = start(None, Limits::default());
+    let mut s = h.connect();
+    let body = vec![b'x'; 256 * 1024];
+    let head = format!(
+        "POST http://unknown.test/ HTTP/1.1\r\nContent-Length: {}\r\n\r\n",
+        body.len()
+    );
+    s.write_all(head.as_bytes()).unwrap();
+    thread::sleep(Duration::from_millis(100));
+    let _ = s.write_all(&body);
+    let reply = read_all(&mut s);
+    assert!(reply.starts_with("HTTP/1.1 403 Forbidden"), "{reply:?}");
+}
