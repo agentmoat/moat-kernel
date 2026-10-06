@@ -89,12 +89,22 @@ impl Sandbox {
 
 /// Run a prepared command (see [`Sandbox::command`]) with optional input.
 pub fn output(cmd: &mut Command, stdin: Option<&str>) -> Output {
-    let mut child = cmd
-        .stdin(Stdio::piped())
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawning moat");
+        .stderr(Stdio::piped());
+    // A binary a test has just copied can be busy for a moment on Linux: a
+    // process forked by another test holds the copy's write handle until it
+    // execs. Retry instead of failing on that race.
+    let mut tries = 0;
+    let mut child = loop {
+        match cmd.spawn() {
+            Err(e) if e.kind() == ErrorKind::ExecutableFileBusy && tries < 50 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            spawned => break spawned.expect("spawning moat"),
+        }
+    };
     let mut pipe = child.stdin.take().expect("stdin is piped");
     if let Some(input) = stdin {
         // A command may exit before reading its input (`guard` refusing its own
