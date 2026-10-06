@@ -6,13 +6,18 @@ use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use moat_core::{Action, Decision, Verdict};
-use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
+use rusqlite::{
+    Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{redact, redact_value};
 
+mod chain;
 mod schema;
+
+pub use chain::GENESIS;
 
 const BUSY_TIMEOUT_MS: u64 = 2000;
 
@@ -165,12 +170,23 @@ pub struct Event {
     pub reasons: Vec<String>,
     /// Time spent deciding, in microseconds.
     pub latency_us: i64,
+    /// Hash of the event before it in the chain; `None` for an event written
+    /// before the chain existed.
+    #[serde(default)]
+    pub prev_hash: Option<String>,
+    /// This event's chain hash (lowercase hex SHA-256, see `verify_chain`);
+    /// `None` for an event written before the chain existed.
+    #[serde(default)]
+    pub hash: Option<String>,
 }
 
 /// A handle to the audit database.
 #[derive(Debug)]
 pub struct Store {
     pub(crate) conn: Connection,
+    /// The schema has the chain columns. Only a read-only handle on a database
+    /// no newer build has opened yet lacks them.
+    chained: bool,
 }
 
 impl Store {
@@ -197,7 +213,8 @@ impl Store {
     pub fn open_read_only(path: &Path) -> Result<Self, StoreError> {
         let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         conn.busy_timeout(std::time::Duration::from_millis(BUSY_TIMEOUT_MS))?;
-        Ok(Self { conn })
+        let chained = schema::version(&conn)? >= 2;
+        Ok(Self { conn, chained })
     }
 
     /// A throwaway database for tests.
@@ -210,7 +227,10 @@ impl Store {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         schema::migrate(&conn)?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            chained: true,
+        })
     }
 
     /// Append one decision and return its id.
@@ -225,31 +245,58 @@ impl Store {
             None => "null".to_owned(),
         };
         let reasons: Vec<String> = event.decision.reasons.iter().map(|r| redact(r)).collect();
-        self.conn.execute(
-            "INSERT INTO events (ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        let rules = serde_json::to_string(&event.decision.rules)?;
+        let reasons = serde_json::to_string(&reasons)?;
+        // Reading the newest hash and appending must be one step, or two
+        // concurrent `guard` processes would link to the same event and fork
+        // the chain. `BEGIN IMMEDIATE` takes the write lock up front (waiting up
+        // to the busy timeout); dropping the transaction on error rolls back.
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let (id, prev_hash) = chain::next_link(&tx)?;
+        let fields = chain::Fields {
+            id,
+            ts_ms,
+            host: event.host,
+            session_id: event.session_id,
+            call_id: event.call_id,
+            cwd: event.cwd,
+            tool: event.tool,
+            action: &action_json,
+            verdict: event.decision.verdict.as_str(),
+            rules: &rules,
+            reasons: &reasons,
+            latency_us: i64::try_from(event.latency_us).unwrap_or(i64::MAX),
+            prev_hash: &prev_hash,
+        };
+        tx.execute(
+            "INSERT INTO events (id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us, prev_hash, hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
-                ts_ms,
-                event.host,
-                event.session_id,
-                event.call_id,
-                event.cwd,
-                event.tool,
-                action_json,
-                event.decision.verdict.as_str(),
-                serde_json::to_string(&event.decision.rules)?,
-                serde_json::to_string(&reasons)?,
-                i64::try_from(event.latency_us).unwrap_or(i64::MAX),
+                fields.id,
+                fields.ts_ms,
+                fields.host,
+                fields.session_id,
+                fields.call_id,
+                fields.cwd,
+                fields.tool,
+                fields.action,
+                fields.verdict,
+                fields.rules,
+                fields.reasons,
+                fields.latency_us,
+                fields.prev_hash,
+                fields.hash(),
             ],
         )?;
-        Ok(EventId(self.conn.last_insert_rowid()))
+        tx.commit()?;
+        Ok(EventId(id))
     }
 
     /// One event by id.
     pub fn get(&self, id: EventId) -> Result<Option<Event>, StoreError> {
         self.conn
             .query_row(
-                &format!("{SELECT} WHERE id = ?1"),
+                &format!("{} WHERE id = ?1", self.select()),
                 params![id.0],
                 row_to_event,
             )
@@ -261,7 +308,7 @@ impl Store {
     pub fn recent(&self, limit: usize) -> Result<Vec<Event>, StoreError> {
         let mut stmt = self
             .conn
-            .prepare(&format!("{SELECT} ORDER BY id DESC LIMIT ?1"))?;
+            .prepare(&format!("{} ORDER BY id DESC LIMIT ?1", self.select()))?;
         let rows = stmt.query_map(
             params![i64::try_from(limit).unwrap_or(i64::MAX)],
             row_to_event,
@@ -271,9 +318,10 @@ impl Store {
 
     /// All events of one session, oldest first.
     pub fn session(&self, session_id: &str) -> Result<Vec<Event>, StoreError> {
-        let mut stmt = self
-            .conn
-            .prepare(&format!("{SELECT} WHERE session_id = ?1 ORDER BY id"))?;
+        let mut stmt = self.conn.prepare(&format!(
+            "{} WHERE session_id = ?1 ORDER BY id",
+            self.select()
+        ))?;
         let rows = stmt.query_map(params![session_id], row_to_event)?;
         rows.collect::<Result<_, _>>().map_err(Into::into)
     }
@@ -287,7 +335,19 @@ impl Store {
     }
 }
 
-pub(crate) const SELECT: &str = "SELECT id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us FROM events";
+const SELECT_CHAINED: &str = "SELECT id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us, prev_hash, hash FROM events";
+const SELECT_UNCHAINED: &str = "SELECT id, ts_ms, host, session_id, call_id, cwd, tool, action, verdict, rules, reasons, latency_us, NULL, NULL FROM events";
+
+impl Store {
+    /// The event query for this database's schema, for [`row_to_event`].
+    pub(crate) fn select(&self) -> &'static str {
+        if self.chained {
+            SELECT_CHAINED
+        } else {
+            SELECT_UNCHAINED
+        }
+    }
+}
 
 pub(crate) fn row_to_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
     fn decode<T: serde::de::DeserializeOwned>(
@@ -320,6 +380,8 @@ pub(crate) fn row_to_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
         rules: decode(row, 9)?,
         reasons: decode(row, 10)?,
         latency_us: row.get(11)?,
+        prev_hash: row.get(12)?,
+        hash: row.get(13)?,
     })
 }
 
@@ -357,3 +419,6 @@ fn create_owner_only(path: &Path) -> Result<(), StoreError> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod chain_tests;

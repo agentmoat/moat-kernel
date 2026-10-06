@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use super::StoreError;
 
 /// Schema version this build writes, kept in `PRAGMA user_version`.
-pub(super) const SCHEMA_VERSION: i64 = 1;
+pub(super) const SCHEMA_VERSION: i64 = 2;
 
 /// Version 1: the events table.
 const V1: &str = "
@@ -25,6 +25,17 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_session ON events(session_id, id);
 CREATE INDEX IF NOT EXISTS events_ts ON events(ts_ms);
+";
+
+/// Version 2: the hash chain (`chain.rs`). Rows already present are not hashed:
+/// they were written without protection, and hashing them now would vouch for
+/// whatever they contain today. `legacy_last_id` records where they end, so a
+/// later event without a hash is reported instead of passing as old.
+const V2: &str = "
+ALTER TABLE events ADD COLUMN prev_hash TEXT;
+ALTER TABLE events ADD COLUMN hash TEXT;
+CREATE TABLE meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+INSERT INTO meta (key, value) VALUES ('legacy_last_id', COALESCE((SELECT MAX(id) FROM events), 0));
 ";
 
 /// The `user_version` of the open database.
@@ -55,6 +66,9 @@ pub(super) fn migrate(conn: &Connection) -> Result<(), StoreError> {
     }
     if found < 1 {
         tx.execute_batch(V1)?;
+    }
+    if found < 2 {
+        tx.execute_batch(V2)?;
     }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
