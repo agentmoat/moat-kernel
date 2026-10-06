@@ -461,3 +461,14 @@
 - id: benign-awk-in-pipeline
   action: { shell: "cut -d, -f2 data.csv | sort | uniq -c | awk '{print $2}'" }
   expect: { verdict: allow, rules: [text-tools, project-fs] }
+# a repository policy (ADR-022): a trusted file's allow rules apply; deny rules
+# for one command leave the rest as the user policy decides
+- id: benign-repo-trusted-allow
+  action: { shell: "make deploy" }
+  repo: { policy: "version: 1\nallow:\n  - id: deploy\n    shell: ['make deploy']\n", trusted: true }
+  expect: { verdict: allow, rules: ["repo:deploy"] }
+- id: benign-repo-deny-leaves-other-commands
+  threat: T4
+  action: { shell: "cargo test" }
+  repo: { policy: "version: 1\ndeny:\n  - id: no-publish\n    shell: ['cargo publish']\n" }
+  expect: { verdict: allow, rules: [dev-shell] }

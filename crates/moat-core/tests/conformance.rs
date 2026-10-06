@@ -1,7 +1,9 @@
 //! Conformance suite: every fixture in `tests/conformance/*.yaml` is evaluated
-//! against the shipped default policy (`moat_core::DEFAULT_POLICY`). A fixture passes when the verdict matches
-//! and every expected rule id is present in the decision. A fixture with `session` is
-//! decided with the taint its earlier calls leave (docs/POLICY.md §4.1).
+//! against the shipped default policy (`moat_core::DEFAULT_POLICY`), with the
+//! fixture's repository policy merged in when it names one. A fixture passes
+//! when the verdict matches and every expected rule id is present in the decision.
+//! A fixture with `session` is decided with the taint its earlier calls leave
+//! (docs/POLICY.md §4.1).
 //!
 //! The suite is the executable form of the security claims in `docs/THREAT_MODEL.md` §3,
 //! so it is strict about its own inputs: unknown keys, duplicate ids and
@@ -16,7 +18,7 @@ use std::collections::BTreeMap;
 
 use moat_core::{
     Action, CompiledPolicy, DEFAULT_POLICY, EvalContext, MapPathResolver, MapResolver, Policy,
-    Taint, TaintSecret, Verdict,
+    RepoPolicy, Taint, TaintSecret, Verdict,
 };
 use serde::Deserialize;
 
@@ -47,6 +49,18 @@ struct Fixture {
     /// matter here; a person may have approved them.
     #[serde(default)]
     session: Vec<FixtureAction>,
+    /// A repository policy merged into the default policy (ADR-022).
+    repo: Option<RepoFixture>,
+}
+
+/// `repo: { policy: "<yaml>", trusted: true }`: the project's
+/// `.moat/policy.yaml`, and whether a person trusted it with `moat trust`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepoFixture {
+    policy: String,
+    #[serde(default)]
+    trusted: bool,
 }
 
 /// `context: { cwd: /Users/me }` is a session in the home directory, which the
@@ -211,15 +225,24 @@ fn default_policy_conformance() {
         let links = MapPathResolver {
             links: fixture.links.clone(),
         };
-        let own = fixture.context.as_ref().map(|c| {
-            let ctx = EvalContext {
-                cwd: c.cwd.clone(),
-                project: c.project.clone(),
-                real_project: c.real_project.clone(),
-                real_home: c.real_home.clone(),
-                ..ctx.clone()
-            };
-            CompiledPolicy::compile(&policy, &ctx).expect("default policy must compile")
+        let merged = fixture.repo.as_ref().map(|r| {
+            RepoPolicy::parse(&r.policy)
+                .and_then(|repo| repo.merge(&policy, r.trusted))
+                .unwrap_or_else(|e| panic!("{}: repo policy: {e}", fixture.id))
+        });
+        let own = (fixture.context.is_some() || merged.is_some()).then(|| {
+            let ctx = fixture.context.as_ref().map_or_else(
+                || ctx.clone(),
+                |c| EvalContext {
+                    cwd: c.cwd.clone(),
+                    project: c.project.clone(),
+                    real_project: c.real_project.clone(),
+                    real_home: c.real_home.clone(),
+                    ..ctx.clone()
+                },
+            );
+            CompiledPolicy::compile(merged.as_ref().unwrap_or(&policy), &ctx)
+                .expect("default policy must compile")
         });
         let compiled = own.as_ref().unwrap_or(&compiled);
         let plain = compiled.decide_with(&action, &resolver, &links);

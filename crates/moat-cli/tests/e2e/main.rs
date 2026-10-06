@@ -23,9 +23,11 @@ mod moatbench;
 mod paths;
 mod proxy;
 mod replay_report;
+mod repo_policy;
 mod sandbox;
 #[cfg(unix)]
 mod sandbox_exec;
 mod sandbox_sync;
 mod taint;
 mod team;
+mod trust;

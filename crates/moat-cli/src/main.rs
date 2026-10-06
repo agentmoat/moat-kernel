@@ -16,11 +16,13 @@ mod integrity;
 mod project;
 mod realpath;
 mod render;
+mod repo;
 mod sandbox;
 mod secrets;
 mod taint;
 mod terminal;
 mod time;
+mod trust;
 
 use std::process::ExitCode;
 

