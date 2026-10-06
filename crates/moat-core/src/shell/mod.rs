@@ -36,7 +36,7 @@
 mod commands;
 mod cwd;
 mod decoders;
-mod git;
+pub(crate) mod git;
 mod invocation;
 mod make;
 mod operands;
@@ -44,7 +44,7 @@ mod options;
 pub(crate) mod tables;
 #[cfg(test)]
 mod tests;
-mod tokens;
+pub(crate) mod tokens;
 
 use crate::action::AtomicAction;
 use crate::lexer::LexError;
