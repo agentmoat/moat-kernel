@@ -114,7 +114,7 @@ impl TryFrom<WireId> for EventId {
 
 impl fmt::Display for EventId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:x}", self.0)
+        fmt::LowerHex::fmt(&self.0, f)
     }
 }
 
