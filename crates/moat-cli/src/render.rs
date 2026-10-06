@@ -169,6 +169,7 @@ fn kind_of(action: &Action) -> &'static str {
         Action::FsRead { .. } => "fs.read",
         Action::FsWrite { .. } | Action::Patch { .. } => "fs.write",
         Action::Net { .. } => "net",
+        Action::Fetch { .. } => "fetch",
         Action::McpTool { .. } => "mcp",
     }
 }
@@ -216,7 +217,8 @@ fn describe(event: &Event) -> String {
         Some(Action::ForeignShell { shell, command }) => format!("{shell}: {command}"),
         Some(Action::FsRead { path }) => format!("read {path}"),
         Some(Action::FsWrite { path }) => format!("write {path}"),
-        Some(Action::Net { url }) => format!("fetch {url}"),
+        Some(Action::Net { url }) => format!("net {url}"),
+        Some(Action::Fetch { url }) => format!("fetch {url}"),
         Some(Action::Patch { writes }) => format!("patch {}", writes.join(", ")),
         Some(Action::McpTool { name, .. }) => name.clone(),
         None => format!("{tool} (ungoverned)"),

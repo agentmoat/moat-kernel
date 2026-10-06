@@ -75,9 +75,10 @@ fn unknown_default_kinds(defaults: &Defaults) -> Vec<Warning> {
         .collect()
 }
 
-/// Warn for every pattern in `later` that a pattern of the same kind in
-/// `earlier` (evaluated first) fully covers. Lists with `!` exclusions are
-/// never assumed to cover anything.
+/// Warn for every pattern in `later` that a pattern in `earlier` (evaluated
+/// first) fully covers: one of the same kind, or a `net` pattern for a `fetch`
+/// one (`net` lists match fetches too; a `fetch` pattern never covers a `net`
+/// one). Lists with `!` exclusions are never assumed to cover anything.
 fn shadowed(
     later: &[RuleGroup],
     earlier: &[RuleGroup],
@@ -89,21 +90,23 @@ fn shadowed(
         for kind in Kind::ALL {
             for pattern in group.patterns(kind) {
                 let hit = earlier.iter().find_map(|e| {
-                    let list = e.patterns(kind);
-                    if list.iter().any(|p| p.starts_with('!')) {
-                        return None;
-                    }
-                    list.iter()
-                        .find(|by| covers(kind, by, pattern))
-                        .map(|by| (&e.id, by))
+                    kind.rule_kinds().iter().find_map(|by_kind| {
+                        let list = e.patterns(*by_kind);
+                        if list.iter().any(|p| p.starts_with('!')) {
+                            return None;
+                        }
+                        list.iter()
+                            .find(|by| covers(kind, by, pattern))
+                            .map(|by| (&e.id, *by_kind, by))
+                    })
                 });
-                if let Some((by_rule, by_pattern)) = hit {
+                if let Some((by_rule, by_kind, by_pattern)) = hit {
                     out.push(Warning {
                         rule: group.id.clone(),
                         message: format!(
                             "{later_name} {kind} pattern `{pattern}` is unreachable: \
-                             {earlier_name} rule `{by_rule}` pattern `{by_pattern}` matches \
-                             everything it matches and {earlier_name} is evaluated first"
+                             {earlier_name} rule `{by_rule}` {by_kind} pattern `{by_pattern}` \
+                             matches everything it matches and {earlier_name} is evaluated first"
                         ),
                     });
                 }
@@ -158,6 +161,23 @@ mod tests {
         );
         assert_eq!(w.len(), 1, "{w:?}");
         assert!(w[0].contains("allow fs.read pattern `~/.ssh/config`"));
+    }
+
+    #[test]
+    fn net_patterns_shadow_fetch_patterns_but_not_the_reverse() {
+        let w = warn(
+            "version: 1\nallow:\n  - id: reg\n    net: ['*.crates.io']\n    fetch: ['docs.rs']\n\
+             ask:\n  - id: web\n    fetch: ['static.crates.io']\n    net: ['docs.rs']\n",
+        );
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(
+            w[0].contains("ask fetch pattern `static.crates.io`"),
+            "{w:?}"
+        );
+        assert!(
+            w[0].contains("rule `reg` net pattern `*.crates.io`"),
+            "{w:?}"
+        );
     }
 
     #[test]

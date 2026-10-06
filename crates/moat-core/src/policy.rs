@@ -3,8 +3,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Fallback verdicts when no rule matches: one verdict for everything, or a map
-/// from action kind (`shell`, `fs.read`, `fs.write`, `net`, `env.read`,
-/// `env.set`, `mcp`, or `"*"`) to a verdict. This is how "outbound network is
+/// from action kind (`shell`, `fs.read`, `fs.write`, `net`, `fetch`,
+/// `env.read`, `env.set`, `mcp`, or `"*"`) to a verdict; a `fetch` without its
+/// own entry takes the `net` one. This is how "outbound network is
 /// deny-by-default" is expressed, because deny rules are absolute and cannot
 /// be punched through by allow rules (DESIGN.md §6.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,15 +23,16 @@ impl Defaults {
     pub fn for_kind(&self, kind: Kind) -> (Verdict, String) {
         match self {
             Self::All(v) => (*v, "default".to_owned()),
-            Self::PerKind(map) => map.get(kind.as_str()).map_or_else(
-                || {
+            Self::PerKind(map) => kind
+                .rule_kinds()
+                .iter()
+                .find_map(|k| map.get(k.as_str()).map(|v| (*v, format!("default.{k}"))))
+                .unwrap_or_else(|| {
                     (
                         map.get("*").copied().unwrap_or(Verdict::Ask),
                         "default".to_owned(),
                     )
-                },
-                |v| (*v, format!("default.{kind}")),
-            ),
+                }),
         }
     }
 }
@@ -113,9 +115,12 @@ pub struct RuleGroup {
     /// Path globs for file writes.
     #[serde(default, rename = "fs.write", skip_serializing_if = "Vec::is_empty")]
     pub fs_write: Vec<String>,
-    /// Host globs.
+    /// Host globs for any network access, fetches included.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub net: Vec<String>,
+    /// Host globs for read-only fetches by a host's fetch tool only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fetch: Vec<String>,
     /// Variable-name globs for reads.
     #[serde(default, rename = "env.read", skip_serializing_if = "Vec::is_empty")]
     pub env_read: Vec<String>,
@@ -136,6 +141,7 @@ impl RuleGroup {
             Kind::FsRead => &self.fs_read,
             Kind::FsWrite => &self.fs_write,
             Kind::Net => &self.net,
+            Kind::Fetch => &self.fetch,
             Kind::EnvRead => &self.env_read,
             Kind::EnvSet => &self.env_set,
             Kind::Mcp => &self.mcp,
@@ -360,6 +366,29 @@ mod tests {
         assert_eq!(
             p.defaults.for_kind(Kind::Shell),
             (Verdict::Ask, "default".to_owned())
+        );
+    }
+
+    #[test]
+    fn fetch_defaults_fall_back_to_net_then_star() {
+        let own = Policy::parse("version: 1\ndefaults: { net: deny, fetch: ask }\n").unwrap();
+        assert_eq!(
+            own.defaults.for_kind(Kind::Fetch),
+            (Verdict::Ask, "default.fetch".to_owned())
+        );
+        assert_eq!(
+            own.defaults.for_kind(Kind::Net),
+            (Verdict::Deny, "default.net".to_owned())
+        );
+        let net = Policy::parse("version: 1\ndefaults: { net: deny, '*': allow }\n").unwrap();
+        assert_eq!(
+            net.defaults.for_kind(Kind::Fetch),
+            (Verdict::Deny, "default.net".to_owned())
+        );
+        let star = Policy::parse("version: 1\ndefaults: { '*': allow }\n").unwrap();
+        assert_eq!(
+            star.defaults.for_kind(Kind::Fetch),
+            (Verdict::Allow, "default".to_owned())
         );
     }
 
