@@ -200,7 +200,18 @@ Two tests prove agreement with the engine:
 its `PreToolUse` rejects `permissionDecision: "ask"` as unsupported and then runs the
 call. So for Codex an `ask` is sent as a `deny` (exit 2) whose reason says to approve
 it with `moat allow --last`. The audit log keeps the `ask`, which is what `--last` finds
-(`Host::answer`). Exit codes follow
+(`Host::answer`).
+
+Codex's `PermissionRequest` hook does not change this (#178, checked against
+openai/codex `ff9ab4a` and codex-cli 0.160.1). Codex runs it only from
+`Session::request_approval` (`core/src/tools/approvals.rs`), after its own approval
+policy and sandbox have decided to prompt. The hook can answer allow, deny or nothing;
+nothing shows Codex's prompt. No hook can send a call into that path, so a `PreToolUse`
+`ask` that let the call through would run unprompted whenever Codex itself does not
+prompt. `moat init` therefore does not install `PermissionRequest`. `guard` refuses that
+event as a wrong event (deny, exit 2, reason on stderr), which Codex reads as a deny
+(`tests/fixtures/hosts/codex/permission-request-shell.json`, built from Codex's
+`permission-request.command.input.schema.json`). Exit codes follow
 ADR-004 and ADR-015: 0 allow or ask, 2 deny, 3 unresolved ask from `moat policy
 check`, 64 usage or configuration error. `guard` never exits 64: an argument it cannot
 parse is a deny with exit 2, because Claude Code and Codex proceed on any other

@@ -84,7 +84,7 @@ names a hook whose binary is missing or is a different `moat`.
 | Agent | What is hooked | Hook file |
 |---|---|---|
 | Claude Code | `PreToolUse`: `Bash`, `Monitor`, `PowerShell` (always asks), `Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Glob`, `Grep`, `LSP`, `SendFile`, `WebFetch` (as `fetch`), MCP tools. `ConfigChange`: user, project and local settings | `~/.claude/settings.json` |
-| Codex | `PreToolUse`: shell commands, `apply_patch` (every file the patch names), MCP tools. Codex hooks cannot ask, so an `ask` blocks the call until you run `moat allow --last`. Codex does not hook web search or hosted tools | `~/.codex/hooks.json` |
+| Codex | `PreToolUse`: shell commands, `apply_patch` (every file the patch names), MCP tools. Codex hooks cannot ask (`PermissionRequest` runs only when Codex itself prompts), so an `ask` blocks the call until you run `moat allow --last`. Codex does not hook web search or hosted tools | `~/.codex/hooks.json` |
 | Cursor | `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` (`Read`, `Write`, `Edit`, `MultiEdit`, `StrReplace`, `Delete`, `Grep`, `Glob`); installed with `failClosed` | `~/.cursor/hooks.json` |
 
 ### Non-default config directories

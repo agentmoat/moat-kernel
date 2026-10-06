@@ -83,7 +83,7 @@ Milestone `v0.1.0-beta`; #144 section P2.
 | #174, #175 | Isolated tier: `moat run --isolate` in a rootless container (Linux) or an Apple Virtualization guest (macOS) |
 | #176 | Lightweight tier: generated Seatbelt or Landlock and seccomp around the agent |
 | #177, #129 | Hash-chained audit log; audit export and a team report |
-| #178 | Codex asks through its own `PermissionRequest` prompt |
+| #178 | Codex asks through its own `PermissionRequest` prompt: investigated; Codex runs that hook only after it decides to prompt, so a Codex `ask` stays a deny (ARCHITECTURE §5) |
 | #128 | Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` |
 | #131 | Bypass challenge with 5–10 security people |
 | #132 | MoatBench mini (about 40 scenarios) and the launch demo |

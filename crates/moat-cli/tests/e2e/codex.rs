@@ -1,6 +1,6 @@
 //! Codex: its `PreToolUse` cannot ask, so an `ask` must still stop the call.
 
-use crate::common::{Sandbox, hook_output, stderr};
+use crate::common::{Sandbox, fixture, hook_output, stderr};
 
 fn shell(session: &str, command: &str) -> String {
     serde_json::json!({
@@ -48,4 +48,17 @@ fn an_ask_blocks_codex_until_a_person_approves_it() {
     let out = sb.guard("claude-code", &claude.to_string());
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(hook_output(&out)["permissionDecision"], "ask");
+}
+
+/// Codex runs `PermissionRequest` hooks only once it has decided to prompt, so
+/// that event cannot carry an `ask` from `PreToolUse` (#178) and `moat init` does
+/// not install it. If a person wires `guard` to it anyway, `guard` refuses the
+/// event, even for a command it would allow: exit 2 with a reason on stderr,
+/// which Codex reads as a deny, never as an approval.
+#[test]
+fn a_codex_permission_request_is_refused_never_approved() {
+    let sb = Sandbox::installed(&[".codex"]);
+    let out = sb.guard("codex", &fixture("codex/permission-request-shell.json"));
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(stderr(&out).contains("moat: deny"), "{}", stderr(&out));
 }
