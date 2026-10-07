@@ -252,6 +252,8 @@ something the alpha claims to stop.
   until someone trusts it again (ADR-022).
 - **The binary is pinned by path, not digest** (ADR-006, ADR-016). Whoever can replace
   the file the stable link points at decides what the hooks run.
+- **Claude Code's `theme` setting is not pinned** (#287). Claude Code writes it to
+  `settings.json` itself; it changes only colours, and every other key stays pinned.
 - **`CLAUDE_CONFIG_DIR` must match for `init`.** `moat init` installs hooks where its
   own environment points. Re-pinning (`allow`, `doctor --accept`) keeps every hook file
   the lock already pins, whatever the shell's environment, and `doctor`/`status` report
