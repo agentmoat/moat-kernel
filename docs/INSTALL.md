@@ -9,16 +9,16 @@ URLs name the version; take the newest from
 
 ```bash
 # macOS and Linux: installs moat into ~/.cargo/bin
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.0/openmoat-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.1/openmoat-installer.sh | sh
 
 # Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.0/openmoat-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.1/openmoat-installer.ps1 | iex"
 
 # Homebrew (macOS, Linux)
 brew install crocodile-labs/tap/moat
 
 # From crates.io (Rust 1.95); cargo installs a pre-release only when asked by version
-cargo install openmoat --locked --version 0.1.0-alpha.0
+cargo install openmoat --locked --version 0.1.0-alpha.1
 ```
 
 To build from a clone instead (Rust 1.95, pinned by `rust-toolchain.toml`):
