@@ -72,24 +72,16 @@ secrets or write outside the project.
 unsure or something fails, it blocks. Everything runs locally and nothing leaves your
 machine unless you export it. Open source under Apache-2.0 and MIT.
 
-> **Status: alpha, not yet released.** The workspace is at `0.1.0-alpha.0`; expect
-> changes until the beta. Routing the host sandboxes through `moat proxy` is opt-in
+> **Status: alpha.** The first release is `0.1.0-alpha.0`; expect changes until the
+> beta. Routing the host sandboxes through `moat proxy` is opt-in
 > (`sandbox.proxy_port`); by default each agent's own proxy enforces the allowlist. Exactly what
 > each operating-system layer enforces, and what it cannot, is listed in
 > [THREAT_MODEL](docs/THREAT_MODEL.md). [Roadmap](docs/ROADMAP.md).
 
 ## Install
 
-No release has been tagged yet. Until `v0.1.0-alpha.0` is out, build from a clone
-(Rust 1.95, pinned by `rust-toolchain.toml`):
-
-```bash
-git clone https://github.com/crocodile-labs/openmoat && cd openmoat
-cargo install --locked --path crates/openmoat-cli    # installs the `moat` binary
-```
-
-From the first release on, builds cover macOS (arm64, x64), Linux (x64, arm64; glibc
-and static musl) and Windows (x64). Every alpha is a GitHub pre-release, so installer
+Release builds cover macOS (arm64, x64), Linux (x64, arm64; glibc and static musl)
+and Windows (x64). Every alpha is a GitHub pre-release, so installer
 URLs name the version; take the newest from
 [Releases](https://github.com/crocodile-labs/openmoat/releases).
 
@@ -105,6 +97,13 @@ brew install crocodile-labs/tap/moat
 
 # From crates.io (Rust 1.95); cargo installs a pre-release only when asked by version
 cargo install openmoat --locked --version 0.1.0-alpha.0
+```
+
+To build from a clone instead (Rust 1.95, pinned by `rust-toolchain.toml`):
+
+```bash
+git clone https://github.com/crocodile-labs/openmoat && cd openmoat
+cargo install --locked --path crates/openmoat-cli    # installs the `moat` binary
 ```
 
 Each release carries `sha256.sum` and GitHub build attestations:

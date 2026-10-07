@@ -18,8 +18,7 @@ action through is a vulnerability, not a usability bug.
 | older alphas | no; upgrade to the latest alpha |
 | `main` | yes, fixes land here first |
 
-No alpha has been tagged yet; until one is, only `main` is supported. There are no
-backports before 1.0.
+Only the latest alpha and `main` are supported. There are no backports before 1.0.
 
 ## Reporting
 
