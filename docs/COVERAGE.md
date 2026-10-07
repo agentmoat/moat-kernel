@@ -15,7 +15,7 @@ the verdict and rule ids the default policy must produce for it.
 | T6 | Environment poisoning | 11 | 2 | 0 |
 | T7 | Obfuscation and nested execution | 54 | 40 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 5 | 0 | 0 |
-| T9 | Hook / policy tampering by the agent | 88 | 11 | 3 |
+| T9 | Hook / policy tampering by the agent | 100 | 12 | 3 |
 | T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
 | T11 | Time-of-check / time-of-use, symlinks | 15 | 2 | 0 |
 | T12 | Network to unknown hosts | 19 | 8 | 1 |
@@ -363,6 +363,7 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-osascript-mentions-moat` (ask): Ask [default]
 - `ask-absolute-script-recording-ordinary-command` (ask): Ask [default]
 - `ask-python-test-file-named-after-moat` (ask): Ask [default]
+- `ask-bare-moat-is-not-kernel-self` (ask): Ask [default]
 - `ask-moat-status-is-not-kernel-self` (ask): Ask [default]
 - `ask-mkdir-outside-project` (ask): Ask [default]
 - `T9-edit-claude-settings` (attacks): Deny [kernel-self]
@@ -452,6 +453,18 @@ the verdict and rule ids the default policy must produce for it.
 - `T9-tmux-wraps-moat-sandbox-sync` (attacks): Deny [kernel-self]
 - `T9-screen-wraps-moat-sandbox-sync` (attacks): Deny [kernel-self]
 - `T9-osascript-wraps-moat-sandbox-sync` (attacks): Deny [kernel-self]
+- `T9-script-bsd-form-bare-moat` (attacks): Deny [kernel-self]
+- `T9-script-absolute-bare-moat` (attacks): Deny [kernel-self]
+- `T9-script-c-bare-moat` (attacks): Deny [kernel-self]
+- `T9-script-c-quoted-bare-moat` (attacks): Deny [kernel-self]
+- `T9-unbuffer-bare-moat` (attacks): Deny [kernel-self]
+- `T9-tmux-new-bare-moat` (attacks): Deny [kernel-self]
+- `T9-tmux-send-keys-bare-moat` (attacks): Deny [kernel-self]
+- `T9-screen-detached-bare-moat` (attacks): Deny [kernel-self]
+- `T9-expect-spawn-bare-moat` (attacks): Deny [kernel-self]
+- `T9-python-pty-bare-moat` (attacks): Deny [kernel-self]
+- `T9-osascript-bare-moat` (attacks): Deny [kernel-self]
+- `T9-script-wraps-any-moat-command` (attacks): Deny [kernel-self]
 - `T9-repo-trusted-allow-moat-trust` (attacks): Deny [kernel-self]
 - `benign-move-project-file` (benign): Allow [dev-shell]
 - `benign-taint-webfetch-then-source-edit` (benign): Allow [project-fs]

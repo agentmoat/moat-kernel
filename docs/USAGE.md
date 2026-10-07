@@ -33,6 +33,24 @@ moat policy check "https://docs.rs/serde" --kind fetch
 moat policy check "~/.aws/credentials" --kind fs-read
 ```
 
+## Run `moat` when something needs you
+
+`moat` alone prints one line (the agents it protects, today's decisions, how many were
+denied or asked) and then whatever needs a person:
+
+```
+$ moat
+Protecting Claude Code · today: 14 decisions, 1 denied, 1 asked
+Claude Code asked to run "npm install left-pad" (rule installs, session 4f2a…)
+Allow? [o]nce for this session / [a]lways / [n]o
+```
+
+A changed pinned file is shown first, with `Accept these changes? [y/N]`; `y` does what
+`moat doctor --accept` does. `o` and `a` do what `moat allow` does for that ask. When
+nothing needs you it says `Nothing needs you.` Questions are asked only at a terminal;
+without one (a script, an agent's shell) it prints the command a person should run and
+changes nothing.
+
 ## A call is denied
 
 The agent gets the rule and the reason, and usually tells you:
@@ -52,7 +70,7 @@ id     time (UTC) host         verdict rules          action
 
 `ask` shows the agent's own permission prompt, tagged with the rule
 (`moat: ask [installs] — new dependency: …`). Approve it there. To stop being asked
-for the same command:
+for the same command, run `moat` and answer `o` or `a`, or:
 
 ```bash
 moat allow --last            # the last ask: allowed for the rest of that agent session
@@ -95,8 +113,10 @@ You can also edit the file by hand:
 ```bash
 $EDITOR ~/.moat/policy.yaml
 moat policy lint             # schema, ids, globs; warnings for unreachable rules
-moat doctor --accept         # re-pin the lock (terminal only)
+moat                         # shows what changed and asks to accept it (terminal only)
 ```
+
+`moat doctor --accept` does the same without the question.
 
 Until you re-pin, every call is denied with `kernel-integrity`: a pinned file that
 changed without a person accepting it is treated as tampered. The same happens when
@@ -132,6 +152,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 
 | Command | Use it to |
 |---|---|
+| `moat` | see which agents are protected and today's decisions; answer drift or the last ask (terminal only) |
 | `moat init [--hosts …] [--yes] [--dry-run]` | install policy, lock and audit log; asks before hooking each agent found (`--hosts`, `--yes` skip the questions) |
 | `moat uninstall [--hosts …] [--purge]` | remove OpenMoat's hooks and sandbox settings, restoring the backups (`--purge` also deletes `~/.moat`) |
 | `moat status` · `moat doctor [--accept] [--verbose]` | check the installation · list drift and re-pin (`--verbose` lists where each sandbox is stricter or wider than the policy) |

@@ -1444,6 +1444,54 @@
   threat: T9
   action: { shell: "osascript -e 'tell app \"Terminal\" to do script \"moat sandbox sync\"'" }
   expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-bsd-form-bare-moat
+  threat: T9
+  action: { shell: "script -q /dev/null moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-absolute-bare-moat
+  threat: T9
+  action: { shell: "/usr/bin/script -q /dev/null /usr/local/bin/moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-c-bare-moat
+  threat: T9
+  action: { shell: "script -qc moat /dev/null" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-c-quoted-bare-moat
+  threat: T9
+  action: { shell: "script -qc 'moat' /dev/null" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-unbuffer-bare-moat
+  threat: T9
+  action: { shell: "unbuffer moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-tmux-new-bare-moat
+  threat: T9
+  action: { shell: "tmux new -d moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-tmux-send-keys-bare-moat
+  threat: T9
+  action: { shell: "tmux send-keys -t 0 moat Enter" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-screen-detached-bare-moat
+  threat: T9
+  action: { shell: "screen -dm /usr/local/bin/moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-expect-spawn-bare-moat
+  threat: T9
+  action: { shell: "expect -c 'spawn moat; expect \"y/N\"; send \"y\\r\"; interact'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-python-pty-bare-moat
+  threat: T9
+  action: { shell: "python3 -c 'import pty; pty.spawn([\"moat\"])'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-osascript-bare-moat
+  threat: T9
+  action: { shell: "osascript -e 'tell app \"Terminal\" to do script \"moat\"'" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-wraps-any-moat-command
+  threat: T9
+  action: { shell: "script -q build.log moat status" }
+  expect: { verdict: deny, rules: [kernel-self] }
 - id: T9-repo-trusted-allow-moat-trust
   threat: T9
   action: { shell: "moat trust --revoke" }

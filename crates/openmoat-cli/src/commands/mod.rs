@@ -6,6 +6,7 @@ mod doctor;
 mod edit;
 mod guard;
 mod init;
+mod overview;
 mod policy;
 mod proxy;
 mod replay;
@@ -24,7 +25,10 @@ use crate::cli::{AuditCommand, Cli, Command, PolicyCommand, SandboxCommand};
 use crate::exit::Code;
 
 pub fn run(cli: Cli) -> Result<Code> {
-    match cli.command {
+    let Some(command) = cli.command else {
+        return overview::run();
+    };
+    match command {
         Command::Init(args) => init::run(&args),
         Command::Uninstall(args) => uninstall::run(&args),
         Command::Guard(args) => Ok(guard::run(&args)),

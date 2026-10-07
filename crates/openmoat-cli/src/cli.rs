@@ -17,11 +17,14 @@ use openmoat_hosts::Host;
                   level; outside them an allowed command runs with your permissions.\n\
                   Exit codes: 0 allow/ok, 1 the agent `run` started failed, 2 deny, 3 ask (unresolved),\n\
                   64 usage or configuration error\n\
-                  (`guard` exits 2 instead, so a broken hook blocks rather than fails open)."
+                  (`guard` exits 2 instead, so a broken hook blocks rather than fails open).\n\n\
+                  Run `moat` alone to see what is protected and answer anything that needs you:\n\
+                  a changed policy to accept, or a command an agent asked to run."
 )]
 pub struct Cli {
+    /// `None` is the home screen (`moat` alone).
     #[command(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 }
 
 #[derive(Debug, Subcommand)]

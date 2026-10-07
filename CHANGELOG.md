@@ -12,6 +12,8 @@ All notable changes to this project are documented here. The format follows
 - `moat uninstall [--hosts …] [--purge]` removes OpenMoat's hooks and sandbox settings from the agents and prints what it did per file (#282). A file unchanged since `moat init` gets its backup back byte for byte, a file `init` created is deleted, and a file changed since keeps those changes. The lock stops pinning the undone files; `~/.moat` stays unless `--purge`. It runs only from a terminal.
 - `moat init` records the config directory of each agent it sets up in `~/.moat/hosts.json`, which the lock pins (#298). `status`, `doctor`, `allow`, `sandbox sync` and `uninstall` use the recorded directories, so a custom `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `CURSOR_CONFIG_DIR` no longer has to be exported for every command. `moat doctor` reports a variable that names another directory than the record instead of following it; `moat init` with the variable set moves the record. `kernel-self` protects both the recorded directory and the one the variable names. Nothing changes for agents in their default directories.
 
+- `moat` with no subcommand shows one health line (the agents whose hook is installed, today's decisions with the number denied and asked) and then what needs a person (#299). Lock drift is listed and `Accept these changes? [y/N]` runs `moat doctor --accept` on `y`. The newest shell `ask` from today that no grant or permanent rule covers is shown with its rule and asks `Allow? [o]nce for this session / [a]lways / [n]o`, which runs `moat allow` for exactly that command. Otherwise it prints `Nothing needs you.` Without a terminal it prints the command to run and changes nothing.
+
 ### Changed
 - `moat init` asks before changing an agent (#282). At a terminal it lists the agents it found with the files it would change and asks `Protect Claude Code (…)? [Y/n]` for each, then names the backups and `Undo anytime: moat uninstall`. `--hosts` and the new `--yes` skip the questions. Without a terminal and without either flag, `init` sets up `~/.moat` but changes no agent's files, and says how to go on: scripts that ran `moat init` need `--yes`.
 
@@ -19,6 +21,7 @@ All notable changes to this project are documented here. The format follows
 - `moat status` and `moat doctor` show an agent that `moat init` left out (the person said no, or named other `--hosts`) as `· not set up` instead of a missing hook and five sandbox problems. Lock drift on a Claude Code settings file no longer names `theme`, which is not pinned (#287).
 
 ### Security
+- `kernel-self` denies any `moat` command run under a pseudo-terminal wrapper (`script`, `unbuffer`, `tmux`, `screen`, quoted for `expect`, Python `pty.spawn`, `osascript`), so an agent cannot answer the questions of a bare `moat` (#299). An agent running `moat` or `moat status` without a wrapper still gets `ask`, and without a terminal `moat` changes nothing.
 - `kernel-self` denies `moat edit` to agents, by name, by absolute path and under every pseudo-terminal wrapper already listed for `moat allow` (#300).
 - `kernel-self` denies agent runs of `moat uninstall`, including through pseudo-terminal wrappers, like `moat allow` (#282).
 

@@ -19,6 +19,7 @@ mod differential;
 mod edit;
 mod export;
 mod guard;
+mod home_screen;
 #[cfg(unix)]
 mod install_path;
 mod lock;

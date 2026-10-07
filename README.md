@@ -70,6 +70,11 @@ for each. It backs up every file before changing it, and `moat uninstall` undoes
 Start your agent as usual. Every tool call now goes through OpenMoat; `moat show`
 lists the decisions.
 
+When something is blocked or asked, run `moat`. It shows which agents are protected and
+today's decisions, then anything that needs you: a changed policy to accept, or the
+command an agent last asked to run (`Allow? [o]nce for this session / [a]lways / [n]o`).
+It shows what would change before it asks, and changes nothing unless you answer.
+
 ## How it works
 
 Before the agent runs a command, reads or writes a file, opens a web page or calls an
