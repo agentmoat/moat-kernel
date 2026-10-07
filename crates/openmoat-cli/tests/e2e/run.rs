@@ -151,12 +151,13 @@ mod confined {
         let local = TcpListener::bind("127.0.0.1:0").unwrap();
         local.set_nonblocking(true).unwrap();
         let url = format!("http://127.0.0.1:{}/", local.local_addr().unwrap().port());
+        // The proxy answers at once, but a loaded CI runner can take over 5 s (#280).
         let out = run_sh(
             &sb,
             &project,
             &format!(
                 "curl -s -m 5 --noproxy '*' {url}; echo \"direct=$?\"
-                 curl -s -m 5 -o /dev/null -w 'proxy=%{{http_code}}\\n' {url}"
+                 curl -s -m 30 -o /dev/null -w 'proxy=%{{http_code}}\\n' {url}"
             ),
         );
         if !ran(&out) {
@@ -194,7 +195,7 @@ libc = ctypes.CDLL(None, use_errno=True)
 libc.syscall(425, 1, None)  # io_uring_setup
 print("io_uring=" + str(ctypes.get_errno()))
 '
-             curl -s -m 5 -o /dev/null -w 'proxy=%{http_code}\n' http://127.0.0.1:9/"#,
+             curl -s -m 30 -o /dev/null -w 'proxy=%{http_code}\n' http://127.0.0.1:9/"#,
         );
         if !ran(&out) {
             return;
