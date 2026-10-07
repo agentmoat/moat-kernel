@@ -122,6 +122,9 @@ agent whose configuration directory exists. It never overwrites an existing poli
 never duplicates a hook and backs up a host file before editing it, so it is safe to
 run again.
 
+To hook only some agents, name them: `moat init --hosts claude-code` (or `codex`,
+`cursor`, comma-separated). `moat init --dry-run` prints what would change first.
+
 Hooks run the `moat` you ran `moat init` with, by its stable path (ADR-016). After
 moving or reinstalling the binary somewhere else, run `moat init` again; `moat doctor`
 names a hook whose binary is missing or is a different `moat`.
