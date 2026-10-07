@@ -43,9 +43,9 @@ moat: deny [secrets-paths] — secret material: read /Users/you/.ssh/id_rsa
 
 ```
 $ moat show
-id     time     host         verdict rules          action
-2      09:12:04 claude-code  ask     installs       npm install left-pad
-1      09:12:03 claude-code  deny    secrets-paths  cat ~/.ssh/id_rsa
+id     time (UTC) host         verdict rules          action
+2      09:12:04   claude-code  ask     installs       npm install left-pad
+1      09:12:03   claude-code  deny    secrets-paths  cat ~/.ssh/id_rsa
 ```
 
 ## A call asks
