@@ -7,7 +7,7 @@ policy, and keeps a local, tamper-evident audit log. This crate owns all I/O: fi
 environment, terminal, host configuration. Decisions come from `openmoat-core`.
 
 ```bash
-cargo install openmoat --locked --version 0.1.0-alpha.1   # pre-releases install only by version
+cargo install openmoat --locked --version 0.1.0-alpha.2   # pre-releases install only by version
 moat init      # policy, lock, audit log, and hooks for every agent found on this machine
 moat status
 ```
