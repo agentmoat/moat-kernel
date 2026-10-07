@@ -141,8 +141,12 @@ touch the manifests or the workflow run `dist plan` only. Running the workflow b
    the four `openmoat-*` entries of `[workspace.dependencies]` in `Cargo.toml`, run
    `cargo check` to update `Cargo.lock`, move the `[Unreleased]` entries of `CHANGELOG.md`
    under `## [X.Y.Z-alpha.N] - YYYY-MM-DD`, and update the version in the README install
-   commands. The release fails without that CHANGELOG section; its text becomes the
-   release notes, after a line saying decisions are not enforced by the OS (ADR-013).
+   commands and in `crates/openmoat-cli/README.md`. The release fails without that
+   CHANGELOG section; its text becomes the release notes, after a line saying what the
+   operating system does and does not enforce (ADR-013). For the first release, also
+   drop the "not yet released" wording: the README status note and the first paragraph
+   of its Install section, `docs/ROADMAP.md` "Where it is today", and the supported
+   versions note in `SECURITY.md`.
 3. After the merge, tag the merge commit: `git tag -s vX.Y.Z-alpha.N -m vX.Y.Z-alpha.N`
    and `git push origin vX.Y.Z-alpha.N`.
 4. Check the GitHub release and the tap commit, then approve the `release` environment in
@@ -150,11 +154,30 @@ touch the manifests or the workflow run `dist plan` only. Running the workflow b
    openmoat-audit and openmoat-proxy, then openmoat.
 
 The first crates.io publish is manual, because trusted publishing can only be configured
-for a crate that exists: reject the `release` deployment, run `cargo publish --locked
---workspace` from the tag with a short-lived token, then for each of the five crates add a
-trusted publisher on crates.io (GitHub, `crocodile-labs/openmoat`, workflow `release.yml`,
-environment `release`), revoke the token and run `cargo logout`. Later releases need no
-crates.io token.
+for a crate that exists. Reject the `release` deployment in the workflow run, then:
+
+1. On crates.io (account with a verified email), create an API token that expires in a
+   day, with the scopes `publish-new` and `publish-update` and the crate pattern
+   `openmoat*`.
+2. From a clean checkout of the tag:
+
+   ```bash
+   git checkout vX.Y.Z-alpha.N
+   cargo login                                   # paste the token
+   cargo publish --locked --workspace --dry-run
+   cargo publish --locked --workspace            # openmoat-core, then openmoat-hosts,
+                                                 # openmoat-audit, openmoat-proxy, then openmoat
+   ```
+
+   If it stops halfway, publish the rest one by one in that order with
+   `cargo publish --locked -p <crate>`; a published version cannot be replaced.
+3. For each of the five crates, open Settings → Trusted Publishing on crates.io and add a
+   GitHub publisher: owner `crocodile-labs`, repository `openmoat`, workflow `release.yml`,
+   environment `release`.
+4. Revoke the token on crates.io and run `cargo logout`.
+
+Later releases need no crates.io token: `publish-crates` exchanges the workflow's OIDC
+token after the `release` environment is approved.
 
 One-time repository setup: a `release` environment with the maintainer as required
 reviewer and deployments limited to `v*` tags, and `HOMEBREW_TAP_TOKEN`, a fine-grained

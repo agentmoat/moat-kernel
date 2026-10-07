@@ -8,11 +8,13 @@ use openmoat_hosts::Host;
 #[derive(Debug, Parser)]
 #[command(
     name = "moat",
-    version,
-    about = "OpenMoat: the kernel your AI agents run on",
-    long_about = "Decides what AI agents may do on this machine and records every decision.\n\
-                  Alpha: decisions are not enforced by the operating system; an allowed\n\
-                  command runs with your permissions.\n\
+    version = concat!(env!("CARGO_PKG_VERSION"), " (OpenMoat)"),
+    about = "OpenMoat: decides what AI coding agents may do, and records every decision",
+    long_about = "OpenMoat decides what AI coding agents may do on this machine and records\n\
+                  every decision.\n\
+                  Alpha: the hook's decisions are not enforced by the operating system. The host\n\
+                  sandboxes `moat init` configures, and `moat run`, confine commands at the OS\n\
+                  level; outside them an allowed command runs with your permissions.\n\
                   Exit codes: 0 allow/ok, 1 the agent `run` started failed, 2 deny, 3 ask (unresolved),\n\
                   64 usage or configuration error\n\
                   (`guard` exits 2 instead, so a broken hook blocks rather than fails open)."
@@ -51,7 +53,8 @@ pub enum Command {
         command: AuditCommand,
     },
     /// Run an agent in a sandbox generated from the policy, its network only through
-    /// OpenMoat's proxy (Lightweight tier, ADR-018; macOS). The agent's own sandbox must be off.
+    /// OpenMoat's proxy (Lightweight tier, ADR-018; macOS, Linux).
+    /// The agent's own sandbox must be off.
     Run(RunArgs),
     /// Inspect and test policy files.
     Policy {

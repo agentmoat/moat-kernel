@@ -1,6 +1,7 @@
 # openmoat-hosts
 
-Host adapters: the only code that knows each agent's hook wire format.
+Host adapters for [OpenMoat](https://github.com/crocodile-labs/openmoat): the only
+code that knows each agent's hook wire format.
 
 An adapter turns a host payload into a `HookRequest` (session, tool, normalised
 `Action`) and a `Decision` back into the host's response document. Adapters never
