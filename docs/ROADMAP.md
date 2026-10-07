@@ -25,8 +25,8 @@ so the only way to install it is to build from a clone. What exists:
   (ADR-022).
 - Standard tier: Claude Code's and Codex's own sandboxes configured and pinned from
   the policy (ADR-018).
-- Lightweight tier: `moat run` with a generated Seatbelt profile (macOS) or Landlock
-  rules (Linux) around the whole agent.
+- Lightweight tier: `moat run` with a generated Seatbelt profile (macOS), or Landlock
+  rules and a seccomp filter (Linux), around the whole agent.
 - `moat proxy`: default-deny egress with an SNI check, its own DNS and an audit row
   per connection, and a secrets broker that blocks a brokered secret on its way to the
   wrong host (ADR-020). HTTPS injection is not built yet (#247).
