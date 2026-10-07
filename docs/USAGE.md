@@ -115,7 +115,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | Command | Use it to |
 |---|---|
 | `moat init [--hosts …] [--dry-run]` | install policy, lock, audit log and agent hooks |
-| `moat status` · `moat doctor [--accept]` | check the installation · list drift and re-pin |
+| `moat status` · `moat doctor [--accept] [--verbose]` | check the installation · list drift and re-pin (`--verbose` lists where each sandbox is stricter or wider than the policy) |
 | `moat show [id] [--session …] [--since …]` | see events |
 | `moat replay --since today` · `moat report --since 7d` | per-session timeline · summary |
 | `moat audit export [--since …] [--host …] [--session …]` | write events as JSON Lines with their chain hashes |
@@ -125,7 +125,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat trust [<repo>] [--revoke]` | let a repository's `.moat/policy.yaml` allow, until the file changes |
 | `moat policy lint` · `moat policy check "<cmd>"` | validate a policy · test an action against it |
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |
-| `moat run [--write PATH]… -- <agent> [args]` | run an agent in a sandbox generated from the policy (macOS, Linux) |
+| `moat run [--write PATH]… [--verbose] -- <agent> [args]` | run an agent in a sandbox generated from the policy (macOS, Linux) |
 | `moat proxy [--listen 127.0.0.1:<port>]` | run the egress proxy on its own |
 | `moat guard --host <id>` | the hook entry point; agents call it, you do not |
 

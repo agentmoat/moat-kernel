@@ -32,8 +32,8 @@ enum Area {
 }
 
 /// The Standard tier: each present host's sandbox settings against the policy,
-/// then what the translation loses or widens.
-fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>) {
+/// then how many places the translation loses or widens (each one with `verbose`).
+fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>, verbose: bool) {
     let plan = match Plan::new(policy) {
         Ok(plan) => plan,
         Err(e) => {
@@ -46,13 +46,23 @@ fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>) {
         let name = host.display_name();
         let problems = host_sandbox::problems(host, &plan, lock);
         present |= !matches!(problems, Ok(None));
+        let translation = host_sandbox::report(host, &plan);
         match problems {
             Ok(None) => continue,
             Ok(Some(problems)) if problems.is_empty() => {
+                let details = if verbose {
+                    ""
+                } else {
+                    "; --verbose for details"
+                };
                 report.line(
                     Area::Sandbox,
                     true,
-                    format!("{name:<16} sandbox matches the policy"),
+                    format!(
+                        "{name:<16} sandbox matches the policy ({} stricter, {} wider{details})",
+                        translation.losses.len(),
+                        translation.allowances.len()
+                    ),
                 );
             }
             Ok(Some(problems)) => {
@@ -66,7 +76,9 @@ fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>) {
             }
             Err(e) => report.line(Area::Sandbox, false, format!("{name:<16} sandbox: {e:#}")),
         }
-        let _ = write_report(&mut report.out, host_sandbox::report(host, &plan));
+        if verbose {
+            let _ = write_report(&mut report.out, translation);
+        }
     }
     if let Some(port) = plan.proxy_port.filter(|_| present) {
         // A warning, not a problem: a stopped proxy fails closed.
@@ -223,7 +235,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
     }
 
     if let Some(policy) = &policy {
-        sandboxes(&mut report, policy, lock.as_ref());
+        sandboxes(&mut report, policy, lock.as_ref(), args.verbose);
     }
 
     match Store::open_read_only(&home.audit_path()).and_then(|store| store.verify_chain()) {

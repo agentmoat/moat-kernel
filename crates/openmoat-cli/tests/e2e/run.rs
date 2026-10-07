@@ -138,6 +138,11 @@ mod confined {
             stderr(&out).contains("turn the agent's own sandbox off"),
             "{shown}"
         );
+        assert!(
+            stderr(&out).contains("wider; --verbose for details)"),
+            "{shown}"
+        );
+        assert!(!stderr(&out).contains("stricter: "), "{shown}");
     }
 
     #[test]

@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- `moat doctor` and `moat run` print one line with the number of places a sandbox is stricter or wider than the policy instead of the whole list; `--verbose` prints the list (#289). Problems (a weakened setting, drift) still print in full, and `moat sandbox show` still prints everything.
+
 ## [0.1.0-alpha.0] - 2026-10-07
 
 ### Added
