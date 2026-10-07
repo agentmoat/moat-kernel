@@ -61,7 +61,7 @@ secrets or write outside the project.
 |---|---|
 | Policy decisions | Allow, ask or deny for every shell command, file access, web fetch and MCP call, with the reason |
 | Host sandboxes (Standard tier) | Claude Code's and Codex's own OS sandboxes, configured from your policy (`moat sandbox show`) |
-| `moat run` (Lightweight tier) | A generated sandbox (Seatbelt on macOS, Landlock on Linux) for any agent, with network only through OpenMoat |
+| `moat run` (Lightweight tier) | A generated sandbox (Seatbelt on macOS, Landlock and seccomp on Linux) for any agent, with network only through OpenMoat |
 | Egress proxy and secrets broker | `moat proxy`: only allowed destinations; the agent sees a placeholder, never the token. Adding the token to HTTPS requests is planned (#247) |
 | Session awareness | After an agent reads secrets or untrusted content, risky follow-up actions are asked about |
 | Repository policy | A project can make the rules stricter; it can loosen them only after you run `moat trust` |
@@ -197,7 +197,8 @@ moat run --write ~/.claude --write ~/.claude.json -- claude
 ```
 
 - **macOS:** a Seatbelt profile, started with `/usr/bin/sandbox-exec`.
-- **Linux 6.7 or later:** Landlock rules. Windows refuses.
+- **Linux 6.7 or later:** Landlock rules, plus a seccomp filter that allows only TCP
+  sockets (no UDP, Unix sockets or `ptrace`). Windows refuses.
 - The agent and every command it starts may read the project, `sandbox.read_roots`,
   the temp directory and the agent's own executable; never the keychain. They may
   write the project, the temp directory and each `--write` path (the agent's state).
@@ -211,8 +212,8 @@ moat run --write ~/.claude --write ~/.claude.json -- claude
   an API key or `apiKeyHelper`.
 - Before the agent starts, `moat run` prints every place the sandbox is stricter or
   wider than the policy (`moat sandbox show` prints the same for the current
-  directory). Linux is markedly wider than macOS (secrets inside the project stay
-  readable, UDP is open); see [THREAT_MODEL.md](docs/THREAT_MODEL.md).
+  directory). Linux is wider than macOS (secrets inside the project stay
+  readable, and the proxy's port is reachable on any host); see [THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 It is weaker per command than the Standard tier: the agent and its scripts share one
 sandbox, so whatever the agent needs, `npm test` gets too.
