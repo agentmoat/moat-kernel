@@ -255,9 +255,13 @@ something the alpha claims to stop.
 - **Claude Code's `theme` setting is not pinned** (#287). Claude Code writes it to
   `settings.json` itself; it changes only colours, and every other key stays pinned.
 - **`CLAUDE_CONFIG_DIR` must match for `init`.** `moat init` installs hooks where its
-  own environment points. Re-pinning (`allow`, `doctor --accept`) keeps every hook file
-  the lock already pins, whatever the shell's environment, and `doctor`/`status` report
-  an installed hook file the lock does not pin (#158).
+  own environment points and records that directory in `~/.moat/hosts.json`, which the
+  lock pins; later commands use the record, not their shell's variables, and `doctor`
+  reports a variable that disagrees (#298). An agent started with another directory
+  than the recorded one is not hooked. Re-pinning (`allow`, `doctor --accept`) keeps
+  every hook file the lock already pins, and `doctor`/`status` report an installed hook
+  file the lock does not pin (#158). `kernel-self` covers each agent's recorded
+  directory, or the one its variable names when none is recorded.
 
 - **The audit chain is tamper-evident, not tamper-proof.** The hash chain
   ([ARCHITECTURE.md](ARCHITECTURE.md) §7) makes an edit, a deletion or a reordering in the middle of the

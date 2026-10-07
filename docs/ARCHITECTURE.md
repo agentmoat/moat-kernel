@@ -290,7 +290,8 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
   the pinned ones, so a reviewed edit of a pinned file cannot pass the hook.
 - **`kernel-self` rules.** The default policy denies agent writes to the state and
   host directories (also where `MOAT_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or
-  `CURSOR_CONFIG_DIR` moved them), hook files and any `bin/moat`, and denies `moat
+  `CURSOR_CONFIG_DIR` moved them, and where `moat init` recorded them in `hosts.json`), hook
+  files and any `bin/moat`, and denies `moat
   allow|doctor|edit|init|policy|trust|uninstall` and `moat sandbox sync` from an agent, including under pseudo-terminal
   wrappers (ADR-011, ADR-014).
 - **Terminal check.** `moat allow`, `moat edit`, `moat trust`, `moat uninstall` and `moat doctor --accept` refuse to

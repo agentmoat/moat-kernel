@@ -1,6 +1,7 @@
 //! Host hook installation.
 
 mod binary;
+mod dirs;
 mod hook_file;
 
 use std::path::{Path, PathBuf};
@@ -9,6 +10,7 @@ use anyhow::{Result, bail};
 use openmoat_hosts::Host;
 
 pub use binary::{hook_binary, stale_hint};
+pub use dirs::Recorded;
 pub use hook_file::{HookState, Outcome, read_or_empty};
 
 use crate::home::user_home;
@@ -120,39 +122,64 @@ pub struct HostConfig {
     pub format: HookFormat,
 }
 
+/// The environment variable that moves `host`'s configuration directory, and
+/// the directory's name under the home directory otherwise.
+pub fn dir_variable(host: Host) -> Result<(&'static str, &'static str)> {
+    Ok(match host {
+        Host::ClaudeCode => ("CLAUDE_CONFIG_DIR", ".claude"),
+        Host::Codex => ("CODEX_HOME", ".codex"),
+        Host::Cursor => ("CURSOR_CONFIG_DIR", ".cursor"),
+        Host::Continue => {
+            bail!("the Continue CLI runs the Claude Code hook; it has none of its own")
+        }
+    })
+}
+
+/// `host`'s configuration directory as named by this shell's environment,
+/// when its variable is set.
+pub fn env_config_dir(host: Host) -> Result<Option<PathBuf>> {
+    Ok(env_dir(dir_variable(host)?.0))
+}
+
 impl HostConfig {
+    /// `host`'s configuration where `moat init` recorded it (`hosts.json`), else
+    /// where this shell's environment or the default puts it.
     pub fn for_host(host: Host) -> Result<Self> {
-        let home = user_home()?;
-        let config = match host {
-            Host::ClaudeCode => Self {
-                host,
-                settings_path: env_dir("CLAUDE_CONFIG_DIR")
-                    .unwrap_or_else(|| home.join(".claude"))
-                    .join("settings.json"),
-                hooks: CLAUDE_CODE_HOOKS,
-                format: HookFormat::Nested,
-            },
-            Host::Codex => Self {
-                host,
-                settings_path: env_dir("CODEX_HOME")
-                    .unwrap_or_else(|| home.join(".codex"))
-                    .join("hooks.json"),
-                hooks: CODEX_HOOKS,
-                format: HookFormat::Nested,
-            },
-            Host::Cursor => Self {
-                host,
-                settings_path: env_dir("CURSOR_CONFIG_DIR")
-                    .unwrap_or_else(|| home.join(".cursor"))
-                    .join("hooks.json"),
-                hooks: CURSOR_HOOKS,
-                format: HookFormat::Cursor,
-            },
-            Host::Continue => {
-                bail!("the Continue CLI runs the Claude Code hook; it has none of its own")
-            }
+        let recorded = Recorded::load(&crate::home::Home::locate()?)?;
+        Self::at(host, recorded.dir(host).or(env_config_dir(host)?))
+    }
+
+    /// For `moat init`: this shell's environment wins over the record, so a
+    /// person moves an agent by running `init` with its variable set.
+    pub fn for_init(host: Host) -> Result<Self> {
+        match env_config_dir(host)? {
+            Some(dir) => Self::at(host, Some(dir)),
+            None => Self::for_host(host),
+        }
+    }
+
+    fn at(host: Host, dir: Option<PathBuf>) -> Result<Self> {
+        let (_, default) = dir_variable(host)?;
+        let dir = match dir {
+            Some(dir) => dir,
+            None => user_home()?.join(default),
         };
-        Ok(config)
+        let (file, hooks, format) = match host {
+            Host::ClaudeCode => ("settings.json", CLAUDE_CODE_HOOKS, HookFormat::Nested),
+            Host::Codex => ("hooks.json", CODEX_HOOKS, HookFormat::Nested),
+            _ => ("hooks.json", CURSOR_HOOKS, HookFormat::Cursor),
+        };
+        Ok(Self {
+            host,
+            settings_path: dir.join(file),
+            hooks,
+            format,
+        })
+    }
+
+    /// The configuration directory, the one `hosts.json` records.
+    pub fn dir(&self) -> &Path {
+        self.settings_path.parent().unwrap_or(&self.settings_path)
     }
 
     /// The host is considered present when its configuration directory exists.

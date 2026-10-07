@@ -6,6 +6,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
 use openmoat_core::{EvalContext, Policy};
+use openmoat_hosts::Host;
 
 use crate::home;
 use crate::project;
@@ -85,22 +86,32 @@ pub fn home_spellings() -> Result<(String, Option<String>)> {
     Ok((home, real))
 }
 
-/// The state and host directories moved out of the home directory by their
-/// environment variables, as the CLI and the hosts resolve them (`home.rs`,
-/// `install`): each as written and with its symlinks resolved, so rules naming
-/// the default directory (`kernel-self`) protect the moved one too.
+/// The state and host directories moved out of the home directory, as the CLI
+/// resolves them (`home.rs`, `install`): a host directory `moat init` recorded
+/// (`hosts.json`), else the one its environment variable names. Each as written
+/// and with its symlinks resolved, so rules naming the default directory
+/// (`kernel-self`) protect the moved one too.
 pub fn moved_dirs() -> Result<Vec<(String, String)>> {
+    let recorded = crate::install::Recorded::load(&home::Home::locate()?)?;
     let mut out = Vec::new();
-    for (default, var) in [
-        ("~/.moat", "MOAT_HOME"),
-        ("~/.claude", "CLAUDE_CONFIG_DIR"),
-        ("~/.codex", "CODEX_HOME"),
-        ("~/.cursor", "CURSOR_CONFIG_DIR"),
+    for (default, var, host) in [
+        ("~/.moat", "MOAT_HOME", None),
+        ("~/.claude", "CLAUDE_CONFIG_DIR", Some(Host::ClaudeCode)),
+        ("~/.codex", "CODEX_HOME", Some(Host::Codex)),
+        ("~/.cursor", "CURSOR_CONFIG_DIR", Some(Host::Cursor)),
     ] {
-        let Some(dir) = std::env::var_os(var).filter(|v| !v.is_empty()) else {
+        let from_env = std::env::var_os(var)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from);
+        let at_home = home::user_home()?.join(&default[2..]);
+        let dir = match host.and_then(|h| recorded.dir(h)) {
+            Some(dir) => Some(dir).filter(|d| *d != at_home),
+            None => from_env,
+        };
+        let Some(dir) = dir else {
             continue;
         };
-        let dir = path_string(&absolute(Path::new(&dir))?);
+        let dir = path_string(&absolute(&dir)?);
         out.extend(real_root(&dir).map(|real| (default.to_owned(), real)));
         out.push((default.to_owned(), dir));
     }

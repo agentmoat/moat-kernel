@@ -24,8 +24,19 @@ impl Home {
         Ok(Self { root })
     }
 
+    /// A state directory at `root`, for unit tests.
+    #[cfg(test)]
+    pub fn at(root: PathBuf) -> Self {
+        Self { root }
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The configuration directory of each agent `moat init` set up.
+    pub fn hosts_path(&self) -> PathBuf {
+        self.root.join("hosts.json")
     }
 
     pub fn policy_path(&self) -> PathBuf {
