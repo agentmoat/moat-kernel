@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-alpha.1] - 2026-10-07
+
 ### Added
 - Lock drift on a JSON or TOML file names the top-level keys that changed since the pin, in `moat doctor`, in `moat doctor --accept` before it re-pins, and in `guard`'s `kernel-integrity` reasons: `settings.json was modified: changed hooks; added theme` (#288). The lock records a digest per top-level key for those files; a lock written earlier keeps the plain message until its next re-pin.
 
