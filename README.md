@@ -180,7 +180,7 @@ The full list, with the reasons: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 |---|---|
 | Report a bypass or vulnerability | [SECURITY.md](SECURITY.md), privately. Valid bypasses become conformance fixtures before the fix is published |
 | Fix a false positive or add a rule | `crates/openmoat-core/policies/default-v1.yaml`, with a fixture in `tests/conformance/` |
-| Support another agent | `crates/openmoat-hosts/src/`, with fixtures in `tests/fixtures/hosts/` |
+| Support another agent | [docs/ADDING_AN_AGENT.md](docs/ADDING_AN_AGENT.md): an adapter in `crates/openmoat-hosts/src/`, with fixtures in `tests/fixtures/hosts/` |
 | Anything that changes what an agent may do | open an issue first |
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first PR. AI-assisted PRs are

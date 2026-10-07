@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- docs/ADDING_AN_AGENT.md: how to add support for another AI coding agent, from mapping its hook payload to an action, through installing the hook and capturing fixtures, to what the pull request must include (#319). Linked from CONTRIBUTING.md and the README.
+
 ## [0.1.0-alpha.4] - 2026-10-07
 
 ### Changed
