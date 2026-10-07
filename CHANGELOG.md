@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 - `moat allow --site <host>`, `moat allow --dir <path>` and `moat allow --remove <id>` (#300). `--site` adds a `net` allow for one host name; it also covers web fetches. `--dir` adds an `fs.read` and `fs.write` allow for an existing directory and everything below it, stored as written and with its symlinks resolved. Both append to `~/.moat/policy.d/approved.yaml`, check that the merged policy lints, re-pin, and print the rule as written plus the `moat allow --remove` command that undoes it. Deny rules still win. Wildcards, URLs, the home directory, its ancestors and filesystem roots are refused. `--remove` takes out any `approved-N` rule, `--always` ones included, and `--always` now prints its undo command too. New attack fixtures show that an agent running `moat allow --site` or `--dir` is denied (`kernel-self`).
+- `moat edit` (#300) opens `~/.moat/policy.yaml` in `$VISUAL`, `$EDITOR`, `vi` or (Windows) `notepad`, on a copy inside `~/.moat`. An unchanged copy changes nothing. A copy that does not lint is reported and never written, and you can reopen it. Otherwise it prints the lint warnings and a unified diff, and writes and re-pins only after `Apply? [y/N]` is answered `y`. The previous policy is kept in `~/.moat/policy.yaml.bak`. It needs a terminal and an intact lock, like `moat allow`.
+
+### Security
+- `kernel-self` denies `moat edit` to agents, by name, by absolute path and under every pseudo-terminal wrapper already listed for `moat allow` (#300).
 
 ## [0.1.0-alpha.1] - 2026-10-07
 

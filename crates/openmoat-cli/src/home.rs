@@ -79,13 +79,19 @@ impl Home {
         Ok(true)
     }
 
-    /// Load and lint the installed user policy, with `moat allow --always` rules merged in.
+    /// Load and lint the installed user policy, with `moat allow` rules merged in.
     pub fn load_policy(&self) -> Result<Policy> {
         let path = self.policy_path();
         if !path.is_file() {
             bail!("no policy at {}; run `moat init`", path.display());
         }
-        let mut policy = context::load_policy(&path)?;
+        self.load_policy_at(&path)
+    }
+
+    /// Load and lint the policy file at `path` as if it were installed, with
+    /// `moat allow` rules merged in (`moat edit` checks its draft this way).
+    pub fn load_policy_at(&self, path: &Path) -> Result<Policy> {
+        let mut policy = context::load_policy(path)?;
         let overlay = crate::approvals::Overlay::load(&self.overlay_path())?;
         if !overlay.allow.is_empty() {
             policy.allow.extend(overlay.allow);

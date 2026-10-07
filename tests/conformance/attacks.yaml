@@ -856,6 +856,18 @@
   threat: T9
   action: { shell: "moat allow --dir /etc" }
   expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-agent-runs-moat-edit
+  threat: T9
+  action: { shell: "EDITOR=true moat edit" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-moat-edit-by-absolute-path
+  threat: T9
+  action: { shell: "/usr/local/bin/moat edit" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-moat-edit
+  threat: T9
+  action: { shell: "script -q /dev/null moat edit" }
+  expect: { verdict: deny, rules: [kernel-self] }
 
 # T7 options of allowed programs that run another program or write a file
 - id: T7-find-exec-shell-exfil

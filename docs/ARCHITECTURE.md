@@ -279,7 +279,7 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
   and `doctor --accept` before it re-pins) names the keys that were changed, added or
   removed: `settings.json was modified: changed hooks; added theme`. A lock written
   before that, or a file that no longer parses, gives the plain `was modified`. Only a person re-pins: `moat init`, or
-  `moat doctor --accept`, `moat allow`, `moat trust` and `moat sandbox sync` from an
+  `moat doctor --accept`, `moat allow`, `moat edit`, `moat trust` and `moat sandbox sync` from an
   interactive terminal.
 - **ConfigChange veto.** Claude Code reports settings changes; a pinned file that no
   longer matches the lock is blocked for the session. Codex and Cursor have no such
@@ -291,9 +291,9 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
 - **`kernel-self` rules.** The default policy denies agent writes to the state and
   host directories (also where `MOAT_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or
   `CURSOR_CONFIG_DIR` moved them), hook files and any `bin/moat`, and denies `moat
-  allow|doctor|init|policy|trust` and `moat sandbox sync` from an agent, including under pseudo-terminal
+  allow|doctor|edit|init|policy|trust` and `moat sandbox sync` from an agent, including under pseudo-terminal
   wrappers (ADR-011, ADR-014).
-- **Terminal check.** `moat allow`, `moat trust` and `moat doctor --accept` refuse to
+- **Terminal check.** `moat allow`, `moat edit`, `moat trust` and `moat doctor --accept` refuse to
   run without a terminal (`terminal.rs`). The debug-only `MOAT_ASSUME_TTY` override exists for tests.
 - **Stable hook path** (ADR-016). Hooks run the package manager's stable link to
   `moat`, not a versioned file an upgrade deletes; `doctor` and `status` name a hook
@@ -370,6 +370,7 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
 ```
 ~/.moat/                       ($MOAT_HOME overrides; directory 0700, files 0600)
   policy.yaml                  user policy (moat init writes the default once)
+  policy.yaml.bak              the policy before the last `moat edit` applied a change
   policy.d/approved.yaml       permanent rules from `moat allow --always/--site/--dir`
   approvals.json               session grants from `moat allow` (24 h each)
   trust.json                   repository policies trusted with `moat trust`: root → SHA-256

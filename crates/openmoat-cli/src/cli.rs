@@ -39,6 +39,9 @@ pub enum Command {
     /// Approve a shell command for one session, or permanently; or permanently allow
     /// a site (`--site`) or a directory (`--dir`). Refused unless run from an interactive terminal.
     Allow(AllowArgs),
+    /// Edit ~/.moat/policy.yaml in $VISUAL or $EDITOR; lint it, show the diff and ask
+    /// before applying and re-pinning. Refused unless run from an interactive terminal.
+    Edit,
     /// Let a repository's .moat/policy.yaml allow, not only deny and ask, until the file changes.
     /// Refused unless run from an interactive terminal, and over a drifted lock.
     Trust(TrustArgs),
