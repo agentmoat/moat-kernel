@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use crate::cli::UninstallArgs;
 use crate::exit::Code;
 use crate::home::{Home, user_home, write_private};
-use crate::install::{self, HostConfig, read_or_empty};
+use crate::install::{self, HostConfig, Recorded, read_or_empty};
 use crate::integrity;
 use crate::render::Deferred;
 use crate::sandbox::{claude, codex, codex_config_path};
@@ -36,7 +36,8 @@ pub fn run(args: &UninstallArgs) -> Result<Code> {
     };
     let mut out = Deferred::default();
     let mut undone = Vec::new();
-    for host in hosts {
+    let mut recorded = Recorded::load(&home)?;
+    for host in hosts.iter().copied() {
         let config = HostConfig::for_host(host)?;
         // Claude Code keeps its sandbox block in the same file as its hooks.
         let sandbox_too = host == Host::ClaudeCode;
@@ -62,7 +63,17 @@ pub fn run(args: &UninstallArgs) -> Result<Code> {
             }
         }
     }
-    integrity::unpin(&home, &undone)?;
+    // The files are undone first: until then the record says where they are.
+    let before = recorded.dirs.len();
+    recorded
+        .dirs
+        .retain(|id, _| !hosts.iter().any(|h| h.id() == id));
+    let mut rewritten = Vec::new();
+    if recorded.dirs.len() != before {
+        recorded.save(&home)?;
+        rewritten.push(home.hosts_path());
+    }
+    integrity::unpin(&home, &undone, &rewritten)?;
     if args.purge {
         purge(&home)?;
         writeln!(out, "✔ state directory  {} deleted", home.root().display())?;

@@ -1,7 +1,7 @@
 //! `moat init`: create the state directory, default policy, audit log and host hooks.
 
 use std::io::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use openmoat_audit::Store;
@@ -12,7 +12,7 @@ use crate::cli::InitArgs;
 use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
-use crate::install::{HostConfig, Outcome};
+use crate::install::{HostConfig, Outcome, Recorded};
 use crate::integrity;
 use crate::render::Deferred;
 use crate::sandbox::{self, Plan};
@@ -77,9 +77,12 @@ pub fn run(args: &InitArgs) -> Result<Code> {
 
     if !dry_run {
         home.ensure_approval_files()?;
+        // Recorded before the files are written: every command from here on,
+        // this one included, finds each agent where this shell says it is.
+        record(&home, &hosts)?;
     }
     for host in hosts.iter().copied() {
-        let config = HostConfig::for_host(host)?;
+        let config = HostConfig::for_init(host)?;
         let outcome = config.install(&binary, dry_run)?;
         let verb = match outcome {
             Outcome::Installed => "installed",
@@ -118,7 +121,7 @@ pub fn run(args: &InitArgs) -> Result<Code> {
         if !hosts.is_empty() {
             let mut backups = Vec::new();
             for host in &hosts {
-                for file in host_files(*host)? {
+                for file in host_files(&HostConfig::for_host(*host)?) {
                     backups.extend(crate::install::backups(&file));
                 }
             }
@@ -148,7 +151,7 @@ fn choose_hosts(args: &InitArgs, out: &mut Deferred) -> Result<Vec<Host>> {
     }
     let found: Vec<HostConfig> = Host::ALL
         .into_iter()
-        .filter_map(|h| HostConfig::for_host(h).ok())
+        .filter_map(|h| HostConfig::for_init(h).ok())
         .filter(HostConfig::host_present)
         .collect();
     let names: Vec<&str> = found.iter().map(|c| c.host.display_name()).collect();
@@ -173,7 +176,7 @@ fn choose_hosts(args: &InitArgs, out: &mut Deferred) -> Result<Vec<Host>> {
     }
     writeln!(out, "Found these agents:")?;
     for config in &found {
-        let files: Vec<String> = host_files(config.host)?
+        let files: Vec<String> = host_files(config)
             .iter()
             .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
             .collect();
@@ -181,7 +184,7 @@ fn choose_hosts(args: &InitArgs, out: &mut Deferred) -> Result<Vec<Host>> {
             out,
             "  {:<12} {} (changes {})",
             config.host.display_name(),
-            config_dir(config).display(),
+            config.dir().display(),
             files.join(", ")
         )?;
     }
@@ -196,7 +199,7 @@ fn choose_hosts(args: &InitArgs, out: &mut Deferred) -> Result<Vec<Host>> {
             out,
             "Protect {} ({})? [Y/n] ",
             config.host.display_name(),
-            config_dir(config).display()
+            config.dir().display()
         )?;
         out.flush()?;
         let mut answer = String::new();
@@ -221,24 +224,27 @@ fn choose_hosts(args: &InitArgs, out: &mut Deferred) -> Result<Vec<Host>> {
     Ok(chosen)
 }
 
-fn config_dir(config: &HostConfig) -> &Path {
-    config
-        .settings_path
-        .parent()
-        .unwrap_or(&config.settings_path)
+/// Every file `init` may change for `config`'s host: its hook file, and Codex's
+/// `config.toml` beside it ([`sandbox::codex_config_path`]).
+fn host_files(config: &HostConfig) -> Vec<PathBuf> {
+    let mut files = vec![config.settings_path.clone()];
+    if config.host == Host::Codex {
+        files.push(config.settings_path.with_file_name("config.toml"));
+    }
+    files
 }
 
-/// Every file `init` may change for `host`: its hook file, and its sandbox
-/// settings when they live elsewhere (Codex `config.toml`).
-fn host_files(host: Host) -> Result<Vec<PathBuf>> {
-    let mut files = vec![HostConfig::for_host(host)?.settings_path];
-    if sandbox::install::HOSTS.contains(&host) {
-        let settings = sandbox::install::settings_path(host)?;
-        if !files.contains(&settings) {
-            files.push(settings);
-        }
+/// Record where each of `hosts` keeps its configuration, so later commands
+/// find it without this shell's environment (`hosts.json`, pinned by the lock).
+fn record(home: &Home, hosts: &[Host]) -> Result<()> {
+    let mut recorded = Recorded::load(home)?;
+    for host in hosts {
+        let config = HostConfig::for_init(*host)?;
+        recorded
+            .dirs
+            .insert(host.id().to_owned(), config.dir().to_path_buf());
     }
-    Ok(files)
+    recorded.save(home)
 }
 
 /// Standard tier (ADR-018): each selected host's own sandbox, configured from

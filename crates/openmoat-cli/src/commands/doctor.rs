@@ -10,7 +10,9 @@ use openmoat_hosts::Host;
 use crate::cli::DoctorArgs;
 use crate::exit::Code;
 use crate::home::Home;
-use crate::install::{CONTINUE_CLI_WARNING, HookState, HostConfig, stale_hint};
+use crate::install::{
+    CONTINUE_CLI_WARNING, HookState, HostConfig, Recorded, dir_variable, env_config_dir, stale_hint,
+};
 use crate::integrity::{self, HookPinGap, HookPins, Lock};
 use crate::render::Deferred;
 use crate::sandbox::{Plan, install as host_sandbox};
@@ -212,7 +214,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         ),
     }
 
-    let hook_files = hooks(&mut report, &binary)?;
+    let hook_files = hooks(&mut report, &home, &binary)?;
 
     if let Some(lock) = &lock {
         let gap = HookPinGap::new(lock, &home, &hook_files);
@@ -285,11 +287,33 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
 
 /// One line per host's hook, then the Continue CLI warning; returns the
 /// installed hook files.
-fn hooks(report: &mut Report, binary: &std::path::Path) -> Result<Vec<std::path::PathBuf>> {
+fn hooks(
+    report: &mut Report,
+    home: &Home,
+    binary: &std::path::Path,
+) -> Result<Vec<std::path::PathBuf>> {
+    let recorded = Recorded::load(home)?;
     let mut hook_files = Vec::new();
     for host in Host::ALL {
         let config = HostConfig::for_host(host)?;
         let name = host.display_name();
+        // Every command follows the record; a variable naming another directory
+        // is reported rather than silently ignored or followed.
+        if let (Some(env), Some(dir)) = (env_config_dir(host)?, recorded.dir(host))
+            && env != dir
+        {
+            let (var, _) = dir_variable(host)?;
+            report.line(
+                Area::Hook,
+                false,
+                format!(
+                    "{name:<16} {var} is {}, but `moat init` set it up in {}, which moat uses; \
+                     run `moat init` with {var} set to set up that directory instead",
+                    env.display(),
+                    dir.display()
+                ),
+            );
+        }
         match config.state(binary) {
             HookState::Installed => {
                 hook_files.push(config.settings_path.clone());

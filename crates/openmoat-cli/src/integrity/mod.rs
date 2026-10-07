@@ -116,6 +116,7 @@ fn state_files(home: &Home) -> Vec<PathBuf> {
         home.grants_path(),
         home.overlay_path(),
         home.trust_path(),
+        home.hosts_path(),
     ]
 }
 
@@ -194,18 +195,22 @@ pub fn refuse_drift(home: &Home, doing: &str) -> Result<()> {
 }
 
 /// Forget the pins of `paths`, the host files `moat uninstall` just undid, and
-/// keep every other pin as it is: nothing is re-pinned, so no drift is accepted.
-pub fn unpin(home: &Home, paths: &[PathBuf]) -> Result<()> {
+/// pin `rewritten`, the state files it just wrote (`hosts.json`). Every other
+/// pin stays as it is, so no drift elsewhere is accepted.
+pub fn unpin(home: &Home, paths: &[PathBuf], rewritten: &[PathBuf]) -> Result<()> {
     let lock_path = home.lock_path();
     if !lock_path.is_file() {
         return Ok(());
     }
     let mut lock = Lock::load(&lock_path)?;
-    for path in paths.iter().map(|p| key(p)) {
+    for path in paths.iter().chain(rewritten).map(|p| key(p)) {
         lock.entries.remove(&path);
         lock.codex_profiles.remove(&path);
         lock.keys.remove(&path);
     }
+    let fresh = Lock::pin(Path::new(&lock.binary), rewritten)?;
+    lock.entries.extend(fresh.entries);
+    lock.keys.extend(fresh.keys);
     lock.save(&lock_path)
 }
 

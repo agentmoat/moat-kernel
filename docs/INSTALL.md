@@ -92,10 +92,13 @@ the default policy denies it to agents (`kernel-self`).
 
 `moat` finds each agent's configuration the way the agent does: `CLAUDE_CONFIG_DIR`,
 `CODEX_HOME` and `CURSOR_CONFIG_DIR` replace `~/.claude`, `~/.codex` and `~/.cursor`,
-and `MOAT_HOME` replaces `~/.moat`. `moat init`, `status`, `doctor` and `allow` read
-these from their own environment. If you start Claude Code with `CLAUDE_CONFIG_DIR`
-set, run those commands with the same value; otherwise `init` installs into
-`~/.claude/settings.json`, which that Claude Code never reads, and `status` reports
-the wrong file.
+and `MOAT_HOME` replaces `~/.moat`. If you start Claude Code with `CLAUDE_CONFIG_DIR`
+set, run `moat init` once with the same value. `init` records the directory of each
+agent it sets up in `~/.moat/hosts.json` (pinned by the lock), and every later command
+(`status`, `doctor`, `allow`, `sandbox sync`, `uninstall`) uses the recorded directory,
+so you do not export the variables again. When a variable in your shell names another
+directory than the record, `moat doctor` reports it instead of following it; run
+`moat init` with the variable set to move OpenMoat to that directory. `MOAT_HOME` is
+not recorded: it says where the record is.
 
 Next: [USAGE.md](USAGE.md) for daily use, [SANDBOX.md](SANDBOX.md) for the OS sandboxes.

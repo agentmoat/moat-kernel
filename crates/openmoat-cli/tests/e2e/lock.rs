@@ -36,8 +36,9 @@ fn init_writes_a_lock_covering_policy_and_hooks() {
     let lock: Value =
         serde_json::from_str(&std::fs::read_to_string(lock_path(&sb)).unwrap()).unwrap();
     let entries = lock["entries"].as_object().unwrap();
-    assert_eq!(entries.len(), 5, "{entries:?}");
+    assert_eq!(entries.len(), 6, "{entries:?}");
     for name in [
+        "hosts.json",
         "policy.yaml",
         "environment.json",
         "approvals.json",
@@ -275,9 +276,11 @@ fn planted_binary_earlier_on_the_search_path_is_denied() {
     assert!(reason.contains("early-bin"), "{reason}");
 }
 
-/// #158: the hook file an agent reads depends on the agent's `CLAUDE_CONFIG_DIR`.
-/// A person re-pinning from a shell with another value must not drop it from the
-/// lock, nor quietly adopt the hook file that shell points at.
+/// #158, #298: the hook file an agent reads depends on the agent's
+/// `CLAUDE_CONFIG_DIR`. A person re-pinning from a shell with another value must
+/// not drop it from the lock, nor quietly adopt the hook file that shell points
+/// at: commands follow the directory `init` recorded, and `doctor` reports the
+/// variable that disagrees. Only `init` with the variable set moves the record.
 #[test]
 fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
     use std::path::Path;
@@ -327,11 +330,15 @@ fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
         "doctor --accept adopted an unpinned hook file"
     );
     assert_eq!(out.status.code(), Some(64), "{report}");
-    assert!(report.contains("is not pinned by the lock"), "{report}");
     assert!(
-        report.contains("is pinned but not this shell's"),
+        report.contains("CLAUDE_CONFIG_DIR is") && report.contains("which moat uses"),
         "{report}"
     );
+    assert!(
+        report.contains("Claude Code      hook installed"),
+        "{report}"
+    );
+    assert!(!report.contains("not pinned"), "{report}");
 
     let out = run(&shell, &["allow", "npm install left-pad", "--always"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
@@ -344,11 +351,10 @@ fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
         "allow --always adopted an unpinned hook file"
     );
 
-    let out = run(&shell, &["status"]);
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
-    assert!(text(&out).contains("is not pinned"), "{}", text(&out));
-    let out = run(&agent, &["status"]);
-    assert!(!text(&out).contains("not pinned"), "{}", text(&out));
+    for dir in [&shell, &agent] {
+        let out = run(dir, &["status"]);
+        assert!(!text(&out).contains("not pinned"), "{}", text(&out));
+    }
 
     let settings = std::fs::read_to_string(agent.join("settings.json")).unwrap();
     let settings = settings.replacen('{', r#"{"model":"x","#, 1);

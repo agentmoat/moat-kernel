@@ -6,6 +6,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
 use openmoat_core::{EvalContext, Policy};
+use openmoat_hosts::Host;
 
 use crate::home;
 use crate::project;
@@ -85,24 +86,34 @@ pub fn home_spellings() -> Result<(String, Option<String>)> {
     Ok((home, real))
 }
 
-/// The state and host directories moved out of the home directory by their
-/// environment variables, as the CLI and the hosts resolve them (`home.rs`,
-/// `install`): each as written and with its symlinks resolved, so rules naming
-/// the default directory (`kernel-self`) protect the moved one too.
+/// The state and host directories moved out of the home directory: the one each
+/// environment variable names and the host directory `moat init` recorded
+/// (`hosts.json`), both when they differ, since an agent may run with either.
+/// Each as written and with its symlinks resolved, so rules naming the default
+/// directory (`kernel-self`) protect the moved ones too.
 pub fn moved_dirs() -> Result<Vec<(String, String)>> {
+    let recorded = crate::install::Recorded::load(&home::Home::locate()?)?;
     let mut out = Vec::new();
-    for (default, var) in [
-        ("~/.moat", "MOAT_HOME"),
-        ("~/.claude", "CLAUDE_CONFIG_DIR"),
-        ("~/.codex", "CODEX_HOME"),
-        ("~/.cursor", "CURSOR_CONFIG_DIR"),
+    for (default, var, host) in [
+        ("~/.moat", "MOAT_HOME", None),
+        ("~/.claude", "CLAUDE_CONFIG_DIR", Some(Host::ClaudeCode)),
+        ("~/.codex", "CODEX_HOME", Some(Host::Codex)),
+        ("~/.cursor", "CURSOR_CONFIG_DIR", Some(Host::Cursor)),
     ] {
-        let Some(dir) = std::env::var_os(var).filter(|v| !v.is_empty()) else {
-            continue;
-        };
-        let dir = path_string(&absolute(Path::new(&dir))?);
-        out.extend(real_root(&dir).map(|real| (default.to_owned(), real)));
-        out.push((default.to_owned(), dir));
+        let from_env = std::env::var_os(var)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from);
+        let at_home = home::user_home()?.join(&default[2..]);
+        let from_record = host.and_then(|h| recorded.dir(h)).filter(|d| *d != at_home);
+        for dir in from_env.into_iter().chain(from_record) {
+            let dir = path_string(&absolute(&dir)?);
+            for spelling in real_root(&dir).into_iter().chain([dir]) {
+                let pair = (default.to_owned(), spelling);
+                if !out.contains(&pair) {
+                    out.push(pair);
+                }
+            }
+        }
     }
     Ok(out)
 }

@@ -144,3 +144,70 @@ fn uninstall_purge_deletes_the_state_directory() {
     assert!(!sb.home.join(".moat").exists());
     assert!(!sb.home.join(".claude/settings.json").exists());
 }
+
+/// #298: `init` records a moved config directory; later commands use it without
+/// the variable, and uninstall forgets it.
+#[test]
+fn commands_follow_the_recorded_config_dir() {
+    let sb = Sandbox::bare(&[".claude"]);
+    let custom = sb.home.join("custom-claude");
+    fs::create_dir_all(&custom).unwrap();
+    let out = output(
+        sb.command()
+            .args(["init", "--hosts", "claude-code"])
+            .env("CLAUDE_CONFIG_DIR", &custom),
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(custom.join("settings.json").is_file());
+    let recorded = fs::read_to_string(sb.home.join(".moat/hosts.json")).unwrap();
+    assert!(recorded.contains("custom-claude"), "{recorded}");
+
+    let status = sb.moat(&["status"]);
+    assert!(
+        stdout(&status).contains("custom-claude"),
+        "{}",
+        text(&status)
+    );
+    assert!(!sb.home.join(".claude/settings.json").exists());
+
+    let out = sb.moat_as_person(&["uninstall"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(!custom.join("settings.json").exists(), "{}", text(&out));
+    let recorded = fs::read_to_string(sb.home.join(".moat/hosts.json")).unwrap();
+    assert!(!recorded.contains("custom-claude"), "{recorded}");
+    let doctor = sb.moat(&["doctor"]);
+    assert!(!text(&doctor).contains("was modified"), "{}", text(&doctor));
+}
+
+/// #298: `kernel-self` protects both the recorded directory and the one an
+/// agent's variable names when they differ; an agent may run with either.
+#[test]
+fn kernel_self_covers_the_recorded_and_the_env_config_dir() {
+    let sb = Sandbox::bare(&[]);
+    let recorded = sb.home.join("recorded-claude");
+    let other = sb.home.join("other-claude");
+    fs::create_dir_all(&recorded).unwrap();
+    let out = output(
+        sb.command()
+            .args(["init", "--hosts", "claude-code"])
+            .env("CLAUDE_CONFIG_DIR", &recorded),
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    for dir in [&recorded, &other] {
+        let target = dir.join("settings.json");
+        let out = output(
+            sb.command().env("CLAUDE_CONFIG_DIR", &other).args([
+                "policy",
+                "check",
+                target.to_str().unwrap(),
+                "--kind",
+                "fs-write",
+            ]),
+            None,
+        );
+        assert_eq!(out.status.code(), Some(2), "{}", text(&out));
+        assert!(stdout(&out).contains("kernel-self"), "{}", text(&out));
+    }
+}
