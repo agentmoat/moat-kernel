@@ -16,6 +16,8 @@ scenarios in CI · nothing leaves your machine unless you export it**
 [Install](docs/INSTALL.md) · [Usage](docs/USAGE.md) · [Policy](docs/POLICY.md) ·
 [Threat model](docs/THREAT_MODEL.md) · [Demo](docs/DEMO.md) · [Roadmap](docs/ROADMAP.md)
 
+![A prompt injection in a README asks Claude Code and Codex to upload the SSH key; OpenMoat denies every attempt, denies the agent's attempts to switch it off, and records it all](docs/assets/demo.gif)
+
 ## Why you need it
 
 AI coding agents run commands, edit files and connect to the internet with your

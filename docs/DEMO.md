@@ -14,7 +14,10 @@ scripts/demo/launch-demo.sh                # or: scripts/demo/launch-demo.sh pat
 DEMO_PACE=0 scripts/demo/launch-demo.sh    # no pauses
 ```
 
-To record it: `asciinema rec -c scripts/demo/launch-demo.sh moat-demo.cast`.
+To record it: `asciinema rec -c scripts/demo/launch-demo.sh moat-demo.cast`. The README's
+`docs/assets/demo.gif` is that recording at 130×40, rendered with
+[agg](https://github.com/asciinema/agg):
+`agg --font-size 15 --theme github-dark --idle-time-limit 3 moat-demo.cast docs/assets/demo.gif`.
 
 ## It never touches your configuration
 
@@ -45,7 +48,9 @@ It ends with `moat show --recent 10` (both agents, one log) and
 
 ## What it does not claim
 
-OpenMoat decides; the operating system does not enforce the decision yet (ADR-013,
-[THREAT_MODEL.md](THREAT_MODEL.md) §5). The demo shows the hook's decisions and the
-audit trail, which is what stops the call in a real Claude Code or Codex session. The
-same scenarios, and more, run in CI as [MoatBench mini](MOATBENCH.md).
+The demo shows the hook's decisions and the audit trail, which is what stops the call
+in a real Claude Code or Codex session. It does not show the operating-system layer: the
+agents' own sandboxes that `moat init` configures (Standard tier) and `moat run`
+(Lightweight tier) are described in [SANDBOX.md](SANDBOX.md), with their limits in
+[THREAT_MODEL.md](THREAT_MODEL.md). The same scenarios, and more, run in CI as
+[MoatBench mini](MOATBENCH.md).

@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- README opens with a 27-second recording of the launch demo (`docs/assets/demo.gif`). The demo script shortens the throwaway paths and the binary path in its output, and docs/DEMO.md no longer says the operating system does not enforce decisions.
 - docs/INSTALL.md says how to upgrade: `brew update && brew upgrade moat`, since `brew upgrade` alone may not see a new release of the tap (#314).
 - After a session grant (`o` in `moat`, or `moat allow --last` without `--always`), `moat` says that the grant covers only this agent session and that a new session asks again; for Claude Code, `claude --continue` resumes the session (#312).
 

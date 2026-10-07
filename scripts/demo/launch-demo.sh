@@ -22,6 +22,7 @@ if [ -z "$bin" ] || [ ! -x "$bin" ]; then
     echo "no moat binary: run 'cargo build -p openmoat' or pass its path" >&2
     exit 64
 fi
+bin=$(cd "$(dirname "$bin")" && pwd -P)/$(basename "$bin")   # as the hooks name it
 pace=${DEMO_PACE:-1.5}
 
 sandbox=$(mktemp -d "${TMPDIR:-/tmp}/moat-demo.XXXXXX")
@@ -63,8 +64,11 @@ agent() {
     sleep "$pace"
 }
 
+# Shorten the throwaway paths and the binary path in what is shown.
+clean() { sed -e "s|$sandbox|<tmp>|g" -e "s|$bin|moat|g"; }
+
 say "Install OpenMoat for Claude Code and Codex in a throwaway home: one policy for both"
-moat init --yes | sed -e "s|$sandbox|<tmp>|g"
+moat init --yes | clean
 
 say "The project README carries a hidden instruction for AI agents"
 cat "$project/README.md"
@@ -84,6 +88,6 @@ agent claude-code demo-claude "moat allow --last --always"
 say "The audit trail: every call, both agents, one log"
 moat show --recent 10
 say "One session as a timeline"
-moat replay --session demo-codex
+moat replay --session demo-codex | clean
 
 say "Done. The throwaway home is deleted; nothing outside it was touched."
