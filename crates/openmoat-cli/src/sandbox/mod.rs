@@ -42,11 +42,13 @@ pub fn proxy_port(policy: &Policy) -> Option<u16> {
 }
 
 /// Lower `policy` for host-wide settings of a user whose home is `home`
-/// (`real_home`: the same with symlinks resolved, when that differs).
+/// (`real_home`: the same with symlinks resolved, when that differs) and whose
+/// state and host directories moved as `moved_dirs` say.
 pub fn lower_for_hosts(
     policy: &Policy,
     home: &str,
     real_home: Option<String>,
+    moved_dirs: Vec<(String, String)>,
     case_insensitive_paths: bool,
 ) -> Result<Enforcement, PolicyError> {
     openmoat_core::ir::lower(
@@ -56,6 +58,7 @@ pub fn lower_for_hosts(
             project: Some(PROJECT.to_owned()),
             real_home,
             real_project: None,
+            moved_dirs,
             cwd: PROJECT.to_owned(),
             case_insensitive_paths,
         },
@@ -153,6 +156,7 @@ impl Plan {
             &policy,
             &home,
             real_home,
+            crate::context::moved_dirs()?,
             crate::context::CASE_INSENSITIVE_PATHS,
         )?;
         let proxy_port = proxy_port(&policy);

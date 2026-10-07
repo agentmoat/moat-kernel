@@ -9,6 +9,7 @@ fn generated(yaml: &str) -> Generated {
         project: Some("/home/me/proj".into()),
         real_home: None,
         real_project: None,
+        moved_dirs: Vec::new(),
         cwd: "/home/me/proj".into(),
         case_insensitive_paths: false,
     };

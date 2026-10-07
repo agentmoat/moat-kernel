@@ -8,6 +8,7 @@ fn ctx() -> EvalContext {
         project: None,
         real_home: None,
         real_project: None,
+        moved_dirs: Vec::new(),
         cwd: "/home/u".to_owned(),
         case_insensitive_paths: false,
     }

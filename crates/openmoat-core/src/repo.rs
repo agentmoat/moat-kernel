@@ -81,6 +81,7 @@ mod tests {
             project: Some("/p".into()),
             real_home: None,
             real_project: None,
+            moved_dirs: Vec::new(),
             cwd: "/p".into(),
             case_insensitive_paths: false,
         };

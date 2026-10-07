@@ -20,6 +20,7 @@ fn generated_with(yaml: &str, grants: &Grants) -> Generated {
         project: Some("/Users/me/proj".into()),
         real_home: None,
         real_project: None,
+        moved_dirs: Vec::new(),
         cwd: "/Users/me/proj".into(),
         case_insensitive_paths: true,
     };

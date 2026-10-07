@@ -9,6 +9,9 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - `moat doctor` and `moat run` print one line with the number of places a sandbox is stricter or wider than the policy instead of the whole list; `--verbose` prints the list (#289). Problems (a weakened setting, drift) still print in full, and `moat sandbox show` still prints everything.
 
+### Security
+- `kernel-self` covers the state and host directories where `MOAT_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `CURSOR_CONFIG_DIR` moved them (#286). A write to `$MOAT_HOME/policy.yaml` or `$CLAUDE_CONFIG_DIR/settings.json` was asked (`default`) instead of denied; the lock caught the change only afterwards. Patterns naming `~/.moat`, `~/.claude`, `~/.codex` or `~/.cursor` now also match the moved directory, in the hook, `moat policy check`, `moat run` and the Standard-tier sandbox settings.
+
 ## [0.1.0-alpha.0] - 2026-10-07
 
 ### Added

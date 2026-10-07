@@ -136,6 +136,7 @@ fn context(rng: &mut Rng) -> EvalContext {
         project: (rng.below(4) != 0).then(|| "/p".into()),
         real_home: (rng.below(3) == 0).then(|| "/Volumes/home/me".into()),
         real_project: (rng.below(3) == 0).then(|| "/private/p".into()),
+        moved_dirs: Vec::new(),
         cwd: "/p".into(),
         case_insensitive_paths: rng.below(2) == 0,
     }

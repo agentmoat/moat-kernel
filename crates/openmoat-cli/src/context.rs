@@ -69,6 +69,7 @@ pub fn eval_context(cwd: Option<&Path>, project: Option<&Path>) -> Result<EvalCo
     Ok(EvalContext {
         real_home: real_root(&home),
         real_project: project.as_deref().and_then(real_root),
+        moved_dirs: moved_dirs()?,
         home,
         project,
         cwd: path_string(&cwd),
@@ -82,6 +83,28 @@ pub fn home_spellings() -> Result<(String, Option<String>)> {
     let home = path_string(&home::user_home()?);
     let real = real_root(&home);
     Ok((home, real))
+}
+
+/// The state and host directories moved out of the home directory by their
+/// environment variables, as the CLI and the hosts resolve them (`home.rs`,
+/// `install`): each as written and with its symlinks resolved, so rules naming
+/// the default directory (`kernel-self`) protect the moved one too.
+pub fn moved_dirs() -> Result<Vec<(String, String)>> {
+    let mut out = Vec::new();
+    for (default, var) in [
+        ("~/.moat", "MOAT_HOME"),
+        ("~/.claude", "CLAUDE_CONFIG_DIR"),
+        ("~/.codex", "CODEX_HOME"),
+        ("~/.cursor", "CURSOR_CONFIG_DIR"),
+    ] {
+        let Some(dir) = std::env::var_os(var).filter(|v| !v.is_empty()) else {
+            continue;
+        };
+        let dir = path_string(&absolute(Path::new(&dir))?);
+        out.extend(real_root(&dir).map(|real| (default.to_owned(), real)));
+        out.push((default.to_owned(), dir));
+    }
+    Ok(out)
 }
 
 /// `root` with its symlinks resolved, when that differs from `root`: the form
