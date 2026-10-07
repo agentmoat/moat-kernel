@@ -86,11 +86,11 @@ pub fn home_spellings() -> Result<(String, Option<String>)> {
     Ok((home, real))
 }
 
-/// The state and host directories moved out of the home directory, as the CLI
-/// resolves them (`home.rs`, `install`): a host directory `moat init` recorded
-/// (`hosts.json`), else the one its environment variable names. Each as written
-/// and with its symlinks resolved, so rules naming the default directory
-/// (`kernel-self`) protect the moved one too.
+/// The state and host directories moved out of the home directory: the one each
+/// environment variable names and the host directory `moat init` recorded
+/// (`hosts.json`), both when they differ, since an agent may run with either.
+/// Each as written and with its symlinks resolved, so rules naming the default
+/// directory (`kernel-self`) protect the moved ones too.
 pub fn moved_dirs() -> Result<Vec<(String, String)>> {
     let recorded = crate::install::Recorded::load(&home::Home::locate()?)?;
     let mut out = Vec::new();
@@ -104,16 +104,16 @@ pub fn moved_dirs() -> Result<Vec<(String, String)>> {
             .filter(|v| !v.is_empty())
             .map(PathBuf::from);
         let at_home = home::user_home()?.join(&default[2..]);
-        let dir = match host.and_then(|h| recorded.dir(h)) {
-            Some(dir) => Some(dir).filter(|d| *d != at_home),
-            None => from_env,
-        };
-        let Some(dir) = dir else {
-            continue;
-        };
-        let dir = path_string(&absolute(&dir)?);
-        out.extend(real_root(&dir).map(|real| (default.to_owned(), real)));
-        out.push((default.to_owned(), dir));
+        let from_record = host.and_then(|h| recorded.dir(h)).filter(|d| *d != at_home);
+        for dir in from_env.into_iter().chain(from_record) {
+            let dir = path_string(&absolute(&dir)?);
+            for spelling in real_root(&dir).into_iter().chain([dir]) {
+                let pair = (default.to_owned(), spelling);
+                if !out.contains(&pair) {
+                    out.push(pair);
+                }
+            }
+        }
     }
     Ok(out)
 }

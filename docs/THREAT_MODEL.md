@@ -260,8 +260,8 @@ something the alpha claims to stop.
   reports a variable that disagrees (#298). An agent started with another directory
   than the recorded one is not hooked. Re-pinning (`allow`, `doctor --accept`) keeps
   every hook file the lock already pins, and `doctor`/`status` report an installed hook
-  file the lock does not pin (#158). `kernel-self` covers each agent's recorded
-  directory, or the one its variable names when none is recorded.
+  file the lock does not pin (#158). `kernel-self` covers both each agent's recorded
+  directory and the one its variable names.
 
 - **The audit chain is tamper-evident, not tamper-proof.** The hash chain
   ([ARCHITECTURE.md](ARCHITECTURE.md) §7) makes an edit, a deletion or a reordering in the middle of the
