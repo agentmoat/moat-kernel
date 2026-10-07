@@ -168,6 +168,10 @@ pub struct DoctorArgs {
     /// Refused unless run from an interactive terminal.
     #[arg(long)]
     pub accept: bool,
+
+    /// Print every place each host sandbox is stricter or wider than the policy.
+    #[arg(long)]
+    pub verbose: bool,
 }
 
 #[derive(Debug, Args)]
@@ -185,6 +189,10 @@ pub struct RunArgs {
     /// the agent's own state (`~/.claude`); deny rules still win. Repeatable.
     #[arg(long = "write", value_name = "PATH")]
     pub writes: Vec<PathBuf>,
+
+    /// Print every place the sandbox is stricter or wider than the policy.
+    #[arg(long)]
+    pub verbose: bool,
 
     /// The agent and its arguments, after `--`.
     #[arg(required = true, last = true, value_name = "AGENT")]

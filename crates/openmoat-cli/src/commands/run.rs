@@ -70,7 +70,7 @@ pub fn run(args: &RunArgs) -> Result<Code> {
     let mut agent = platform::confine(&policy, &ctx, grants, &program)?;
     agent.command().args(rest);
     let exit = Exit::open(&home, policy, ctx)?;
-    notice(&program, port, exit.session(), agent.report())?;
+    notice(&program, port, exit.session(), agent.report(), args.verbose)?;
     std::thread::spawn(move || {
         if let Err(error) = exit.serve(&listener) {
             eprintln!("moat run: the proxy stopped, so the agent has no network: {error:#}");
@@ -123,7 +123,7 @@ fn resolved(path: &Path) -> String {
 }
 
 /// What the user must know before the agent starts, on standard error.
-fn notice(program: &Path, port: u16, session: &str, report: &Report) -> Result<()> {
+fn notice(program: &Path, port: u16, session: &str, report: &Report, verbose: bool) -> Result<()> {
     let mut err = std::io::stderr().lock();
     writeln!(
         err,
@@ -135,6 +135,15 @@ fn notice(program: &Path, port: u16, session: &str, report: &Report) -> Result<(
          it starts as one, so it is weaker per command than the Standard tier.",
         program.display()
     )?;
-    write_report(&mut err, report)?;
+    if verbose {
+        write_report(&mut err, report)?;
+    } else {
+        writeln!(
+            err,
+            "moat run: sandbox ready ({} stricter, {} wider; --verbose for details)",
+            report.losses.len(),
+            report.allowances.len()
+        )?;
+    }
     Ok(())
 }

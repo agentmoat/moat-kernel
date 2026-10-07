@@ -96,8 +96,18 @@ fn init_writes_both_sandboxes_keeps_user_settings_and_pins_them() {
         text(&doctor)
     );
     assert!(
-        stdout(&doctor).contains("stricter: fs.write `codex.git`"),
-        "losses are printed"
+        stdout(&doctor).contains("wider; --verbose for details)"),
+        "{}",
+        text(&doctor)
+    );
+    assert!(
+        !stdout(&doctor).contains("stricter: "),
+        "the list waits for --verbose"
+    );
+    let verbose = sb.moat(&["doctor", "--verbose"]);
+    assert!(
+        stdout(&verbose).contains("stricter: fs.write `codex.git`"),
+        "losses are printed with --verbose"
     );
 }
 

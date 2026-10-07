@@ -567,7 +567,8 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
   Codex `:minimal` and `:tmpdir`, Claude Code's working directories and unblocked
   system paths, directory nodes left out of `denyWrite`, `.git` outside its
   code-execution paths so `git commit` works), and each of those is
-  listed. `moat sandbox show`, `sandbox sync` and `doctor` print both.
+  listed. `moat sandbox show` and `sandbox sync` print both; `doctor` counts them
+  and prints them with `--verbose`.
 - **Traps the generators handle** (found in the spike, re-verified on Claude Code
   2.1.290 and codex-cli 0.160.1): a relative pattern in Claude Code user settings
   resolves against `~/.claude`, so every pattern is absolute (`/**/.env`); a directory

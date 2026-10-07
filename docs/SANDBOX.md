@@ -69,9 +69,9 @@ moat run --write ~/.claude --write ~/.claude.json -- claude
   `sandbox.enabled` (which `moat init` turns on) fails there and Codex needs
   `--sandbox danger-full-access`. Credentials must not come from the keychain: use
   an API key or `apiKeyHelper`.
-- Before the agent starts, `moat run` prints every place the sandbox is stricter or
-  wider than the policy (`moat sandbox show` prints the same for the current
-  directory). Linux is wider than macOS (secrets inside the project stay
+- Before the agent starts, `moat run` prints how many places the sandbox is stricter
+  or wider than the policy; `moat run --verbose` lists each one (`moat sandbox show`
+  prints the same for the current directory). Linux is wider than macOS (secrets inside the project stay
   readable, and the proxy's port is reachable on any host); see [THREAT_MODEL.md](THREAT_MODEL.md).
 
 It is weaker per command than the Standard tier: the agent and its scripts share one
