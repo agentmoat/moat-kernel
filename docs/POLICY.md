@@ -425,6 +425,22 @@ overlay, approvals, hook file) drifted, it lists each one and exits 64 without c
 the overlay, the grants or the lock. Review the changes with `moat doctor` and accept them
 with `moat doctor --accept`, then approve again; approving a command never accepts drift.
 
+```bash
+moat allow --site docs.rs          # net: [docs.rs], network access to that host, fetches included
+moat allow --dir ~/work/shared     # fs.read and fs.write of the directory and everything below it
+moat allow --remove approved-3     # take a permanent rule out again
+```
+
+`--site` and `--dir` append a rule to the same overlay, check that the merged policy still
+lints, re-pin, and print the rule as written plus the `--remove` command that undoes it.
+`--site` takes a plain host name or address only (no wildcard, scheme or port; write those
+in the policy). `--dir` must name an existing directory; it is stored as written and,
+when that differs, with its symlinks resolved, since the hook checks a path both ways. The
+home directory, its ancestors and filesystem roots are refused, as are names with glob
+characters. Deny rules still win, so `.env` files and keys inside an allowed directory stay
+denied and `kernel-self` paths stay protected. `--remove` takes any `approved-N` id,
+including one `--always` wrote.
+
 ## 9. Host sandboxes (`sandbox:`)
 
 `moat init` and `moat sandbox sync` compile the policy into each host's own sandbox

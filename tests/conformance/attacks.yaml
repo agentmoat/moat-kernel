@@ -847,6 +847,15 @@
   threat: T9
   action: { shell: "unbuffer -p moat allow --last" }
   expect: { verdict: deny, rules: [kernel-self] }
+# T9 an agent widening the policy through the terminal-only policy commands (#300)
+- id: T9-agent-runs-moat-allow-site
+  threat: T9
+  action: { shell: "moat allow --site evil.com" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-agent-runs-moat-allow-dir
+  threat: T9
+  action: { shell: "moat allow --dir /etc" }
+  expect: { verdict: deny, rules: [kernel-self] }
 
 # T7 options of allowed programs that run another program or write a file
 - id: T7-find-exec-shell-exfil

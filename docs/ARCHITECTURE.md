@@ -370,7 +370,7 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
 ```
 ~/.moat/                       ($MOAT_HOME overrides; directory 0700, files 0600)
   policy.yaml                  user policy (moat init writes the default once)
-  policy.d/approved.yaml       permanent approvals from `moat allow --always`
+  policy.d/approved.yaml       permanent rules from `moat allow --always/--site/--dir`
   approvals.json               session grants from `moat allow` (24 h each)
   trust.json                   repository policies trusted with `moat trust`: root → SHA-256
   environment.json             search path and program locations recorded at init

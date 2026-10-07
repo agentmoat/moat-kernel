@@ -218,3 +218,110 @@ fn allow_on_a_clean_lock_pins_only_the_overlay_it_wrote() {
     let doctor = sb.moat(&["doctor"]);
     assert!(text(&doctor).contains("all intact"), "{}", text(&doctor));
 }
+
+/// Exit code of `moat policy check` for one action against the installed policy:
+/// 0 allow, 2 deny, 3 ask.
+fn check(sb: &Sandbox, kind: &str, action: &str) -> Option<i32> {
+    let cwd = sb.project();
+    let cwd = cwd.to_str().unwrap();
+    let out = sb.moat(&["policy", "check", action, "--kind", kind, "--cwd", cwd]);
+    out.status.code()
+}
+
+#[test]
+fn allow_site_adds_a_net_rule_and_remove_takes_it_back() {
+    let sb = Sandbox::installed(&[".claude"]);
+    assert_eq!(check(&sb, "net", "docs.rs"), Some(2), "default.net denies");
+
+    let out = sb.moat_as_person(&["allow", "--site", "Docs.rs"]);
+    let message = text(&out);
+    assert_eq!(out.status.code(), Some(0), "{message}");
+    assert!(
+        message.contains("added to")
+            && message.contains("- docs.rs")
+            && message.contains("undo: moat allow --remove approved-1")
+            && message.contains("lock re-pinned"),
+        "{message}"
+    );
+    assert_eq!(check(&sb, "net", "docs.rs"), Some(0));
+    assert_eq!(check(&sb, "fetch", "https://docs.rs/serde"), Some(0));
+    assert_eq!(check(&sb, "net", "evil.docs.rs"), Some(2), "no wildcard");
+
+    let out = sb.moat_as_person(&["allow", "--remove", "approved-1"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(text(&out).contains("removed from"), "{}", text(&out));
+    assert_eq!(check(&sb, "net", "docs.rs"), Some(2));
+    let doctor = sb.moat(&["doctor"]);
+    assert!(text(&doctor).contains("all intact"), "{}", text(&doctor));
+
+    let out = sb.moat_as_person(&["allow", "--remove", "approved-1"]);
+    assert_eq!(out.status.code(), Some(64));
+    assert!(text(&out).contains("rules there: none"), "{}", text(&out));
+}
+
+#[test]
+fn allow_site_and_dir_refuse_dangerous_input_and_write_nothing() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let before = approval_state(&sb);
+    let home = sb.home.to_str().unwrap().to_owned();
+    let root = sb
+        .home
+        .ancestors()
+        .last()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    for (args, says) in [
+        (vec!["allow", "--site", "*"], "not a host name"),
+        (
+            vec!["allow", "--site", "https://evil.com"],
+            "not a host name",
+        ),
+        (vec!["allow", "--dir", &home], "home directory"),
+        (vec!["allow", "--dir", &root], "home directory"),
+        (vec!["allow", "--dir", "no/such/dir"], "does not exist"),
+        (
+            vec!["allow", "--site", "x.dev", "--last"],
+            "cannot be used with",
+        ),
+    ] {
+        let out = sb.moat_as_person(&args);
+        assert_ne!(out.status.code(), Some(0), "{args:?}");
+        assert!(text(&out).contains(says), "{args:?}: {}", text(&out));
+    }
+    assert_eq!(approval_state(&sb), before, "nothing written");
+}
+
+#[test]
+fn allow_dir_opens_the_directory_but_deny_rules_still_win() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let shared = sb.home.join("work/shared");
+    std::fs::create_dir_all(&shared).unwrap();
+    let notes = shared.join("notes.md").to_str().unwrap().to_owned();
+    let env = shared.join(".env").to_str().unwrap().to_owned();
+    assert_eq!(
+        check(&sb, "fs-write", &notes),
+        Some(3),
+        "outside the project asks"
+    );
+
+    let out = sb.moat_as_person(&["allow", "--dir", shared.to_str().unwrap()]);
+    let message = text(&out);
+    assert_eq!(out.status.code(), Some(0), "{message}");
+    assert!(
+        message.contains("fs.write:")
+            && message.contains("/**")
+            && message.contains("deny rules still win"),
+        "{message}"
+    );
+    assert_eq!(check(&sb, "fs-write", &notes), Some(0));
+    assert_eq!(check(&sb, "fs-read", &notes), Some(0));
+    assert_eq!(
+        check(&sb, "fs-read", &env),
+        Some(2),
+        "secrets-paths still denies"
+    );
+    let sibling = sb.home.join("work/other.md");
+    assert_eq!(check(&sb, "fs-write", sibling.to_str().unwrap()), Some(3));
+}

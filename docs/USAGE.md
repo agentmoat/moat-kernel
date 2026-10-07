@@ -74,6 +74,18 @@ Credentials are redacted before anything is stored. The log is a SQLite file in
 
 ## Change the policy
 
+The common changes are one command each. Each prints the rule it added and the
+command that takes it back, and re-pins the lock:
+
+```bash
+moat allow --site docs.rs          # network access to docs.rs, web fetches included
+moat allow --dir ~/work/shared     # read and write in that directory; .env files and keys in it stay denied
+moat allow --remove approved-3     # undo: take a rule moat allow added out again
+```
+
+They need a terminal, and the default policy denies them to agents. For anything else,
+edit the file:
+
 ```bash
 $EDITOR ~/.moat/policy.yaml
 moat policy lint             # schema, ids, globs; warnings for unreachable rules
@@ -122,6 +134,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat audit verify <file> [--anchor <hash>]` | check an export without the database; print its head hash |
 | `moat audit report <file>…` | one report over verified exports from several machines |
 | `moat allow --last [--always]` | turn an `ask` into a session grant (24 h) or a permanent rule |
+| `moat allow --site <host>` · `--dir <path>` · `--remove <id>` | allow a site or a directory permanently · take such a rule out again |
 | `moat trust [<repo>] [--revoke]` | let a repository's `.moat/policy.yaml` allow, until the file changes |
 | `moat policy lint` · `moat policy check "<cmd>"` | validate a policy · test an action against it |
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |

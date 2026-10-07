@@ -36,7 +36,8 @@ pub enum Command {
     Status,
     /// Verify policy lock, hooks and binary; `--accept` re-pins edits made by a person.
     Doctor(DoctorArgs),
-    /// Approve a shell command for one session, or permanently.
+    /// Approve a shell command for one session, or permanently; or permanently allow
+    /// a site (`--site`) or a directory (`--dir`). Refused unless run from an interactive terminal.
     Allow(AllowArgs),
     /// Let a repository's .moat/policy.yaml allow, not only deny and ask, until the file changes.
     /// Refused unless run from an interactive terminal, and over a drifted lock.
@@ -150,6 +151,19 @@ pub struct AllowArgs {
     /// Add a permanent allow rule to ~/.moat/policy.d/approved.yaml instead.
     #[arg(long)]
     pub always: bool,
+
+    /// Permanently allow network access to this host (`net`), web fetches included.
+    #[arg(long, value_name = "HOST", conflicts_with_all = ["command", "last", "session", "dir", "remove"])]
+    pub site: Option<String>,
+
+    /// Permanently allow reading and writing in this directory and below it; deny
+    /// rules (secrets, kernel files) still win.
+    #[arg(long, value_name = "PATH", conflicts_with_all = ["command", "last", "session", "remove"])]
+    pub dir: Option<PathBuf>,
+
+    /// Remove a rule from ~/.moat/policy.d/approved.yaml by id (`approved-3`).
+    #[arg(long, value_name = "RULE_ID", conflicts_with_all = ["command", "last", "session"])]
+    pub remove: Option<String>,
 }
 
 #[derive(Debug, Args)]
