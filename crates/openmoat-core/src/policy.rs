@@ -273,6 +273,10 @@ pub struct SandboxSettings {
     /// every layer. Absolute or `~/…`, never a glob.
     #[serde(default)]
     pub read_roots: Vec<String>,
+    /// The loopback port `moat proxy` listens on and the host sandboxes send
+    /// their commands' traffic to; absent, the CLI's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy_port: Option<std::num::NonZeroU16>,
 }
 
 fn default_verdict() -> Defaults {
@@ -475,6 +479,8 @@ mod tests {
             );
         }
         assert!(Policy::parse("version: 1\nsandbox: { bogus: 1 }\n").is_err());
+        assert!(Policy::parse("version: 1\nsandbox: { proxy_port: 18081 }\n").is_ok());
+        assert!(Policy::parse("version: 1\nsandbox: { proxy_port: 0 }\n").is_err());
     }
 
     #[test]

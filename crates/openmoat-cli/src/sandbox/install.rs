@@ -93,7 +93,7 @@ pub fn problems(host: Host, plan: &Plan, lock: Option<&Lock>) -> Result<Option<V
     let out_of_date = "differs from the policy; run `moat sandbox sync`".to_owned();
     let mut problems = if host == Host::Codex {
         let doc = read_toml(&path)?;
-        let mut found = codex::weaknesses(&doc);
+        let mut found = codex::weaknesses(&doc, plan.proxy_port.is_some());
         if !codex::in_sync(&doc, &plan.codex) {
             found.push(out_of_date);
         }
@@ -103,7 +103,7 @@ pub fn problems(host: Host, plan: &Plan, lock: Option<&Lock>) -> Result<Option<V
         found
     } else {
         let root = read_or_empty(&path)?;
-        let mut found = claude::weaknesses(&root, plan.claude.block_reads);
+        let mut found = claude::weaknesses(&root, plan.claude.block_reads, plan.proxy_port);
         if !claude::in_sync(&root, &plan.claude) {
             found.push(out_of_date);
         }

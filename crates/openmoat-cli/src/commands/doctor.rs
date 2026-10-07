@@ -41,9 +41,12 @@ fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>) {
             return;
         }
     };
+    let mut present = false;
     for host in host_sandbox::HOSTS {
         let name = host.display_name();
-        match host_sandbox::problems(host, &plan, lock) {
+        let problems = host_sandbox::problems(host, &plan, lock);
+        present |= !matches!(problems, Ok(None));
+        match problems {
             Ok(None) => continue,
             Ok(Some(problems)) if problems.is_empty() => {
                 report.line(
@@ -64,6 +67,15 @@ fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>) {
             Err(e) => report.line(Area::Sandbox, false, format!("{name:<16} sandbox: {e:#}")),
         }
         let _ = write_report(&mut report.out, host_sandbox::report(host, &plan));
+    }
+    if let Some(port) = plan.proxy_port.filter(|_| present) {
+        // A warning, not a problem: a stopped proxy fails closed.
+        let (ok, text) = super::proxy::listening_line(port);
+        let _ = writeln!(
+            report.out,
+            "{} moat proxy       {text}",
+            if ok { "✔" } else { "!" }
+        );
     }
 }
 

@@ -11,7 +11,11 @@
 //!   denied), and a `**/` exception re-opens it everywhere;
 //! - `permissions.blockReadsOutsideWorkingDirectories` denies sandboxed reads
 //!   under the user directories (`/Users`, `/home`, `/Volumes`, …) outside the
-//!   working directories, and makes file tools refuse them.
+//!   working directories, and makes file tools refuse them;
+//! - with `network.httpProxyPort` and `network.socksProxyPort` set (only when
+//!   the policy sets `sandbox.proxy_port`), sandboxed commands reach the
+//!   network only through those loopback ports (2.1.292; the sandboxing docs,
+//!   "Custom proxy configuration"), so with nothing listening they have none.
 
 mod settings;
 
@@ -60,11 +64,15 @@ pub struct Generated {
     pub report: Report,
 }
 
-/// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`].
-pub fn generate(ir: &Enforcement) -> Result<Generated> {
+/// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`]. With
+/// `proxy_port`, sandboxed commands' traffic goes to `moat proxy` there.
+pub fn generate(ir: &Enforcement, proxy_port: Option<u16>) -> Result<Generated> {
     let mut report = Report::default();
     let filesystem = Filesystem::build(ir, &mut report)?;
-    let network = network(&ir.egress.net, &mut report);
+    let network = match proxy_port {
+        None => network(&ir.egress.net, &mut report),
+        Some(port) => through_moat_proxy(&ir.egress.net, port, &mut report),
+    };
     let mut sandbox = Map::new();
     sandbox.insert("enabled".into(), json!(true));
     sandbox.insert("failIfUnavailable".into(), json!(true));
@@ -356,6 +364,28 @@ fn network(net: &Access, report: &mut Report) -> Value {
         }
     }
     json!({ "allowedDomains": allowed, "deniedDomains": denied, "strictAllowlist": true })
+}
+
+/// `network.*` with both proxy ports naming `moat proxy`, which then decides
+/// every connection by the policy; Claude Code's own lists and local-address
+/// check stop applying to that traffic. The lists are still written: they
+/// apply again if the ports are removed (`moat doctor` reports that), and
+/// `strictAllowlist` in user settings keeps a repository from setting its own
+/// ports or domains. Their losses are not reported, since they do not decide.
+fn through_moat_proxy(net: &Access, port: u16, report: &mut Report) -> Value {
+    let mut value = network(net, &mut Report::default());
+    value["httpProxyPort"] = json!(port);
+    value["socksProxyPort"] = json!(port);
+    report.proxy_only(net);
+    report.loss(
+        Kind::Net,
+        "claude-code.proxy",
+        format!(
+            "sandboxed commands have no network while nothing listens on 127.0.0.1:{port} \
+             (`moat proxy`), and none over SOCKS5 (`ALL_PROXY`, ssh): `moat proxy` speaks HTTP only"
+        ),
+    );
+    value
 }
 
 #[cfg(test)]

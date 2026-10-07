@@ -173,8 +173,10 @@ pub struct DoctorArgs {
 #[derive(Debug, Args)]
 pub struct ProxyArgs {
     /// Address to listen on. Must be a loopback address: the proxy serves this machine only.
-    #[arg(long, default_value = "127.0.0.1:18080")]
-    pub listen: std::net::SocketAddr,
+    /// Default: 127.0.0.1 and the policy's `sandbox.proxy_port`, where the host sandboxes
+    /// then send their commands' traffic; 127.0.0.1:18080 when it is not set.
+    #[arg(long)]
+    pub listen: Option<std::net::SocketAddr>,
 }
 
 #[derive(Debug, Args)]

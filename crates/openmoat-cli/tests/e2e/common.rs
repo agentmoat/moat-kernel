@@ -5,9 +5,10 @@
 //! `USERPROFILE` and (Windows) `SYSTEMROOT`, so nothing from the developer's machine (a real `~/.moat`,
 //! `CLAUDE_CONFIG_DIR`, a terminal) leaks into a test.
 
-use std::io::{ErrorKind, Write as _};
+use std::io::{BufRead as _, BufReader, ErrorKind, Write as _};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, ChildStdout, Command, Output, Stdio};
 
 use serde_json::Value;
 use tempfile::TempDir;
@@ -89,6 +90,62 @@ impl Sandbox {
     /// Run the hook for `host` with `payload`.
     pub fn guard(&self, host: &str, payload: &str) -> Output {
         self.moat_stdin(&["guard", "--host", host], payload)
+    }
+
+    /// Opt the host sandboxes into `moat proxy` on a free loopback port
+    /// (`sandbox.proxy_port`), so no test meets a proxy the developer runs;
+    /// re-pinned and the host sandboxes synced as a person would. Returns the port.
+    pub fn use_free_proxy_port(&self) -> u16 {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        // Edited as YAML, not as text: a Windows checkout has CRLF line endings.
+        let path = self.home.join(".moat/policy.yaml");
+        let mut policy: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        policy["sandbox"]["proxy_port"] = port.into();
+        std::fs::write(&path, serde_yaml_ng::to_string(&policy).unwrap()).unwrap();
+        let accepted = self.moat_as_person(&["doctor", "--accept"]);
+        assert!(text(&accepted).contains("re-pinned"), "{}", text(&accepted));
+        let synced = self.moat_as_person(&["sandbox", "sync"]);
+        assert_eq!(synced.status.code(), Some(0), "{}", text(&synced));
+        port
+    }
+
+    /// `moat proxy` on the policy's port, stopped when the guard drops.
+    pub fn start_proxy(&self) -> RunningProxy {
+        let mut child = self
+            .command()
+            .arg("proxy")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+        let running = RunningProxy {
+            child,
+            _stdout: stdout,
+        };
+        assert!(line.contains("listening on"), "moat proxy: {line:?}");
+        running
+    }
+}
+
+/// A `moat proxy` child, killed on drop. Its stdout stays open so a late line
+/// cannot fail it.
+pub struct RunningProxy {
+    child: Child,
+    _stdout: BufReader<ChildStdout>,
+}
+
+impl Drop for RunningProxy {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
