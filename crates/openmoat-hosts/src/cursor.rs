@@ -3,7 +3,8 @@
 //!
 //! Input is JSON on stdin with per-event fields plus `workspace_roots`. Output is
 //! `{"permission": "allow" | "deny" | "ask", "user_message", "agent_message"}`;
-//! exit 2 also denies. Cursor is fail-open unless the hook entry sets
+//! exit 2 also denies. Only the shell and MCP events prompt on `ask`; elsewhere
+//! [`Host::answer`] sends it as a deny. Cursor is fail-open unless the hook entry sets
 //! `failClosed`, which the installer does.
 
 use openmoat_core::{Action, Decision};
@@ -100,8 +101,20 @@ pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError>
         cwd,
         tool,
         action,
-        event: HookEvent::PreToolUse,
+        event: event_kind(event),
     })
+}
+
+/// <https://cursor.com/docs/hooks> lists `ask` as an output of
+/// `beforeShellExecution` and `beforeMCPExecution` and shows a shell hook using it
+/// to ask for permission. For `preToolUse` it says `ask` is "accepted by the schema
+/// but not enforced", and `beforeReadFile`'s output is only allow or deny. Any
+/// event not known to prompt is treated as one that does not.
+fn event_kind(event: &str) -> HookEvent {
+    match event {
+        "beforeShellExecution" | "beforeMCPExecution" => HookEvent::PreToolUse,
+        _ => HookEvent::PreToolUseNoAsk,
+    }
 }
 
 /// Keys that name a file or directory in a Cursor tool's input. `path` and
@@ -383,5 +396,25 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ask["permission"], "ask");
+    }
+
+    #[test]
+    fn ask_is_a_deny_where_cursor_does_not_prompt() {
+        let ask = Decision::new(Verdict::Ask);
+        for (name, verdict) in [
+            ("beforeShellExecution", Verdict::Ask),
+            ("beforeMCPExecution", Verdict::Ask),
+            ("beforeReadFile", Verdict::Deny),
+            ("preToolUse-write", Verdict::Deny),
+        ] {
+            let event = Host::Cursor.parse_request(&fixture(name)).unwrap().event;
+            let answer = Host::Cursor.answer(&event, &ask);
+            assert_eq!(answer.verdict, verdict, "{name}");
+            assert_eq!(
+                answer.reasons.iter().any(|r| r.contains("doctor --accept")),
+                verdict == Verdict::Deny,
+                "{name}"
+            );
+        }
     }
 }

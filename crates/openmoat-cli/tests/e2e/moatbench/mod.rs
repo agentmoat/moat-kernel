@@ -188,7 +188,7 @@ fn run(sb: &Sandbox, project: &Path, scenario: &Scenario, host: Host) -> Option<
         .zip(&answers)
         .enumerate()
     {
-        let answer = host.answer(*verdict);
+        let answer = host.answer(&step.call(), *verdict);
         let expected_code = if answer == Verdict::Deny { 2 } else { 0 };
         assert!(
             *code == Some(expected_code) && *decision == answer.word(),

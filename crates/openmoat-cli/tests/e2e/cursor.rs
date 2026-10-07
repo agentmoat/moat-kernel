@@ -199,6 +199,77 @@ fn pre_tool_use_unlisted_search_of_a_secret_is_denied() {
     );
 }
 
+fn write_payload(sb: &Sandbox, path: &std::path::Path) -> String {
+    let project = sb.project();
+    serde_json::json!({
+        "conversation_id": "cur-s1", "hook_event_name": "preToolUse",
+        "workspace_roots": [project.to_string_lossy()], "cwd": project.to_string_lossy(),
+        "tool_name": "Write",
+        "tool_input": {"file_path": path.to_string_lossy(), "content": "x"},
+        "tool_use_id": "tu-11"
+    })
+    .to_string()
+}
+
+/// Cursor runs a `preToolUse` call answered `ask` ("accepted by the schema but
+/// not enforced"), so moat sends a deny that says how to approve it, and records
+/// the `ask`.
+#[test]
+fn pre_tool_use_ask_is_denied_and_a_policy_rule_then_allows_it() {
+    let sb = sandbox();
+    let notes = sb.home.join("notes").join("todo.md");
+    let (code, doc) = guard(&sb, &write_payload(&sb, &notes));
+    assert_eq!(code, Some(2), "{doc}");
+    assert_eq!(doc["permission"], "deny");
+    assert!(
+        doc["agent_message"].to_string().contains("doctor --accept"),
+        "{doc}"
+    );
+    let log = text(&sb.moat(&["audit", "export"]));
+    assert!(log.contains("\"verdict\":\"ask\""), "{log}");
+
+    let policy = sb.home.join(".moat/policy.yaml");
+    let rule = "allow:\n  - id: notes\n    fs.write: ['~/notes/**']\n";
+    let edited =
+        std::fs::read_to_string(&policy)
+            .unwrap()
+            .replacen("\nallow:\n", &format!("\n{rule}"), 1);
+    std::fs::write(&policy, edited).unwrap();
+    let accept = sb.moat_as_person(&["doctor", "--accept"]);
+    assert_eq!(accept.status.code(), Some(0), "{}", text(&accept));
+    let (code, doc) = guard(&sb, &write_payload(&sb, &notes));
+    assert_eq!(code, Some(0), "{doc}");
+    assert_eq!(doc["permission"], "allow", "{doc}");
+}
+
+/// Cursor prompts on a `beforeShellExecution` `ask`, so it keeps the `ask`, and
+/// `moat allow --last` approves the command for the conversation.
+#[test]
+fn shell_ask_stays_an_ask_and_allow_last_approves_it() {
+    let sb = sandbox();
+    let project = sb.project();
+    let payload = serde_json::json!({
+        "conversation_id": "cur-s2", "hook_event_name": "beforeShellExecution",
+        "workspace_roots": [project.to_string_lossy()], "cwd": project.to_string_lossy(),
+        "command": "npm install left-pad"
+    })
+    .to_string();
+    let (code, doc) = guard(&sb, &payload);
+    assert_eq!(
+        (code, &doc["permission"]),
+        (Some(0), &Value::from("ask")),
+        "{doc}"
+    );
+    let allow = sb.moat_as_person(&["allow", "--last"]);
+    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    let (code, doc) = guard(&sb, &payload);
+    assert_eq!(
+        (code, &doc["permission"]),
+        (Some(0), &Value::from("allow")),
+        "{doc}"
+    );
+}
+
 #[test]
 fn unknown_cursor_event_fails_closed() {
     let sb = sandbox();
