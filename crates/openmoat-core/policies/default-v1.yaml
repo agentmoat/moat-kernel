@@ -179,6 +179,13 @@ deny:
       - "{tmux,*/tmux,screen,*/screen} * */moat {allow,doctor,edit,init,policy,trust,uninstall}*"
       - "{tmux,*/tmux,screen,*/screen} * '*moat {allow,doctor,edit,init,policy,trust,uninstall,sandbox*sync}*'"
       - "{osascript,*/osascript} * '*moat {allow,doctor,edit,init,policy,trust,uninstall,sandbox*sync}*'"
+      # a bare `moat` (the home screen asks to accept drift or approve an ask) under the
+      # same wrappers; patterns are prefixes, so these deny any `moat` command run in them
+      - "{script,*/script,unbuffer,*/unbuffer,tmux,*/tmux,screen,*/screen} * {moat,*/moat}"
+      - "{script,*/script,tmux,*/tmux,screen,*/screen} * '{moat,*/moat}'*"
+      - "{expect,*/expect} * '*spawn {moat,*/moat}{;,\n,'}*"
+      - "{python*,*/python*} * '*pty*spawn*(*\"{moat,*/moat}\"{],)}*'"
+      - "{osascript,*/osascript} * '*\"{moat,*/moat}\"*'"
   - id: shell-rc
     reason: edits persist into every future shell session
     fs.write: ["~/.zshrc", "~/.bashrc", "~/.bash_profile", "~/.profile", "~/.zprofile", "~/.zshenv"]

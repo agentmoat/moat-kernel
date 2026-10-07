@@ -1,0 +1,107 @@
+//! `moat` with no subcommand: health, then drift and asks answered at a terminal.
+
+use std::fs;
+
+use crate::common::{Sandbox, bash_payload, hook_output, output, text};
+
+const INSTALL: &str = "npm install left-pad";
+
+/// `moat` alone as a person at a terminal, typing `answers`.
+fn home_as_person(sb: &Sandbox, answers: &str) -> String {
+    let out = output(sb.command().env("MOAT_ASSUME_TTY", "1"), Some(answers));
+    text(&out)
+}
+
+fn verdict(sb: &Sandbox, session: &str) -> String {
+    let payload = bash_payload(session, &sb.project(), INSTALL);
+    hook_output(&sb.guard("claude-code", &payload))["permissionDecision"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn edit_policy(sb: &Sandbox) {
+    let path = sb.home.join(".moat/policy.yaml");
+    let mut policy = fs::read_to_string(&path).unwrap();
+    policy.push_str("\n# edited by hand\n");
+    fs::write(path, policy).unwrap();
+}
+
+fn lock(sb: &Sandbox) -> String {
+    fs::read_to_string(sb.home.join(".moat/policy.lock")).unwrap()
+}
+
+#[test]
+fn nothing_needs_a_person() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let out = output(&mut sb.command(), Some(""));
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    let shown = text(&out);
+    assert!(shown.contains("Protecting Claude Code"), "{shown}");
+    assert!(shown.contains("today: 0 decisions"), "{shown}");
+    assert!(shown.contains("Nothing needs you."), "{shown}");
+}
+
+#[test]
+fn drift_accepted_with_y_repins() {
+    let sb = Sandbox::installed(&[".claude"]);
+    edit_policy(&sb);
+    let shown = home_as_person(&sb, "y\n");
+    assert!(shown.contains("policy.yaml"), "{shown}");
+    assert!(shown.contains("Accept these changes? [y/N]"), "{shown}");
+    assert!(shown.contains("lock re-pinned"), "{shown}");
+    assert!(shown.contains("Nothing needs you."), "{shown}");
+    assert!(text(&sb.moat(&["doctor"])).contains("healthy"));
+}
+
+#[test]
+fn drift_declined_changes_nothing() {
+    let sb = Sandbox::installed(&[".claude"]);
+    edit_policy(&sb);
+    let before = lock(&sb);
+    let shown = home_as_person(&sb, "n\n");
+    assert!(shown.contains("moat doctor"), "{shown}");
+    assert!(!shown.contains("re-pinned"), "{shown}");
+    assert_eq!(lock(&sb), before);
+}
+
+#[test]
+fn ask_allowed_once_grants_the_session() {
+    let sb = Sandbox::installed(&[".claude"]);
+    assert_eq!(verdict(&sb, "s1"), "ask");
+    let shown = home_as_person(&sb, "o\n");
+    assert!(
+        shown.contains(&format!("Claude Code asked to run \"{INSTALL}\"")),
+        "{shown}"
+    );
+    assert!(
+        shown.contains("session s1 on claude-code may run"),
+        "{shown}"
+    );
+    assert_eq!(verdict(&sb, "s1"), "allow");
+    assert_eq!(verdict(&sb, "s2"), "ask", "grants are per session");
+    // Answered: s2's ask is the newest now, so it is the one shown.
+    assert!(home_as_person(&sb, "n\n").contains("session s2"));
+}
+
+#[test]
+fn without_a_terminal_nothing_changes() {
+    let sb = Sandbox::installed(&[".claude"]);
+    assert_eq!(verdict(&sb, "s1"), "ask");
+    let out = output(&mut sb.command(), Some("o\n"));
+    let shown = text(&out);
+    assert!(shown.contains("moat allow --last"), "{shown}");
+    assert!(!shown.contains("may run"), "{shown}");
+    assert_eq!(verdict(&sb, "s1"), "ask");
+
+    edit_policy(&sb);
+    let before = lock(&sb);
+    let out = output(&mut sb.command(), Some("y\n"));
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert!(
+        text(&out).contains("moat doctor --accept"),
+        "{}",
+        text(&out)
+    );
+    assert_eq!(lock(&sb), before);
+}

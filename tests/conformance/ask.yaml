@@ -266,6 +266,10 @@
   threat: T9
   action: { shell: "python3 tests/test_pty_spawn_moat_allow.py" }
   expect: { verdict: ask, rules: [default] }
+- id: ask-bare-moat-is-not-kernel-self
+  threat: T9
+  action: { shell: "moat" }
+  expect: { verdict: ask, rules: [default] }
 - id: ask-moat-status-is-not-kernel-self
   threat: T9
   action: { shell: "moat status" }

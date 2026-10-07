@@ -5,6 +5,7 @@ use std::io::Write as _;
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail, ensure};
+use openmoat_audit::Event;
 use openmoat_core::{Action, Verdict};
 
 use crate::approvals::{GRANT_TTL_MS, Grants, Overlay};
@@ -191,11 +192,7 @@ fn warn_if_shadowed(home: &Home, id: &str, out: &mut Deferred) -> Result<()> {
 
 /// Host, session and command of the most recent `ask` for a shell command.
 fn last_ask(home: &Home, out: &mut Deferred) -> Result<(Option<String>, Option<String>, String)> {
-    let store = home.open_audit()?;
-    let event = store
-        .recent(LAST_ASK_SEARCH)?
-        .into_iter()
-        .find(|e| e.verdict == Verdict::Ask && matches!(e.action, Some(Action::Shell { .. })))
+    let event = newest_shell_ask(&home.open_audit()?)?
         .context("no recent `ask` for a shell command in the audit log")?;
     let Some(Action::Shell { command }) = event.action else {
         unreachable!("filtered to shell actions");
@@ -206,4 +203,12 @@ fn last_ask(home: &Home, out: &mut Deferred) -> Result<(Option<String>, Option<S
         event.id, event.host, event.session_id
     )?;
     Ok((Some(event.host), Some(event.session_id), command))
+}
+
+/// The most recent `ask` for a shell command: what `--last` takes.
+pub(super) fn newest_shell_ask(store: &openmoat_audit::Store) -> Result<Option<Event>> {
+    Ok(store
+        .recent(LAST_ASK_SEARCH)?
+        .into_iter()
+        .find(|e| e.verdict == Verdict::Ask && matches!(e.action, Some(Action::Shell { .. }))))
 }
