@@ -1390,6 +1390,19 @@
   threat: T9
   action: { shell: "tmux new -d 'moat trust .'" }
   expect: { verdict: deny, rules: [kernel-self] }
+# `moat uninstall` removes the hooks that check the agent, so only a person may run it
+- id: T9-agent-runs-moat-uninstall
+  threat: T9
+  action: { shell: "moat uninstall --purge" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-agent-runs-moat-uninstall-by-path
+  threat: T9
+  action: { shell: "/opt/homebrew/bin/moat uninstall --hosts codex" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T9-script-wraps-moat-uninstall
+  threat: T9
+  action: { shell: "script -q /dev/null moat uninstall" }
+  expect: { verdict: deny, rules: [kernel-self] }
 # `moat sandbox sync` re-pins the lock like `moat allow`, so agents may not run it either
 - id: T9-agent-runs-moat-sandbox-sync
   threat: T9

@@ -10,11 +10,8 @@ use toml_edit::DocumentMut;
 
 use super::{Plan, Report, claude, codex, codex_config_path};
 use crate::home::write_private;
-use crate::install::{HostConfig, read_or_empty};
+use crate::install::{HostConfig, SANDBOX_BACKUP, backup_path, read_or_empty};
 use crate::integrity::Lock;
-
-/// The copy of a host file taken before OpenMoat's sandbox edit changes it.
-const BACKUP_SUFFIX: &str = "moat-sandbox-backup";
 
 /// Hosts with a sandbox backend, in the order OpenMoat writes them.
 pub const HOSTS: [Host; 2] = [Host::ClaudeCode, Host::Codex];
@@ -49,8 +46,8 @@ pub fn write(host: Host, plan: &Plan, dry_run: bool) -> Result<bool> {
         return Ok(true);
     }
     if path.exists() {
-        let backup = PathBuf::from(format!("{}.{BACKUP_SUFFIX}", path.display()));
-        fs::copy(&path, &backup).with_context(|| format!("backing up {}", path.display()))?;
+        fs::copy(&path, backup_path(&path, SANDBOX_BACKUP))
+            .with_context(|| format!("backing up {}", path.display()))?;
     }
     write_private(&path, text.as_bytes())?;
     Ok(true)
@@ -113,7 +110,7 @@ pub fn problems(host: Host, plan: &Plan, lock: Option<&Lock>) -> Result<Option<V
     Ok(Some(problems))
 }
 
-fn read_toml(path: &Path) -> Result<DocumentMut> {
+pub fn read_toml(path: &Path) -> Result<DocumentMut> {
     if !path.exists() {
         return Ok(DocumentMut::new());
     }

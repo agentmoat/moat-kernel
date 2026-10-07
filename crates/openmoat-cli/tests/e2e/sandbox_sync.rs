@@ -25,7 +25,7 @@ fn installed() -> Sandbox {
     )
     .unwrap();
     fs::write(codex_config(&sb), "# my settings\nmodel = \"o3\"\n").unwrap();
-    let out = sb.moat(&["init"]);
+    let out = sb.moat(&["init", "--yes"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     sb
 }

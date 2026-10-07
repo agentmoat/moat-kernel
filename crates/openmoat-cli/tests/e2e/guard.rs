@@ -14,7 +14,7 @@ fn settings(sb: &Sandbox) -> Value {
 #[test]
 fn init_creates_state_and_installs_claude_code_hook() {
     let sb = Sandbox::bare(&[".claude"]);
-    let out = sb.moat(&["init"]);
+    let out = sb.moat(&["init", "--yes"]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     assert!(stdout(&out).contains("installed: PreToolUse, ConfigChange →"));
     assert!(sb.home.join(".moat/policy.yaml").is_file());
@@ -32,7 +32,7 @@ fn init_creates_state_and_installs_claude_code_hook() {
         "{command}"
     );
 
-    let again = sb.moat(&["init"]);
+    let again = sb.moat(&["init", "--yes"]);
     assert_eq!(again.status.code(), Some(0));
     assert!(stdout(&again).contains("unchanged"));
     assert!(stdout(&again).contains("(kept)"));
@@ -62,7 +62,7 @@ fn init_dry_run_touches_nothing() {
 #[test]
 fn guard_denies_secret_exfiltration_and_records_it() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
 
     let out = sb.guard("claude-code", &fixture("claude-code/bash.json"));
     assert_eq!(out.status.code(), Some(2));
@@ -105,7 +105,7 @@ fn guard_denies_secret_exfiltration_and_records_it() {
 #[test]
 fn guard_allows_ordinary_work_and_asks_for_installs() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     let project = sb.home.join("proj");
     std::fs::create_dir_all(project.join(".git")).unwrap();
     let cwd = project.to_string_lossy();
@@ -170,7 +170,7 @@ fn guard_allows_ordinary_work_and_asks_for_installs() {
 #[test]
 fn guard_passes_ungoverned_tools_through() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     let out = sb.guard("claude-code", &fixture("claude-code/ungoverned.json"));
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(decision(&out)["permissionDecision"], "allow");
@@ -185,7 +185,7 @@ fn guard_passes_ungoverned_tools_through() {
 #[test]
 fn claude_code_command_tools_are_hooked_and_governed() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     let matcher = settings(&sb)["hooks"]["PreToolUse"][0]["matcher"]
         .as_str()
         .unwrap()
@@ -215,7 +215,7 @@ fn claude_code_command_tools_are_hooked_and_governed() {
 #[test]
 fn webfetch_to_an_unlisted_host_asks_but_a_websocket_is_denied() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     for (name, code, verdict, rule) in [
         ("webfetch-docs", 0, "ask", "default.fetch"),
         ("webfetch", 0, "allow", "registries"),
@@ -250,7 +250,7 @@ fn guard_fails_closed() {
             .contains("moat init")
     );
 
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     for payload in ["", "not json", r#"{"tool_name":"Bash","tool_input":{}}"#] {
         let out = sb.guard("claude-code", payload);
         assert_eq!(out.status.code(), Some(2), "payload {payload:?} must deny");
@@ -270,7 +270,7 @@ fn guard_fails_closed() {
 #[test]
 fn unparseable_guard_arguments_deny() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     for args in [
         &["guard", "--host", "windsurf"][..],
         &["guard"],
@@ -313,7 +313,7 @@ fn malformed_payloads_name_their_cause_once() {
 #[test]
 fn deleted_audit_log_denies_instead_of_recreating_it() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     let audit = sb.home.join(".moat/audit.db");
     let before = sb.guard("claude-code", &fixture("claude-code/bash.json"));
     assert!(
@@ -337,7 +337,7 @@ fn deleted_audit_log_denies_instead_of_recreating_it() {
 fn unwritable_audit_log_denies() {
     use std::os::unix::fs::PermissionsExt as _;
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     let audit = sb.home.join(".moat/audit.db");
     std::fs::set_permissions(&audit, std::fs::Permissions::from_mode(0o000)).unwrap();
 
@@ -355,7 +355,7 @@ fn unwritable_audit_log_denies() {
 #[test]
 fn mcp_arguments_are_checked_as_paths() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     let out = sb.guard(
         "claude-code",
         &fixture("claude-code/mcp_filesystem_read_secret.json"),
@@ -372,7 +372,7 @@ fn mcp_arguments_are_checked_as_paths() {
 #[test]
 fn reads_and_writes_through_symlinks_are_checked_at_the_target() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     let project = sb.home.join("proj");
     std::fs::create_dir_all(project.join(".git")).unwrap();
     std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
@@ -416,7 +416,7 @@ fn reads_and_writes_through_symlinks_are_checked_at_the_target() {
 #[test]
 fn windows_drive_letter_payloads_are_canonical() {
     let sb = Sandbox::bare(&[".claude"]);
-    sb.moat(&["init"]);
+    sb.moat(&["init", "--yes"]);
     let project = sb.home.join("proj");
     std::fs::create_dir_all(project.join(".git")).unwrap();
     let slash = |p: &std::path::Path| p.to_string_lossy().replace('\\', "/");
@@ -455,7 +455,7 @@ fn windows_drive_letter_payloads_are_canonical() {
 fn codex_payloads_use_the_same_contract() {
     let sb = Sandbox::bare(&[".claude"]);
     std::fs::create_dir_all(sb.home.join(".codex")).unwrap();
-    let out = sb.moat(&["init"]);
+    let out = sb.moat(&["init", "--yes"]);
     assert!(stdout(&out).contains("Codex"), "{}", stdout(&out));
     assert!(sb.home.join(".codex/hooks.json").is_file());
 

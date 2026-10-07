@@ -129,7 +129,7 @@ fn an_unpinned_trust_record_is_ignored() {
     assert_eq!(deploy(&sb, &project).0, "ask");
 
     // The record itself is right: once a person pins it, it applies.
-    let out = sb.moat_as_person(&["init"]);
+    let out = sb.moat_as_person(&["init", "--yes"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     assert_eq!(deploy(&sb, &project).0, "allow");
 }

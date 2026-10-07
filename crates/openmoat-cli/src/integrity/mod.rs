@@ -193,6 +193,22 @@ pub fn refuse_drift(home: &Home, doing: &str) -> Result<()> {
     Ok(())
 }
 
+/// Forget the pins of `paths`, the host files `moat uninstall` just undid, and
+/// keep every other pin as it is: nothing is re-pinned, so no drift is accepted.
+pub fn unpin(home: &Home, paths: &[PathBuf]) -> Result<()> {
+    let lock_path = home.lock_path();
+    if !lock_path.is_file() {
+        return Ok(());
+    }
+    let mut lock = Lock::load(&lock_path)?;
+    for path in paths.iter().map(|p| key(p)) {
+        lock.entries.remove(&path);
+        lock.codex_profiles.remove(&path);
+        lock.keys.remove(&path);
+    }
+    lock.save(&lock_path)
+}
+
 /// One way a pinned file differs from the lock.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Drift {

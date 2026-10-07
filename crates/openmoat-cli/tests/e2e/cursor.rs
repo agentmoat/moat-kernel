@@ -47,7 +47,7 @@ fn init_installs_fail_closed_hooks_for_every_cursor_event() {
     let status = sb.moat(&["status"]);
     assert_eq!(status.status.code(), Some(0), "{}", text(&status));
     assert!(text(&status).contains("Cursor"));
-    let again = text(&sb.moat(&["init"]));
+    let again = text(&sb.moat(&["init", "--yes"]));
     assert!(
         again.contains("beforeShellExecution, beforeMCPExecution, beforeReadFile, preToolUse →"),
         "{again}"

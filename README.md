@@ -53,9 +53,12 @@ The full table and how to test your own commands: [docs/USAGE.md](docs/USAGE.md)
 
 ```bash
 brew install crocodile-labs/tap/moat      # or the installer, cargo: docs/INSTALL.md
-moat init --hosts claude-code             # or codex, cursor; --dry-run previews
+moat init                                 # asks before changing each agent it finds
 moat policy check "cat ~/.ssh/id_rsa"
 ```
+
+`moat init` lists the agents it found and asks `Protect Claude Code (~/.claude)? [Y/n]`
+for each. It backs up every file before changing it, and `moat uninstall` undoes it.
 
 ```
 ⛔ deny

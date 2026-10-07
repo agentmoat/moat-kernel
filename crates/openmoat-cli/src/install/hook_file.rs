@@ -12,10 +12,8 @@ use std::path::Path;
 use anyhow::{Context as _, Result, bail};
 use serde_json::{Map, Value, json};
 
-use super::{HookFormat, HookSpec, HostConfig};
+use super::{HOOK_BACKUP, HookFormat, HookSpec, HostConfig, backup_path};
 use crate::home::write_private;
-
-const BACKUP_SUFFIX: &str = ".moat-backup";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Outcome {
@@ -46,13 +44,8 @@ pub fn install(config: &HostConfig, binary: &Path, dry_run: bool) -> Result<Outc
         return Ok(outcome);
     }
     if path.exists() {
-        let backup = path.with_extension(format!(
-            "{}{BACKUP_SUFFIX}",
-            path.extension()
-                .map(|e| e.to_string_lossy())
-                .unwrap_or_default()
-        ));
-        fs::copy(path, &backup).with_context(|| format!("backing up {}", path.display()))?;
+        fs::copy(path, backup_path(path, HOOK_BACKUP))
+            .with_context(|| format!("backing up {}", path.display()))?;
     }
     let text = serde_json::to_string_pretty(&root)? + "\n";
     write_private(path, text.as_bytes())?;
@@ -203,6 +196,35 @@ fn upsert(
     }
 }
 
+/// The inverse of [`install`] on a parsed file: remove every entry of ours, then
+/// the events and `hooks` object that leaves empty, and Cursor's `version` when
+/// nothing else remains. Returns whether anything was removed.
+pub fn remove(root: &mut Value, config: &HostConfig) -> bool {
+    let Value::Object(top) = root else {
+        return false;
+    };
+    let Some(Value::Object(hooks)) = top.get_mut("hooks") else {
+        return false;
+    };
+    let mut removed = false;
+    hooks.retain(|_, entries| {
+        let Value::Array(list) = entries else {
+            return true;
+        };
+        let before = list.len();
+        list.retain(|e| !is_ours(e, config));
+        removed |= list.len() != before;
+        list.len() == before || !list.is_empty()
+    });
+    if removed && hooks.is_empty() {
+        top.remove("hooks");
+    }
+    if removed && config.format == HookFormat::Cursor && top.len() == 1 {
+        top.retain(|key, value| key != "version" || *value != json!(1));
+    }
+    removed
+}
+
 pub fn read_or_empty(path: &Path) -> Result<Value> {
     if !path.exists() {
         return Ok(Value::Object(Map::new()));
@@ -329,6 +351,33 @@ mod tests {
                 .with_extension("json.moat-backup")
                 .exists()
         );
+    }
+
+    #[test]
+    fn remove_undoes_install_and_keeps_foreign_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = config(dir.path());
+        let original = json!({"theme": "dark", "hooks": {"PreToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "lint.sh"}]}
+        ], "Stop": []}});
+        fs::write(&cfg.settings_path, original.to_string()).unwrap();
+        install(&cfg, Path::new("/x/moat"), false).unwrap();
+        let mut doc = root(&cfg);
+        assert!(remove(&mut doc, &cfg));
+        assert_eq!(doc, original);
+        assert!(!remove(&mut doc, &cfg), "nothing left to remove");
+
+        let created = tempfile::tempdir().unwrap();
+        let cursor = HostConfig {
+            host: Host::Cursor,
+            settings_path: created.path().join("hooks.json"),
+            hooks: &SPECS[..1],
+            format: HookFormat::Cursor,
+        };
+        install(&cursor, Path::new("/x/moat"), false).unwrap();
+        let mut doc = root(&cursor);
+        assert!(remove(&mut doc, &cursor));
+        assert_eq!(doc, json!({}), "a file init created strips to nothing");
     }
 
     #[test]

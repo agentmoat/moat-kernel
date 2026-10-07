@@ -35,6 +35,70 @@ pub fn apply(root: &mut Value, generated: &Generated) -> Result<bool> {
     Ok(*top != before)
 }
 
+/// Every key of the `sandbox` object [`apply`] may write, with the sub-keys it
+/// owns in `filesystem` and `network` (the proxy ports only with `proxy_port`).
+const OWNED: &[(&str, &[&str])] = &[
+    ("enabled", &[]),
+    ("failIfUnavailable", &[]),
+    ("allowUnsandboxedCommands", &[]),
+    ("excludedCommands", &[]),
+    (
+        "filesystem",
+        &["denyRead", "allowRead", "denyWrite", "allowWrite"],
+    ),
+    (
+        "network",
+        &[
+            "allowedDomains",
+            "deniedDomains",
+            "strictAllowlist",
+            "httpProxyPort",
+            "socksProxyPort",
+        ],
+    ),
+];
+
+/// The inverse of [`apply`]: remove every key OpenMoat writes, then the objects
+/// that leaves empty. Works without a policy, so `moat uninstall` never needs
+/// one. Returns whether anything was removed.
+pub fn remove(root: &mut Value) -> bool {
+    let Value::Object(top) = root else {
+        return false;
+    };
+    let mut removed = false;
+    if let Some(Value::Object(sandbox)) = top.get_mut("sandbox") {
+        for (key, subs) in OWNED {
+            if subs.is_empty() {
+                removed |= sandbox.remove(*key).is_some();
+            } else if let Some(Value::Object(nested)) = sandbox.get_mut(*key) {
+                let before = nested.len();
+                nested.retain(|sub, _| !subs.contains(&sub.as_str()));
+                if nested.len() != before {
+                    removed = true;
+                    if nested.is_empty() {
+                        sandbox.remove(*key);
+                    }
+                }
+            }
+        }
+    }
+    if let Some(Value::Object(permissions)) = top.get_mut("permissions") {
+        removed |= permissions.remove(BLOCK_READS).is_some();
+    }
+    if removed {
+        for key in ["sandbox", "permissions"] {
+            if top
+                .get(key)
+                .and_then(Value::as_object)
+                .is_some_and(Map::is_empty)
+            {
+                top.remove(key);
+            }
+        }
+    }
+    removed
+}
+
 /// Deny sandboxed writes to the settings files next to `settings`, wherever
 /// `CLAUDE_CONFIG_DIR` puts them: the policy names only `~/.claude`, and OpenMoat
 /// pins this file.
@@ -193,6 +257,29 @@ mod tests {
         );
         assert!(apply(&mut json!([]), &out).is_err());
         assert!(apply(&mut json!({"sandbox": 1}), &out).is_err());
+    }
+
+    #[test]
+    fn remove_undoes_apply_and_keeps_user_keys() {
+        let original = json!({
+            "theme": "dark",
+            "permissions": { "allow": ["Bash(ls)"] },
+            "sandbox": { "autoAllowBashIfSandboxed": false, "network": { "allowUnixSockets": ["/x.sock"] } },
+        });
+        let mut root = original.clone();
+        apply(&mut root, &generated(DEFAULT_POLICY)).unwrap();
+        assert!(remove(&mut root));
+        assert_eq!(root, original);
+        assert!(!remove(&mut root));
+
+        let mut root = json!({});
+        apply(
+            &mut root,
+            &generated("version: 1\nsandbox:\n  proxy_port: 18555\n"),
+        )
+        .unwrap();
+        assert!(remove(&mut root));
+        assert_eq!(root, json!({}), "every key apply writes is owned");
     }
 
     #[test]

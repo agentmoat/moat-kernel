@@ -35,3 +35,4 @@ mod sandbox_sync;
 mod taint;
 mod team;
 mod trust;
+mod uninstall;

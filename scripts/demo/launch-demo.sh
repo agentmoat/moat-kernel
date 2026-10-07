@@ -64,7 +64,7 @@ agent() {
 }
 
 say "Install OpenMoat for Claude Code and Codex in a throwaway home: one policy for both"
-moat init | sed -e "s|$sandbox|<tmp>|g"
+moat init --yes | sed -e "s|$sandbox|<tmp>|g"
 
 say "The project README carries a hidden instruction for AI agents"
 cat "$project/README.md"

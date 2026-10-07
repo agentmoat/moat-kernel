@@ -3,7 +3,7 @@
 mod binary;
 mod hook_file;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 use openmoat_hosts::Host;
@@ -12,6 +12,28 @@ pub use binary::{hook_binary, stale_hint};
 pub use hook_file::{HookState, Outcome, read_or_empty};
 
 use crate::home::user_home;
+
+/// Suffix of the copy of a host file taken before OpenMoat's hook edit changes it.
+pub const HOOK_BACKUP: &str = "moat-backup";
+/// Suffix of the copy taken before OpenMoat's sandbox edit changes it.
+pub const SANDBOX_BACKUP: &str = "moat-sandbox-backup";
+
+/// The copy of `path` named `<path>.<suffix>`.
+pub fn backup_path(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".");
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+/// The backups of `path` that exist, hook backup first.
+pub fn backups(path: &Path) -> Vec<PathBuf> {
+    [HOOK_BACKUP, SANDBOX_BACKUP]
+        .into_iter()
+        .map(|suffix| backup_path(path, suffix))
+        .filter(|p| p.is_file())
+        .collect()
+}
 
 /// One hook entry we own in a host's configuration.
 #[derive(Debug, Clone, Copy)]
@@ -146,6 +168,11 @@ impl HostConfig {
 
     pub fn state(&self, binary: &std::path::Path) -> HookState {
         hook_file::state(self, binary)
+    }
+
+    /// Remove OpenMoat's hook entries from the parsed hook file `root`.
+    pub fn remove(&self, root: &mut serde_json::Value) -> bool {
+        hook_file::remove(root, self)
     }
 }
 

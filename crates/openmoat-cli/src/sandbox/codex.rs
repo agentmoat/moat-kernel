@@ -27,7 +27,7 @@ use super::{PROJECT, Report};
 
 mod config;
 
-pub use config::{apply, in_sync, owned_part, protect, weaknesses};
+pub use config::{apply, in_sync, owned_part, protect, remove, weaknesses};
 
 /// The profile name OpenMoat owns and sets as `default_permissions`.
 pub const PROFILE: &str = "moat";

@@ -16,6 +16,7 @@ mod show;
 mod status;
 mod team;
 mod trust;
+mod uninstall;
 
 use anyhow::Result;
 
@@ -25,6 +26,7 @@ use crate::exit::Code;
 pub fn run(cli: Cli) -> Result<Code> {
     match cli.command {
         Command::Init(args) => init::run(&args),
+        Command::Uninstall(args) => uninstall::run(&args),
         Command::Guard(args) => Ok(guard::run(&args)),
         Command::Show(args) => show::run(&args),
         Command::Status => status::run(),
