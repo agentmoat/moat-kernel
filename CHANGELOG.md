@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] - 2026-10-07
+
 ### Added
 - Policy key `taint.protected_writes` (#215): path globs that a write to asks once the session read untrusted content, in addition to the built-in list (CI, git hooks, build scripts, agent instructions). It extends the list and cannot shorten it; `moat policy lint` rejects `!` exclusions and globs that do not compile. Policies without the key behave as before.
 - `moat allow --last` and `moat allow --last --always` approve file actions too, not only shell commands (#278). The last ask can be a file read, write or delete from a Claude Code file tool, a Codex `apply_patch` or a Cursor file tool. A session grant covers exactly those files for that action; `--always` adds an `fs.read` or `fs.write` rule for exactly those paths (as asked and with symlinks resolved) and prints it with its undo command. Deny rules still win. `moat` (the home screen) shows and approves the newest file ask the same way. `~/.moat/approvals.json` moves to version 2, which records the approved action; version 1 files are still read and are rewritten as version 2 on the next grant.
