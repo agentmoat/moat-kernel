@@ -103,16 +103,25 @@ mod tests {
     fn any_other_key_changed_is_drift() {
         let (_dir, path, lock) = pinned(r#"{"hooks":{"PreToolUse":[]},"theme":"light"}"#);
         fs::write(&path, r#"{"hooks":{},"theme":"light"}"#).unwrap();
-        assert!(matches!(lock.verify_one(&path), Some(Drift::Modified(_))));
+        assert!(matches!(
+            lock.verify_one(&path),
+            Some(Drift::Modified(_) | Drift::KeysChanged(..))
+        ));
         fs::write(&path, r#"{"hooks":{"PreToolUse":[]},"model":"x"}"#).unwrap();
-        assert!(matches!(lock.verify_one(&path), Some(Drift::Modified(_))));
+        assert!(matches!(
+            lock.verify_one(&path),
+            Some(Drift::Modified(_) | Drift::KeysChanged(..))
+        ));
     }
 
     #[test]
     fn invalid_json_is_drift() {
         let (_dir, path, lock) = pinned(r#"{"hooks":{}}"#);
         fs::write(&path, r#"{"hooks":{}"#).unwrap();
-        assert!(matches!(lock.verify_one(&path), Some(Drift::Modified(_))));
+        assert!(matches!(
+            lock.verify_one(&path),
+            Some(Drift::Modified(_) | Drift::KeysChanged(..))
+        ));
     }
 
     #[test]
@@ -135,6 +144,9 @@ mod tests {
         fs::write(&hooks, "{}").unwrap();
         let lock = Lock::pin(Path::new("/x/moat"), std::slice::from_ref(&hooks)).unwrap();
         fs::write(&hooks, r#"{"theme":"light"}"#).unwrap();
-        assert!(matches!(lock.verify_one(&hooks), Some(Drift::Modified(_))));
+        assert!(matches!(
+            lock.verify_one(&hooks),
+            Some(Drift::Modified(_) | Drift::KeysChanged(..))
+        ));
     }
 }

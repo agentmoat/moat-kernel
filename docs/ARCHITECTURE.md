@@ -274,7 +274,11 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
   its top-level `theme` key, which Claude Code writes itself on first run (#287); a
   file that does not parse is drift, and a whole-file digest from an older lock still
   verifies until the next re-pin. The lock also pins the part of Codex's `config.toml` that holds OpenMoat's sandbox profile
-  (§13). It is verified on every `guard` call. Only a person re-pins: `moat init`, or
+  (§13). It is verified on every `guard` call. For each pinned JSON or TOML file the
+  lock also records a digest per top-level key, so drift (in `guard` reasons, `doctor`,
+  and `doctor --accept` before it re-pins) names the keys that were changed, added or
+  removed: `settings.json was modified: changed hooks; added theme`. A lock written
+  before that, or a file that no longer parses, gives the plain `was modified`. Only a person re-pins: `moat init`, or
   `moat doctor --accept`, `moat allow`, `moat trust` and `moat sandbox sync` from an
   interactive terminal.
 - **ConfigChange veto.** Claude Code reports settings changes; a pinned file that no

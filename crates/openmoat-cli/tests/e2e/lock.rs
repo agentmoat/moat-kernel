@@ -179,6 +179,26 @@ fn doctor_reports_health_drift_and_refuses_to_accept_outside_a_terminal() {
 }
 
 #[test]
+fn doctor_and_accept_name_the_keys_that_changed() {
+    let sb = sandbox();
+    let mut settings: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&sb)).unwrap()).unwrap();
+    settings["hooks"] = Value::Null;
+    settings["theme"] = Value::from("light");
+    std::fs::write(settings_path(&sb), settings.to_string()).unwrap();
+    let expected = "settings.json was modified: changed hooks; added theme";
+
+    let out = sb.moat(&["doctor"]);
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert!(text(&out).contains(expected), "{}", text(&out));
+
+    let out = sb.moat_as_person(&["doctor", "--accept"]);
+    let report = text(&out);
+    let (shown, repinned) = (report.find(expected), report.find("lock re-pinned"));
+    assert!(shown.is_some() && shown < repinned, "{report}");
+}
+
+#[test]
 fn missing_lock_denies_and_points_to_init() {
     let sb = sandbox();
     std::fs::remove_file(lock_path(&sb)).unwrap();
