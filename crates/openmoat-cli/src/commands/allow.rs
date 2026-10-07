@@ -143,10 +143,14 @@ fn approve(
             approvals::describe(action),
             crate::time::duration(GRANT_TTL_MS)
         )?;
+        let resume = if host == openmoat_hosts::Host::ClaudeCode.id() {
+            " (`claude --continue` resumes this one)"
+        } else {
+            ""
+        };
         writeln!(
             out,
-            "  only in this agent session: a new session asks again \
-             (Claude Code: `claude --continue` resumes this one)"
+            "  only in this agent session: a new session asks again{resume}"
         )?;
     }
     repin(home, out)
