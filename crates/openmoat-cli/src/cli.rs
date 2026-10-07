@@ -26,8 +26,12 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Install the kernel: default policy, audit log and host hooks.
+    /// Install the kernel: default policy, audit log and host hooks. At a terminal it
+    /// asks before changing each agent it finds.
     Init(InitArgs),
+    /// Remove OpenMoat's hooks and sandbox settings from the agents, restoring the
+    /// backups `moat init` took. Refused unless run from an interactive terminal.
+    Uninstall(UninstallArgs),
     /// Decide one hook request from stdin (invoked by host hooks, not by people).
     Guard(GuardArgs),
     /// Show one audit event, a session, or the most recent events.
@@ -90,13 +94,30 @@ pub struct SandboxShowArgs {
 
 #[derive(Debug, Args)]
 pub struct InitArgs {
-    /// Hosts to install hooks for. Defaults to every supported host that is present.
+    /// Hosts to install hooks for, without asking. Defaults to every supported host
+    /// that is present, each confirmed at the terminal.
     #[arg(long, value_delimiter = ',', value_parser = parse_host)]
     pub hosts: Option<Vec<Host>>,
+
+    /// Set up every agent found without asking (for scripts).
+    #[arg(long, short = 'y')]
+    pub yes: bool,
 
     /// Print what would change without writing anything.
     #[arg(long)]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct UninstallArgs {
+    /// Hosts to remove OpenMoat from. Defaults to every supported host.
+    #[arg(long, value_delimiter = ',', value_parser = parse_host)]
+    pub hosts: Option<Vec<Host>>,
+
+    /// Also delete OpenMoat's state directory (policy, lock, audit log). Not with
+    /// --hosts: the agents left set up would deny every tool call without it.
+    #[arg(long, conflicts_with = "hosts")]
+    pub purge: bool,
 }
 
 #[derive(Debug, Args)]

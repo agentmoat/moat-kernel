@@ -29,6 +29,31 @@ pub fn apply(doc: &mut DocumentMut, generated: &Generated) -> Result<bool> {
     Ok(doc.to_string() != before)
 }
 
+/// The inverse of [`apply`]: remove `default_permissions` when it names the moat
+/// profile, `[permissions.moat]` and a plain `features.network_proxy = true`, then
+/// the tables that leaves empty. A `[features.network_proxy]` table has the
+/// user's own settings and stays. Returns whether anything was removed.
+pub fn remove(doc: &mut DocumentMut) -> bool {
+    let before = doc.to_string();
+    if doc.get("default_permissions").and_then(Item::as_str) == Some(PROFILE) {
+        doc.remove("default_permissions");
+    }
+    for (table, key) in [("permissions", PROFILE), ("features", "network_proxy")] {
+        let emptied = match doc.get_mut(table).and_then(Item::as_table_like_mut) {
+            Some(parent)
+                if key == PROFILE || parent.get(key).and_then(Item::as_bool) == Some(true) =>
+            {
+                parent.remove(key).is_some() && parent.is_empty()
+            }
+            _ => false,
+        };
+        if emptied {
+            doc.remove(table);
+        }
+    }
+    doc.to_string() != before
+}
+
 /// Deny commands the Codex home (`$CODEX_HOME`: this config, `auth.json`,
 /// sessions) wherever it is; the policy names only `~/.codex`.
 pub fn protect(generated: &mut Generated, codex_home: &Path) {

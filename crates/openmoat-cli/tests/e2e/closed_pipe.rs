@@ -54,7 +54,7 @@ fn read_only_commands_stop_quietly() {
 #[test]
 fn init_finishes_its_work_before_stopping() {
     let sb = Sandbox::bare(&[".claude"]);
-    let out = closed_stdout(sb.command().arg("init"), "");
+    let out = closed_stdout(sb.command().args(["init", "--yes"]), "");
     assert_quiet_success(&out, "init");
     let status = sb.moat(&["status"]);
     assert_eq!(status.status.code(), Some(0), "{}", text(&status));

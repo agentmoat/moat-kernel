@@ -44,7 +44,7 @@ fn hooks_survive_a_package_manager_upgrade() {
     // (macOS reports the link); starting the Cellar file directly gives the same
     // facts on both.
     let versioned = prefix.join("Cellar/moat/0.1.0/bin/moat");
-    let out = run(&versioned, &["init"], None);
+    let out = run(&versioned, &["init", "--yes"], None);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     let command = hook_command(&sb);
     assert!(command.ends_with("homebrew/bin/moat"), "{command}");
@@ -82,7 +82,7 @@ fn doctor_and_status_name_a_missing_or_different_hook_binary() {
     let moat = prefix.join("bin/moat");
 
     // Hooks installed by another moat (here the build output) are not this one.
-    assert_eq!(sb.moat(&["init"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
     for args in [["doctor"], ["status"]] {
         let out = output(sb.command_at(&moat).args(args), None);
         assert_eq!(out.status.code(), Some(64), "{}", text(&out));
@@ -108,7 +108,7 @@ fn doctor_and_status_name_a_missing_or_different_hook_binary() {
         text(&out)
     );
 
-    let out = output(sb.command_at(&moat).args(["init"]), None);
+    let out = output(sb.command_at(&moat).args(["init", "--yes"]), None);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     let out = output(sb.command_at(&moat).args(["doctor"]), None);
     assert_eq!(

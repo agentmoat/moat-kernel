@@ -42,7 +42,7 @@ fn codex_enforces_the_generated_profile() {
         return;
     };
     let sb = Sandbox::bare(&[".codex"]);
-    let out = sb.moat(&["init"]);
+    let out = sb.moat(&["init", "--yes"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     let project = sb.project();
     fs::write(project.join("main.rs"), "fn main() {}").unwrap();

@@ -15,7 +15,7 @@ the verdict and rule ids the default policy must produce for it.
 | T6 | Environment poisoning | 11 | 2 | 0 |
 | T7 | Obfuscation and nested execution | 54 | 40 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 5 | 0 | 0 |
-| T9 | Hook / policy tampering by the agent | 85 | 11 | 3 |
+| T9 | Hook / policy tampering by the agent | 88 | 11 | 3 |
 | T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
 | T11 | Time-of-check / time-of-use, symlinks | 15 | 2 | 0 |
 | T12 | Network to unknown hosts | 19 | 8 | 1 |
@@ -439,6 +439,9 @@ the verdict and rule ids the default policy must produce for it.
 - `T9-agent-runs-moat-trust-by-path` (attacks): Deny [kernel-self]
 - `T9-script-wraps-moat-trust` (attacks): Deny [kernel-self]
 - `T9-tmux-wraps-moat-trust` (attacks): Deny [kernel-self]
+- `T9-agent-runs-moat-uninstall` (attacks): Deny [kernel-self]
+- `T9-agent-runs-moat-uninstall-by-path` (attacks): Deny [kernel-self]
+- `T9-script-wraps-moat-uninstall` (attacks): Deny [kernel-self]
 - `T9-agent-runs-moat-sandbox-sync` (attacks): Deny [kernel-self]
 - `T9-agent-runs-moat-sandbox-sync-by-path` (attacks): Deny [kernel-self]
 - `T9-script-wraps-moat-sandbox-sync` (attacks): Deny [kernel-self]

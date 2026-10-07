@@ -219,3 +219,21 @@ fn protect_denies_the_codex_home_and_in_sync_ignores_other_keys() {
             .any(|w| w.contains("sandbox_mode"))
     );
 }
+
+#[test]
+fn remove_restores_the_users_text() {
+    let out = generated(DEFAULT_POLICY);
+    for original in [
+        "",
+        "# mine\nmodel = \"o3\"\n\n[features]\nweb_search = true\n",
+        "[features.network_proxy]\nenabled = false\nport = 3128\n",
+    ] {
+        let mut doc: DocumentMut = original.parse().unwrap();
+        apply(&mut doc, &out).unwrap();
+        assert!(remove(&mut doc));
+        // A proxy table is the user's: OpenMoat turned it on and leaves it.
+        let expected = original.replace("enabled = false", "enabled = true");
+        assert_eq!(doc.to_string(), expected, "after apply on {original:?}");
+        assert!(!remove(&mut doc));
+    }
+}

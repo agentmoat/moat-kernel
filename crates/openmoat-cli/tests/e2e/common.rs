@@ -40,7 +40,7 @@ impl Sandbox {
     /// `bare(host_dirs)` followed by a successful `moat init`.
     pub fn installed(host_dirs: &[&str]) -> Self {
         let sb = Self::bare(host_dirs);
-        let out = sb.moat(&["init"]);
+        let out = sb.moat(&["init", "--yes"]);
         assert_eq!(out.status.code(), Some(0), "moat init: {}", text(&out));
         sb
     }

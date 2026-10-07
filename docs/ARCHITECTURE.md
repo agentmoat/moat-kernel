@@ -380,6 +380,7 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
 ~/.claude/settings.json        Claude Code hooks and sandbox block ($CLAUDE_CONFIG_DIR overrides)
 ~/.codex/hooks.json            Codex hooks ($CODEX_HOME overrides)
 ~/.codex/config.toml           Codex [permissions.moat] profile, default_permissions
+<file>.moat-backup             each hook file before OpenMoat's last hook edit
 <file>.moat-sandbox-backup     each host file before OpenMoat's last sandbox edit
 ~/.cursor/hooks.json           Cursor hooks ($CURSOR_CONFIG_DIR overrides)
 <project>/.moat/policy.yaml    repository policy, committed by the team (ADR-022)
@@ -594,6 +595,17 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
   `kernel-integrity`. `doctor` also fails on a weakened or out-of-date setting,
   including a Claude Code proxy port that does not match `sandbox.proxy_port` (missing
   when it is set, present when it is not).
+- **Asking and undoing.** Before writing anything, `moat init` lists the agents whose
+  configuration directory exists and asks per agent at a terminal; `--hosts` and
+  `--yes` skip the questions, and without a terminal no agent's files change.
+  `moat uninstall` (`commands/uninstall.rs`, a person at a terminal; `kernel-self`
+  denies it to agents) is the inverse: it removes exactly the hook entries
+  (`hook_file::remove`) and sandbox keys (`claude::remove`, `codex::remove`) init
+  writes. When what is left equals a backup that holds none of OpenMoat's entries, it
+  writes that backup's bytes back; when nothing is left and no such backup exists, init
+  created the file and it is deleted; otherwise the user's later changes stay with the
+  backups. The lock then drops those files (`integrity::unpin`) without re-pinning
+  anything else.
 
 ## 14. Lightweight tier: `moat run`
 

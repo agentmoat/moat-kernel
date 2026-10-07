@@ -22,7 +22,7 @@ fn shell(session: &str, command: &str) -> String {
 fn an_ask_blocks_codex_until_a_person_approves_it() {
     let sb = Sandbox::bare(&[".claude"]);
     std::fs::create_dir_all(sb.home.join(".codex")).unwrap();
-    assert_eq!(sb.moat(&["init"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
 
     let command = "npm install left-pad";
     let out = sb.guard("codex", &shell("codex-s1", command));

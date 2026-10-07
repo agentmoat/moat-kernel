@@ -75,7 +75,11 @@ fn edited_policy_makes_guard_fail_closed_until_repinned() {
         text(&check)
     );
 
-    assert_eq!(sb.moat(&["init"]).status.code(), Some(0), "init re-pins");
+    assert_eq!(
+        sb.moat(&["init", "--yes"]).status.code(),
+        Some(0),
+        "init re-pins"
+    );
     assert_eq!(guard_read_src(&sb)["permissionDecision"], "allow");
 }
 
@@ -251,7 +255,7 @@ fn planted_binary_earlier_on_the_search_path_is_denied() {
             Some(stdin),
         )
     };
-    assert_eq!(run(&["init"], "").status.code(), Some(0));
+    assert_eq!(run(&["init", "--yes"], "").status.code(), Some(0));
     let payload = serde_json::json!({
         "session_id": "pin", "cwd": home.to_string_lossy(), "tool_name": "Bash",
         "tool_input": {"command": "git status --short"}, "tool_use_id": "t"
@@ -304,7 +308,7 @@ fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
     };
     std::fs::create_dir_all(&agent).unwrap();
     std::fs::create_dir_all(&shell).unwrap();
-    assert_eq!(run(&agent, &["init"]).status.code(), Some(0));
+    assert_eq!(run(&agent, &["init", "--yes"]).status.code(), Some(0));
     // The other shell's directory holds an OpenMoat hook the lock never pinned.
     std::fs::copy(agent.join("settings.json"), shell.join("settings.json")).unwrap();
 
@@ -354,6 +358,6 @@ fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
     let reason = d["permissionDecisionReason"].as_str().unwrap();
     assert!(reason.contains("settings.json was modified"), "{reason}");
 
-    assert_eq!(run(&shell, &["init"]).status.code(), Some(0));
+    assert_eq!(run(&shell, &["init", "--yes"]).status.code(), Some(0));
     assert!(pinned(&agent) && pinned(&shell), "init keeps and adopts");
 }

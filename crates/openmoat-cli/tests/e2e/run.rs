@@ -31,7 +31,7 @@ fn installed_with_secret() -> (Sandbox, PathBuf) {
         std::env::temp_dir()
     };
     let sb = Sandbox::bare_in(&parent, &[]);
-    let out = sb.moat(&["init"]);
+    let out = sb.moat(&["init", "--yes"]);
     assert_eq!(out.status.code(), Some(0), "moat init: {}", text(&out));
     std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
     std::fs::write(sb.home.join(".ssh/id_rsa"), "FAKE-SSH-KEY").unwrap();

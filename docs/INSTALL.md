@@ -34,18 +34,33 @@ Each release carries `sha256.sum` and GitHub build attestations:
 ## Set up with `moat init`
 
 ```bash
-moat init      # policy, lock, audit log, and hooks for every agent found on this machine
+moat init      # policy, lock, audit log; asks before hooking each agent it finds
 moat status    # policy, lock, hooks per agent, recent decisions
 ```
 
 `moat init` writes `~/.moat/policy.yaml` (the default policy), pins it and the hook
-files in `~/.moat/policy.lock`, creates the audit log, and registers hooks with each
-agent whose configuration directory exists. It never overwrites an existing policy,
-never duplicates a hook and backs up a host file before editing it, so it is safe to
-run again.
+files in `~/.moat/policy.lock` and creates the audit log. Then it lists each agent
+whose configuration directory exists, with the files it would change, and asks once
+per agent:
 
-To hook only some agents, name them: `moat init --hosts claude-code` (or `codex`,
-`cursor`, comma-separated). `moat init --dry-run` prints what would change first.
+```
+Found these agents:
+  Claude Code  /Users/you/.claude (changes settings.json)
+  Codex        /Users/you/.codex (changes hooks.json, config.toml)
+Protect Claude Code (/Users/you/.claude)? [Y/n]
+Protect Codex (/Users/you/.codex)? [Y/n]
+```
+
+Only the agents you accept get the hook and sandbox settings. The last lines name the
+backups and how to undo: `Undo anytime: moat uninstall`. `init` never overwrites an
+existing policy, never duplicates a hook and backs up a host file before editing it
+(`<file>.moat-backup` for hooks, `<file>.moat-sandbox-backup` for sandbox settings), so
+it is safe to run again.
+
+To choose without questions, name the agents: `moat init --hosts claude-code` (or
+`codex`, `cursor`, comma-separated). `moat init --yes` sets up every agent found, for
+scripts. Without a terminal and without `--yes` or `--hosts`, `init` changes no agent's
+files and says how to go on. `moat init --dry-run` prints what would change first.
 
 Hooks run the `moat` you ran `moat init` with, by its stable path (ADR-016). After
 moving or reinstalling the binary somewhere else, run `moat init` again; `moat doctor`
@@ -57,6 +72,21 @@ names a hook whose binary is missing or is a different `moat`.
 | Codex | `PreToolUse`: shell commands, `apply_patch` (every file the patch names), MCP tools. Codex hooks cannot ask (`PermissionRequest` runs only when Codex itself prompts), so an `ask` blocks the call until you run `moat allow --last`. Codex does not hook web search or hosted tools | `~/.codex/hooks.json` |
 | Cursor | `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` (`Read`, `Write`, `Edit`, `MultiEdit`, `StrReplace`, `Delete`, `Grep`, `Glob`, and any other tool that names a path); installed with `failClosed`. Cursor prompts on `ask` only for shell and MCP calls, so an `ask` on `preToolUse` or `beforeReadFile` is sent as a deny | `~/.cursor/hooks.json` |
 | Continue CLI (`cn`) | Runs the Claude Code hook, recorded as host `continue`. `cn` ignores an `ask`, so an `ask` blocks the call until you run `moat allow --last`. The released `cn` does not run hooks, so nothing is checked until it does; use `moat run` (`moat doctor` warns) | Claude Code's |
+
+## Undo with `moat uninstall`
+
+```bash
+moat uninstall                    # every agent; --hosts codex for one
+moat uninstall --purge            # also delete ~/.moat (policy, lock, audit log)
+```
+
+`moat uninstall` removes OpenMoat's hooks and sandbox settings from each agent and
+prints what it did per file. When the file is otherwise unchanged since `moat init`,
+the backup `init` took is written back byte for byte; a file `init` created is
+deleted; a file you changed since keeps your changes and only loses OpenMoat's
+entries (its backup stays next to it). The lock stops pinning those files. `~/.moat`
+stays unless you pass `--purge`. Like `moat allow`, it runs only from a terminal, and
+the default policy denies it to agents (`kernel-self`).
 
 ## Non-default config directories
 

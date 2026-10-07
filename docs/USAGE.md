@@ -132,7 +132,8 @@ again. Repository rules apply in the hook, not in the host sandboxes
 
 | Command | Use it to |
 |---|---|
-| `moat init [--hosts …] [--dry-run]` | install policy, lock, audit log and agent hooks |
+| `moat init [--hosts …] [--yes] [--dry-run]` | install policy, lock and audit log; asks before hooking each agent found (`--hosts`, `--yes` skip the questions) |
+| `moat uninstall [--hosts …] [--purge]` | remove OpenMoat's hooks and sandbox settings, restoring the backups (`--purge` also deletes `~/.moat`) |
 | `moat status` · `moat doctor [--accept] [--verbose]` | check the installation · list drift and re-pin (`--verbose` lists where each sandbox is stricter or wider than the policy) |
 | `moat show [id] [--session …] [--since …]` | see events |
 | `moat replay --since today` · `moat report --since 7d` | per-session timeline · summary |
