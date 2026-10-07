@@ -5,7 +5,7 @@
 //! - `approvals.json`: session grants, exact command for one host session, valid for
 //!   [`GRANT_TTL_MS`] after they are written;
 //! - `policy.d/approved.yaml`: permanent allow rules appended by `moat allow --always`,
-//!   merged into the user policy at load time so `policy.yaml` is never rewritten.
+//!   `--site` and `--dir`, merged into the user policy at load time so `policy.yaml` is never rewritten.
 
 use std::fs;
 use std::path::Path;
@@ -118,7 +118,7 @@ impl Grants {
     }
 }
 
-/// Allow rules appended by `moat allow --always`.
+/// Allow rules appended by `moat allow --always`, `--site` and `--dir`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Overlay {
     pub version: u32,
@@ -167,8 +167,8 @@ impl Overlay {
 
     pub fn save(&self, path: &Path) -> Result<()> {
         let text = format!(
-            "# Permanent allow rules added with `moat allow --always`. Edit or delete freely,\n\
-             # then run `moat doctor --accept`.\n{}",
+            "# Permanent allow rules added with `moat allow`. Remove one with\n\
+             # `moat allow --remove <id>`, or edit freely, then run `moat doctor --accept`.\n{}",
             serde_yaml_ng::to_string(self)?
         );
         write_private(path, text.as_bytes())
@@ -180,6 +180,46 @@ impl Overlay {
     pub fn allow_command(&mut self, command: &str) -> Result<&RuleGroup> {
         let pattern = openmoat_core::literal_shell_pattern(command)
             .with_context(|| format!("cannot approve `{command}`"))?;
+        Ok(self.push("moat allow --always", |g| g.shell = vec![pattern]))
+    }
+
+    /// Append a `net` allow for one host name, which also covers web fetches.
+    /// Only a plain name or address is accepted: a wildcard, scheme or port would
+    /// widen the rule beyond what the person typed.
+    pub fn allow_site(&mut self, host: &str) -> Result<&RuleGroup> {
+        let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
+        let plain = host.split('.').all(|label| {
+            !label.is_empty() && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        });
+        if !plain {
+            bail!(
+                "`{host}` is not a host name such as docs.rs; wildcards, URLs and ports \
+                 are not accepted here (write those in the policy, ~/.moat/policy.yaml)"
+            );
+        }
+        Ok(self.push("moat allow --site", |g| g.net = vec![host]))
+    }
+
+    /// Append an `fs.read` and `fs.write` allow for each spelling of a directory
+    /// and everything below it.
+    pub fn allow_dir(&mut self, spellings: &[String]) -> &RuleGroup {
+        let patterns: Vec<String> = spellings
+            .iter()
+            .flat_map(|dir| [dir.clone(), format!("{dir}/**")])
+            .collect();
+        self.push("moat allow --dir", |g| {
+            g.fs_read.clone_from(&patterns);
+            g.fs_write = patterns;
+        })
+    }
+
+    /// Remove the rule with this id, returning it.
+    pub fn remove(&mut self, id: &str) -> Option<RuleGroup> {
+        let index = self.allow.iter().position(|g| g.id == id)?;
+        Some(self.allow.remove(index))
+    }
+
+    fn push(&mut self, how: &str, fill: impl FnOnce(&mut RuleGroup)) -> &RuleGroup {
         // One past the highest existing number: ids stay unique after a person
         // deletes an earlier rule, and a duplicate id would fail the policy lint.
         let n = self
@@ -189,16 +229,17 @@ impl Overlay {
             .max()
             .unwrap_or(0)
             + 1;
-        self.allow.push(RuleGroup {
+        let mut rule = RuleGroup {
             id: format!("{OVERLAY_PREFIX}{n}"),
             reason: Some(format!(
-                "approved with `moat allow --always` on {}",
+                "approved with `{how}` on {}",
                 time::timestamp(time::now_ms())
             )),
-            shell: vec![pattern],
             ..RuleGroup::default()
-        });
-        Ok(&self.allow[self.allow.len() - 1])
+        };
+        fill(&mut rule);
+        self.allow.push(rule);
+        &self.allow[self.allow.len() - 1]
     }
 }
 
@@ -216,6 +257,31 @@ mod tests {
         assert_eq!(o.allow_command("d").unwrap().id, "approved-4");
         let ids: std::collections::BTreeSet<_> = o.allow.iter().map(|g| &g.id).collect();
         assert_eq!(ids.len(), o.allow.len());
+    }
+
+    #[test]
+    fn sites_dirs_and_removal() {
+        let mut o = Overlay::default();
+        assert_eq!(o.allow_site(" Docs.RS. ").unwrap().net, ["docs.rs"]);
+        for bad in [
+            "*",
+            "*.example.com",
+            "https://x.dev",
+            "x.dev:443",
+            "",
+            "a..b",
+            "::1",
+        ] {
+            let error = o.allow_site(bad).unwrap_err().to_string();
+            assert!(error.contains("in the policy"), "{bad}: {error}");
+        }
+        let dir = o.allow_dir(&["/w/a".to_owned(), "/real/a".to_owned()]);
+        assert_eq!(dir.id, "approved-2");
+        assert_eq!(dir.fs_read, ["/w/a", "/w/a/**", "/real/a", "/real/a/**"]);
+        assert_eq!(dir.fs_write, dir.fs_read);
+        assert_eq!(o.remove("approved-1").unwrap().net, ["docs.rs"]);
+        assert!(o.remove("approved-1").is_none());
+        assert_eq!(o.allow.len(), 1);
     }
 
     /// 2026-10-03 00:00:00 UTC; tests pass time in, they never read the clock.
