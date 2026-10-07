@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- docs/INSTALL.md says how to upgrade: `brew update && brew upgrade moat`, since `brew upgrade` alone may not see a new release of the tap (#314).
+
 ## [0.1.0-alpha.3] - 2026-10-07
 
 ### Added

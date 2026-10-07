@@ -31,6 +31,16 @@ cargo install --locked --path crates/openmoat-cli    # installs the `moat` binar
 Each release carries `sha256.sum` and GitHub build attestations:
 `gh attestation verify <archive> --repo crocodile-labs/openmoat`.
 
+### Upgrade
+
+```bash
+brew update && brew upgrade moat                              # Homebrew: update the tap first
+cargo install openmoat --locked --force --version <version>   # crates.io
+```
+
+With the installers, run the installer of the new release. Hooks keep working after an
+upgrade in the same place; `moat doctor` confirms it.
+
 ## Set up with `moat init`
 
 ```bash
