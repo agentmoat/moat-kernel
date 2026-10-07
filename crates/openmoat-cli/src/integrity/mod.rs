@@ -19,6 +19,7 @@ use crate::home::{Home, write_private};
 use crate::install::{HookState, HostConfig};
 
 mod digest;
+mod keys;
 
 pub use digest::sha256_hex;
 use digest::{digest, digests, is_claude_settings};
@@ -40,6 +41,10 @@ pub struct Lock {
     /// profile, ADR-018). Codex edits the rest of that file itself.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub codex_profiles: BTreeMap<String, String>,
+    /// Pinned JSON or TOML file → top-level key → SHA-256 of its value, so drift
+    /// can name the keys that changed. Locks written before #288 have none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub keys: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// Which hook files a re-pin covers, besides OpenMoat's own state files.
@@ -192,6 +197,8 @@ pub fn refuse_drift(home: &Home, doing: &str) -> Result<()> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Drift {
     Modified(PathBuf),
+    /// Modified, with the top-level keys that differ from the pin.
+    KeysChanged(PathBuf, String),
     Missing(PathBuf),
     Unreadable(PathBuf, String),
     /// A staged copy (`proposal`) that would change the pinned `target`.
@@ -205,6 +212,7 @@ impl fmt::Display for Drift {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Modified(p) => write!(f, "{} was modified", p.display()),
+            Self::KeysChanged(p, keys) => write!(f, "{} was modified: {keys}", p.display()),
             Self::Missing(p) => write!(f, "{} is missing", p.display()),
             Self::Unreadable(p, why) => write!(f, "{} is unreadable: {why}", p.display()),
             Self::Proposed { proposal, target } => write!(
@@ -221,10 +229,13 @@ impl Lock {
     /// Pin the current contents of `paths`. Files that do not exist are skipped;
     /// callers pass only files they just wrote or verified.
     pub fn pin(binary: &Path, paths: &[PathBuf]) -> Result<Self> {
-        let mut entries = BTreeMap::new();
+        let (mut entries, mut keys) = (BTreeMap::new(), BTreeMap::new());
         for path in paths {
             if path.is_file() {
                 entries.insert(key(path), digest(path, is_claude_settings(path))?);
+                if let Some(digests) = keys::key_digests(path) {
+                    keys.insert(key(path), digests);
+                }
             }
         }
         Ok(Self {
@@ -233,6 +244,7 @@ impl Lock {
             binary: binary.to_string_lossy().into_owned(),
             entries,
             codex_profiles: BTreeMap::new(),
+            keys,
         })
     }
 
@@ -298,7 +310,7 @@ impl Lock {
         }
         match digests(&path, is_claude_settings(&path)) {
             Ok(actual) if actual.contains(expected) => None,
-            Ok(_) => Some(Drift::Modified(path)),
+            Ok(_) => Some(self.modified(path)),
             Err(e) => Some(Drift::Unreadable(path, format!("{e:#}"))),
         }
     }
@@ -318,6 +330,17 @@ impl Lock {
                 target: PathBuf::from(key(target)),
             }),
             Err(e) => Some(Drift::Unreadable(proposal.to_path_buf(), format!("{e:#}"))),
+        }
+    }
+
+    /// [`Drift::KeysChanged`] when the pin recorded the file's top-level keys
+    /// and some differ now, else [`Drift::Modified`].
+    fn modified(&self, path: PathBuf) -> Drift {
+        let now = keys::key_digests(&path);
+        let pinned = self.keys.get(&key(&path));
+        match pinned.zip(now).and_then(|(p, n)| keys::describe(p, &n)) {
+            Some(keys) => Drift::KeysChanged(path, keys),
+            None => Drift::Modified(path),
         }
     }
 

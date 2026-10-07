@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Lock drift on a JSON or TOML file names the top-level keys that changed since the pin, in `moat doctor`, in `moat doctor --accept` before it re-pins, and in `guard`'s `kernel-integrity` reasons: `settings.json was modified: changed hooks; added theme` (#288). The lock records a digest per top-level key for those files; a lock written earlier keeps the plain message until its next re-pin.
+
 ### Changed
 - `moat doctor` and `moat run` print one line with the number of places a sandbox is stricter or wider than the policy instead of the whole list; `--verbose` prints the list (#289). Problems (a weakened setting, drift) still print in full, and `moat sandbox show` still prints everything.
 - `moat show` labels its time column `time (UTC)` and `moat replay` adds `UTC` to each session's start time; both were already UTC but unlabelled (#290).
