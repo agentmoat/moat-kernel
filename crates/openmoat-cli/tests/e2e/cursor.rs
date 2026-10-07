@@ -229,11 +229,15 @@ fn pre_tool_use_ask_is_denied_and_a_policy_rule_then_allows_it() {
     assert!(log.contains("\"verdict\":\"ask\""), "{log}");
 
     let policy = sb.home.join(".moat/policy.yaml");
-    let rule = "allow:\n  - id: notes\n    fs.write: ['~/notes/**']\n";
-    let edited =
-        std::fs::read_to_string(&policy)
-            .unwrap()
-            .replacen("\nallow:\n", &format!("\n{rule}"), 1);
+    // The default policy has CRLF line endings in a Windows checkout, so the rule
+    // goes right after `allow:` and the original line ending follows it.
+    let original = std::fs::read_to_string(&policy).unwrap();
+    let edited = original.replacen(
+        "\nallow:",
+        "\nallow:\n  - id: notes\n    fs.write: ['~/notes/**']",
+        1,
+    );
+    assert_ne!(edited, original, "the policy has an `allow:` section");
     std::fs::write(&policy, edited).unwrap();
     let accept = sb.moat_as_person(&["doctor", "--accept"]);
     assert_eq!(accept.status.code(), Some(0), "{}", text(&accept));
