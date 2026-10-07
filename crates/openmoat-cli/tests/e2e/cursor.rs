@@ -213,37 +213,30 @@ fn write_payload(sb: &Sandbox, path: &std::path::Path) -> String {
 
 /// Cursor runs a `preToolUse` call answered `ask` ("accepted by the schema but
 /// not enforced"), so moat sends a deny that says how to approve it, and records
-/// the `ask`.
+/// the `ask`; `moat allow --last` then approves that exact file for the
+/// conversation.
 #[test]
-fn pre_tool_use_ask_is_denied_and_a_policy_rule_then_allows_it() {
+fn pre_tool_use_ask_is_denied_and_allow_last_approves_the_file() {
     let sb = sandbox();
     let notes = sb.home.join("notes").join("todo.md");
     let (code, doc) = guard(&sb, &write_payload(&sb, &notes));
     assert_eq!(code, Some(2), "{doc}");
     assert_eq!(doc["permission"], "deny");
-    assert!(
-        doc["agent_message"].to_string().contains("doctor --accept"),
-        "{doc}"
-    );
+    let message = doc["agent_message"].to_string();
+    assert!(message.contains("run `moat`"), "{doc}");
+    assert!(message.contains("moat allow --last"), "{doc}");
     let log = text(&sb.moat(&["audit", "export"]));
     assert!(log.contains("\"verdict\":\"ask\""), "{log}");
 
-    let policy = sb.home.join(".moat/policy.yaml");
-    // The default policy has CRLF line endings in a Windows checkout, so the rule
-    // goes right after `allow:` and the original line ending follows it.
-    let original = std::fs::read_to_string(&policy).unwrap();
-    let edited = original.replacen(
-        "\nallow:",
-        "\nallow:\n  - id: notes\n    fs.write: ['~/notes/**']",
-        1,
-    );
-    assert_ne!(edited, original, "the policy has an `allow:` section");
-    std::fs::write(&policy, edited).unwrap();
-    let accept = sb.moat_as_person(&["doctor", "--accept"]);
-    assert_eq!(accept.status.code(), Some(0), "{}", text(&accept));
+    let allow = sb.moat_as_person(&["allow", "--last"]);
+    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    assert!(text(&allow).contains("may write"), "{}", text(&allow));
     let (code, doc) = guard(&sb, &write_payload(&sb, &notes));
     assert_eq!(code, Some(0), "{doc}");
     assert_eq!(doc["permission"], "allow", "{doc}");
+    let other = sb.home.join("notes").join("other.md");
+    let (code, _) = guard(&sb, &write_payload(&sb, &other));
+    assert_eq!(code, Some(2), "only the approved file");
 }
 
 /// Cursor prompts on a `beforeShellExecution` `ask`, so it keeps the `ask`, and

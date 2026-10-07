@@ -27,18 +27,19 @@ use thiserror::Error;
 const UNKNOWN_SESSION: &str = "unknown";
 
 /// Appended to an `ask` that Codex receives as a `deny` ([`Host::answer`]).
-const CODEX_ASK: &str = "this needs your approval and Codex hooks cannot ask: run \
-     `moat allow --last` (this session) or `moat allow --last --always`, then retry";
+const CODEX_ASK: &str = "this needs your approval and Codex hooks cannot ask: run `moat` to \
+     approve it, or `moat allow --last` (this session) or `moat allow --last --always`, then retry";
 
 /// Appended to an `ask` that the Continue CLI receives as a `deny` ([`Host::answer`]).
 const CONTINUE_ASK: &str = "this needs your approval and the Continue CLI runs a call its \
-     hook asks about: run `moat allow --last` (this session) or `moat allow --last --always`, \
-     then retry";
+     hook asks about: run `moat` to approve it, or `moat allow --last` (this session) or \
+     `moat allow --last --always`, then retry";
 
 /// Appended to an `ask` that Cursor receives as a `deny` ([`Host::answer`]). Only
-/// file tools reach these hooks, and `moat allow` approves shell commands only.
+/// file tools reach these hooks; `moat allow --last` approves the exact file.
 const CURSOR_ASK: &str = "this needs your approval and Cursor does not prompt for this \
-     hook: add an allow rule to ~/.moat/policy.yaml, run `moat doctor --accept`, then retry";
+     hook: run `moat` to approve it, or `moat allow --last` (this session) or \
+     `moat allow --last --always`, then retry";
 
 /// One line the model can act on: verdict, rule ids, then the reasons.
 #[must_use]

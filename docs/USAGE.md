@@ -69,13 +69,22 @@ id     time (UTC) host         verdict rules          action
 ## A call asks
 
 `ask` shows the agent's own permission prompt, tagged with the rule
-(`moat: ask [installs] — new dependency: …`). Approve it there. To stop being asked
-for the same command, run `moat` and answer `o` or `a`, or:
+(`moat: ask [installs] — new dependency: …`). Approve it there. Codex, and Cursor for
+file tools, cannot prompt: there the call is denied with a message that says to run
+`moat` or `moat allow --last`. To stop being asked for the same command or file, run
+`moat` and answer `o` or `a`, or:
 
 ```bash
 moat allow --last            # the last ask: allowed for the rest of that agent session
 moat allow --last --always   # or a permanent rule in ~/.moat/policy.d/approved.yaml
 ```
+
+The last ask can be a shell command or a file read, write or delete (a Claude Code
+file tool, a Codex `apply_patch`, a Cursor file tool). A session grant covers that
+exact command, or those exact files for that action. `--always` adds a rule for the
+command, or an `fs.read` or `fs.write` rule for exactly those paths, and prints it
+with the `moat allow --remove` command that undoes it. For a whole directory use
+`moat allow --dir <path>`; for a pattern, `moat edit`. Deny rules still win.
 
 Both refuse to run without a terminal, and the default policy denies them to agents.
 
@@ -161,7 +170,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat audit export [--since …] [--host …] [--session …]` | write events as JSON Lines with their chain hashes |
 | `moat audit verify <file> [--anchor <hash>]` | check an export without the database; print its head hash |
 | `moat audit report <file>…` | one report over verified exports from several machines |
-| `moat allow --last [--always]` | turn an `ask` into a session grant (24 h) or a permanent rule |
+| `moat allow --last [--always]` | turn the last `ask` (a command or a file action) into a session grant (24 h) or a permanent rule for exactly that command or those paths |
 | `moat allow --site <host>` · `--dir <path>` · `--remove <id>` | allow a site or a directory permanently · take such a rule out again |
 | `moat edit` | edit the policy in your editor; it is checked and the diff shown before anything changes |
 | `moat trust [<repo>] [--revoke]` | let a repository's `.moat/policy.yaml` allow, until the file changes |

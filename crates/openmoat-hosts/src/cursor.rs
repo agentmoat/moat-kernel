@@ -411,7 +411,10 @@ mod tests {
             let answer = Host::Cursor.answer(&event, &ask);
             assert_eq!(answer.verdict, verdict, "{name}");
             assert_eq!(
-                answer.reasons.iter().any(|r| r.contains("doctor --accept")),
+                answer
+                    .reasons
+                    .iter()
+                    .any(|r| r.contains("moat allow --last")),
                 verdict == Verdict::Deny,
                 "{name}"
             );

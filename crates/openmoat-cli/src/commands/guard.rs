@@ -12,7 +12,7 @@ use openmoat_audit::{NewEvent, Store};
 use openmoat_core::{CompiledPolicy, Decision, Verdict};
 use openmoat_hosts::{HookEvent, HookRequest, Host};
 
-use crate::approvals::Grants;
+use crate::approvals::{self, Grants};
 use crate::cli::GuardArgs;
 use crate::context;
 use crate::environment::Snapshot;
@@ -125,12 +125,13 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
     let snapshot = Snapshot::load(&home.environment_path())?;
     let compiled = CompiledPolicy::compile(&policy, &ctx)?;
     let mut decision = compiled.decide_with(action, &snapshot, &FsPathResolver);
+    // A grant only turns an `ask` into an `allow`; a deny stays a deny.
     if decision.verdict == Verdict::Ask
-        && let openmoat_core::Action::Shell { command } = action
+        && let Some(asked) = approvals::approvable(action, Some(&ctx.cwd), &ctx.home)
         && Grants::load(&home.grants_path())?.matches(
             host.id(),
             &request.session_id,
-            command,
+            &asked,
             crate::time::now_ms(),
         )
     {

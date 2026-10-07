@@ -37,6 +37,7 @@ pub use action::{Action, AtomicAction};
 // from the policy's brokered `Secret`.
 pub use engine::{CompiledPolicy, EvalContext, Secret as TaintSecret, Taint, evaluate};
 pub use kind::{Kind, UnknownKind};
+pub use paths::resolve as resolve_path;
 pub use pattern::literal_shell_pattern;
 pub use policy::{Defaults, Policy, PolicyError, RuleGroup, SandboxSettings};
 pub use programs::{MapResolver, NoResolver, ProgramResolver};

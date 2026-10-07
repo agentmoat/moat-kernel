@@ -2,8 +2,8 @@
 //!
 //! Two files under `~/.moat`, both pinned by the policy lock so an agent cannot
 //! grant itself anything:
-//! - `approvals.json`: session grants, exact command for one host session, valid for
-//!   [`GRANT_TTL_MS`] after they are written;
+//! - `approvals.json`: session grants, an exact command or exact files for one host
+//!   session, valid for [`GRANT_TTL_MS`] after they are written;
 //! - `policy.d/approved.yaml`: permanent allow rules appended by `moat allow --always`,
 //!   `--site` and `--dir`, merged into the user policy at load time so `policy.yaml` is never rewritten.
 
@@ -11,13 +11,17 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
-use openmoat_core::RuleGroup;
+use openmoat_core::{Action, RuleGroup};
 use serde::{Deserialize, Serialize};
 
 use crate::home::write_private;
 use crate::time;
 
-const GRANTS_VERSION: u32 = 1;
+mod asked;
+pub use asked::{approvable, describe, files};
+
+/// Version 2 grants an [`Action`]; version 1 granted only a `command` string.
+const GRANTS_VERSION: u32 = 2;
 const OVERLAY_VERSION: u32 = 1;
 pub const OVERLAY_PREFIX: &str = "approved-";
 /// How long a session grant stays valid. Hosts do not tell OpenMoat when a session
@@ -28,11 +32,27 @@ pub const GRANT_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 pub struct Grant {
     pub host: String,
     pub session_id: String,
-    pub command: String,
+    /// What is approved, as [`approvable`] spells it.
+    pub action: Action,
     /// Milliseconds since the epoch. A grant written without one reads as 0,
     /// long expired: a grant whose age is unknown must not stay valid forever.
     #[serde(default)]
     pub granted_at_ms: i64,
+}
+
+/// A version 1 grant: a shell command.
+#[derive(Deserialize)]
+struct GrantV1 {
+    host: String,
+    session_id: String,
+    command: String,
+    #[serde(default)]
+    granted_at_ms: i64,
+}
+
+#[derive(Deserialize)]
+struct GrantsV1 {
+    entries: Vec<GrantV1>,
 }
 
 impl Grant {
@@ -67,16 +87,31 @@ impl Grants {
         }
         let text =
             fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        let grants: Self =
-            serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
-        if grants.version != GRANTS_VERSION {
-            bail!(
+        let parse = || format!("parsing {}", path.display());
+        let value: serde_json::Value = serde_json::from_str(&text).with_context(parse)?;
+        match value.get("version").and_then(serde_json::Value::as_u64) {
+            Some(1) => {
+                let old: GrantsV1 = serde_json::from_value(value).with_context(parse)?;
+                let entries = old.entries.into_iter().map(|g| Grant {
+                    host: g.host,
+                    session_id: g.session_id,
+                    action: Action::Shell {
+                        command: g.command.trim().to_owned(),
+                    },
+                    granted_at_ms: g.granted_at_ms,
+                });
+                Ok(Self {
+                    version: GRANTS_VERSION,
+                    entries: entries.collect(),
+                })
+            }
+            Some(2) => serde_json::from_value(value).with_context(parse),
+            version => bail!(
                 "{} has version {}; this build supports {GRANTS_VERSION}",
                 path.display(),
-                grants.version
-            );
+                version.map_or_else(|| "none".to_owned(), |v| v.to_string())
+            ),
         }
-        Ok(grants)
     }
 
     /// Write the file, dropping grants that expired by `now_ms` so it does not
@@ -89,27 +124,25 @@ impl Grants {
         )
     }
 
-    /// Grant `command` to the host session as of `now_ms`; granting it again
-    /// restarts its lifetime.
-    pub fn grant(&mut self, host: &str, session_id: &str, command: &str, now_ms: i64) {
-        let command = command.trim();
+    /// Grant `action` (spelled by [`approvable`]) to the host session as of
+    /// `now_ms`; granting it again restarts its lifetime.
+    pub fn grant(&mut self, host: &str, session_id: &str, action: &Action, now_ms: i64) {
         self.entries
-            .retain(|g| !(g.host == host && g.session_id == session_id && g.command == command));
+            .retain(|g| !(g.host == host && g.session_id == session_id && g.action == *action));
         self.entries.push(Grant {
             host: host.to_owned(),
             session_id: session_id.to_owned(),
-            command: command.to_owned(),
+            action: action.clone(),
             granted_at_ms: now_ms,
         });
     }
 
-    /// Exact command match for this host session among grants still valid at
-    /// `now_ms`; no prefix or glob semantics.
+    /// Exact match of `action` (spelled by [`approvable`]) for this host session
+    /// among grants still valid at `now_ms`; no prefix or glob semantics.
     #[must_use]
-    pub fn matches(&self, host: &str, session_id: &str, command: &str, now_ms: i64) -> bool {
-        let command = command.trim();
+    pub fn matches(&self, host: &str, session_id: &str, action: &Action, now_ms: i64) -> bool {
         self.active(now_ms)
-            .any(|g| g.host == host && g.session_id == session_id && g.command == command)
+            .any(|g| g.host == host && g.session_id == session_id && g.action == *action)
     }
 
     /// Grants still valid at `now_ms`.
@@ -183,6 +216,42 @@ impl Overlay {
         Ok(self.push("moat allow --always", |g| g.shell = vec![pattern]))
     }
 
+    /// Append an `fs.read` and `fs.write` allow for exactly these paths. A path
+    /// holding glob characters is refused: the rule would read them as wildcards.
+    pub fn allow_files(&mut self, reads: &[String], writes: &[String]) -> Result<&RuleGroup> {
+        if let Some(bad) = reads
+            .iter()
+            .chain(writes)
+            .find(|p| p.contains(['*', '?', '[', ']', '{', '}', '\\']))
+        {
+            bail!(
+                "{bad} contains glob characters; write it in the policy with `moat edit` instead"
+            );
+        }
+        Ok(self.push("moat allow --always", |g| {
+            g.fs_read = reads.to_vec();
+            g.fs_write = writes.to_vec();
+        }))
+    }
+
+    /// Whether a rule here already allows `action` (spelled by [`approvable`]).
+    #[must_use]
+    pub fn covers(&self, action: &Action) -> bool {
+        if let Action::Shell { command } = action {
+            let pattern = openmoat_core::literal_shell_pattern(command).ok();
+            return self
+                .allow
+                .iter()
+                .any(|g| pattern.as_ref().is_some_and(|p| g.shell.contains(p)));
+        }
+        let (reads, writes) = files(action);
+        !(reads.is_empty() && writes.is_empty())
+            && self.allow.iter().any(|g| {
+                reads.iter().all(|p| g.fs_read.contains(p))
+                    && writes.iter().all(|p| g.fs_write.contains(p))
+            })
+    }
+
     /// Append a `net` allow for one host name, which also covers web fetches.
     /// Only a plain name or address is accepted: a wildcard, scheme or port would
     /// widen the rule beyond what the person typed.
@@ -247,6 +316,17 @@ impl Overlay {
 mod tests {
     use super::*;
 
+    fn sh(command: &str) -> Action {
+        approvable(
+            &Action::Shell {
+                command: command.to_owned(),
+            },
+            None,
+            "/h",
+        )
+        .unwrap()
+    }
+
     #[test]
     fn overlay_ids_stay_unique_after_a_deletion() {
         let mut o = Overlay::default();
@@ -290,37 +370,45 @@ mod tests {
     #[test]
     fn grants_match_exactly_per_host_session() {
         let mut g = Grants::default();
-        g.grant("claude-code", "s1", " npm install left-pad ", NOW);
-        g.grant("claude-code", "s1", "npm install left-pad", NOW);
+        g.grant("claude-code", "s1", &sh(" npm install left-pad "), NOW);
+        g.grant("claude-code", "s1", &sh("npm install left-pad"), NOW);
         assert_eq!(g.entries.len(), 1, "duplicates collapse");
-        assert!(g.matches("claude-code", "s1", "npm install left-pad", NOW));
-        assert!(!g.matches("claude-code", "s2", "npm install left-pad", NOW));
-        assert!(!g.matches("cursor", "s1", "npm install left-pad", NOW));
-        assert!(!g.matches("claude-code", "s1", "npm install left-pad --save", NOW));
+        assert!(g.matches("claude-code", "s1", &sh("npm install left-pad"), NOW));
+        assert!(!g.matches("claude-code", "s2", &sh("npm install left-pad"), NOW));
+        assert!(!g.matches("cursor", "s1", &sh("npm install left-pad"), NOW));
+        assert!(!g.matches("claude-code", "s1", &sh("npm install left-pad --save"), NOW));
     }
 
     #[test]
     fn grants_expire_after_the_ttl() {
         let mut g = Grants::default();
-        g.grant("codex", "k1", "cargo add serde", NOW);
-        let ok = |g: &Grants, at| g.matches("codex", "k1", "cargo add serde", at);
+        g.grant("codex", "k1", &sh("cargo add serde"), NOW);
+        let ok = |g: &Grants, at| g.matches("codex", "k1", &sh("cargo add serde"), at);
         assert!(ok(&g, NOW + GRANT_TTL_MS - 1));
         assert!(!ok(&g, NOW + GRANT_TTL_MS), "expired at the TTL");
         assert!(!ok(&g, NOW - 1), "a grant from the future is not valid");
 
-        g.grant("codex", "k1", "cargo add serde", NOW + GRANT_TTL_MS);
+        g.grant("codex", "k1", &sh("cargo add serde"), NOW + GRANT_TTL_MS);
         assert_eq!(g.entries.len(), 1);
         assert!(ok(&g, NOW + GRANT_TTL_MS + 1), "granting again restarts it");
     }
 
     #[test]
-    fn a_grant_without_a_timestamp_is_expired() {
-        let g: Grants = serde_json::from_str(
-            r#"{"version":1,"entries":[{"host":"codex","session_id":"k1","command":"ls"}]}"#,
-        )
-        .unwrap();
+    fn version_1_grants_migrate_and_one_without_a_timestamp_is_expired() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("approvals.json");
+        let v1 = format!(
+            r#"{{"version":1,"entries":[{{"host":"codex","session_id":"k1","command":"ls"}},
+            {{"host":"codex","session_id":"k2","command":" ls ","granted_at_ms":{NOW}}}]}}"#
+        );
+        fs::write(&path, v1).unwrap();
+        let g = Grants::load(&path).unwrap();
+        assert_eq!(g.version, 2);
         assert_eq!(g.entries[0].granted_at_ms, 0);
-        assert!(!g.matches("codex", "k1", "ls", NOW));
+        assert!(!g.matches("codex", "k1", &sh("ls"), NOW));
+        assert!(g.matches("codex", "k2", &sh("ls"), NOW));
+        fs::write(&path, r#"{"version":3,"entries":[]}"#).unwrap();
+        assert!(Grants::load(&path).is_err(), "a newer file is refused");
     }
 
     #[test]
@@ -328,8 +416,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("approvals.json");
         let mut g = Grants::default();
-        g.grant("codex", "old", "ls", NOW - GRANT_TTL_MS);
-        g.grant("codex", "new", "ls", NOW - 1);
+        g.grant("codex", "old", &sh("ls"), NOW - GRANT_TTL_MS);
+        g.grant("codex", "new", &sh("ls"), NOW - 1);
         assert_eq!(g.active(NOW).count(), 1);
         g.save(&path, NOW).unwrap();
         let loaded = Grants::load(&path).unwrap();
@@ -342,7 +430,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let grants_path = dir.path().join("approvals.json");
         let mut g = Grants::default();
-        g.grant("codex", "k1", "cargo add serde", NOW);
+        g.grant("codex", "k1", &sh("cargo add serde"), NOW);
         g.save(&grants_path, NOW).unwrap();
         assert_eq!(Grants::load(&grants_path).unwrap(), g);
         assert_eq!(
