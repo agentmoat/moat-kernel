@@ -406,14 +406,18 @@ absolute path. Checked against the installed policy (no `--policy`), it also ver
 When a host prompts you because the verdict was `ask`, you can make the answer stick:
 
 ```bash
-moat allow --last                  # grant the most recent ask to that host session (exact command)
+moat allow --last                  # grant the most recent ask to that host session (exact command or files)
 moat allow --last --always         # or add a permanent allow rule
 moat allow "npm install left-pad" --host claude-code --session 7c1e
 ```
 
-Session grants live in `~/.moat/approvals.json` and match the exact command text for
-one host session. A grant applies to any `ask` for that command, including an
-`unparseable` one; it never overrides a `deny`. Hosts do not report when a session ends,
+Session grants live in `~/.moat/approvals.json` and match the exact command text, or
+the exact files and action (read or write) of a file ask, for one host session. File
+paths are compared made absolute against the call's working directory, `~` expanded
+and `.` and `..` collapsed. A grant applies to any `ask` for that command or those
+files, including an `unparseable` one; it never overrides a `deny`. A file ask approved
+with `--always` becomes an `fs.read` or `fs.write` rule for exactly its paths, as
+asked and with symlinks resolved; a path with glob characters is refused. Hosts do not report when a session ends,
 so a grant expires 24 hours after `moat allow` wrote it (granting the same command again
 restarts it); `guard` ignores expired grants, every write of `approvals.json` drops them,
 and `moat status` shows how many are active and the age of the oldest. A grant written

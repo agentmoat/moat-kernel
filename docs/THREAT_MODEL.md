@@ -217,8 +217,9 @@ something the alpha claims to stop.
   differently (`Read` `filepath`); those calls are denied as malformed.
 - **Cursor file tools cannot ask.** Cursor runs a `preToolUse` call answered `ask`
   and accepts only allow or deny from `beforeReadFile`, so OpenMoat sends an `ask`
-  there as a deny. A file write or read that needs approval is blocked until a policy
-  allow rule covers it; `moat allow` approves shell commands only.
+  there as a deny. A file write or read that needs approval is blocked until a person
+  approves that exact file with `moat` or `moat allow --last`, or a policy allow rule
+  covers it.
 - **Ungoverned tools.** Claude Code `WebSearch` (server-side), `SendFile` (#137) and
   orchestration tools whose own calls are hooked; Codex web search and hosted tools;
   Cursor `Shell` and `MCP:<tool>` under `preToolUse` (governed by `beforeShellExecution`

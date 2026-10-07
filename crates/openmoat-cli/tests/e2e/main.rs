@@ -7,6 +7,7 @@
 mod common;
 
 mod allow;
+mod allow_files;
 mod approvals;
 mod audit;
 mod cli;

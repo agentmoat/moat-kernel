@@ -105,3 +105,28 @@ fn without_a_terminal_nothing_changes() {
     );
     assert_eq!(lock(&sb), before);
 }
+
+#[test]
+fn file_ask_is_shown_and_allowed_once() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let notes = sb.home.join("notes.md");
+    let payload = serde_json::json!({
+        "session_id": "s1", "cwd": sb.project().to_string_lossy(),
+        "hook_event_name": "PreToolUse", "tool_name": "Read",
+        "tool_input": {"file_path": notes.to_string_lossy()}, "tool_use_id": "t1"
+    })
+    .to_string();
+    let read = || hook_output(&sb.guard("claude-code", &payload))["permissionDecision"].clone();
+    assert_eq!(read(), "ask");
+    let shown = home_as_person(&sb, "o\n");
+    assert!(
+        shown.contains("today: 1 decision, 0 denied, 1 asked"),
+        "{shown}"
+    );
+    assert!(shown.contains("Claude Code asked to read"), "{shown}");
+    assert!(
+        shown.contains("session s1 on claude-code may read"),
+        "{shown}"
+    );
+    assert_eq!(read(), "allow");
+}

@@ -18,7 +18,7 @@ pub fn normalise(raw: &str, home: &str, project: Option<&str>, cwd: &str) -> Str
     resolve(raw, home, project, Some(cwd)).unwrap_or_else(|| collapse(&format!("{cwd}/{raw}")))
 }
 
-/// [`normalise`] for a word a shell will expand, against a working directory
+/// `normalise` for a word a shell will expand, against a working directory
 /// that may be unknown (`None`). `None` when the result depends on a directory
 /// that is not known: a relative path and an unknown `cwd`, or `~-`.
 #[must_use]

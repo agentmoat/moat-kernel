@@ -222,8 +222,9 @@ Two tests prove agreement with the engine:
 `ask` is the host's own prompt; OpenMoat has no prompt of its own. Codex cannot ask:
 its `PreToolUse` rejects `permissionDecision: "ask"` as unsupported and then runs the
 call. So for Codex an `ask` is sent as a `deny` (exit 2) whose reason says to approve
-it with `moat allow --last`. The audit log keeps the `ask`, which is what `--last` finds
-(`Host::answer`).
+it with `moat` or `moat allow --last`. Cursor's `preToolUse` and `beforeReadFile` get the
+same treatment. The audit log keeps the `ask`, which is what `--last` finds
+(`Host::answer`); it approves a shell command or the exact files of a file action.
 
 The Continue CLI (`cn`) cannot ask either, and it runs the Claude Code hook: it merges
 hooks from `~/.claude/settings.json` and `.claude/settings.json` with its own files.
@@ -244,9 +245,8 @@ Cursor prompts on `ask` for `beforeShellExecution` and `beforeMCPExecution` only
 for permission with it). For `preToolUse` the same page says `ask` is "accepted by the
 schema but not enforced", so the call runs, and `beforeReadFile` takes only allow or
 deny. The Cursor adapter marks those two events `HookEvent::PreToolUseNoAsk`, and an
-`ask` there is sent as a `deny` (exit 2). Only file tools are governed there and
-`moat allow` approves shell commands only, so the reason says to add an allow rule to
-the policy and run `moat doctor --accept`. The audit log keeps the `ask`.
+`ask` there is sent as a `deny` (exit 2) whose reason says to approve it with `moat` or
+`moat allow --last`, which approve the exact file. The audit log keeps the `ask`.
 
 Codex's `PermissionRequest` hook does not change this (#178, checked against
 openai/codex `ff9ab4a` and codex-cli 0.160.1). Codex runs it only from

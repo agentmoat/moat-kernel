@@ -1,25 +1,71 @@
-//! `moat allow`: turn an `ask` into a session grant or a permanent rule, allow a
-//! site or a directory permanently, or remove a permanent rule.
+//! `moat allow`: turn an `ask` (a shell command or a file action) into a session
+//! grant or a permanent rule, allow a site or a directory permanently, or remove a
+//! permanent rule.
 
 use std::io::Write as _;
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use openmoat_audit::Event;
-use openmoat_core::{Action, Verdict};
+use openmoat_core::{Action, PathResolver as _, Verdict};
 
-use crate::approvals::{GRANT_TTL_MS, Grants, Overlay};
+use crate::approvals::{self, GRANT_TTL_MS, Grants, Overlay};
 use crate::cli::AllowArgs;
 use crate::context::{absolute, path_string};
 use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity::{self, HookPins};
+use crate::realpath::FsPathResolver;
 use crate::render::Deferred;
 
-/// How many recent events `--last` searches for the newest shell `ask`.
+/// How many recent events `--last` searches for the newest `ask` it can approve.
 const LAST_ASK_SEARCH: usize = 200;
 
 pub fn run(args: &AllowArgs) -> Result<Code> {
+    let home = checked_home()?;
+    let mut out = Deferred::default();
+    if args.site.is_some() || args.dir.is_some() || args.remove.is_some() {
+        change_overlay(&home, args, &mut out)?;
+        return repin(&home, out);
+    }
+    let (host, session, action) = match (&args.command, args.last) {
+        (Some(command), false) => (
+            args.host.map(|h| h.id().to_owned()),
+            args.session.clone(),
+            Action::Shell {
+                command: command.trim().to_owned(),
+            },
+        ),
+        (None, true) => {
+            let event = newest_ask(&home.open_audit()?)?
+                .context("no recent `ask` for a shell command or a file in the audit log")?;
+            let action = asked(&event)?;
+            writeln!(
+                out,
+                "last ask: {} on {} (session {}) wanted to {}",
+                event.id,
+                event.host,
+                event.session_id,
+                approvals::describe(&action)
+            )?;
+            (Some(event.host), Some(event.session_id), action)
+        }
+        _ => bail!("give a command, or --last to take the most recent ask"),
+    };
+    approve(&home, host, session, &action, args.always, out)
+}
+
+/// Approve exactly `action` (from [`asked`]) for the host session, or for good
+/// with `always`: the home screen's answer, with the same checks as `run`.
+pub(super) fn run_for(host: &str, session: &str, action: &Action, always: bool) -> Result<Code> {
+    let home = checked_home()?;
+    let (host, session) = (Some(host.to_owned()), Some(session.to_owned()));
+    approve(&home, host, session, action, always, Deferred::default())
+}
+
+/// The state directory, once a person at a terminal is confirmed and the lock
+/// shows no drift.
+fn checked_home() -> Result<Home> {
     if !crate::terminal::interactive() {
         bail!("`moat allow` must be run by a person in a terminal, not from a hook or script");
     }
@@ -39,34 +85,48 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
             deny.reasons.join("\n  ")
         );
     }
+    Ok(home)
+}
 
-    let mut out = Deferred::default();
-    if args.site.is_some() || args.dir.is_some() || args.remove.is_some() {
-        change_overlay(&home, args, &mut out)?;
-        return repin(&home, out);
-    }
-    let (host, session, command) = match (&args.command, args.last) {
-        (Some(command), false) => (
-            args.host.map(|h| h.id().to_owned()),
-            args.session.clone(),
-            command.clone(),
-        ),
-        (None, true) => last_ask(&home, &mut out)?,
-        _ => bail!("give a command, or --last to take the most recent ask"),
-    };
-
-    if args.always {
+/// Write the session grant, or with `always` the permanent rule, then re-pin.
+fn approve(
+    home: &Home,
+    host: Option<String>,
+    session: Option<String>,
+    action: &Action,
+    always: bool,
+    mut out: Deferred,
+) -> Result<Code> {
+    if always {
         let path = home.overlay_path();
         let mut overlay = Overlay::load(&path)?;
-        let rule = overlay.allow_command(&command)?.clone();
+        let rule = if let Action::Shell { command } = action {
+            let rule = overlay.allow_command(command)?.clone();
+            writeln!(
+                out,
+                "✔ permanent rule {} allows shell \"{command}\"",
+                rule.id
+            )?;
+            rule
+        } else {
+            let (reads, writes) = approvals::files(action);
+            let rule = overlay
+                .allow_files(&spellings(reads), &spellings(writes))?
+                .clone();
+            writeln!(out, "✔ added to {}:", path.display())?;
+            for line in serde_yaml_ng::to_string(&[&rule])?.lines() {
+                writeln!(out, "    {line}")?;
+            }
+            writeln!(
+                out,
+                "  only this exact path; `moat allow --dir <dir>` allows a whole directory, \
+                 `moat edit` any pattern"
+            )?;
+            rule
+        };
         overlay.save(&path)?;
-        writeln!(
-            out,
-            "✔ permanent rule {} allows shell \"{command}\"",
-            rule.id
-        )?;
         writeln!(out, "  undo: moat allow --remove {}", rule.id)?;
-        warn_if_shadowed(&home, &rule.id, &mut out)?;
+        warn_if_shadowed(home, &rule.id, &mut out)?;
     } else {
         let session = session.context(
             "give --host and --session for a session grant, --always for a permanent rule, or --last",
@@ -75,15 +135,28 @@ pub fn run(args: &AllowArgs) -> Result<Code> {
         let path = home.grants_path();
         let mut grants = Grants::load(&path)?;
         let now = crate::time::now_ms();
-        grants.grant(&host, &session, &command, now);
+        grants.grant(&host, &session, action, now);
         grants.save(&path, now)?;
         writeln!(
             out,
-            "✔ session {session} on {host} may run \"{command}\" for {}",
+            "✔ session {session} on {host} may {} for {}",
+            approvals::describe(action),
             crate::time::duration(GRANT_TTL_MS)
         )?;
     }
-    repin(&home, out)
+    repin(home, out)
+}
+
+/// Each path as asked and with its symlinks resolved, since the hook checks a
+/// path both ways and the stricter answer wins.
+fn spellings(paths: &[String]) -> Vec<String> {
+    let mut out = paths.to_vec();
+    for real in paths.iter().filter_map(|p| FsPathResolver.resolve(p)) {
+        if !out.contains(&real) {
+            out.push(real);
+        }
+    }
+    out
 }
 
 fn repin(home: &Home, mut out: Deferred) -> Result<Code> {
@@ -190,25 +263,39 @@ fn warn_if_shadowed(home: &Home, id: &str, out: &mut Deferred) -> Result<()> {
     Ok(())
 }
 
-/// Host, session and command of the most recent `ask` for a shell command.
-fn last_ask(home: &Home, out: &mut Deferred) -> Result<(Option<String>, Option<String>, String)> {
-    let event = newest_shell_ask(&home.open_audit()?)?
-        .context("no recent `ask` for a shell command in the audit log")?;
-    let Some(Action::Shell { command }) = event.action else {
-        unreachable!("filtered to shell actions");
+/// The action an ask named, as a grant or rule approves it ([`approvals::approvable`]).
+pub(super) fn asked(event: &Event) -> Result<Action> {
+    let cwd = match event.cwd.as_deref() {
+        Some(cwd) => Some(path_string(&absolute(Path::new(cwd))?)),
+        None => None,
     };
-    writeln!(
-        out,
-        "last ask: {} on {} (session {}) wanted to run \"{command}\"",
-        event.id, event.host, event.session_id
-    )?;
-    Ok((Some(event.host), Some(event.session_id), command))
+    let home = path_string(&crate::home::user_home()?);
+    event
+        .action
+        .as_ref()
+        .and_then(|a| approvals::approvable(a, cwd.as_deref(), &home))
+        .with_context(|| {
+            format!(
+                "ask {} names no file `moat allow` can approve (none, or a relative path \
+                 without a working directory); allow it with `moat edit` instead",
+                event.id
+            )
+        })
 }
 
-/// The most recent `ask` for a shell command: what `--last` takes.
-pub(super) fn newest_shell_ask(store: &openmoat_audit::Store) -> Result<Option<Event>> {
-    Ok(store
-        .recent(LAST_ASK_SEARCH)?
-        .into_iter()
-        .find(|e| e.verdict == Verdict::Ask && matches!(e.action, Some(Action::Shell { .. }))))
+/// The most recent `ask` for a shell command or a file: what `--last` takes.
+pub(super) fn newest_ask(store: &openmoat_audit::Store) -> Result<Option<Event>> {
+    Ok(store.recent(LAST_ASK_SEARCH)?.into_iter().find(|e| {
+        e.verdict == Verdict::Ask
+            && matches!(
+                e.action,
+                Some(
+                    Action::Shell { .. }
+                        | Action::FsRead { .. }
+                        | Action::FsWrite { .. }
+                        | Action::Patch { .. }
+                        | Action::ReadFiles { .. }
+                )
+            )
+    }))
 }

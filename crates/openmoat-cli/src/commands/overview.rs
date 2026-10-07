@@ -12,8 +12,8 @@ use openmoat_audit::Event;
 use openmoat_core::{Action, Verdict};
 use openmoat_hosts::Host;
 
-use crate::approvals::{Grants, Overlay};
-use crate::cli::{AllowArgs, DoctorArgs};
+use crate::approvals::{self, Grants, Overlay};
+use crate::cli::DoctorArgs;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig};
@@ -60,14 +60,15 @@ pub fn run() -> Result<Code> {
         }
     }
 
-    let Some((event, host, command)) = pending_ask(&home, &store, today, now)? else {
+    let Some((event, host, action)) = pending_ask(&home, &store, today, now)? else {
         println!("Nothing needs you.");
         println!("`moat show` lists recent decisions; `moat --help` lists every command.");
         return Ok(Code::Ok);
     };
     println!(
-        "{} asked to run \"{command}\" (rule {}, session {})",
+        "{} asked to {} (rule {}, session {})",
         host.display_name(),
+        approvals::describe(&action),
         event.rules.join(", "),
         event.session_id
     );
@@ -85,16 +86,7 @@ pub fn run() -> Result<Code> {
         }
     };
     // The exact ask shown, not `--last`: a newer ask may have arrived meanwhile.
-    super::allow::run(&AllowArgs {
-        command: Some(command),
-        last: false,
-        host: (!always).then_some(host),
-        session: (!always).then_some(event.session_id),
-        always,
-        site: None,
-        dir: None,
-        remove: None,
-    })
+    super::allow::run_for(&event.host, &event.session_id, &action, always)
 }
 
 /// Agents whose hook is installed, and today's decisions.
@@ -116,8 +108,9 @@ fn health(today: &[Event]) -> Result<String> {
     };
     let count = |v: Verdict| today.iter().filter(|e| e.verdict == v).count();
     Ok(format!(
-        "{agents} · today: {} decisions, {} denied, {} asked",
+        "{agents} · today: {} decision{}, {} denied, {} asked",
         today.len(),
+        if today.len() == 1 { "" } else { "s" },
         count(Verdict::Deny),
         count(Verdict::Ask)
     ))
@@ -130,22 +123,16 @@ fn pending_ask(
     store: &openmoat_audit::Store,
     today: i64,
     now: i64,
-) -> Result<Option<(Event, Host, String)>> {
-    let Some(event) = super::allow::newest_shell_ask(store)?.filter(|e| e.ts_ms >= today) else {
+) -> Result<Option<(Event, Host, Action)>> {
+    let Some(event) = super::allow::newest_ask(store)?.filter(|e| e.ts_ms >= today) else {
         return Ok(None);
     };
-    let Some(Action::Shell { command }) = event.action.clone() else {
-        return Ok(None);
-    };
+    let action = super::allow::asked(&event)?;
     let host: Host = event.host.parse()?;
     let granted =
-        Grants::load(&home.grants_path())?.matches(&event.host, &event.session_id, &command, now);
-    let pattern = openmoat_core::literal_shell_pattern(&command).ok();
-    let permanent = Overlay::load(&home.overlay_path())?
-        .allow
-        .iter()
-        .any(|g| pattern.as_ref().is_some_and(|p| g.shell.contains(p)));
-    Ok((!granted && !permanent).then_some((event, host, command)))
+        Grants::load(&home.grants_path())?.matches(&event.host, &event.session_id, &action, now);
+    let permanent = Overlay::load(&home.overlay_path())?.covers(&action);
+    Ok((!granted && !permanent).then_some((event, host, action)))
 }
 
 /// Ask a question and read one line; end of input reads as an empty answer.

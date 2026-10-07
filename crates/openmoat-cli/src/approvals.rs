@@ -2,8 +2,8 @@
 //!
 //! Two files under `~/.moat`, both pinned by the policy lock so an agent cannot
 //! grant itself anything:
-//! - `approvals.json`: session grants, exact command for one host session, valid for
-//!   [`GRANT_TTL_MS`] after they are written;
+//! - `approvals.json`: session grants, an exact command or exact files for one host
+//!   session, valid for [`GRANT_TTL_MS`] after they are written;
 //! - `policy.d/approved.yaml`: permanent allow rules appended by `moat allow --always`,
 //!   `--site` and `--dir`, merged into the user policy at load time so `policy.yaml` is never rewritten.
 
@@ -11,13 +11,14 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
-use openmoat_core::RuleGroup;
+use openmoat_core::{Action, RuleGroup};
 use serde::{Deserialize, Serialize};
 
 use crate::home::write_private;
 use crate::time;
 
-const GRANTS_VERSION: u32 = 1;
+/// Version 2 grants an [`Action`]; version 1 granted only a `command` string.
+const GRANTS_VERSION: u32 = 2;
 const OVERLAY_VERSION: u32 = 1;
 pub const OVERLAY_PREFIX: &str = "approved-";
 /// How long a session grant stays valid. Hosts do not tell OpenMoat when a session
@@ -28,11 +29,27 @@ pub const GRANT_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 pub struct Grant {
     pub host: String,
     pub session_id: String,
-    pub command: String,
+    /// What is approved, as [`approvable`] spells it.
+    pub action: Action,
     /// Milliseconds since the epoch. A grant written without one reads as 0,
     /// long expired: a grant whose age is unknown must not stay valid forever.
     #[serde(default)]
     pub granted_at_ms: i64,
+}
+
+/// A version 1 grant: a shell command.
+#[derive(Deserialize)]
+struct GrantV1 {
+    host: String,
+    session_id: String,
+    command: String,
+    #[serde(default)]
+    granted_at_ms: i64,
+}
+
+#[derive(Deserialize)]
+struct GrantsV1 {
+    entries: Vec<GrantV1>,
 }
 
 impl Grant {
@@ -67,16 +84,31 @@ impl Grants {
         }
         let text =
             fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        let grants: Self =
-            serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
-        if grants.version != GRANTS_VERSION {
-            bail!(
+        let parse = || format!("parsing {}", path.display());
+        let value: serde_json::Value = serde_json::from_str(&text).with_context(parse)?;
+        match value.get("version").and_then(serde_json::Value::as_u64) {
+            Some(1) => {
+                let old: GrantsV1 = serde_json::from_value(value).with_context(parse)?;
+                let entries = old.entries.into_iter().map(|g| Grant {
+                    host: g.host,
+                    session_id: g.session_id,
+                    action: Action::Shell {
+                        command: g.command.trim().to_owned(),
+                    },
+                    granted_at_ms: g.granted_at_ms,
+                });
+                Ok(Self {
+                    version: GRANTS_VERSION,
+                    entries: entries.collect(),
+                })
+            }
+            Some(2) => serde_json::from_value(value).with_context(parse),
+            version => bail!(
                 "{} has version {}; this build supports {GRANTS_VERSION}",
                 path.display(),
-                grants.version
-            );
+                version.map_or_else(|| "none".to_owned(), |v| v.to_string())
+            ),
         }
-        Ok(grants)
     }
 
     /// Write the file, dropping grants that expired by `now_ms` so it does not
@@ -89,33 +121,85 @@ impl Grants {
         )
     }
 
-    /// Grant `command` to the host session as of `now_ms`; granting it again
-    /// restarts its lifetime.
-    pub fn grant(&mut self, host: &str, session_id: &str, command: &str, now_ms: i64) {
-        let command = command.trim();
+    /// Grant `action` (spelled by [`approvable`]) to the host session as of
+    /// `now_ms`; granting it again restarts its lifetime.
+    pub fn grant(&mut self, host: &str, session_id: &str, action: &Action, now_ms: i64) {
         self.entries
-            .retain(|g| !(g.host == host && g.session_id == session_id && g.command == command));
+            .retain(|g| !(g.host == host && g.session_id == session_id && g.action == *action));
         self.entries.push(Grant {
             host: host.to_owned(),
             session_id: session_id.to_owned(),
-            command: command.to_owned(),
+            action: action.clone(),
             granted_at_ms: now_ms,
         });
     }
 
-    /// Exact command match for this host session among grants still valid at
-    /// `now_ms`; no prefix or glob semantics.
+    /// Exact match of `action` (spelled by [`approvable`]) for this host session
+    /// among grants still valid at `now_ms`; no prefix or glob semantics.
     #[must_use]
-    pub fn matches(&self, host: &str, session_id: &str, command: &str, now_ms: i64) -> bool {
-        let command = command.trim();
+    pub fn matches(&self, host: &str, session_id: &str, action: &Action, now_ms: i64) -> bool {
         self.active(now_ms)
-            .any(|g| g.host == host && g.session_id == session_id && g.command == command)
+            .any(|g| g.host == host && g.session_id == session_id && g.action == *action)
     }
 
     /// Grants still valid at `now_ms`.
     pub fn active(&self, now_ms: i64) -> impl Iterator<Item = &Grant> {
         self.entries.iter().filter(move |g| g.active(now_ms))
     }
+}
+
+/// An asked action as a grant or `--always` rule names it: a shell command
+/// trimmed, or files with each path made absolute against `cwd` (`~` expanded,
+/// `.` and `..` collapsed) the way the engine reads it. `None` for what `moat
+/// allow` cannot approve (MCP tools, sites, a foreign shell, a patch naming no
+/// file) and for a relative path without a `cwd`. `cwd` and `home` are in canonical slash form.
+#[must_use]
+pub fn approvable(action: &Action, cwd: Option<&str>, home: &str) -> Option<Action> {
+    let absolute = |p: &String| openmoat_core::resolve_path(p, home, None, cwd);
+    // A patch naming no file is unparseable, and stays an `ask`.
+    let all = |paths: &[String]| {
+        let all: Vec<String> = paths.iter().map(absolute).collect::<Option<_>>()?;
+        (!all.is_empty()).then_some(all)
+    };
+    Some(match action {
+        Action::Shell { command } => Action::Shell {
+            command: command.trim().to_owned(),
+        },
+        Action::FsRead { path } => Action::FsRead {
+            path: absolute(path)?,
+        },
+        Action::FsWrite { path } => Action::FsWrite {
+            path: absolute(path)?,
+        },
+        Action::Patch { writes } => Action::Patch {
+            writes: all(writes)?,
+        },
+        Action::ReadFiles { paths } => Action::ReadFiles { paths: all(paths)? },
+        _ => return None,
+    })
+}
+
+/// The paths a file action reads and writes; both empty for anything else.
+#[must_use]
+pub fn files(action: &Action) -> (&[String], &[String]) {
+    match action {
+        Action::FsRead { path } => (std::slice::from_ref(path), &[]),
+        Action::ReadFiles { paths } => (paths, &[]),
+        Action::FsWrite { path } => (&[], std::slice::from_ref(path)),
+        Action::Patch { writes } => (&[], writes),
+        _ => (&[], &[]),
+    }
+}
+
+/// What an approvable action does, for a person: `run "…"`, `read …`, `write …`.
+#[must_use]
+pub fn describe(action: &Action) -> String {
+    if let Action::Shell { command } = action {
+        return format!("run \"{command}\"");
+    }
+    let (reads, writes) = files(action);
+    let verb = if writes.is_empty() { "read" } else { "write" };
+    format!("{verb} {}", [reads, writes].concat().join(", "))
 }
 
 /// Allow rules appended by `moat allow --always`, `--site` and `--dir`.
@@ -183,6 +267,42 @@ impl Overlay {
         Ok(self.push("moat allow --always", |g| g.shell = vec![pattern]))
     }
 
+    /// Append an `fs.read` and `fs.write` allow for exactly these paths. A path
+    /// holding glob characters is refused: the rule would read them as wildcards.
+    pub fn allow_files(&mut self, reads: &[String], writes: &[String]) -> Result<&RuleGroup> {
+        if let Some(bad) = reads
+            .iter()
+            .chain(writes)
+            .find(|p| p.contains(['*', '?', '[', ']', '{', '}', '\\']))
+        {
+            bail!(
+                "{bad} contains glob characters; write it in the policy with `moat edit` instead"
+            );
+        }
+        Ok(self.push("moat allow --always", |g| {
+            g.fs_read = reads.to_vec();
+            g.fs_write = writes.to_vec();
+        }))
+    }
+
+    /// Whether a rule here already allows `action` (spelled by [`approvable`]).
+    #[must_use]
+    pub fn covers(&self, action: &Action) -> bool {
+        if let Action::Shell { command } = action {
+            let pattern = openmoat_core::literal_shell_pattern(command).ok();
+            return self
+                .allow
+                .iter()
+                .any(|g| pattern.as_ref().is_some_and(|p| g.shell.contains(p)));
+        }
+        let (reads, writes) = files(action);
+        !(reads.is_empty() && writes.is_empty())
+            && self.allow.iter().any(|g| {
+                reads.iter().all(|p| g.fs_read.contains(p))
+                    && writes.iter().all(|p| g.fs_write.contains(p))
+            })
+    }
+
     /// Append a `net` allow for one host name, which also covers web fetches.
     /// Only a plain name or address is accepted: a wildcard, scheme or port would
     /// widen the rule beyond what the person typed.
@@ -244,144 +364,4 @@ impl Overlay {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn overlay_ids_stay_unique_after_a_deletion() {
-        let mut o = Overlay::default();
-        for c in ["a", "b", "c"] {
-            o.allow_command(c).unwrap();
-        }
-        o.allow.remove(0);
-        assert_eq!(o.allow_command("d").unwrap().id, "approved-4");
-        let ids: std::collections::BTreeSet<_> = o.allow.iter().map(|g| &g.id).collect();
-        assert_eq!(ids.len(), o.allow.len());
-    }
-
-    #[test]
-    fn sites_dirs_and_removal() {
-        let mut o = Overlay::default();
-        assert_eq!(o.allow_site(" Docs.RS. ").unwrap().net, ["docs.rs"]);
-        for bad in [
-            "*",
-            "*.example.com",
-            "https://x.dev",
-            "x.dev:443",
-            "",
-            "a..b",
-            "::1",
-        ] {
-            let error = o.allow_site(bad).unwrap_err().to_string();
-            assert!(error.contains("in the policy"), "{bad}: {error}");
-        }
-        let dir = o.allow_dir(&["/w/a".to_owned(), "/real/a".to_owned()]);
-        assert_eq!(dir.id, "approved-2");
-        assert_eq!(dir.fs_read, ["/w/a", "/w/a/**", "/real/a", "/real/a/**"]);
-        assert_eq!(dir.fs_write, dir.fs_read);
-        assert_eq!(o.remove("approved-1").unwrap().net, ["docs.rs"]);
-        assert!(o.remove("approved-1").is_none());
-        assert_eq!(o.allow.len(), 1);
-    }
-
-    /// 2026-10-03 00:00:00 UTC; tests pass time in, they never read the clock.
-    const NOW: i64 = 1_790_985_600_000;
-
-    #[test]
-    fn grants_match_exactly_per_host_session() {
-        let mut g = Grants::default();
-        g.grant("claude-code", "s1", " npm install left-pad ", NOW);
-        g.grant("claude-code", "s1", "npm install left-pad", NOW);
-        assert_eq!(g.entries.len(), 1, "duplicates collapse");
-        assert!(g.matches("claude-code", "s1", "npm install left-pad", NOW));
-        assert!(!g.matches("claude-code", "s2", "npm install left-pad", NOW));
-        assert!(!g.matches("cursor", "s1", "npm install left-pad", NOW));
-        assert!(!g.matches("claude-code", "s1", "npm install left-pad --save", NOW));
-    }
-
-    #[test]
-    fn grants_expire_after_the_ttl() {
-        let mut g = Grants::default();
-        g.grant("codex", "k1", "cargo add serde", NOW);
-        let ok = |g: &Grants, at| g.matches("codex", "k1", "cargo add serde", at);
-        assert!(ok(&g, NOW + GRANT_TTL_MS - 1));
-        assert!(!ok(&g, NOW + GRANT_TTL_MS), "expired at the TTL");
-        assert!(!ok(&g, NOW - 1), "a grant from the future is not valid");
-
-        g.grant("codex", "k1", "cargo add serde", NOW + GRANT_TTL_MS);
-        assert_eq!(g.entries.len(), 1);
-        assert!(ok(&g, NOW + GRANT_TTL_MS + 1), "granting again restarts it");
-    }
-
-    #[test]
-    fn a_grant_without_a_timestamp_is_expired() {
-        let g: Grants = serde_json::from_str(
-            r#"{"version":1,"entries":[{"host":"codex","session_id":"k1","command":"ls"}]}"#,
-        )
-        .unwrap();
-        assert_eq!(g.entries[0].granted_at_ms, 0);
-        assert!(!g.matches("codex", "k1", "ls", NOW));
-    }
-
-    #[test]
-    fn saving_prunes_expired_grants() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("approvals.json");
-        let mut g = Grants::default();
-        g.grant("codex", "old", "ls", NOW - GRANT_TTL_MS);
-        g.grant("codex", "new", "ls", NOW - 1);
-        assert_eq!(g.active(NOW).count(), 1);
-        g.save(&path, NOW).unwrap();
-        let loaded = Grants::load(&path).unwrap();
-        assert_eq!(loaded.entries.len(), 1);
-        assert_eq!(loaded.entries[0].session_id, "new");
-    }
-
-    #[test]
-    fn grants_and_overlay_round_trip() {
-        let dir = tempfile::tempdir().unwrap();
-        let grants_path = dir.path().join("approvals.json");
-        let mut g = Grants::default();
-        g.grant("codex", "k1", "cargo add serde", NOW);
-        g.save(&grants_path, NOW).unwrap();
-        assert_eq!(Grants::load(&grants_path).unwrap(), g);
-        assert_eq!(
-            Grants::load(&dir.path().join("missing.json")).unwrap(),
-            Grants::default()
-        );
-
-        let overlay_path = dir.path().join("approved.yaml");
-        let mut o = Overlay::default();
-        assert_eq!(
-            o.allow_command("npm install left-pad").unwrap().id,
-            "approved-1"
-        );
-        assert_eq!(
-            o.allow_command("pip install requests").unwrap().id,
-            "approved-2"
-        );
-        o.save(&overlay_path).unwrap();
-        let loaded = Overlay::load(&overlay_path).unwrap();
-        assert_eq!(loaded.allow.len(), 2);
-        assert_eq!(loaded.allow[1].shell, ["pip install requests"]);
-        assert!(
-            loaded.allow[0]
-                .reason
-                .as_deref()
-                .unwrap()
-                .contains("moat allow --always")
-        );
-
-        fs::write(
-            &overlay_path,
-            "version: 1\nallow:\n  - id: sneaky\n    shell: ['*']\n",
-        )
-        .unwrap();
-        assert!(
-            Overlay::load(&overlay_path)
-                .unwrap_err()
-                .to_string()
-                .contains("approved-")
-        );
-    }
-}
+mod tests;
