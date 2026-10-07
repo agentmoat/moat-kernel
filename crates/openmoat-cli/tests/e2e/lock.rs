@@ -189,9 +189,11 @@ fn doctor_and_accept_name_the_keys_that_changed() {
     let mut settings: Value =
         serde_json::from_str(&std::fs::read_to_string(settings_path(&sb)).unwrap()).unwrap();
     settings["hooks"] = Value::Null;
+    settings["model"] = Value::from("x");
     settings["theme"] = Value::from("light");
     std::fs::write(settings_path(&sb), settings.to_string()).unwrap();
-    let expected = "settings.json was modified: changed hooks; added theme";
+    // `theme` is not pinned, so it is not named.
+    let expected = "settings.json was modified: changed hooks; added model";
 
     let out = sb.moat(&["doctor"]);
     assert_eq!(out.status.code(), Some(64), "{}", text(&out));

@@ -9,7 +9,7 @@ use sha2::{Digest as _, Sha256};
 /// The top-level key of a Claude Code settings file left out of its digest.
 /// Claude Code writes it on first run and whenever the person picks a theme, and
 /// it changes only colours (#287).
-const COSMETIC_KEY: &str = "theme";
+pub(super) const COSMETIC_KEY: &str = "theme";
 
 /// Whether `path` is a Claude Code settings file, pinned without [`COSMETIC_KEY`].
 pub(super) fn is_claude_settings(path: &Path) -> bool {

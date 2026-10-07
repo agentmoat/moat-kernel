@@ -54,6 +54,14 @@ impl Recorded {
     pub fn dir(&self, host: Host) -> Option<PathBuf> {
         self.dirs.get(host.id()).cloned()
     }
+
+    /// Whether `moat init` set up other agents and left `host` out: the person
+    /// said no or named other `--hosts`, so its missing hook is not a problem.
+    /// An empty record (nothing set up yet, or an install from before #298)
+    /// skips nothing.
+    pub fn skipped(&self, host: Host) -> bool {
+        !self.dirs.is_empty() && self.dir(host).is_none()
+    }
 }
 
 #[cfg(test)]
@@ -75,5 +83,16 @@ mod tests {
         assert_eq!(loaded.dir(Host::ClaudeCode), None);
         fs::write(home.hosts_path(), r#"{"version":7,"dirs":{}}"#).unwrap();
         assert!(Recorded::load(&home).is_err());
+    }
+
+    #[test]
+    fn skips_only_hosts_left_out_of_a_non_empty_record() {
+        let mut recorded = Recorded::default();
+        assert!(!recorded.skipped(Host::Codex));
+        recorded
+            .dirs
+            .insert("claude-code".into(), PathBuf::from("/cfg/claude"));
+        assert!(recorded.skipped(Host::Codex));
+        assert!(!recorded.skipped(Host::ClaudeCode));
     }
 }
