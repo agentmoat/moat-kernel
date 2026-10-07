@@ -5,7 +5,7 @@ mod hook_file;
 
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use openmoat_hosts::Host;
 
 pub use binary::{hook_binary, stale_hint};
@@ -126,6 +126,9 @@ impl HostConfig {
                 hooks: CURSOR_HOOKS,
                 format: HookFormat::Cursor,
             },
+            Host::Continue => {
+                bail!("the Continue CLI runs the Claude Code hook; it has none of its own")
+            }
         };
         Ok(config)
     }
@@ -144,6 +147,28 @@ impl HostConfig {
     pub fn state(&self, binary: &std::path::Path) -> HookState {
         hook_file::state(self, binary)
     }
+}
+
+/// What `moat doctor` and `moat status` say when the Continue CLI is present.
+pub const CONTINUE_CLI_WARNING: &str = "the released Continue CLI does not run hooks, so \
+     OpenMoat cannot check its tool calls; run it under `moat run`";
+
+/// Where the Continue CLI (`cn`) shows itself: its global directory
+/// (`CONTINUE_GLOBAL_DIR`, else `~/.continue`, as `cn` resolves it), or `cn`
+/// on the search path. `cn` loads Claude Code's hooks but fires none of them
+/// yet (released 1.5.47), so its tool calls never reach `guard`.
+pub fn continue_cli() -> Result<Option<PathBuf>> {
+    let dir = match env_dir("CONTINUE_GLOBAL_DIR") {
+        Some(dir) => dir,
+        None => user_home()?.join(".continue"),
+    };
+    if dir.is_dir() {
+        return Ok(Some(dir));
+    }
+    let path: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect())
+        .unwrap_or_default();
+    Ok(crate::environment::find_in(&path, &[], "cn"))
 }
 
 fn env_dir(name: &str) -> Option<PathBuf> {

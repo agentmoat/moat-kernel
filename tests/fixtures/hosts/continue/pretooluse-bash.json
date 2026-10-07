@@ -1,0 +1,12 @@
+{
+  "session_id": "3f2a9c1e-7b4d-4e8a-9f0b-2c6d8e1a5b7f",
+  "transcript_path": "",
+  "cwd": "/p",
+  "permission_mode": "normal",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install left-pad"
+  },
+  "tool_use_id": "call_k2Jd8sQx1Lw3"
+}

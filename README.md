@@ -131,6 +131,7 @@ names a hook whose binary is missing or is a different `moat`.
 | Claude Code | `PreToolUse`: `Bash`, `Monitor`, `PowerShell` (always asks), `Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Glob`, `Grep`, `LSP`, `SendFile`, `WebFetch` (as `fetch`), MCP tools. `ConfigChange`: user, project and local settings | `~/.claude/settings.json` |
 | Codex | `PreToolUse`: shell commands, `apply_patch` (every file the patch names), MCP tools. Codex hooks cannot ask (`PermissionRequest` runs only when Codex itself prompts), so an `ask` blocks the call until you run `moat allow --last`. Codex does not hook web search or hosted tools | `~/.codex/hooks.json` |
 | Cursor | `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` (`Read`, `Write`, `Edit`, `MultiEdit`, `StrReplace`, `Delete`, `Grep`, `Glob`); installed with `failClosed` | `~/.cursor/hooks.json` |
+| Continue CLI (`cn`) | Runs the Claude Code hook, recorded as host `continue`. `cn` ignores an `ask`, so an `ask` blocks the call until you run `moat allow --last`. The released `cn` does not run hooks, so nothing is checked until it does; use `moat run` (`moat doctor` warns) | Claude Code's |
 
 ### Non-default config directories
 
@@ -349,8 +350,11 @@ exits 64: it denies with exit 2 instead, so a broken hook blocks rather than fai
   command that is allowed or that you approve.
 - Claude Code and Codex run the tool call when the hook binary is missing; Cursor
   blocks.
-- Continue CLI (`cn`) loads Claude Code's hooks but treats an `ask` as allow (#264).
-  Run it under `moat run` until it has its own adapter.
+- The released Continue CLI (`cn`) does not run hooks, so OpenMoat cannot check its
+  tool calls; run it under `moat run`. `moat doctor` and `moat status` warn when `cn`
+  is on the search path or its directory (`~/.continue`, or `CONTINUE_GLOBAL_DIR`)
+  exists. Once `cn` runs Claude Code's hooks, OpenMoat sends its asks as denies, but
+  `cn` runs the call if the hook crashes or times out.
 - Tools no hook exposes are not seen: Claude Code `WebSearch`, Codex web search.
 - PowerShell is not parsed; Claude Code `PowerShell` calls always ask.
 
