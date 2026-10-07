@@ -1,0 +1,78 @@
+# OS sandboxes: Standard and Lightweight tiers
+
+OpenMoat decides each tool call in the agent's hook. The sandboxes below make the operating system enforce the same policy on everything those calls start.
+
+## Host sandboxes (Standard tier)
+
+`moat init` also turns on each agent's own sandbox and configures it from the policy
+(ADR-018). Commands the agent runs, and every script they start (`npm test`,
+`build.rs`, `make`), are then confined by the operating system: no secrets, no reads
+outside the project and `sandbox.read_roots`, no writes outside the project, and
+network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
+
+- **Claude Code** (`settings.json`): the `sandbox` block (`enabled`,
+  `failIfUnavailable: true`, `allowUnsandboxedCommands: false`, `excludedCommands: []`,
+  read and write lists, `network.allowedDomains` with `strictAllowlist`) and
+  `permissions.blockReadsOutsideWorkingDirectories: true`. Claude Code's file tools
+  then refuse reads outside the working directories; `/add-dir` adds one.
+- **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =
+  "moat"` and `features.network_proxy = true`.
+
+Network has two modes:
+
+- **Default:** each agent's own proxy enforces the allowlist.
+- **Opt-in:** set `sandbox.proxy_port: 18080` in the policy, run `moat sandbox sync`,
+  and keep `moat proxy` running (a user service works). Sandboxed commands then reach
+  the network through `moat proxy`, which records every connection, injects brokered
+  secrets and refuses private addresses.
+  - Claude Code's `network.httpProxyPort` and `socksProxyPort` name the proxy. While
+    it is stopped, its sandboxed commands have no network, and `moat doctor` and
+    `moat status` warn.
+  - Codex's proxy passes what it allows on to `moat proxy` when you start Codex with
+    `HTTP_PROXY` and `HTTPS_PROXY` set to `http://127.0.0.1:18080`. Codex's own API
+    hosts then need an allow rule.
+
+Other settings and comments are kept, and each file is copied to
+`<file>.moat-sandbox-backup` before moat changes it. `moat sandbox show` prints what
+the policy compiles to, with every place a host is stricter or wider than the policy;
+`moat sandbox sync` rewrites both after you edit the policy and re-pins them. Editing
+the generated parts by hand is drift (`kernel-integrity`), and `moat doctor` names any
+weakened setting. Under Claude Code, sandboxed commands can run `git commit` but cannot
+write `.git/hooks`, `.git/config` or the other paths that make git run code (ADR-021).
+Codex keeps `.git` read-only: commit outside its sandbox (Codex asks to).
+
+To undo, delete the `sandbox` key and `permissions.blockReadsOutsideWorkingDirectories`
+from Claude Code's settings, and `default_permissions`, `[permissions.moat]` and
+`features.network_proxy` from Codex's `config.toml` (or restore the backups), then run
+`moat doctor --accept`.
+
+## `moat run` (Lightweight tier)
+
+Without a container or VM runtime, `moat run` puts a whole agent in a sandbox generated
+from the policy, with network only through a `moat proxy` it starts (ADR-018):
+
+```bash
+moat run --write ~/.claude --write ~/.claude.json -- claude
+```
+
+- **macOS:** a Seatbelt profile, started with `/usr/bin/sandbox-exec`.
+- **Linux 6.7 or later:** Landlock rules, plus a seccomp filter that allows only TCP
+  sockets (no UDP, Unix sockets or `ptrace`). Windows refuses.
+- The agent and every command it starts may read the project, `sandbox.read_roots`,
+  the temp directory and the agent's own executable; never the keychain. They may
+  write the project, the temp directory and each `--write` path (the agent's state).
+  Deny rules still win (`~/.claude/settings.json` stays unwritable).
+- Network goes only to the proxy on a loopback port (`HTTP_PROXY`, `HTTPS_PROXY`),
+  which allows the hosts the policy allows. A tool that ignores those variables has
+  no network.
+- Turn the agent's own sandbox off inside: sandboxes do not nest, so Claude Code's
+  `sandbox.enabled` (which `moat init` turns on) fails there and Codex needs
+  `--sandbox danger-full-access`. Credentials must not come from the keychain: use
+  an API key or `apiKeyHelper`.
+- Before the agent starts, `moat run` prints every place the sandbox is stricter or
+  wider than the policy (`moat sandbox show` prints the same for the current
+  directory). Linux is wider than macOS (secrets inside the project stay
+  readable, and the proxy's port is reachable on any host); see [THREAT_MODEL.md](THREAT_MODEL.md).
+
+It is weaker per command than the Standard tier: the agent and its scripts share one
+sandbox, so whatever the agent needs, `npm test` gets too.

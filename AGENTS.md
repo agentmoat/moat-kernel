@@ -87,7 +87,7 @@ invariant moves. Put the saved time into enforcement (#119, #126).
 2. Golden payloads in `tests/fixtures/hosts/<host>/`; tests cover every tool kind the host exposes, a malformed payload, and an ungoverned tool.
 3. Installer config in `crates/openmoat-cli/src/install/mod.rs` (settings path, matcher, env override). If the host is fail-open by default, the installer must set its fail-closed flag.
 4. End-to-end test in `crates/openmoat-cli/tests/e2e/guard.rs` running the real binary against the fixture.
-5. Document the coverage honestly: the hosts table in `README.md`, `docs/ARCHITECTURE.md` §2–3, and ungoverned tools in `docs/THREAT_MODEL.md` §5.
+5. Document the coverage honestly: the hosts table in `docs/INSTALL.md` and the supported agents table in `README.md`, `docs/ARCHITECTURE.md` §2–3, and ungoverned tools in `docs/THREAT_MODEL.md` §5.
 
 ### Add a CLI command
 1. Grammar in `cli.rs` (clap derive, `///` doc on every arg), dispatch in `commands/mod.rs`, implementation in `commands/<name>.rs`.
