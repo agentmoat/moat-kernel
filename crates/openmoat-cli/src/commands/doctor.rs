@@ -35,7 +35,13 @@ enum Area {
 
 /// The Standard tier: each present host's sandbox settings against the policy,
 /// then how many places the translation loses or widens (each one with `verbose`).
-fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>, verbose: bool) {
+fn sandboxes(
+    report: &mut Report,
+    policy: &Policy,
+    lock: Option<&Lock>,
+    recorded: &Recorded,
+    verbose: bool,
+) {
     let plan = match Plan::new(policy) {
         Ok(plan) => plan,
         Err(e) => {
@@ -44,7 +50,10 @@ fn sandboxes(report: &mut Report, policy: &Policy, lock: Option<&Lock>, verbose:
         }
     };
     let mut present = false;
-    for host in host_sandbox::HOSTS {
+    for host in host_sandbox::HOSTS
+        .into_iter()
+        .filter(|h| !recorded.skipped(*h))
+    {
         let name = host.display_name();
         let problems = host_sandbox::problems(host, &plan, lock);
         present |= !matches!(problems, Ok(None));
@@ -237,7 +246,8 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
     }
 
     if let Some(policy) = &policy {
-        sandboxes(&mut report, policy, lock.as_ref(), args.verbose);
+        let recorded = Recorded::load(&home).unwrap_or_default();
+        sandboxes(&mut report, policy, lock.as_ref(), &recorded, args.verbose);
     }
 
     match Store::open_read_only(&home.audit_path()).and_then(|store| store.verify_chain()) {
@@ -314,7 +324,15 @@ fn hooks(
                 ),
             );
         }
-        match config.state(binary) {
+        let state = config.state(binary);
+        if recorded.skipped(host) && config.host_present() && matches!(state, HookState::Missing) {
+            report.note(&format!(
+                "{name:<16} not set up; `moat init --hosts {}` adds it",
+                host.id()
+            ));
+            continue;
+        }
+        match state {
             HookState::Installed => {
                 hook_files.push(config.settings_path.clone());
                 report.line(

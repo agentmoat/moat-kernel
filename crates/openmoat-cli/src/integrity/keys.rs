@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+use super::digest::{COSMETIC_KEY, is_claude_settings};
 use super::sha256_hex;
 
 /// Top-level key → SHA-256 of its value, for a `.json` file holding an object or
@@ -17,8 +18,11 @@ pub(super) fn key_digests(path: &Path) -> Option<BTreeMap<String, String>> {
             let value: serde_json::Value = serde_json::from_str(&text).ok()?;
             let object = value.as_object()?;
             let digest = |v| serde_json::to_vec(v).ok().map(|b| sha256_hex(&b));
+            // The key the digest leaves out is not named as a change either.
+            let settings = is_claude_settings(path);
             object
                 .iter()
+                .filter(|(k, _)| !(settings && *k == COSMETIC_KEY))
                 .map(|(k, v)| Some((k.clone(), digest(v)?)))
                 .collect()
         }
@@ -86,14 +90,15 @@ mod tests {
         lock.verify_one(path).unwrap().to_string()
     }
 
+    /// `theme` is not pinned in a Claude Code settings file, so it is not named
+    /// either; another JSON file still names it.
     #[test]
     fn json_drift_names_changed_added_and_removed_keys() {
         let (_dir, path, lock) = pinned("settings.json", r#"{"hooks":{"a":1},"env":{}}"#);
         fs::write(&path, r#"{"hooks":{"a":2},"theme":"light","model":"x"}"#).unwrap();
         assert!(
-            message(&lock, &path).ends_with(
-                "settings.json was modified: changed hooks; added model, theme; removed env"
-            ),
+            message(&lock, &path)
+                .ends_with("settings.json was modified: changed hooks; added model; removed env"),
             "{}",
             message(&lock, &path)
         );

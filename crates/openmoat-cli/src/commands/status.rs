@@ -11,7 +11,7 @@ use openmoat_hosts::Host;
 use crate::approvals::{GRANT_TTL_MS, Grants};
 use crate::exit::Code;
 use crate::home::Home;
-use crate::install::{HookState, HostConfig};
+use crate::install::{HookState, HostConfig, Recorded};
 use crate::integrity::{self, HookPinGap, Lock};
 use crate::sandbox::{Plan, install as host_sandbox};
 use crate::{render, time};
@@ -118,10 +118,14 @@ pub fn run() -> Result<Code> {
         }
     }
 
+    let recorded = Recorded::load(&home).unwrap_or_default();
     for host in Host::ALL {
         let config = HostConfig::for_host(host)?;
         let line = match config.state(&binary) {
             HookState::Installed => "✔ installed".to_owned(),
+            HookState::Missing if recorded.skipped(host) && config.host_present() => {
+                format!("· not set up (`moat init --hosts {}` adds it)", host.id())
+            }
             HookState::Missing if !config.host_present() => "· host not found".to_owned(),
             HookState::Missing => {
                 healthy = false;
@@ -154,7 +158,7 @@ pub fn run() -> Result<Code> {
     }
 
     if let Ok(policy) = home.load_policy() {
-        healthy &= sandboxes(&mut out, &Plan::new(&policy)?, &lock_path)?;
+        healthy &= sandboxes(&mut out, &Plan::new(&policy)?, &lock_path, &recorded)?;
     }
 
     let audit_path = home.audit_path();
@@ -180,11 +184,19 @@ pub fn run() -> Result<Code> {
 }
 
 /// One line per present host's sandbox (Standard tier); `false` on any problem.
-fn sandboxes(out: &mut impl io::Write, plan: &Plan, lock_path: &Path) -> Result<bool> {
+fn sandboxes(
+    out: &mut impl io::Write,
+    plan: &Plan,
+    lock_path: &Path,
+    recorded: &Recorded,
+) -> Result<bool> {
     let lock = Lock::load(lock_path).ok();
     let mut healthy = true;
     let mut present = false;
-    for host in host_sandbox::HOSTS {
+    for host in host_sandbox::HOSTS
+        .into_iter()
+        .filter(|h| !recorded.skipped(*h))
+    {
         let name = host.display_name();
         let problems = host_sandbox::problems(host, plan, lock.as_ref());
         present |= !matches!(problems, Ok(None));

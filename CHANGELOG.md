@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - `moat init` asks before changing an agent (#282). At a terminal it lists the agents it found with the files it would change and asks `Protect Claude Code (…)? [Y/n]` for each, then names the backups and `Undo anytime: moat uninstall`. `--hosts` and the new `--yes` skip the questions. Without a terminal and without either flag, `init` sets up `~/.moat` but changes no agent's files, and says how to go on: scripts that ran `moat init` need `--yes`.
 
+### Fixed
+- `moat status` and `moat doctor` show an agent that `moat init` left out (the person said no, or named other `--hosts`) as `· not set up` instead of a missing hook and five sandbox problems. Lock drift on a Claude Code settings file no longer names `theme`, which is not pinned (#287).
+
 ### Security
 - `kernel-self` denies `moat edit` to agents, by name, by absolute path and under every pseudo-terminal wrapper already listed for `moat allow` (#300).
 - `kernel-self` denies agent runs of `moat uninstall`, including through pseudo-terminal wrappers, like `moat allow` (#282).
