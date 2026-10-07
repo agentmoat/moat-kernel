@@ -1,0 +1,71 @@
+# Install and set up OpenMoat
+
+## Install
+
+Release builds cover macOS (arm64, x64), Linux (x64, arm64; glibc and static musl)
+and Windows (x64). Every alpha is a GitHub pre-release, so installer
+URLs name the version; take the newest from
+[Releases](https://github.com/crocodile-labs/openmoat/releases).
+
+```bash
+# macOS and Linux: installs moat into ~/.cargo/bin
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.0/openmoat-installer.sh | sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.0/openmoat-installer.ps1 | iex"
+
+# Homebrew (macOS, Linux)
+brew install crocodile-labs/tap/moat
+
+# From crates.io (Rust 1.95); cargo installs a pre-release only when asked by version
+cargo install openmoat --locked --version 0.1.0-alpha.0
+```
+
+To build from a clone instead (Rust 1.95, pinned by `rust-toolchain.toml`):
+
+```bash
+git clone https://github.com/crocodile-labs/openmoat && cd openmoat
+cargo install --locked --path crates/openmoat-cli    # installs the `moat` binary
+```
+
+Each release carries `sha256.sum` and GitHub build attestations:
+`gh attestation verify <archive> --repo crocodile-labs/openmoat`.
+
+## Set up with `moat init`
+
+```bash
+moat init      # policy, lock, audit log, and hooks for every agent found on this machine
+moat status    # policy, lock, hooks per agent, recent decisions
+```
+
+`moat init` writes `~/.moat/policy.yaml` (the default policy), pins it and the hook
+files in `~/.moat/policy.lock`, creates the audit log, and registers hooks with each
+agent whose configuration directory exists. It never overwrites an existing policy,
+never duplicates a hook and backs up a host file before editing it, so it is safe to
+run again.
+
+To hook only some agents, name them: `moat init --hosts claude-code` (or `codex`,
+`cursor`, comma-separated). `moat init --dry-run` prints what would change first.
+
+Hooks run the `moat` you ran `moat init` with, by its stable path (ADR-016). After
+moving or reinstalling the binary somewhere else, run `moat init` again; `moat doctor`
+names a hook whose binary is missing or is a different `moat`.
+
+| Agent | What is hooked | Hook file |
+|---|---|---|
+| Claude Code | `PreToolUse`: `Bash`, `Monitor`, `PowerShell` (always asks), `Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Glob`, `Grep`, `LSP`, `SendFile`, `WebFetch` (as `fetch`), MCP tools. `ConfigChange`: user, project and local settings | `~/.claude/settings.json` |
+| Codex | `PreToolUse`: shell commands, `apply_patch` (every file the patch names), MCP tools. Codex hooks cannot ask (`PermissionRequest` runs only when Codex itself prompts), so an `ask` blocks the call until you run `moat allow --last`. Codex does not hook web search or hosted tools | `~/.codex/hooks.json` |
+| Cursor | `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` (`Read`, `Write`, `Edit`, `MultiEdit`, `StrReplace`, `Delete`, `Grep`, `Glob`, and any other tool that names a path); installed with `failClosed`. Cursor prompts on `ask` only for shell and MCP calls, so an `ask` on `preToolUse` or `beforeReadFile` is sent as a deny | `~/.cursor/hooks.json` |
+| Continue CLI (`cn`) | Runs the Claude Code hook, recorded as host `continue`. `cn` ignores an `ask`, so an `ask` blocks the call until you run `moat allow --last`. The released `cn` does not run hooks, so nothing is checked until it does; use `moat run` (`moat doctor` warns) | Claude Code's |
+
+## Non-default config directories
+
+`moat` finds each agent's configuration the way the agent does: `CLAUDE_CONFIG_DIR`,
+`CODEX_HOME` and `CURSOR_CONFIG_DIR` replace `~/.claude`, `~/.codex` and `~/.cursor`,
+and `MOAT_HOME` replaces `~/.moat`. `moat init`, `status`, `doctor` and `allow` read
+these from their own environment. If you start Claude Code with `CLAUDE_CONFIG_DIR`
+set, run those commands with the same value; otherwise `init` installs into
+`~/.claude/settings.json`, which that Claude Code never reads, and `status` reports
+the wrong file.
+
+Next: [USAGE.md](USAGE.md) for daily use, [SANDBOX.md](SANDBOX.md) for the OS sandboxes.
