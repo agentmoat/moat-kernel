@@ -14,6 +14,7 @@ describes the code on `main`.
 | [MOATBENCH.md](MOATBENCH.md) | run the attack and everyday scenarios per host and read the scorecard |
 | [DEMO.md](DEMO.md) | run the launch demo in a throwaway home |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | find where code lives and how a tool call becomes a decision, a hook response and an audit record |
+| [ADDING_AN_AGENT.md](ADDING_AN_AGENT.md) | add support for another AI coding agent: adapter, installer, fixtures, tests, docs |
 | [ROADMAP.md](ROADMAP.md) | see the alpha, beta and 1.0 stages; the live order is issue #144 |
 | [adr/](adr/README.md) | read the decisions that constrain the code |
 

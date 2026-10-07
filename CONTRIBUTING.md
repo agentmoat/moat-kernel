@@ -8,6 +8,7 @@ purpose; the detail lives in `docs/`.
 - Read `AGENTS.md` (the contract for humans and coding agents working here) and
   `docs/POLICY.md` and `docs/ARCHITECTURE.md` §3–4 if you touch policy or shell
   classification.
+- To support another AI coding agent, follow `docs/ADDING_AN_AGENT.md`.
 - Security-relevant findings go through a private advisory, never a public issue.
   See `SECURITY.md`.
 - A safe command the default policy denies or asks about is a *false positive*: open an

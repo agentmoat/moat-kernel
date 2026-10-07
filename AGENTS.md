@@ -83,10 +83,11 @@ invariant moves. Put the saved time into enforcement (#119, #126).
 4. Never widen `looks_like_path` or `host_of` without a negative test for the false positive you might introduce.
 
 ### Add a host adapter
+The full guide is `docs/ADDING_AN_AGENT.md`.
 1. New module in `crates/openmoat-hosts/src/<host>.rs`; add the variant to `Host` and its `id()`/`display_name()`.
 2. Golden payloads in `tests/fixtures/hosts/<host>/`; tests cover every tool kind the host exposes, a malformed payload, and an ungoverned tool.
 3. Installer config in `crates/openmoat-cli/src/install/mod.rs` (settings path, matcher, env override). If the host is fail-open by default, the installer must set its fail-closed flag.
-4. End-to-end test in `crates/openmoat-cli/tests/e2e/guard.rs` running the real binary against the fixture.
+4. End-to-end tests in a module per agent (`crates/openmoat-cli/tests/e2e/cursor.rs` is the model, registered in `e2e/main.rs`) running the real binary against the fixture.
 5. Document the coverage honestly: the hosts table in `docs/INSTALL.md` and the supported agents table in `README.md`, `docs/ARCHITECTURE.md` §2–3, and ungoverned tools in `docs/THREAT_MODEL.md` §5.
 
 ### Add a CLI command
