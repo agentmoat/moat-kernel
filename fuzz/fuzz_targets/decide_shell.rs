@@ -21,6 +21,7 @@ fn compiled() -> &'static CompiledPolicy<'static> {
             case_insensitive_paths: false,
             real_home: None,
             real_project: None,
+            moved_dirs: Vec::new(),
         };
         CompiledPolicy::compile(policy, &ctx).expect("default policy compiles")
     })
