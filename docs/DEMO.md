@@ -15,9 +15,12 @@ DEMO_PACE=0 scripts/demo/launch-demo.sh    # no pauses
 ```
 
 To record it: `asciinema rec -c scripts/demo/launch-demo.sh moat-demo.cast`. The README's
-`docs/assets/demo.gif` is that recording at 130×40, rendered with
+`docs/assets/demo.gif` is a shorter cut of the same story, written by
+`scripts/demo/record-gif.py` (every verdict comes from the real `moat guard` in a
+throwaway home; only pacing and typing are scripted) and rendered with
 [agg](https://github.com/asciinema/agg):
-`agg --font-size 15 --theme github-dark --idle-time-limit 3 moat-demo.cast docs/assets/demo.gif`.
+`scripts/demo/record-gif.py target/release/moat demo.cast` then
+`agg --font-size 20 --theme github-dark --last-frame-duration 6 demo.cast docs/assets/demo.gif`.
 
 ## It never touches your configuration
 
