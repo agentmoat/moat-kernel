@@ -143,6 +143,11 @@ fn approve(
             approvals::describe(action),
             crate::time::duration(GRANT_TTL_MS)
         )?;
+        writeln!(
+            out,
+            "  only in this agent session: a new session asks again \
+             (Claude Code: `claude --continue` resumes this one)"
+        )?;
     }
     repin(home, out)
 }

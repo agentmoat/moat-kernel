@@ -35,6 +35,11 @@ fn allow_last_grants_the_session_and_repins() {
         "{}",
         text(&out)
     );
+    assert!(
+        text(&out).contains("a new session asks again"),
+        "{}",
+        text(&out)
+    );
     assert!(text(&out).contains("lock re-pinned"), "{}", text(&out));
 
     let (verdict, reason) = guard(&sb, "s1", INSTALL);

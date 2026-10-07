@@ -79,6 +79,9 @@ moat allow --last            # the last ask: allowed for the rest of that agent 
 moat allow --last --always   # or a permanent rule in ~/.moat/policy.d/approved.yaml
 ```
 
+A session grant lasts 24 hours and covers only that agent session: a new session
+asks again. For Claude Code, `claude --continue` resumes the session.
+
 The last ask can be a shell command or a file read, write or delete (a Claude Code
 file tool, a Codex `apply_patch`, a Cursor file tool). A session grant covers that
 exact command, or those exact files for that action. `--always` adds a rule for the

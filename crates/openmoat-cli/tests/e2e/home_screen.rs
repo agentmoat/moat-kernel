@@ -78,6 +78,7 @@ fn ask_allowed_once_grants_the_session() {
         shown.contains("session s1 on claude-code may run"),
         "{shown}"
     );
+    assert!(shown.contains("`claude --continue` resumes"), "{shown}");
     assert_eq!(verdict(&sb, "s1"), "allow");
     assert_eq!(verdict(&sb, "s2"), "ask", "grants are per session");
     // Answered: s2's ask is the newest now, so it is the one shown.

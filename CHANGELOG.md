@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - docs/INSTALL.md says how to upgrade: `brew update && brew upgrade moat`, since `brew upgrade` alone may not see a new release of the tap (#314).
+- After a session grant (`o` in `moat`, or `moat allow --last` without `--always`), `moat` says that the grant covers only this agent session and that a new session asks again; for Claude Code, `claude --continue` resumes the session (#312).
 
 ### Fixed
 - `moat init` no longer leaves out an agent silently when `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `CURSOR_CONFIG_DIR` names a directory that does not exist yet (#313). It prints one line per such agent with the variable and the directory, and says to start the agent once to create it and then run `moat init` again. It does not create the directory.
