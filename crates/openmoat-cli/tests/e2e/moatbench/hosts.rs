@@ -66,12 +66,14 @@ impl Host {
         )
     }
 
-    /// The verdict the host is told for a kernel verdict: Codex cannot ask, so
-    /// an `ask` reaches it as a blocking `deny`.
-    pub fn answer(self, verdict: Verdict) -> Verdict {
-        match (self, verdict) {
-            (Self::Codex, Verdict::Ask) => Verdict::Deny,
-            (_, other) => other,
+    /// The verdict the host is told for a kernel verdict on `call`: Codex cannot
+    /// ask, nor can Cursor's `beforeReadFile` and `preToolUse` (file reads and
+    /// writes), so an `ask` reaches them as a blocking `deny`.
+    pub fn answer(self, call: &Call, verdict: Verdict) -> Verdict {
+        match (self, call, verdict) {
+            (Self::Codex, _, Verdict::Ask)
+            | (Self::Cursor, Call::Read(_) | Call::Write(_), Verdict::Ask) => Verdict::Deny,
+            (_, _, other) => other,
         }
     }
 

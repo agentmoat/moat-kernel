@@ -239,6 +239,15 @@ records host `continue` with the `ask`. Everything else is decided as for Claude
 (`Host::sender`, `tests/fixtures/hosts/continue/`, built from `cn`'s hook source).
 `continue` is not in `Host::ALL`: it has no hook file of its own to install.
 
+Cursor prompts on `ask` for `beforeShellExecution` and `beforeMCPExecution` only
+(<https://cursor.com/docs/hooks>: `ask` is an output of both, and its shell example asks
+for permission with it). For `preToolUse` the same page says `ask` is "accepted by the
+schema but not enforced", so the call runs, and `beforeReadFile` takes only allow or
+deny. The Cursor adapter marks those two events `HookEvent::PreToolUseNoAsk`, and an
+`ask` there is sent as a `deny` (exit 2). Only file tools are governed there and
+`moat allow` approves shell commands only, so the reason says to add an allow rule to
+the policy and run `moat doctor --accept`. The audit log keeps the `ask`.
+
 Codex's `PermissionRequest` hook does not change this (#178, checked against
 openai/codex `ff9ab4a` and codex-cli 0.160.1). Codex runs it only from
 `Session::request_approval` (`core/src/tools/approvals.rs`), after its own approval

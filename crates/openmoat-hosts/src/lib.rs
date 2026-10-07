@@ -35,6 +35,11 @@ const CONTINUE_ASK: &str = "this needs your approval and the Continue CLI runs a
      hook asks about: run `moat allow --last` (this session) or `moat allow --last --always`, \
      then retry";
 
+/// Appended to an `ask` that Cursor receives as a `deny` ([`Host::answer`]). Only
+/// file tools reach these hooks, and `moat allow` approves shell commands only.
+const CURSOR_ASK: &str = "this needs your approval and Cursor does not prompt for this \
+     hook: add an allow rule to ~/.moat/policy.yaml, run `moat doctor --accept`, then retry";
+
 /// One line the model can act on: verdict, rule ids, then the reasons.
 #[must_use]
 pub fn reason_line(decision: &Decision) -> String {
@@ -213,21 +218,25 @@ impl Host {
     }
 
     /// The decision as this host has to receive it. Codex's `PreToolUse` rejects
-    /// `permissionDecision: "ask"` as unsupported and then runs the call, and the
-    /// Continue CLI ignores it and runs the call, so an `ask` reaches either as a
-    /// `deny` that says how to approve it; the audit log keeps the `ask`, which is
-    /// what `moat allow --last` looks for.
+    /// `permissionDecision: "ask"` as unsupported and then runs the call, the
+    /// Continue CLI ignores it and runs the call, and Cursor does not enforce
+    /// `ask` on `preToolUse` or `beforeReadFile` ([`HookEvent::PreToolUseNoAsk`]).
+    /// There an `ask` reaches the host as a `deny` that says how to approve it;
+    /// the audit log keeps the `ask`, which is what `moat allow --last` looks for.
     #[must_use]
     pub fn answer(self, event: &HookEvent, decision: &Decision) -> Decision {
-        let mut answer = decision.clone();
-        let how_to_approve = match self {
-            Self::Codex => CODEX_ASK,
-            Self::Continue => CONTINUE_ASK,
-            Self::ClaudeCode | Self::Cursor => return answer,
+        let how = match (self, event) {
+            (Self::Codex, HookEvent::PreToolUse) => Some(CODEX_ASK),
+            (Self::Continue, HookEvent::PreToolUse) => Some(CONTINUE_ASK),
+            (Self::Cursor, HookEvent::PreToolUseNoAsk) => Some(CURSOR_ASK),
+            _ => None,
         };
-        if matches!(event, HookEvent::PreToolUse) && decision.verdict == Verdict::Ask {
+        let mut answer = decision.clone();
+        if let Some(how) = how
+            && decision.verdict == Verdict::Ask
+        {
             answer.verdict = Verdict::Deny;
-            answer.reasons.push(how_to_approve.to_owned());
+            answer.reasons.push(how.to_owned());
         }
         answer
     }
@@ -237,7 +246,9 @@ impl Host {
     pub fn render_response(self, event: &HookEvent, decision: &Decision) -> String {
         match (self, event) {
             (Self::Cursor, _) => cursor::render(decision),
-            (_, HookEvent::PreToolUse) => pre_tool_use::render(decision),
+            (_, HookEvent::PreToolUse | HookEvent::PreToolUseNoAsk) => {
+                pre_tool_use::render(decision)
+            }
             (_, HookEvent::ConfigChange { .. }) => config_change::render(decision),
         }
     }
@@ -266,6 +277,9 @@ pub enum HookEvent {
     /// A tool is about to run.
     #[default]
     PreToolUse,
+    /// A tool is about to run under a hook that ignores `ask`: Cursor `preToolUse`
+    /// accepts it but runs the call, and `beforeReadFile` takes only allow or deny.
+    PreToolUseNoAsk,
     /// A host settings file changed on disk (Claude Code only).
     ConfigChange {
         /// Which settings scope changed (`user_settings`, `project_settings`, …).
