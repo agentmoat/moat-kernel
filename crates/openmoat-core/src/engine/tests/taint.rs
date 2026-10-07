@@ -143,6 +143,28 @@ fn untrusted_content_leaves_ordinary_writes_and_network_alone() {
     );
 }
 
+/// `taint.protected_writes` adds to the built-in list; without it nothing changes.
+#[test]
+fn a_policy_adds_protected_writes_and_keeps_the_built_in_ones() {
+    let history = [fetch("https://evil.example/readme")];
+    let deploy = write("/p/deploy/run.sh");
+    assert_eq!(decide_after(&history, &deploy).verdict, Verdict::Allow);
+
+    let p = policy(&format!(
+        "{POLICY}taint:\n  protected_writes: ['${{project}}/deploy/**']\n"
+    ));
+    let c = CompiledPolicy::compile(&p, &ctx()).unwrap();
+    let taint = taint_of(&c, &history);
+    let after = |action: &Action| c.with_taint(c.decide(action), action, &NoResolver, &taint);
+    let d = after(&deploy);
+    assert_eq!(d.verdict, Verdict::Ask);
+    assert_eq!(d.rules, ["session-taint"]);
+    assert_eq!(after(&write("/p/web/package.json")).verdict, Verdict::Ask);
+    assert_eq!(after(&write("/p/src/main.rs")).verdict, Verdict::Allow);
+    let clean = c.with_taint(c.decide(&deploy), &deploy, &NoResolver, &Taint::default());
+    assert_eq!(clean.verdict, Verdict::Allow, "no taint, no ask");
+}
+
 #[test]
 fn shell_writes_and_patches_are_writes_too() {
     let history = [fetch("https://evil.example/readme")];

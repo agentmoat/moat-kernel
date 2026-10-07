@@ -43,6 +43,7 @@ use thiserror::Error;
 use crate::kind::Kind;
 use crate::pattern::{GlobPattern, ShellPattern};
 use crate::secret::{self, Secret};
+use crate::taint::{self, TaintSettings};
 use crate::verdict::Verdict;
 
 pub const SUPPORTED_VERSION: u32 = 1;
@@ -255,6 +256,9 @@ pub struct Policy {
     /// Secrets `moat proxy` keeps from the agent and injects for one host each.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub secrets: Vec<Secret>,
+    /// What session taint protects beyond the built-in list. Absent in older policies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taint: Option<TaintSettings>,
     /// Ask rules merged in from a repository policy ([`crate::RepoPolicy`],
     /// ADR-022). Tried after `deny` and before `allow`, so a repository can make
     /// an action the user allows ask. Never read from or written to a file, and
@@ -342,6 +346,7 @@ impl Policy {
         for root in self.sandbox.iter().flat_map(|s| &s.read_roots) {
             lint_read_root(root)?;
         }
+        taint::check(self.taint.as_ref())?;
         secret::check(&self.secrets)
     }
 

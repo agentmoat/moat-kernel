@@ -153,7 +153,8 @@ something the alpha claims to stop.
   carry data in its URL; the prompt shows the URL. Session taint (POLICY.md §4.1)
   narrows this. After a secret read, `net`, `fetch` and MCP calls in the same session
   ask. After a `fetch` or an MCP result, writes to CI, git hooks, build scripts and
-  agent instruction files ask.
+  agent instruction files ask, and so do writes to the paths a policy adds under
+  `taint.protected_writes`.
 - **Session taint is minimal.** It follows host tool calls only: proxied connections
   carry no session. It does not count these as untrusted content: shell network to
   allowed hosts (`gh pr view`, `git pull`), an allowed command that reads secrets at run

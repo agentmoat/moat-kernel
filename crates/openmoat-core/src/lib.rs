@@ -29,6 +29,7 @@ mod realpath;
 mod repo;
 mod secret;
 mod shell;
+mod taint;
 mod verdict;
 
 pub use action::{Action, AtomicAction};
@@ -42,6 +43,7 @@ pub use programs::{MapResolver, NoResolver, ProgramResolver};
 pub use realpath::{MapPathResolver, PathResolver};
 pub use repo::{REPO_RULE_PREFIX, RepoPolicy};
 pub use secret::{Secret, Source as SecretSource};
+pub use taint::TaintSettings;
 pub use verdict::{Decision, UnknownVerdict, Verdict};
 
 /// The shipped default policy, as YAML: what `moat init` installs and what the
