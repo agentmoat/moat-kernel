@@ -109,6 +109,13 @@
   action: { shell: "cat e/hosts" }
   links: { /tmp/app/e: /etc }
   expect: { verdict: ask, rules: [default] }
+# A moved Claude Code directory is protected where the default one is, no
+# wider: its other files ask as they would under ~/.claude
+- id: ask-moved-claude-dir-other-file
+  threat: T9
+  context: { cwd: /p, project: /p, moved_dirs: { "~/.claude": /srv/claude } }
+  action: { fs_write: "/srv/claude/CLAUDE.md" }
+  expect: { verdict: ask, rules: [default] }
 # T3: env with arguments sets variables for one command; it is not a dump
 - id: ask-env-assignment-wrapper-is-not-a-dump
   threat: T3

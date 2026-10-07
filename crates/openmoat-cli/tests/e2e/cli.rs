@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::process::Output;
 
-use crate::common::{Sandbox, stderr, stdout};
+use crate::common::{Sandbox, output, stderr, stdout};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -309,4 +309,38 @@ fn compile_prints_the_enforcement_ir_and_its_losses() {
         "{text}"
     );
     assert!(text.contains("  fs.read `sandbox.read_roots`:"), "{text}");
+}
+
+/// A state or host directory moved by its environment variable is protected
+/// like the default one: a write below it is `kernel-self`, not `default` (#286).
+#[test]
+fn kernel_self_covers_moved_config_directories() {
+    let sb = Sandbox::bare(&[]);
+    let dir = tempfile::tempdir().unwrap();
+    let policy = default_policy();
+    for (var, file) in [
+        ("MOAT_HOME", "policy.yaml"),
+        ("CLAUDE_CONFIG_DIR", "settings.json"),
+    ] {
+        let moved = dir.path().join(var);
+        let target = moved.join(file);
+        let out = output(
+            sb.command().env(var, &moved).args([
+                "policy",
+                "check",
+                target.to_str().unwrap(),
+                "--kind",
+                "fs-write",
+                "--policy",
+                policy.to_str().unwrap(),
+            ]),
+            None,
+        );
+        assert_eq!(out.status.code(), Some(2), "{var}: {}", stdout(&out));
+        assert!(
+            stdout(&out).contains("kernel-self"),
+            "{var}: {}",
+            stdout(&out)
+        );
+    }
 }

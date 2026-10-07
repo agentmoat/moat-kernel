@@ -6,7 +6,7 @@ use crate::sandbox::{assert_golden, lower_for_hosts};
 
 pub(super) fn generated(yaml: &str) -> Generated {
     let policy = Policy::parse(yaml).expect("test policy lints");
-    let ir = lower_for_hosts(&policy, "/Users/me", None, false).expect("lowers");
+    let ir = lower_for_hosts(&policy, "/Users/me", None, Vec::new(), false).expect("lowers");
     generate(&ir, crate::sandbox::proxy_port(&policy)).expect("generates")
 }
 

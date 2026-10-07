@@ -67,6 +67,8 @@ struct RepoFixture {
 /// CLI never trusts as a project; `project` names one explicitly.
 /// `real_project` and `real_home` are those roots with their symlinks resolved,
 /// as the CLI reports them when a root is reached through a link.
+/// `moved_dirs` maps a default directory (`~/.claude`) to where an environment
+/// variable (`CLAUDE_CONFIG_DIR`) moved it.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FixtureContext {
@@ -77,6 +79,8 @@ struct FixtureContext {
     real_project: Option<String>,
     #[serde(default)]
     real_home: Option<String>,
+    #[serde(default)]
+    moved_dirs: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -205,6 +209,7 @@ fn default_policy_conformance() {
         project: Some("/p".into()),
         real_home: None,
         real_project: None,
+        moved_dirs: Vec::new(),
         cwd: "/p".into(),
         case_insensitive_paths: false,
     };
@@ -238,6 +243,7 @@ fn default_policy_conformance() {
                     project: c.project.clone(),
                     real_project: c.real_project.clone(),
                     real_home: c.real_home.clone(),
+                    moved_dirs: c.moved_dirs.clone().into_iter().collect(),
                     ..ctx.clone()
                 },
             );

@@ -15,7 +15,7 @@ the verdict and rule ids the default policy must produce for it.
 | T6 | Environment poisoning | 11 | 2 | 0 |
 | T7 | Obfuscation and nested execution | 54 | 40 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 5 | 0 | 0 |
-| T9 | Hook / policy tampering by the agent | 75 | 9 | 3 |
+| T9 | Hook / policy tampering by the agent | 80 | 10 | 3 |
 | T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
 | T11 | Time-of-check / time-of-use, symlinks | 15 | 2 | 0 |
 | T12 | Network to unknown hosts | 19 | 8 | 1 |
@@ -356,6 +356,7 @@ the verdict and rule ids the default policy must produce for it.
 
 - `ask-write-git-internals` (ask): Ask [default]
 - `ask-linked-project-write-git-internals-resolved` (ask): Ask [default]
+- `ask-moved-claude-dir-other-file` (ask): Ask [default]
 - `ask-script-recording-ordinary-command` (ask): Ask [default]
 - `ask-python-pty-spawn-ordinary-shell` (ask): Ask [default]
 - `ask-tmux-ordinary-command` (ask): Ask [default]
@@ -368,6 +369,11 @@ the verdict and rule ids the default policy must produce for it.
 - `T9-edit-moat-policy` (attacks): Deny [kernel-self]
 - `T9-redirect-into-moat` (attacks): Deny [kernel-self]
 - `T9-sed-in-place-cursor-hooks` (attacks): Deny [kernel-self]
+- `T9-edit-moved-moat-policy` (attacks): Deny [kernel-self]
+- `T9-redirect-into-moved-claude-settings` (attacks): Deny [kernel-self]
+- `T9-remove-moved-claude-dir` (attacks): Deny [kernel-self]
+- `T9-edit-moved-codex-hooks` (attacks): Deny [kernel-self]
+- `T9-edit-moved-cursor-hooks` (attacks): Deny [kernel-self]
 - `T9-append-zshrc` (attacks): Deny [shell-rc]
 - `T9-tee-bashrc` (attacks): Deny [shell-rc]
 - `T9-moat-policy-command` (attacks): Deny [kernel-self]

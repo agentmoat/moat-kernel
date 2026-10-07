@@ -282,7 +282,8 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
   the copy is blocked unless the file still matches the lock and the copy's bytes equal
   the pinned ones, so a reviewed edit of a pinned file cannot pass the hook.
 - **`kernel-self` rules.** The default policy denies agent writes to the state and
-  host directories, hook files and any `bin/moat`, and denies `moat
+  host directories (also where `MOAT_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or
+  `CURSOR_CONFIG_DIR` moved them), hook files and any `bin/moat`, and denies `moat
   allow|doctor|init|policy|trust` and `moat sandbox sync` from an agent, including under pseudo-terminal
   wrappers (ADR-011, ADR-014).
 - **Terminal check.** `moat allow`, `moat trust` and `moat doctor --accept` refuse to

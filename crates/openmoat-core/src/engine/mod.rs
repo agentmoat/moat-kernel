@@ -39,6 +39,12 @@ pub struct EvalContext {
     /// in the project is the project's however its path is written. A link
     /// *inside* the project changes nothing here: its target is checked as is.
     pub real_project: Option<String>,
+    /// Directories an environment variable moved out of the home directory
+    /// (`MOAT_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CURSOR_CONFIG_DIR`), as
+    /// `(default, moved)` pairs such as `("~/.claude", "/srv/claude")`. A
+    /// pattern naming `default` or a path below it also matches the same path
+    /// under `moved`, so rules about a host's directory follow it when it moves.
+    pub moved_dirs: Vec<(String, String)>,
     /// The directory relative paths are taken from.
     pub cwd: String,
     /// Whether file paths compare case-insensitively, as on the default macOS
@@ -187,9 +193,17 @@ impl<'p> CompiledGroup<'p> {
 
 impl EvalContext {
     /// `raw` expanded once per spelling of the home directory and project root
-    /// it names ([`paths::expand_pattern`]); empty when it names no location.
+    /// it names ([`paths::expand_pattern`]), and once more per directory in
+    /// [`Self::moved_dirs`] it falls under; empty when it names no location.
     /// The policy compiler (`ir`) lowers patterns through the same expansion.
     pub(crate) fn spellings(&self, raw: &str) -> Vec<String> {
+        let (negated, body) = crate::pattern::split_negation(raw);
+        let bang = if negated { "!" } else { "" };
+        let moved = self.moved_dirs.iter().filter_map(|(default, dir)| {
+            let rest = body.strip_prefix(default.as_str())?;
+            (rest.is_empty() || rest.starts_with('/')).then(|| format!("{bang}{dir}{rest}"))
+        });
+        let raws: Vec<String> = std::iter::once(raw.to_owned()).chain(moved).collect();
         let projects: Vec<Option<&str>> = match &self.project {
             Some(p) => [Some(p), self.real_project.as_ref()]
                 .into_iter()
@@ -198,15 +212,18 @@ impl EvalContext {
                 .collect(),
             None => vec![None],
         };
-        let mut out: Vec<String> = [Some(&self.home), self.real_home.as_ref()]
+        let mut out = Vec::new();
+        for home in [Some(&self.home), self.real_home.as_ref()]
             .into_iter()
             .flatten()
-            .flat_map(|h| {
-                projects
-                    .iter()
-                    .filter_map(move |p| paths::expand_pattern(raw, h, *p))
-            })
-            .collect();
+        {
+            for project in &projects {
+                out.extend(
+                    raws.iter()
+                        .filter_map(|raw| paths::expand_pattern(raw, home, *project)),
+                );
+            }
+        }
         out.sort();
         out.dedup();
         out

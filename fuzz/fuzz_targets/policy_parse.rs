@@ -21,6 +21,7 @@ fuzz_target!(|data: &[u8]| {
         case_insensitive_paths: true,
         real_home: None,
         real_project: None,
+        moved_dirs: Vec::new(),
     };
     let _ = CompiledPolicy::compile(&policy, &ctx);
     if let Ok(ir) = ir::lower(&policy, &ctx) {

@@ -49,6 +49,7 @@ fuzz_target!(|data: &[u8]| {
         case_insensitive_paths: false,
         real_home: None,
         real_project: None,
+        moved_dirs: Vec::new(),
     };
     let compiled = CompiledPolicy::compile(&policy, &ctx).expect("linted policy compiles");
     let decision = compiled.decide(&Action::Shell {

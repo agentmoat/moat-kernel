@@ -9,6 +9,7 @@ fn ctx() -> EvalContext {
         project: Some("/p".into()),
         real_home: None,
         real_project: None,
+        moved_dirs: Vec::new(),
         cwd: "/p".into(),
         case_insensitive_paths: false,
     }
@@ -426,4 +427,22 @@ fn scoop_binary_is_kernel_self_in_any_case() {
         assert_eq!(d.verdict, Verdict::Deny, "{path}");
         assert!(d.rules.contains(&"kernel-self".to_owned()), "{path}");
     }
+}
+
+/// A directory an environment variable moved is matched like the default it
+/// replaces, below it and as an exclusion too, but not a sibling sharing a
+/// name prefix (#286).
+#[test]
+fn moved_dirs_add_a_spelling_under_the_default_they_replace() {
+    let moved = EvalContext {
+        moved_dirs: vec![("~/.claude".into(), "/srv/claude".into())],
+        ..ctx()
+    };
+    assert_eq!(moved.spellings("~/.claude"), ["/h/.claude", "/srv/claude"]);
+    assert_eq!(
+        moved.spellings("!~/.claude/settings.json"),
+        ["!/h/.claude/settings.json", "!/srv/claude/settings.json"]
+    );
+    assert_eq!(moved.spellings("~/.claudex/x"), ["/h/.claudex/x"]);
+    assert_eq!(moved.spellings("**/.claude"), ["**/.claude"]);
 }
