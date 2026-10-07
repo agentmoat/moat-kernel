@@ -270,7 +270,10 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
 - **Policy lock** (ADR-006). `~/.moat/policy.lock` pins SHA-256 digests of the policy,
   `environment.json`, `approvals.json`, `policy.d/approved.yaml`, `trust.json` and every
   hook file OpenMoat installed, keyed by location so a swap for a symlink is a
-  modification, and the part of Codex's `config.toml` that holds OpenMoat's sandbox profile
+  modification. Claude Code's `settings.json` is pinned by the canonical JSON without
+  its top-level `theme` key, which Claude Code writes itself on first run (#287); a
+  file that does not parse is drift, and a whole-file digest from an older lock still
+  verifies until the next re-pin. The lock also pins the part of Codex's `config.toml` that holds OpenMoat's sandbox profile
   (§13). It is verified on every `guard` call. Only a person re-pins: `moat init`, or
   `moat doctor --accept`, `moat allow`, `moat trust` and `moat sandbox sync` from an
   interactive terminal.
@@ -580,7 +583,7 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
 - **Writing and pinning.** `moat init` and `moat sandbox sync` merge the generated
   keys into the files, keeping every other key (JSON values; TOML through `toml_edit`,
   comments included), and back each file up first. `policy.lock` pins Claude Code's
-  `settings.json` whole and Codex's `config.toml` by the canonical text of the part
+  `settings.json` whole except the cosmetic `theme` key (§6) and Codex's `config.toml` by the canonical text of the part
   OpenMoat owns (`default_permissions`, `[permissions.moat]`, `features.network_proxy`),
   because Codex writes trusted projects into that file itself. Drift is
   `kernel-integrity`. `doctor` also fails on a weakened or out-of-date setting,

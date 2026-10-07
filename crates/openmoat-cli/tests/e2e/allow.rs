@@ -154,7 +154,8 @@ fn assert_allow_refuses_after_tampering(pinned: &str, args: &[&str]) {
     let sb = Sandbox::installed(&[".claude"]);
     let path = sb.home.join(pinned);
     let mut tampered = std::fs::read(&path).unwrap();
-    tampered.extend_from_slice(b"\n");
+    // Whitespace alone would not do: a settings file is pinned by its JSON (#287).
+    tampered.extend_from_slice(b"\n# tampered\n");
     std::fs::write(&path, tampered).unwrap();
     let before = approval_state(&sb);
 

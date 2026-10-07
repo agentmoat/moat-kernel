@@ -14,10 +14,14 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, Result, bail};
 use openmoat_core::{Decision, Verdict};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest as _, Sha256};
 
 use crate::home::{Home, write_private};
 use crate::install::{HookState, HostConfig};
+
+mod digest;
+
+pub use digest::sha256_hex;
+use digest::{digest, digests, is_claude_settings};
 
 const LOCK_VERSION: u32 = 1;
 /// Rule id of every decision the lock forces.
@@ -29,7 +33,8 @@ pub struct Lock {
     pub pinned_at_ms: i64,
     /// Absolute path of the `moat` binary the hooks point at.
     pub binary: String,
-    /// Canonical path → lowercase hex SHA-256 of the file contents.
+    /// Canonical path → lowercase hex SHA-256 of the file contents (of a Claude
+    /// Code `settings.json`, without its cosmetic `theme` key; see `digest.rs`).
     pub entries: BTreeMap<String, String>,
     /// Codex `config.toml` → SHA-256 of the part OpenMoat owns (its permissions
     /// profile, ADR-018). Codex edits the rest of that file itself.
@@ -219,7 +224,7 @@ impl Lock {
         let mut entries = BTreeMap::new();
         for path in paths {
             if path.is_file() {
-                entries.insert(key(path), digest(path)?);
+                entries.insert(key(path), digest(path, is_claude_settings(path))?);
             }
         }
         Ok(Self {
@@ -291,8 +296,8 @@ impl Lock {
         if fs::symlink_metadata(&path).is_err() {
             return Some(Drift::Missing(path));
         }
-        match digest(&path) {
-            Ok(actual) if &actual == expected => None,
+        match digests(&path, is_claude_settings(&path)) {
+            Ok(actual) if actual.contains(expected) => None,
             Ok(_) => Some(Drift::Modified(path)),
             Err(e) => Some(Drift::Unreadable(path, format!("{e:#}"))),
         }
@@ -306,8 +311,8 @@ impl Lock {
         if let Some(drift) = self.verify_one(target) {
             return Some(drift);
         }
-        match digest(proposal) {
-            Ok(actual) if &actual == expected => None,
+        match digests(proposal, is_claude_settings(target)) {
+            Ok(actual) if actual.contains(expected) => None,
             Ok(_) => Some(Drift::Proposed {
                 proposal: proposal.to_path_buf(),
                 target: PathBuf::from(key(target)),
@@ -339,34 +344,6 @@ fn key(path: &Path) -> String {
     } else {
         text.into_owned()
     }
-}
-
-/// SHA-256 of the file. A symlink hashes its target path together with the
-/// contents, so swapping a regular file for a link (or re-pointing a link)
-/// changes the digest even when the bytes read through it are identical.
-fn digest(path: &Path) -> Result<String> {
-    let meta = fs::symlink_metadata(path).with_context(|| format!("reading {}", path.display()))?;
-    let mut bytes = Vec::new();
-    if meta.file_type().is_symlink() {
-        let target =
-            fs::read_link(path).with_context(|| format!("reading link {}", path.display()))?;
-        bytes.extend_from_slice(b"symlink:");
-        bytes.extend_from_slice(target.to_string_lossy().as_bytes());
-        bytes.push(b'\n');
-    }
-    bytes.extend(fs::read(path).with_context(|| format!("reading {}", path.display()))?);
-    Ok(sha256_hex(&bytes))
-}
-
-/// Lowercase hex SHA-256, as pinned in the lock and shown by `status`.
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .fold(String::with_capacity(64), |mut hex, b| {
-            use std::fmt::Write as _;
-            let _ = write!(hex, "{b:02x}");
-            hex
-        })
 }
 
 #[cfg(test)]
