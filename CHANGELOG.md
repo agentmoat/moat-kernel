@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-alpha.0] - 2026-10-07
+
 ### Added
 - Standard tier (ADR-018, #168, #169): `moat init` configures Claude Code's and Codex's own sandboxes from the policy through the enforcement IR (ADR-019). Claude Code's user settings get the `sandbox` block (`enabled`, `failIfUnavailable: true`, `allowUnsandboxedCommands: false`, `excludedCommands: []`, absolute deny and allow lists, `network.allowedDomains` with `strictAllowlist`) and `permissions.blockReadsOutsideWorkingDirectories: true`; Codex's `config.toml` gets a `[permissions.moat]` profile, `default_permissions = "moat"` and `features.network_proxy = true`. Other keys and comments are kept; each file is backed up to `<file>.moat-sandbox-backup` first. `moat sandbox show` prints what the policy compiles to with every loss (stricter) and allowance (wider); `moat sandbox sync` rewrites and re-pins (a person at a terminal, refused over a drifted lock). `moat doctor` and `moat status` check both hosts and print the losses.
 - Policy: the additive `sandbox: { read_roots: [...] }` section lists paths the host sandboxes may read although no allow rule covers them (toolchains, system and temp directories). Only OS layers use it; the hook still asks for those reads and deny rules win inside them. The default policy lists a cross-platform set; a policy without the section gets that list.

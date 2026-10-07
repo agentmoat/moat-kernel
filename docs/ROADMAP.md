@@ -7,8 +7,8 @@ GitHub milestone. Neither carries dates.
 
 ## Where it is today
 
-The workspace version is `0.1.0-alpha.0`. It has not been tagged or published yet,
-so the only way to install it is to build from a clone. What exists:
+The first release is `0.1.0-alpha.0`, from GitHub Releases, the Homebrew tap and
+crates.io (README, Install). What exists:
 
 - One policy for Claude Code, Codex and Cursor, checked through each host's own hooks.
 - Policy kinds `shell`, `fs.read`, `fs.write`, `net`, `fetch`, `env.read`, `env.set`, `mcp`.
