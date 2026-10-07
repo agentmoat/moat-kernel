@@ -92,7 +92,7 @@ impl<'p> CompiledPolicy<'p> {
             repo_ask: compile_list(&policy.repo_ask)?,
             allow: compile_list(&policy.allow)?,
             ask: compile_list(&policy.ask)?,
-            protected: taint::compile_protected(ctx)?,
+            protected: taint::compile_protected(policy, ctx)?,
         })
     }
 

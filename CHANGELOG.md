@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Policy key `taint.protected_writes` (#215): path globs that a write to asks once the session read untrusted content, in addition to the built-in list (CI, git hooks, build scripts, agent instructions). It extends the list and cannot shorten it; `moat policy lint` rejects `!` exclusions and globs that do not compile. Policies without the key behave as before.
+
 ## [0.1.0-alpha.2] - 2026-10-07
 
 ### Added

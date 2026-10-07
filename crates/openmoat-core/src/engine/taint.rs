@@ -9,7 +9,7 @@
 use super::{CompiledPolicy, EvalContext, classify_action, with_resolved_paths};
 use crate::action::{Action, AtomicAction};
 use crate::pattern::{GlobPattern, any_match};
-use crate::policy::PolicyError;
+use crate::policy::{Policy, PolicyError};
 use crate::realpath::PathResolver;
 use crate::shell::ParseOutcome;
 use crate::verdict::{Decision, Verdict};
@@ -21,29 +21,6 @@ const SECRET_RULE: &str = "secrets-paths";
 
 /// The rule id a tightened decision carries.
 const TAINT_RULE: &str = "session-taint";
-
-/// Files whose change runs code or steers the agent later, beyond the edit
-/// itself: CI, git hooks, editor tasks, build scripts the allowed dev commands
-/// run, and agent instructions and settings. Writing them is ordinary work,
-/// until the session has read content an attacker may control.
-const PROTECTED_WRITES: [&str; 16] = [
-    "**/.github/workflows/**",
-    "**/.gitlab-ci.yml",
-    "**/.circleci/**",
-    "**/.husky/**",
-    "**/.githooks/**",
-    "**/.vscode/**",
-    "**/package.json",
-    "**/Makefile",
-    "**/build.rs",
-    "**/CLAUDE.md",
-    "**/AGENTS.md",
-    "**/.claude/**",
-    "**/.codex/**",
-    "**/.cursor/**",
-    "**/.cursorrules",
-    "**/.mcp.json",
-];
 
 /// Where secret material in a session came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,10 +57,12 @@ impl Taint {
     }
 }
 
-/// [`PROTECTED_WRITES`] compiled for `ctx`.
-pub(super) fn compile_protected(ctx: &EvalContext) -> Result<Vec<GlobPattern>, PolicyError> {
-    PROTECTED_WRITES
-        .iter()
+/// The built-in protected paths and the ones `policy` adds, compiled for `ctx`.
+pub(super) fn compile_protected(
+    policy: &Policy,
+    ctx: &EvalContext,
+) -> Result<Vec<GlobPattern>, PolicyError> {
+    crate::taint::protected_writes(policy.taint.as_ref())
         .flat_map(|p| ctx.spellings(p))
         .map(|p| GlobPattern::compile(&p, ctx.case_insensitive_paths))
         .collect()

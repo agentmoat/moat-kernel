@@ -31,6 +31,9 @@ sandbox:                            # optional: what the host sandboxes may read
   proxy_port: 18080                 # optional, opt-in: send host sandbox traffic through `moat proxy` (§9)
 
 secrets:    [ <secret>, … ]         # values OpenMoat keeps from the agent (§2.1)
+
+taint:                              # optional: more paths session taint protects (§4.1)
+  protected_writes: ["**/deploy/**"]
 ```
 
 `approval:` (`channel`, `remember`, `timeout_s`) and `scope:` (`project_roots`) are reserved:
@@ -198,12 +201,16 @@ other atomic action, so an `allow` becomes `ask` and a `deny` stays `deny`.
 - In the default policy `secrets-paths` denies, so no secret read runs and none taints.
   The trigger matters when your policy moves `secrets-paths` to `ask`: once you approve
   the read, the session is tainted.
-- Protected paths are fixed in `engine/taint.rs`: files whose change runs code or steers the
-  agent later. They are CI (`.github/workflows/**`, `.gitlab-ci.yml`, `.circleci/**`), git
+- Protected paths are files whose change runs code or steers the agent later. The built-in
+  list (`taint.rs`) is CI (`.github/workflows/**`, `.gitlab-ci.yml`, `.circleci/**`), git
   hooks (`.husky/**`, `.githooks/**`), editor tasks (`.vscode/**`), build scripts the
   allowed dev commands run (`package.json`, `Makefile`, `build.rs`), and agent instructions
   and settings (`CLAUDE.md`, `AGENTS.md`, `.claude/**`, `.codex/**`, `.cursor/**`,
   `.cursorrules`, `.mcp.json`), at any depth.
+- `taint: { protected_writes: [<glob>, …] }` adds path globs (§3.2, `~` and `${project}`
+  included) to that list. It only extends: a policy cannot remove a built-in path, and
+  `moat policy lint` rejects a `!` exclusion as well as a glob that does not compile.
+  Without the key, the built-in list applies alone.
 - Shell network to an allowed host (`git fetch`, `gh pr view`) is not counted as untrusted
   content, and a command OpenMoat cannot classify taints nothing it can name.
 - `moat guard` reads the history from the audit log: the earlier events of the same host
