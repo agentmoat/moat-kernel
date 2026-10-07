@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-alpha.4] - 2026-10-07
+
 ### Changed
 - README opens with a 40-second recording of the launch demo (`docs/assets/demo.gif`, from real `moat guard` verdicts). The demo script shortens the throwaway paths and the binary path in its output, and docs/DEMO.md no longer says the operating system does not enforce decisions.
 - docs/INSTALL.md says how to upgrade: `brew update && brew upgrade moat`, since `brew upgrade` alone may not see a new release of the tap (#314).
