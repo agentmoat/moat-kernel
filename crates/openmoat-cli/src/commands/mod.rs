@@ -3,6 +3,7 @@
 mod allow;
 mod audit;
 mod doctor;
+mod edit;
 mod guard;
 mod init;
 mod policy;
@@ -29,6 +30,7 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Status => status::run(),
         Command::Doctor(args) => doctor::run(&args),
         Command::Allow(args) => allow::run(&args),
+        Command::Edit => edit::run(),
         Command::Trust(args) => trust::run(&args),
         Command::Replay(args) => replay::run(&args),
         Command::Report(args) => report::run(&args),

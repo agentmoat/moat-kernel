@@ -83,8 +83,14 @@ moat allow --dir ~/work/shared     # read and write in that directory; .env file
 moat allow --remove approved-3     # undo: take a rule moat allow added out again
 ```
 
-They need a terminal, and the default policy denies them to agents. For anything else,
-edit the file:
+For anything else, `moat edit` opens `~/.moat/policy.yaml` in `$VISUAL` or `$EDITOR`
+(`vi`, or `notepad` on Windows, when neither is set). When you close the editor it
+checks the policy, shows the diff and asks `Apply? [y/N]`. A policy with errors is never
+written, and an unchanged one changes nothing. The previous version is kept in
+`~/.moat/policy.yaml.bak`. These commands need a terminal, and the default policy denies
+them to agents.
+
+You can also edit the file by hand:
 
 ```bash
 $EDITOR ~/.moat/policy.yaml
@@ -135,6 +141,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat audit report <file>…` | one report over verified exports from several machines |
 | `moat allow --last [--always]` | turn an `ask` into a session grant (24 h) or a permanent rule |
 | `moat allow --site <host>` · `--dir <path>` · `--remove <id>` | allow a site or a directory permanently · take such a rule out again |
+| `moat edit` | edit the policy in your editor; it is checked and the diff shown before anything changes |
 | `moat trust [<repo>] [--revoke]` | let a repository's `.moat/policy.yaml` allow, until the file changes |
 | `moat policy lint` · `moat policy check "<cmd>"` | validate a policy · test an action against it |
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |

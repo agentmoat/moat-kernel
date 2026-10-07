@@ -194,7 +194,7 @@ impl Overlay {
         if !plain {
             bail!(
                 "`{host}` is not a host name such as docs.rs; wildcards, URLs and ports \
-                 are not accepted here (write those in the policy, ~/.moat/policy.yaml)"
+                 are not accepted here (write those in the policy with `moat edit`)"
             );
         }
         Ok(self.push("moat allow --site", |g| g.net = vec![host]))

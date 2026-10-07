@@ -16,6 +16,7 @@ mod config_change;
 mod continue_cli;
 mod cursor;
 mod differential;
+mod edit;
 mod export;
 mod guard;
 #[cfg(unix)]

@@ -28,6 +28,7 @@ sha2.workspace = true
 signal-hook.workspace = true
 toml_edit.workspace = true
 zeroize.workspace = true
+similar.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock.workspace = true

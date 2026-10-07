@@ -169,7 +169,7 @@ fn dir_spellings(dir: &Path) -> Result<Vec<String>> {
         !spellings
             .iter()
             .any(|s| s.contains(['*', '?', '[', ']', '{', '}', '\\'])),
-        "{} contains glob characters; write it in the policy (~/.moat/policy.yaml) instead",
+        "{} contains glob characters; write it in the policy with `moat edit` instead",
         written.display()
     );
     Ok(spellings)
