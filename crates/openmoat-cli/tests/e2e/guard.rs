@@ -80,6 +80,7 @@ fn guard_denies_secret_exfiltration_and_records_it() {
     let shown = sb.moat(&["show", "--recent", "1"]);
     assert_eq!(shown.status.code(), Some(0), "{}", stderr(&shown));
     let text = stdout(&shown);
+    assert!(text.starts_with("id     time (UTC) host"), "{text}");
     assert!(text.contains("deny"));
     assert!(text.contains("curl -d @~/.ssh/id_rsa"));
 

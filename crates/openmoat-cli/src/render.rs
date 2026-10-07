@@ -115,12 +115,12 @@ pub fn event_table(events: &[Event]) -> Result<()> {
     }
     writeln!(
         out,
-        "id     time     host         verdict rules          action"
+        "id     time (UTC) host         verdict rules          action"
     )?;
     for event in events {
         writeln!(
             out,
-            "{:<6} {:<8} {:<12} {:<7} {:<14} {}",
+            "{:<6} {:<10} {:<12} {:<7} {:<14} {}",
             event.id,
             clock(event.ts_ms),
             event.host,
@@ -145,7 +145,7 @@ pub fn replay(sessions: &[SessionSummary]) -> Result<()> {
         }
         writeln!(
             out,
-            "{}  {}  {}  {}  {} decisions ({} denied, {} asked)",
+            "{} UTC  {}  {}  {}  {} decisions ({} denied, {} asked)",
             clock(session.first_ms),
             session.session_id,
             session.host,

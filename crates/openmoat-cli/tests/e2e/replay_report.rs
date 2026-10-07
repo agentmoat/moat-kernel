@@ -29,6 +29,7 @@ fn replay_groups_sessions_into_a_timeline() {
     let t = text(&out);
     assert!(t.contains("alpha"), "{t}");
     assert!(t.contains("beta"), "{t}");
+    assert!(t.contains(" UTC  alpha"), "{t}");
     assert!(t.contains("├─") && t.contains("└─"), "{t}");
     assert!(
         t.contains("✔") && t.contains("❓") && t.contains("⛔"),
