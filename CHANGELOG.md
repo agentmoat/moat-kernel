@@ -9,6 +9,9 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - docs/INSTALL.md says how to upgrade: `brew update && brew upgrade moat`, since `brew upgrade` alone may not see a new release of the tap (#314).
 
+### Fixed
+- `moat init` no longer leaves out an agent silently when `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `CURSOR_CONFIG_DIR` names a directory that does not exist yet (#313). It prints one line per such agent with the variable and the directory, and says to start the agent once to create it and then run `moat init` again. It does not create the directory.
+
 ## [0.1.0-alpha.3] - 2026-10-07
 
 ### Added

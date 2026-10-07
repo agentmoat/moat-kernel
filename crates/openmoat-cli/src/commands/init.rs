@@ -12,7 +12,7 @@ use crate::cli::InitArgs;
 use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
-use crate::install::{HostConfig, Outcome, Recorded};
+use crate::install::{HostConfig, Outcome, Recorded, dir_variable, env_config_dir};
 use crate::integrity;
 use crate::render::Deferred;
 use crate::sandbox::{self, Plan};
@@ -149,11 +149,26 @@ fn choose_hosts(args: &InitArgs, out: &mut Deferred) -> Result<Vec<Host>> {
     if let Some(explicit) = &args.hosts {
         return Ok(explicit.clone());
     }
-    let found: Vec<HostConfig> = Host::ALL
+    let mut found = Vec::new();
+    for config in Host::ALL
         .into_iter()
         .filter_map(|h| HostConfig::for_init(h).ok())
-        .filter(HostConfig::host_present)
-        .collect();
+    {
+        if config.host_present() {
+            found.push(config);
+        } else if env_config_dir(config.host)?.is_some() {
+            // The agent creates its directory on first start; say so instead of
+            // leaving it out silently. The directory is not created here.
+            let name = config.host.display_name();
+            writeln!(
+                out,
+                "{name}: {} is {}, which does not exist yet; start {name} once to create \
+                 it, then run moat init again",
+                dir_variable(config.host)?.0,
+                config.dir().display()
+            )?;
+        }
+    }
     let names: Vec<&str> = found.iter().map(|c| c.host.display_name()).collect();
     if found.is_empty() {
         writeln!(

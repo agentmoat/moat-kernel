@@ -344,3 +344,31 @@ fn kernel_self_covers_moved_config_directories() {
         );
     }
 }
+
+/// `CLAUDE_CONFIG_DIR` naming a directory that does not exist yet: `init` says
+/// why Claude Code is not set up, sets up the agents it found, and creates
+/// nothing at that path (#313).
+#[test]
+fn init_names_a_config_dir_variable_whose_directory_is_missing() {
+    let sb = Sandbox::bare(&[".codex"]);
+    let missing = sb.home.join(".claude-not-yet");
+    let out = output(
+        sb.command()
+            .env("CLAUDE_CONFIG_DIR", &missing)
+            .args(["init", "--yes"]),
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    let expected = format!(
+        "Claude Code: CLAUDE_CONFIG_DIR is {}, which does not exist yet; start Claude Code \
+         once to create it, then run moat init again",
+        missing.display()
+    );
+    assert!(stdout(&out).contains(&expected), "{}", stdout(&out));
+    assert!(!missing.exists(), "init must not create the directory");
+    assert!(
+        sb.home.join(".codex/hooks.json").is_file(),
+        "{}",
+        stdout(&out)
+    );
+}
