@@ -159,6 +159,46 @@ fn pre_tool_use_grep_of_a_secret_is_denied() {
     );
 }
 
+/// A captured cursor-agent `Grep` names its target with `file_path`, not `path`;
+/// reading it as a search of the workspace would let it through.
+#[test]
+fn pre_tool_use_grep_by_file_path_of_a_secret_is_denied() {
+    let sb = sandbox();
+    let payload = serde_json::json!({
+        "hook_event_name": "preToolUse",
+        "workspace_roots": [sb.home.to_string_lossy()],
+        "tool_name": "Grep",
+        "tool_input": {"file_path": sb.home.join(".aws/credentials").to_string_lossy(), "pattern": "aws_secret"}
+    })
+    .to_string();
+    let (code, doc) = guard(&sb, &payload);
+    assert_eq!(code, Some(2), "{doc}");
+    assert!(
+        doc["user_message"].to_string().contains("secrets-paths"),
+        "{doc}"
+    );
+}
+
+/// A tool Cursor does not document is checked against the paths it names
+/// instead of passing as ungoverned.
+#[test]
+fn pre_tool_use_unlisted_search_of_a_secret_is_denied() {
+    let sb = sandbox();
+    let payload = serde_json::json!({
+        "hook_event_name": "preToolUse",
+        "workspace_roots": [sb.home.to_string_lossy()],
+        "tool_name": "SemanticSearch",
+        "tool_input": {"query": "private key", "target_directories": [sb.home.join(".ssh").to_string_lossy()]}
+    })
+    .to_string();
+    let (code, doc) = guard(&sb, &payload);
+    assert_eq!(code, Some(2), "{doc}");
+    assert!(
+        doc["user_message"].to_string().contains("secrets-paths"),
+        "{doc}"
+    );
+}
+
 #[test]
 fn unknown_cursor_event_fails_closed() {
     let sb = sandbox();
