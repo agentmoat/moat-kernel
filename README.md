@@ -170,7 +170,9 @@ you export it.
   sandbox covers only `Bash`, `PowerShell` and `Monitor`. `moat run` covers a whole
   agent but is weaker per command.
 - Allowed scripts (`npm test`, `make test`) run whatever they contain; the sandbox
-  bounds them, OpenMoat does not inspect them.
+  bounds them, OpenMoat does not inspect them. What `moat run` stops in such a script,
+  and what it does not (on Linux, `.env` in the project stays readable), is tested on
+  every pull request: [docs/EVIDENCE.md](docs/EVIDENCE.md).
 - Hosts the policy allows (`api.github.com`, the registries) can receive data from an
   allowed or approved command.
 - Tools no hook exposes are not seen (Claude Code `WebSearch`, Codex web search).

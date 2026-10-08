@@ -137,7 +137,9 @@ something the alpha claims to stop.
     proxy: a tool that ignores `HTTP(S)_PROXY` cannot resolve them. `socketpair()`
     stays allowed; its sockets reach only each other.
 
-  `moat run` prints each allowance before the agent starts.
+  `moat run` prints each allowance before the agent starts. What it stops in an allowed
+  project script, per operating system, and the gaps above, are executed in CI and
+  listed in [EVIDENCE.md](EVIDENCE.md).
 - **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
   `cargo run`, `make test`, `pytest` and similar are allowed by `dev-shell`. They run
   whatever the project's scripts, build files and test files say, and OpenMoat sees
@@ -306,7 +308,12 @@ something the alpha claims to stop.
 - **Fuzzing.** `cargo fuzz` targets for the shell path through the engine, policy
   parsing, host payloads and `moat allow --always` patterns run in CI on every pull
   request and weekly.
-- **Planned:** differential testing of the lexer against real `bash`, executing
-  fixtures under OS enforcement, and the full MoatBench, which measures attack success
+- **Differential suite** (`tests/differential/scenarios.yaml`): each scenario runs
+  against the hook decision and each host sandbox whose binary is present, and hostile
+  project scripts run under `moat run` on macOS and Linux, with the OS outcome
+  (`EPERM`, `EACCES`, the proxy's 403) asserted. [EVIDENCE.md](EVIDENCE.md) is the
+  results table, generated from the same file; known gaps are listed there as gaps.
+- **Planned:** differential testing of the lexer against real `bash`, the Codex and
+  Claude Code sandboxes in CI, and the full MoatBench, which measures attack success
   with and without OpenMoat across live agents ([ROADMAP.md](ROADMAP.md)). Prompt fatigue is measured
   today only by `moat report` (asks per active hour).

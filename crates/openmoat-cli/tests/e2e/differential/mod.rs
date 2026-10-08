@@ -7,7 +7,8 @@
 //! (`moat guard` on a host payload). The executing host-sandbox layers are
 //! stacked on top: `codex sandbox -P moat` (#170) and a fake-API `claude -p`.
 //! Where a host binary is missing the layer prints a visible skip and the suite
-//! still passes on the layers it can run.
+//! still passes on the layers it can run. Hostile project scripts run under
+//! `moat run` in `scripts`, which also generates `docs/EVIDENCE.md` (#335).
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -20,6 +21,7 @@ use crate::common::{Sandbox, bash_payload, hook_output, json};
 pub mod claude;
 #[cfg(unix)]
 pub mod codex;
+pub mod scripts;
 
 /// A layer's verdict. Sandboxes express only `Allow` (ran) and `Deny` (blocked);
 /// `Ask` is a hook outcome (the host prompts the person).
@@ -109,14 +111,19 @@ impl Scenario {
 struct Suite {
     attacks: Vec<Scenario>,
     benign: Vec<Scenario>,
+    scripts: Vec<scripts::Script>,
+}
+
+fn suite() -> Suite {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/differential/scenarios.yaml");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    serde_yaml_ng::from_str(&text).expect("scenarios.yaml")
 }
 
 /// The scenario file, attacks first.
 pub fn scenarios() -> Vec<Scenario> {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/differential/scenarios.yaml");
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-    let suite: Suite = serde_yaml_ng::from_str(&text).expect("scenarios.yaml");
+    let suite = suite();
     let mut all = suite.attacks;
     for mut benign in suite.benign {
         assert!(
@@ -149,7 +156,12 @@ impl Fixtures {
     /// Build an installed home with both fixture trees and the secret files the
     /// attacks target.
     pub fn build() -> Self {
-        let sb = Sandbox::installed(&[".claude", ".codex"]);
+        Self::build_in(&std::env::temp_dir())
+    }
+
+    /// [`Fixtures::build`] with the home in a temporary directory below `parent`.
+    pub fn build_in(parent: &Path) -> Self {
+        let sb = Sandbox::installed_in(parent, &[".claude", ".codex"]);
         let w = |p: &Path, name: &str, body: &str| std::fs::write(p.join(name), body).unwrap();
 
         std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
@@ -215,15 +227,19 @@ impl Fixtures {
     /// The hook decision for `scenario`: `moat guard` on a Claude Code Bash
     /// payload, mapped from `permissionDecision`.
     pub fn hook_verdict(&self, scenario: &Scenario) -> Verdict {
-        let cwd = self.tree(scenario.project);
-        let payload = bash_payload(&scenario.id, cwd, &scenario.command);
+        self.hook_decision(&scenario.id, scenario.project, &scenario.command)
+    }
+
+    /// The hook decision for `command` in `project`, under audit session `id`.
+    pub fn hook_decision(&self, id: &str, project: Project, command: &str) -> Verdict {
+        let payload = bash_payload(id, self.tree(project), command);
         let out = self.sb.guard("claude-code", &payload);
         let decision = hook_output(&out)["permissionDecision"].clone();
         match decision.as_str() {
             Some("allow") => Verdict::Allow,
             Some("ask") => Verdict::Ask,
             Some("deny") => Verdict::Deny,
-            _ => panic!("{}: no permissionDecision in {}", scenario.id, json(&out)),
+            _ => panic!("{id}: no permissionDecision in {}", json(&out)),
         }
     }
 }

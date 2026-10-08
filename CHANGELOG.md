@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- docs/EVIDENCE.md: what the OS layer does to hostile project scripts that the hook allows (#335). The differential suite runs each payload as `npm test` under `moat run`, in a throwaway home with fake secrets, and asserts the outcome on every pull request: on macOS (Seatbelt) and Linux (Landlock and seccomp), reading `~/.ssh/id_rsa` or `~/.aws/credentials`, writing outside the project, a direct TCP connection, a DNS query over UDP, a symlink from the project into `~/.ssh`, and editing the policy or Claude Code's settings fail with `EPERM` or `EACCES`, and an unlisted host gets the proxy's 403. On Linux a project `.env` stays readable, shown as a known gap. The Codex and Claude Code sandboxes are not run in CI and are listed as not verified. Regenerate with `MOAT_UPDATE_EVIDENCE=1 cargo test -p openmoat --test e2e differential`.
+
 ### Changed
 - README, the CLI crate README and docs/INSTALL.md no longer say every action is checked: they say OpenMoat checks the commands, file access, web requests and MCP calls the agents report through their hooks, which is what README Limits and THREAT_MODEL describe (#331).
 - A permanent approval (`moat allow --always`, `moat allow --last --always`, or `a` in `moat`) prints what the rule will match before writing it (#333). For a shell command: `will allow: npm test (and the same command with extra arguments); deny rules still win`, since a command rule matches the approved command as a prefix. For files it says the rule names exactly those paths. The undo line is unchanged, and so is what a rule matches.

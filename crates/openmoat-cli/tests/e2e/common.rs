@@ -39,7 +39,12 @@ impl Sandbox {
 
     /// `bare(host_dirs)` followed by a successful `moat init`.
     pub fn installed(host_dirs: &[&str]) -> Self {
-        let sb = Self::bare(host_dirs);
+        Self::installed_in(&std::env::temp_dir(), host_dirs)
+    }
+
+    /// [`Sandbox::installed`] in a temporary directory below `parent`.
+    pub fn installed_in(parent: &Path, host_dirs: &[&str]) -> Self {
+        let sb = Self::bare_in(parent, host_dirs);
         let out = sb.moat(&["init", "--yes"]);
         assert_eq!(out.status.code(), Some(0), "moat init: {}", text(&out));
         sb

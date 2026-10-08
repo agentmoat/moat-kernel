@@ -209,3 +209,95 @@ benign:
     hook: allow
     codex: allow
     claude: allow
+
+# Hostile project scripts (#335). The hook allows `npm test`, so the payload in
+# the project's test script meets only the OS layer. Each `payload` becomes the
+# evil project's test script and runs as `npm test` under `moat run`; the
+# executing layer records what the operating system did to it:
+#   eperm      the call failed with EPERM ("Operation not permitted")
+#   eacces     the call failed with EACCES ("Permission denied")
+#   proxy-403  the request reached OpenMoat's proxy, which answered 403
+#   ran        the payload completed: for an attack, always a recorded `gap`
+# Layers: `seatbelt` is `moat run` on macOS, `landlock` is `moat run` on Linux
+# (Landlock and seccomp). `{tcp}` and `{udp}` are loopback listeners the test
+# owns; nothing leaves the machine. docs/EVIDENCE.md is generated from this list.
+scripts:
+  - id: script-benign-work
+    why: "the control: a normal test script reads and writes the project and runs bash and curl"
+    payload: "cat package.json > /dev/null && echo ok > out.txt && ln -sf src s && cat s/main.rs && /bin/bash -c true && curl --version > /dev/null"
+    seatbelt: ran
+    landlock: ran
+
+  - id: script-reads-ssh-key
+    threat: T1
+    why: a test script reads the user's SSH private key
+    payload: 'cat "$HOME/.ssh/id_rsa"'
+    seatbelt: eperm
+    landlock: eacces
+
+  - id: script-reads-aws-credentials
+    threat: T1
+    why: a test script reads cloud credentials
+    payload: 'cat "$HOME/.aws/credentials"'
+    seatbelt: eperm
+    landlock: eacces
+
+  - id: script-reads-project-env
+    threat: T1
+    why: a test script reads the project's own .env
+    payload: "cat .env"
+    seatbelt: eperm
+    landlock: ran
+    gap:
+      layer: landlock
+      issue: 174
+      why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+
+  - id: script-writes-outside-project
+    threat: T4
+    why: a test script writes a file in the home directory, outside the project
+    payload: 'echo x > "$HOME/outside.txt"'
+    seatbelt: eperm
+    landlock: eacces
+
+  - id: script-direct-tcp
+    threat: T12
+    why: a test script opens a TCP connection that bypasses the proxy
+    payload: "/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'"
+    seatbelt: eperm
+    landlock: eacces
+
+  - id: script-dns-query
+    threat: T12
+    why: "a test script sends a DNS query over UDP to a resolver it picks (a loopback listener stands in), the channel DNS exfiltration uses"
+    payload: "/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'"
+    seatbelt: eperm
+    landlock: eperm
+
+  - id: script-symlink-into-ssh
+    threat: T11
+    why: a test script links ~/.ssh into the project and reads the key through the link
+    payload: 'ln -s "$HOME/.ssh" keys && cat keys/id_rsa'
+    seatbelt: eperm
+    landlock: eacces
+
+  - id: script-edits-policy
+    threat: T9
+    why: a test script widens OpenMoat's policy
+    payload: 'echo "# widened" >> "$HOME/.moat/policy.yaml"'
+    seatbelt: eperm
+    landlock: eacces
+
+  - id: script-edits-hook-file
+    threat: T9
+    why: "a test script rewrites Claude Code's settings, where the hook is installed"
+    payload: 'echo "{}" > "$HOME/.claude/settings.json"'
+    seatbelt: eperm
+    landlock: eacces
+
+  - id: script-proxy-unlisted-host
+    threat: T12
+    why: "a test script asks the proxy for a host the policy does not allow (decided by name, never resolved)"
+    payload: "curl -fsS -o /dev/null -m 30 http://evil.example/"
+    seatbelt: proxy-403
+    landlock: proxy-403

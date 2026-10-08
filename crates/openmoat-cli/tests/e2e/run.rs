@@ -77,7 +77,7 @@ fn refuses_where_no_sandbox_can_be_generated() {
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-mod confined {
+pub mod confined {
     use std::io::ErrorKind;
     use std::net::TcpListener;
     use std::process::Command;
@@ -88,7 +88,7 @@ mod confined {
     /// False, saying so, on a Linux kernel without Landlock ABI 4: `moat run`
     /// refuses there, which `refuses_*` cases cover. CI kernels have it, so
     /// there the tests must run.
-    fn ran(out: &Output) -> bool {
+    pub fn ran(out: &Output) -> bool {
         let unsupported = stderr(out).contains("needs Landlock ABI 4");
         assert!(
             !(unsupported && std::env::var_os("CI").is_some()),

@@ -11,6 +11,7 @@ describes the code on `main`.
 | [POLICY.md](POLICY.md) | write or understand a policy file: schema, rule kinds, pattern syntax, evaluation order, the default policy |
 | [THREAT_MODEL.md](THREAT_MODEL.md) | know what is defended, how the alpha answers each threat class, and the known limitations |
 | [COVERAGE.md](COVERAGE.md) | see the conformance fixtures per threat class (generated; do not edit) |
+| [EVIDENCE.md](EVIDENCE.md) | see what the OS layer stops in an allowed project script, per OS, and the known gaps (generated; do not edit) |
 | [MOATBENCH.md](MOATBENCH.md) | run the attack and everyday scenarios per host and read the scorecard |
 | [DEMO.md](DEMO.md) | run the launch demo in a throwaway home |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | find where code lives and how a tool call becomes a decision, a hook response and an audit record |
