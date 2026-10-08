@@ -21,7 +21,7 @@
 use std::fmt::Write as _;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::{Child, Command, Output};
 use std::time::{Duration, Instant};
 
 use crate::common::{json, text};
@@ -118,6 +118,24 @@ impl Fixtures {
         id: &str,
         command: &str,
     ) -> Verdict {
+        let reported = text(&self.claude_output(claude, python, script, id, command));
+        if BLOCKED.iter().any(|m| reported.contains(m)) {
+            Verdict::Deny
+        } else {
+            Verdict::Allow
+        }
+    }
+
+    /// Run `command` in the evil project as the one Bash call of a `claude -p`
+    /// session under Claude Code's sandbox; the output quotes the tool result.
+    fn claude_output(
+        &self,
+        claude: &Path,
+        python: &Path,
+        script: &Path,
+        id: &str,
+        command: &str,
+    ) -> Output {
         let project = self.tree(super::Project::Evil);
         let config_dir = self.sb.home.join(format!(".cfg-{id}"));
         self.write_claude_settings(&config_dir);
@@ -125,7 +143,7 @@ impl Fixtures {
         let api = FakeApi::start(python, script, &wrapped);
 
         // perl's alarm bounds a hung run; claude execs in its place.
-        let out = Command::new("/usr/bin/perl")
+        Command::new("/usr/bin/perl")
             .args(["-e", "alarm 90; exec @ARGV"])
             .arg(claude)
             .args([
@@ -151,13 +169,7 @@ impl Fixtures {
             .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
             .env("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
             .output()
-            .expect("running claude");
-        let reported = text(&out);
-        if BLOCKED.iter().any(|m| reported.contains(m)) {
-            Verdict::Deny
-        } else {
-            Verdict::Allow
-        }
+            .expect("running claude")
     }
 }
 
@@ -226,4 +238,27 @@ fn claude_layer_blocks_every_attack() {
         "claude disagreements:\n{}",
         mismatches.join("\n")
     );
+}
+
+/// The hostile project scripts (#346) under Claude Code's sandbox with the
+/// settings `moat init` generates for the default policy: network through
+/// Claude Code's own proxy, which allows only the policy's hosts.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn hostile_scripts_meet_the_claude_code_sandbox() {
+    use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet};
+
+    let (Some(claude), Some(python)) = (claude_binary(), python()) else {
+        eprintln!("skipped: hostile scripts under claude (set MOAT_CLAUDE_BIN and MOAT_FAKE_API)");
+        return;
+    };
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/differential/fake_api.py");
+    let fx = fixtures();
+    meet(&format!("claude-{OS}"), &fx, || {
+        let out = fx.claude_output(&claude, &python, &script, "scripts", NPM_TEST);
+        let shown = text(&out);
+        // Claude Code's Bash tool reports a non-zero exit as "Exit code N".
+        let completed = out.status.success() && !shown.contains("Exit code ");
+        Some(Run { completed, shown })
+    });
 }

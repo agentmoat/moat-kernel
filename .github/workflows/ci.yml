@@ -40,6 +40,37 @@ jobs:
         run: scripts/ci/quality-gate.sh
         shell: bash
 
+  # The hostile project scripts of docs/EVIDENCE.md under Claude Code's sandbox
+  # and Codex's `moat` profile (#346): pinned binaries, no account, no API call.
+  standard-tier:
+    name: standard tier (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: "1.95"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: linux sandbox prerequisites
+        if: runner.os == 'Linux'
+        # Both sandboxes use bubblewrap; Claude Code's proxy relay is socat. Ubuntu
+        # 24.04's AppArmor blocks the unprivileged user namespaces bwrap needs.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: pinned claude and codex
+        run: scripts/ci/host-binaries.sh "$RUNNER_TEMP/hosts" >> "$GITHUB_ENV"
+      - name: hostile scripts under every layer
+        run: scripts/ci/differential.sh hostile_scripts
+
   core-is-pure:
     name: openmoat-core builds for wasm32 (no I/O)
     runs-on: ubuntu-latest

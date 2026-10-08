@@ -6,10 +6,11 @@
 //! visible skip and the suite passes on the other layers.
 
 use std::fmt::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::{Fixtures, Scenario, Verdict, scenarios};
+use super::{Fixtures, Project, Scenario, Verdict, scenarios};
+use crate::common::text;
 
 /// The codex binary, or `None` to skip the layer.
 fn binary() -> Option<PathBuf> {
@@ -27,26 +28,10 @@ impl Fixtures {
     /// stopped it. The project's own `bin/` holds the `npm`/`cargo` shims.
     /// Codex runs with `HTTP(S)_PROXY` naming `moat proxy` on `proxy_port`, so its
     /// own proxy hands what it allows on to OpenMoat's.
-    fn codex_verdict(
-        &self,
-        codex: &std::path::Path,
-        proxy_port: u16,
-        scenario: &Scenario,
-    ) -> Verdict {
-        let project = self.tree(scenario.project);
-        let path = format!("{}/bin:/usr/bin:/bin", project.display());
-        // bash (not dash) for `pipefail`, so a blocked `curl … | sh` is a Deny
-        // rather than the trailing shell's exit 0.
-        let script = format!("set -eo pipefail; {}", scenario.command);
+    fn codex_verdict(&self, codex: &Path, proxy_port: u16, scenario: &Scenario) -> Verdict {
         let proxy = format!("http://127.0.0.1:{proxy_port}");
-        let out = Command::new(codex)
-            .args(["sandbox", "-P", "moat", "-C"])
-            .arg(project)
-            .args(["--", "/bin/bash", "-c", &script])
-            .env_clear()
-            .env("PATH", path)
-            .env("HOME", &self.sb.home)
-            .env("CODEX_HOME", self.sb.home.join(".codex"))
+        let mut cmd = self.codex_command(codex, scenario.project, &scenario.command);
+        let out = cmd
             .env("HTTP_PROXY", &proxy)
             .env("HTTPS_PROXY", &proxy)
             .output()
@@ -57,6 +42,50 @@ impl Fixtures {
             Verdict::Deny
         }
     }
+
+    /// `command` in `project` under `codex sandbox -P moat`, in the installed
+    /// home and nothing else of the caller's environment.
+    fn codex_command(&self, codex: &Path, project: Project, command: &str) -> Command {
+        let project = self.tree(project);
+        let path = format!("{}/bin:/usr/bin:/bin", project.display());
+        // bash (not dash) for `pipefail`, so a blocked `curl … | sh` is a Deny
+        // rather than the trailing shell's exit 0.
+        let script = format!("set -eo pipefail; {command}");
+        let mut cmd = Command::new(codex);
+        cmd.args(["sandbox", "-P", "moat", "-C"])
+            .arg(project)
+            .args(["--", "/bin/bash", "-c", &script])
+            .env_clear()
+            .env("PATH", path)
+            .env("HOME", &self.sb.home)
+            .env("CODEX_HOME", self.sb.home.join(".codex"));
+        cmd
+    }
+}
+
+/// The hostile project scripts (#346) under `codex sandbox -P moat`, the
+/// profile `moat init` generates for the default policy, with no proxy
+/// variables set: network as Codex itself gives it to the sandbox.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn hostile_scripts_meet_the_codex_profile() {
+    use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet};
+
+    let Some(codex) = binary() else {
+        eprintln!("skipped: hostile scripts under codex (set MOAT_CODEX_BIN)");
+        return;
+    };
+    let fx = fixtures();
+    meet(&format!("codex-{OS}"), &fx, || {
+        let out = fx
+            .codex_command(&codex, Project::Evil, NPM_TEST)
+            .output()
+            .expect("running codex sandbox");
+        Some(Run {
+            completed: out.status.success(),
+            shown: text(&out),
+        })
+    });
 }
 
 #[test]
