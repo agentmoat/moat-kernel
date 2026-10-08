@@ -103,6 +103,9 @@ pub struct Word {
     pub text: String,
     /// True if any part of the word was quoted (affects glob/host heuristics).
     pub quoted: bool,
+    /// True if an unquoted, unescaped `*`, `?` or `[` is part of the word: the
+    /// shell replaces such a word with the file names it matches.
+    pub glob: bool,
     /// Byte ranges of `text` that came from single quotes: the shell does not
     /// expand a `$` inside them, so it names no variable.
     pub literal: Vec<Range<usize>>,
@@ -261,7 +264,9 @@ impl Lexer {
                 '|' | '&' | ';' | '(' | ')' | '<' | '>' => self.operator(),
                 _ => {
                     self.bump();
-                    self.word().text.push(c);
+                    let word = self.word();
+                    word.glob |= matches!(c, '*' | '?' | '[');
+                    word.text.push(c);
                 }
             }
         }

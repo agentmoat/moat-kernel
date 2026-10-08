@@ -534,3 +534,17 @@
 - id: benign-make-default-target
   action: { shell: "make" }
   expect: { verdict: allow, rules: [dev-shell] }
+# #355 glob operands: matches in the project stay allowed, `*` skips dotfiles
+# as the shell does, and a quoted pattern is one literal name
+- id: benign-glob-source-files
+  action: { shell: "cat src/*.rs" }
+  files: [/p/.env, /p/src/main.rs, /p/src/lib.rs]
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-glob-star-skips-dotfiles
+  action: { shell: "wc -l *" }
+  files: [/p/.env, /p/README.md, /p/Cargo.toml]
+  expect: { verdict: allow, rules: [dev-readonly, project-fs] }
+- id: benign-glob-quoted-is-literal
+  action: { shell: "cat '.en?'" }
+  files: [/p/.env]
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }

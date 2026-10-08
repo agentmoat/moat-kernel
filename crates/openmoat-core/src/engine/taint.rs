@@ -6,7 +6,7 @@
 //! resulting [`Taint`] then goes into [`CompiledPolicy::with_taint`], which can
 //! only turn an outcome stricter.
 
-use super::{CompiledPolicy, EvalContext, classify_action, with_resolved_paths};
+use super::{CompiledPolicy, EvalContext, checked_atoms};
 use crate::action::{Action, AtomicAction};
 use crate::pattern::{GlobPattern, any_match};
 use crate::policy::{Policy, PolicyError};
@@ -78,9 +78,9 @@ impl CompiledPolicy<'_> {
             cwd: cwd.to_owned(),
             ..self.ctx.clone()
         };
-        let (atoms, _) = classify_action(action, &ctx).into_parts();
+        let (atoms, _) = checked_atoms(action, &ctx, paths);
         let mut taint = Taint::default();
-        for atom in with_resolved_paths(atoms, paths) {
+        for atom in atoms {
             match atom {
                 AtomicAction::FsRead { .. } if self.names_secret(&atom) => {
                     taint.absorb(Taint {
@@ -113,6 +113,11 @@ impl CompiledPolicy<'_> {
         paths: &dyn PathResolver,
         taint: &Taint,
     ) -> Decision {
+        // A clean session tightens nothing; skip classifying (and listing the
+        // directories of glob operands) a second time.
+        if *taint == Taint::default() {
+            return decision;
+        }
         self.atoms(action, paths)
             .0
             .iter()

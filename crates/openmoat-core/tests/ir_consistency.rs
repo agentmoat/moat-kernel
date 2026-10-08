@@ -108,6 +108,7 @@ fn ir_verdicts_match_the_engine_on_every_lowerable_fixture() {
         };
         let links = MapPathResolver {
             links: fixture.links,
+            ..MapPathResolver::default()
         };
         let engine = CompiledPolicy::compile(&policy, &ctx).unwrap();
         let ir = lower(&policy, &ctx).unwrap().checker().unwrap();

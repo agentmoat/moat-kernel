@@ -184,6 +184,15 @@ impl AtomicAction {
         }
     }
 
+    /// The same read or write of `path`; `None` for any other atom.
+    pub(crate) fn with_path(&self, path: String) -> Option<Self> {
+        match self {
+            Self::FsRead { .. } => Some(Self::FsRead { path }),
+            Self::FsWrite { .. } => Some(Self::FsWrite { path }),
+            _ => None,
+        }
+    }
+
     /// The text a glob rule is matched against; `None` for shell atoms, which
     /// are matched as argv.
     pub(crate) fn subject(&self) -> Option<&str> {

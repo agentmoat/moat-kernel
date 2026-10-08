@@ -204,6 +204,7 @@ fn exposure_follows_a_link_into_secret_material() {
     let c = CompiledPolicy::compile(&p, &ctx()).unwrap();
     let links = MapPathResolver {
         links: [("/p/key".to_owned(), "/h/.ssh/id_rsa".to_owned())].into(),
+        ..MapPathResolver::default()
     };
     let taint = c.exposure(&read("/p/key"), "/p", &links);
     assert_eq!(taint.secrets.len(), 1);

@@ -61,6 +61,7 @@ pub(super) fn classify_into(
         return Err(ClassifyError::TooDeep);
     }
     let tokens = lexer::lex(command)?;
+    sink.note_globs(&tokens);
     let mut dirs = ctx.cwd.to_vec();
     let mut saved = Vec::new();
     for item in group_commands(&tokens) {

@@ -16,6 +16,7 @@
 
 mod action;
 mod engine;
+mod expand;
 mod host;
 pub mod ir;
 mod kind;
