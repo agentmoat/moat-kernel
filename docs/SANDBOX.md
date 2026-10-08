@@ -22,7 +22,9 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   before each command and runs none when one is unreadable, and those hold root-only
   directories. `moat sandbox show` lists these roots (`codex.outside-home`); the hook
   still denies the agent's own reads there. A directory you cannot list inside the
-  project or a home read root still stops Codex on Linux.
+  project or a home read root still stops Codex on Linux. Codex on Linux also runs its
+  own executable inside the sandbox, so it starts commands only when installed under
+  a read root (npm under `/usr` or `~/.nvm`, or `~/.local/bin`).
 - **Cursor:** not configured. Cursor has a sandbox of its own (Seatbelt on macOS,
   Landlock and seccomp on Linux, set in `~/.cursor/sandbox.json`), but `moat init`
   does not generate its settings, and Cursor can rerun a command outside it once its

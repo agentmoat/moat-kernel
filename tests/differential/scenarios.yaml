@@ -216,6 +216,8 @@ benign:
 # executing layer, which records what the operating system did to it:
 #   eperm      the call failed with EPERM ("Operation not permitted")
 #   eacces     the call failed with EACCES ("Permission denied")
+#   erofs      the call failed with EROFS ("Read-only file system"): the
+#              sandbox mounted the path read-only
 #   enoent     the path does not exist inside the sandbox (bubblewrap mounted
 #              an empty directory over it)
 #   refused    the connection was refused in the sandbox's own network namespace
@@ -311,7 +313,7 @@ scripts:
     claude-macos: eperm
     claude-linux: contained
     codex-macos: eperm
-    codex-linux: eperm
+    codex-linux: contained
 
   - id: script-symlink-into-ssh
     threat: T11
@@ -344,7 +346,7 @@ scripts:
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
-    codex-linux: eacces
+    codex-linux: erofs
 
   - id: script-proxy-unlisted-host
     threat: T12

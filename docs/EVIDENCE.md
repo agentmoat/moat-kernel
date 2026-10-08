@@ -25,13 +25,14 @@ listeners the test owns.
 | `script-reads-project-env` | T1 | `cat .env` | EPERM | **gap**: ran (#174) | EPERM | **gap**: ran (#359) | EPERM | EACCES |
 | `script-writes-outside-project` | T4 | `echo x > "$HOME/outside.txt"` | EPERM | EACCES | EPERM | contained | EPERM | contained |
 | `script-direct-tcp` | T12 | `/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'` | EPERM | EACCES | EPERM | refused | EPERM | refused |
-| `script-dns-query` | T12 | `/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'` | EPERM | EPERM | EPERM | contained | EPERM | EPERM |
+| `script-dns-query` | T12 | `/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'` | EPERM | EPERM | EPERM | contained | EPERM | contained |
 | `script-symlink-into-ssh` | T11 | `ln -s "$HOME/.ssh" keys && cat keys/id_rsa` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
 | `script-edits-policy` | T9 | `echo "# widened" >> "$HOME/.moat/policy.yaml"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
-| `script-edits-hook-file` | T9 | `echo "{}" > "$HOME/.claude/settings.json"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
+| `script-edits-hook-file` | T9 | `echo "{}" > "$HOME/.claude/settings.json"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EROFS |
 | `script-proxy-unlisted-host` | T12 | `curl -fsS -o /dev/null -m 30 http://evil.example/` | proxy 403 | proxy 403 | proxy 403 | proxy 403 | proxy 403 | proxy 403 |
 
-EPERM and EACCES: the system call failed with that error. ENOENT: the path does not exist
+EPERM, EACCES and EROFS: the system call failed with that error (EROFS: the sandbox
+mounted the path read-only). ENOENT: the path does not exist
 inside the sandbox (bubblewrap mounted an empty directory over it). refused: the connection
 was refused inside the sandbox's own network namespace. proxy 403: the layer's proxy refused
 the request (OpenMoat's under `moat run`, the agent's own, which allows only the policy's
