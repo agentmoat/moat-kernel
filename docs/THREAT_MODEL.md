@@ -256,7 +256,7 @@ something the alpha claims to stop.
   there as a deny. A file write or read that needs approval is blocked until a person
   approves that exact file with `moat` or `moat allow --last`, or a policy allow rule
   covers it.
-- **Ungoverned tools.** Claude Code `WebSearch` (server-side), `SendFile` (#137) and
+- **Ungoverned tools.** Claude Code `WebSearch` (server-side) and
   orchestration tools whose own calls are hooked; Codex web search and hosted tools;
   Cursor `Shell` and `MCP:<tool>` under `preToolUse` (governed by `beforeShellExecution`
   and `beforeMCPExecution` instead), `Task`, and any tool that names no path. Ungoverned calls are
