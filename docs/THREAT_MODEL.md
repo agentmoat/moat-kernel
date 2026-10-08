@@ -143,8 +143,11 @@ something the alpha claims to stop.
   whatever the project's scripts, build files and test files say, and OpenMoat sees
   only the command line. An agent that can write into the project can therefore run
   any code through an allowed command. In the Standard tier that code runs inside the
-  host's sandbox, and under `moat run` inside OpenMoat's, with the bounds above. Without
-  either (Cursor), it runs with the user's permissions.
+  host's sandbox, and under `moat run` inside OpenMoat's, with the bounds above. In the
+  Cursor editor OpenMoat configures no sandbox: the code runs in Cursor's own sandbox
+  as Cursor's `sandbox.json` sets it when that is on, and with the user's permissions
+  when it is off or Cursor reruns the command outside it after its own classifier
+  approves. The Cursor CLI can run under `moat run` (SANDBOX.md).
 - **Allowed hosts are relays.** `registries` allows network to `api.github.com`,
   `github.com` and the package registries. The host check passes for any command
   that reaches them, so a command that is itself allowed (a project script) or that

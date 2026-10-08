@@ -343,6 +343,13 @@ fn hooks(
                         config.settings_path.display()
                     ),
                 );
+                // `moat init` configures Claude Code's and Codex's sandboxes, not Cursor's.
+                if host == Host::Cursor {
+                    report.note(
+                        "Cursor           no OS sandbox from OpenMoat: only the hook applies \
+                         the policy; `moat run` covers the Cursor CLI (docs/SANDBOX.md)",
+                    );
+                }
             }
             HookState::Missing if !config.host_present() => {
                 report.note(&format!("{name:<16} host not found"));

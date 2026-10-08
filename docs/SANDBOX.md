@@ -17,6 +17,11 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   then refuse reads outside the working directories; `/add-dir` adds one.
 - **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =
   "moat"` and `features.network_proxy = true`.
+- **Cursor:** not configured. Cursor has a sandbox of its own (Seatbelt on macOS,
+  Landlock and seccomp on Linux, set in `~/.cursor/sandbox.json`), but `moat init`
+  does not generate its settings, and Cursor can rerun a command outside it once its
+  own classifier approves. In the Cursor editor only the hook applies the policy; the
+  Cursor CLI can run under [`moat run`](#cursor-cli-under-moat-run).
 
 Network has two modes:
 
@@ -76,3 +81,28 @@ moat run --write ~/.claude --write ~/.claude.json -- claude
 
 It is weaker per command than the Standard tier: the agent and its scripts share one
 sandbox, so whatever the agent needs, `npm test` gets too.
+
+### Cursor CLI under `moat run`
+
+Cursor's CLI (`agent`, formerly `cursor-agent`) needs three things the default policy
+does not give it:
+
+1. Its installation directory readable: it is a script that starts the Node.js and
+   JavaScript files beside it. Add `~/.local/share/cursor-agent` to
+   `sandbox.read_roots` (`moat edit`).
+2. Its API host allowed: add an allow rule with `net: ["api2.cursor.sh"]`. The
+   audit log names any other host the proxy refused.
+3. Its state directory writable, and credentials from `CURSOR_API_KEY`: on macOS
+   `agent login` keeps them in the keychain, which the sandbox blocks.
+
+```bash
+CURSOR_API_KEY=… moat run --write ~/.cursor -- agent --sandbox disabled
+```
+
+`--sandbox disabled` turns Cursor's own sandbox off for this run only, because
+sandboxes do not nest; it does not change `~/.cursor/cli-config.json`. `~/.cursor`
+must already exist, and `~/.cursor/hooks.json` stays unwritable. Checked on macOS
+with Cursor CLI `2026.10.01`: it starts, writes only `~/.cursor`, and reaches
+`api2.cursor.sh` through the proxy; a session with an account and the commands it runs
+were not checked, nor was Linux, where the CLI keeps its settings in
+`$XDG_CONFIG_HOME/cursor` when that variable is set.
