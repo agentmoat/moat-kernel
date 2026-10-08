@@ -304,14 +304,11 @@ scripts:
     claude-macos: eperm
     claude-linux: eacces
     codex-macos: eperm
-    codex-linux: ran
+    codex-linux: erofs
     gaps:
       - layer: landlock
         issue: 174
         why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .envrc can be created (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
-      - layer: codex-linux
-        issue: 377
-        why: "Codex on Linux hides only the files a deny glob matches when the command starts, so a missing .envrc can be created"
 
   - id: script-writes-project-policy
     threat: T9

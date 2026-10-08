@@ -176,6 +176,7 @@ impl Plan {
         }
         if cfg!(target_os = "linux") {
             codex::read_own_binary(&mut codex, codex::own_binary().as_deref());
+            codex::deny_names(&mut codex);
         }
         Ok(Self {
             default_read_roots,
