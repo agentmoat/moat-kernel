@@ -101,6 +101,59 @@ pub mod confined {
         !unsupported
     }
 
+    /// `run` again, at most twice more, while curl could not even open a
+    /// connection to the proxy. On some macos-14 runners Seatbelt refuses a
+    /// connect that the profile's `localhost:<port>` rule allows: EPERM for a
+    /// few milliseconds about every 15 s, in any sandbox with that rule, before
+    /// the proxy sees anything (#280). A proxy that is really unreachable stays so.
+    pub fn retried(mut run: impl FnMut() -> Output) -> Output {
+        let mut out = run();
+        for _ in 0..2 {
+            if !refused_before_the_proxy(&out) {
+                break;
+            }
+            eprintln!("retrying: the sandbox refused the connection to the proxy (#280)");
+            out = run();
+        }
+        out
+    }
+
+    /// curl's message for a connection to the proxy port that never opened.
+    fn refused_before_the_proxy(out: &Output) -> bool {
+        let shown = text(out);
+        let port = shown
+            .split("proxy on 127.0.0.1:")
+            .nth(1)
+            .and_then(|rest| rest.split_whitespace().next());
+        port.is_some_and(|p| shown.contains(&format!("Failed to connect to 127.0.0.1 port {p} ")))
+    }
+
+    #[test]
+    fn only_a_refused_connection_to_the_proxy_is_retried() {
+        use std::os::unix::process::ExitStatusExt as _;
+        let notice = "moat run: /bin/sh in a sandbox\n  network: only through OpenMoat's \
+                      proxy on 127.0.0.1:49205 (audit session proxy-1)\n";
+        let output = |curl: &str| Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: Vec::new(),
+            stderr: format!("{notice}{curl}").into_bytes(),
+        };
+        // The failure CI saw (#280), and the expected refusal of a direct connection.
+        let proxy = "curl: (7) Failed to connect to 127.0.0.1 port 49205 after 0 ms: \
+                     Couldn't connect to server\n";
+        let direct = "curl: (7) Failed to connect to 127.0.0.1 port 49206 after 0 ms: \
+                      Couldn't connect to server\n";
+        assert!(refused_before_the_proxy(&output(proxy)));
+        assert!(!refused_before_the_proxy(&output(direct)));
+        assert!(!refused_before_the_proxy(&output("")));
+        let mut runs = 0;
+        retried(|| {
+            runs += 1;
+            output(proxy)
+        });
+        assert_eq!(runs, 3, "two more tries, then the failure stands");
+    }
+
     #[test]
     fn secrets_and_writes_outside_the_project_are_refused_and_work_goes_on() {
         let (sb, project) = installed_with_secret();
@@ -151,15 +204,12 @@ pub mod confined {
         let local = TcpListener::bind("127.0.0.1:0").unwrap();
         local.set_nonblocking(true).unwrap();
         let url = format!("http://127.0.0.1:{}/", local.local_addr().unwrap().port());
-        // The proxy answers at once, but a loaded CI runner can take over 5 s (#280).
-        let out = run_sh(
-            &sb,
-            &project,
-            &format!(
-                "curl -s -m 5 --noproxy '*' {url}; echo \"direct=$?\"
-                 curl -s -m 30 -o /dev/null -w 'proxy=%{{http_code}}\\n' {url}"
-            ),
+        // `-S` on the proxy request: its error is what `retried` looks for.
+        let script = format!(
+            "curl -s -m 5 --noproxy '*' {url}; echo \"direct=$?\"
+             curl -sS -m 30 -o /dev/null -w 'proxy=%{{http_code}}\\n' {url}"
         );
+        let out = retried(|| run_sh(&sb, &project, &script));
         if !ran(&out) {
             return;
         }

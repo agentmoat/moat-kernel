@@ -186,7 +186,7 @@ mod executing {
     use super::super::{Fixtures, Project, Verdict};
     use super::{Outcome, scripts};
     use crate::common::{output, text};
-    use crate::run::confined::ran;
+    use crate::run::confined::{ran, retried};
 
     #[cfg(target_os = "macos")]
     const LAYER: &str = "seatbelt";
@@ -257,7 +257,7 @@ mod executing {
                 .payload
                 .replace("{tcp}", &tcp.local_addr().unwrap().port().to_string())
                 .replace("{udp}", &udp.local_addr().unwrap().port().to_string());
-            let out = fx.run_script(&payload);
+            let out = retried(|| fx.run_script(&payload));
             if !ran(&out) {
                 return;
             }
