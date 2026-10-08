@@ -23,8 +23,7 @@ openmoat ──► openmoat-hosts ──► openmoat-core
 | `openmoat-proxy` | The egress proxy behind `moat proxy` (§12): request and `ClientHello` parsers, host decisions through openmoat-core, the address guard, connection relay, the `Recorder` trait the CLI implements over `openmoat-audit` | Network I/O only through `std::net`; no async runtime; no storage. Depends on `openmoat-core`, `httparse`, `thiserror` |
 | `openmoat` (`crates/openmoat-cli`) | The `moat` binary: commands, hook installation, the policy lock, approvals, the repository policy file, the environment snapshot, the filesystem resolvers, the sandbox backends generated from the IR (§13, §14), rendering, exit codes | The only crate that touches files, the environment and the terminal; the only one that starts processes |
 
-No crate depends on `openmoat`. Planned crates for enforcement are on the
-[roadmap](ROADMAP.md); none exist yet.
+No crate depends on `openmoat`.
 
 ## 2. One tool call, end to end
 
@@ -189,10 +188,10 @@ installation exists) and, against the installed policy, the same lock check.
 
 ADR-019 makes `policy.yaml` the single source for every enforcement point.
 `openmoat_core::ir::lower(policy, ctx)` derives the `Enforcement` IR from the same policy
-and `EvalContext` the engine compiles. The engine is the hook backend. Claude Code's and
-Codex's sandbox settings (§13) and the Lightweight tier's Seatbelt profile and Landlock
-rules (§14) are generated from the IR. The egress proxy decides hosts through the engine
-(§12).
+and `EvalContext` the engine compiles. The engine is the hook backend. Claude Code's,
+Codex's and Cursor's sandbox settings (§13) and the Lightweight tier's Seatbelt profile
+and Landlock rules (§14) are generated from the IR. The egress proxy decides hosts
+through the engine (§12).
 
 | IR part | Contents |
 |---|---|
@@ -437,11 +436,14 @@ crates/openmoat-cli/           the moat binary; tests/e2e/ runs it in isolated h
 tests/conformance/             attacks.yaml, ask.yaml, benign.yaml: one tool call each,
                                with the verdict the default policy must give
 tests/fixtures/hosts/          real host payloads (claude-code, codex, cursor)
+tests/moatbench/               MoatBench mini scenarios, one file per category
+tests/differential/            differential scenarios and hostile scripts (EVIDENCE.md)
 fuzz/                          cargo-fuzz targets: decide_shell, policy_parse,
                                host_payload, literal_pattern, proxy_parse
                                (separate workspace)
-docs/                          this document, POLICY, THREAT_MODEL, ROADMAP,
-                               COVERAGE (generated), adr/
+docs/                          this document, INSTALL, USAGE, SANDBOX, POLICY,
+                               THREAT_MODEL, ROADMAP, COVERAGE and EVIDENCE
+                               (generated), adr/
 scripts/ci/quality-gate.sh     the one gate CI and the pre-push hook run
 scripts/ci/guard-latency.py    times `moat guard` per process in CI (the `latency` job)
 scripts/ci/sync-labels.sh      the repository's label set

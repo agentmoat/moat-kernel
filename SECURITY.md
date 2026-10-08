@@ -2,28 +2,30 @@
 
 OpenMoat is a security control. Reports about it are handled as such.
 
-**In the alpha the operating system enforces only part of the policy** (ADR-013).
-OpenMoat decides whether each agent tool call may run and records it. The operating
-system confines only the commands inside the host sandboxes `moat init` configures
-(Claude Code `Bash`, `PowerShell` and `Monitor`; every Codex command) and agents started
-with `moat run`. Everywhere else an allowed call runs with your permissions and the
-shell classifier is the security boundary, so a classifier mistake that lets a dangerous
-action through is a vulnerability, not a usability bug.
+**The operating system enforces only part of the policy** (ADR-013, ADR-018).
+OpenMoat decides whether each agent tool call its hook reports may run, and records it.
+The operating system confines only the commands inside the host sandboxes `moat init`
+configures (Claude Code `Bash`, `PowerShell` and `Monitor`; every Codex command; the
+terminal commands Cursor runs in its sandbox) and agents started with `moat run`.
+Everywhere else an allowed call runs with your permissions and the policy decision is
+the only check, so a classifier mistake that lets a dangerous action through is a
+vulnerability, not a usability bug.
 
 ## Supported versions
 
 | Version | Security fixes |
 |---|---|
-| latest `0.1.0-alpha.N` | yes |
-| older alphas | no; upgrade to the latest alpha |
+| latest release | yes |
+| older versions | no; upgrade to the latest release |
 | `main` | yes, fixes land here first |
 
-Only the latest alpha and `main` are supported. There are no backports before 1.0.
+Only the latest release and `main` are supported. There are no backports before 1.0.
 
 ## Reporting
 
 Use GitHub's private advisory form:
-https://github.com/crocodile-labs/openmoat/security/advisories/new
+[report a vulnerability](https://github.com/crocodile-labs/openmoat/security/advisories/new).
+Only the maintainers see it.
 
 Do not open public issues or pull requests for bypasses. A useful report contains:
 
@@ -65,20 +67,23 @@ yours.
 | Sandbox generation | a generated host sandbox setting, Seatbelt profile or Landlock rule that allows more than the policy and than `moat sandbox show` reports |
 | Self-protection gap | an agent tool call that can modify `~/.moat`, host hook configuration or the `moat` binary without a `deny` |
 | Audit integrity | decisions missing from the log, or secrets persisted un-redacted |
-| Supply chain | malicious or vulnerable dependencies; from the first release, artefacts whose checksum or attestation does not verify |
+| Supply chain | malicious or vulnerable dependencies; release artefacts whose checksum or attestation does not verify |
 
 ## Out of scope (today)
 
-These are known limits, documented in `docs/THREAT_MODEL.md` §5 and
+These are known limits, documented in `docs/THREAT_MODEL.md` §4–5 and
 `docs/ROADMAP.md`, rather than bugs:
 
 | Not yet covered | Status |
 |---|---|
-| OS enforcement where no sandbox applies (Claude Code's file tools, `WebFetch` and MCP calls, Cursor, Windows): a report that an allowed call could do harm because nothing below the decision stops it (a misjudged call is a policy bypass, in scope) | `moat run`; Windows enforcement (#135), Isolated tier (#174, #175) |
+| OS enforcement where no sandbox applies (Claude Code's and Cursor's file tools, `WebFetch` and MCP calls; commands Cursor runs outside its sandbox; native Windows): a report that an allowed call could do harm because nothing below the decision stops it (a misjudged call is a policy bypass, in scope) | `moat run`; Windows enforcement (#135), Isolated tier (#174, #175) |
+| Sandbox gaps listed as gaps in `docs/EVIDENCE.md` or as losses by `moat sandbox show` (for example, on Linux `moat run` cannot deny `.env` inside the project) | tracked in the issue each one names |
 | HTTPS secret injection, and per-host method and path rules, in `moat proxy` | #247 |
 | Data sent to a host the policy allows (`api.github.com`, registries) by an allowed or approved command, including project scripts such as `npm test` | known limit; session taint asks for network after a secret read |
 | PowerShell / cmd tokenisation | Claude Code `PowerShell` always asks; other PowerShell lines are lexed as POSIX and fall through to the `ask` default |
-| Hosts that proceed when the hook binary is missing | host limitation; `moat status` reports it |
+| Hosts that proceed when the hook binary is missing or killed | host limitation; `moat status` reports a missing hook |
+| Tools no hook reports (Claude Code `WebSearch`, Codex web search) | host limitation: the hook never sees them |
+| An attacker with root or the user's own shell, a compromised release pipeline, prompt-injection detection in text | not a target (THREAT_MODEL §4) |
 | Agents running in a vendor's cloud rather than on the host | not a target |
 
 ## Threat model in one paragraph
@@ -92,13 +97,15 @@ every attempt. Full version: `docs/THREAT_MODEL.md`.
 
 ## Verifying a release
 
-Releases will carry SHA-256 checksums and GitHub build provenance attestations. Verify a
-downloaded artefact with `gh attestation verify <file> --repo crocodile-labs/openmoat`
+Every release carries SHA-256 checksums (`sha256.sum`) and GitHub build provenance
+attestations. Verify a downloaded artefact with
+`gh attestation verify <file> --repo crocodile-labs/openmoat`
 before installing it by hand.
 
 ## Hardening already in place
 
-Deterministic decisions (no model in the loop); a policy lock verified on every call (edits to the policy or hook files deny everything until a person re-pins); fail-closed on every error path;
-exit code 2 reserved for `deny`; protected paths for the kernel's own configuration;
-redaction before audit storage; owner-only permissions on state files; a pure core
+Deterministic decisions (no model in the loop); a policy lock verified on every call
+(edits to the policy or hook files deny everything until a person re-pins); fail-closed
+on every error path in `moat guard`; exit code 2 reserved for `deny`; protected paths
+for the kernel's own configuration; redaction before audit storage; owner-only permissions on state files; a pure core
 with no I/O and no `unsafe`; dependency and licence auditing in CI.

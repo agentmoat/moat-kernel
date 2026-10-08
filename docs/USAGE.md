@@ -188,7 +188,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat init [--hosts …] [--yes] [--dry-run]` | install policy, lock and audit log; asks before hooking each agent found (`--hosts`, `--yes` skip the questions) |
 | `moat uninstall [--hosts …] [--purge]` | remove OpenMoat's hooks and sandbox settings, restoring the backups (`--purge` also deletes `~/.moat`) |
 | `moat status [--format json]` · `moat doctor [--accept] [--verbose]` | check the installation and each agent's protection level · list drift and re-pin (`--verbose` lists where each sandbox is stricter or wider than the policy) |
-| `moat show [id] [--session …] [--since …]` | see events |
+| `moat show [id] [--session …] [--since …] [--recent N]` | see events |
 | `moat replay --since today` · `moat report --since 7d` | per-session timeline · summary |
 | `moat audit export [--since …] [--host …] [--session …]` | write events as JSON Lines with their chain hashes |
 | `moat audit verify <file> [--anchor <hash>]` | check an export without the database; print its head hash |
@@ -197,7 +197,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat allow --site <host>` · `--dir <path>` · `--remove <id>` | allow a site or a directory permanently · take such a rule out again |
 | `moat edit` | edit the policy in your editor; it is checked and the diff shown before anything changes |
 | `moat trust [<repo>] [--revoke]` | let a repository's `.moat/policy.yaml` allow, until the file changes |
-| `moat policy lint` · `moat policy check "<cmd>"` | validate a policy · test an action against it |
+| `moat policy lint` · `moat policy check "<cmd>"` · `moat policy compile` | validate a policy · test an action against it · print what the OS layers enforce |
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |
 | `moat run [--write PATH]… [--verbose] -- <agent> [args]` | run an agent in a sandbox generated from the policy (macOS, Linux) |
 | `moat proxy [--listen 127.0.0.1:<port>]` | run the egress proxy on its own |

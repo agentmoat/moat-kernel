@@ -26,7 +26,7 @@ refines them. To add one, copy the shape of ADR-004 and take the next number.
 | [018](ADR-018-enforcement-approach.md) | Enforcement tiers: Standard (the host's own sandbox, generated and pinned by OpenMoat), Isolated (container or VM with OpenMoat outside), Lightweight (generated Seatbelt or Landlock); Seatbelt does not nest | accepted |
 | [019](ADR-019-one-policy-compiled-to-every-enforcement-point.md) | One policy compiled to every enforcement point through one IR; lossy targets narrow, never widen; differential executing tests prove the layers agree | accepted |
 | [020](ADR-020-egress-proxy-and-secrets-broker.md) | `moat proxy` is the only network exit; the secrets broker injects credentials so the agent never holds them; minimal session taint | accepted |
-| [021](ADR-021-os-layer-allowances.md) | An OS layer may be wider than the hook only by listed allowances: `sandbox.read_roots` and what a host needs to run, each printed by `moat sandbox show` | proposed |
+| [021](ADR-021-os-layer-allowances.md) | An OS layer may be wider than the hook only by listed allowances: `sandbox.read_roots` and what a host needs to run, each printed by `moat sandbox show` | accepted |
 | [022](ADR-022-repository-policy-and-trust.md) | `<project>/.moat/policy.yaml` adds deny and ask rules by itself; its allow rules apply only after `moat trust` pins that exact file by hash; hook only | accepted |
 
 ## Names in older ADRs
@@ -44,7 +44,7 @@ Older ADRs cite documents that were folded into the current set. Read them as:
 | `DESIGN.md` §3 (threat model, T1–T12), §9 (G1–G12) | [THREAT_MODEL.md](../THREAT_MODEL.md) |
 | `DESIGN.md` §4–5, §7 (hooks, components, pipeline, paths) | [ARCHITECTURE.md](../ARCHITECTURE.md) |
 | `DESIGN.md` §6 (policy semantics) | [POLICY.md](../POLICY.md) |
-| `DESIGN.md` §8.3–8.4 (own approval prompt, Telegram) | not built; [ROADMAP.md](../ROADMAP.md) |
+| `DESIGN.md` §8.3–8.4 (own approval prompt, Telegram) | not built, and no issue |
 | `STRENGTH.md` §3.3 (benchmark gate), `PROGRESS.md` §4 | [ROADMAP.md](../ROADMAP.md) and issue #144 |
 | `STRENGTH.md` W6 (prompt fatigue), §4.1 (fuzzing, differential testing) | [THREAT_MODEL.md](../THREAT_MODEL.md) §5–6 |
 | `TECH_STACK.md` | ADR-001 (the full scored comparison is in git history) |
