@@ -20,7 +20,13 @@ pub fn literal_shell_pattern(command: &str) -> Result<String, PolicyError> {
     let bad = || PolicyError::BadShellPattern {
         pattern: command.to_owned(),
     };
-    let mut tokens = lexer::lex(command.trim()).map_err(|_| bad())?;
+    // The classifier sees the words braces make (`{cat,.env}` runs `cat .env`),
+    // so the approval names them too.
+    let (mut tokens, too_many) =
+        lexer::expand_braces(lexer::lex(command.trim()).map_err(|_| bad())?);
+    if too_many.is_some() {
+        return Err(bad());
+    }
     if tokens.is_empty() {
         return Err(PolicyError::EmptyPattern);
     }
@@ -112,9 +118,15 @@ mod tests {
             !cat.is_match(&argv(&["cat", "~/.ssh/id_rsa"])),
             "`*` is not a wildcard"
         );
-        let q = compiled("ls file?.[ch] {a,b}");
+        let q = compiled("ls file?.[ch] '{a,b}'");
         assert!(q.is_match(&argv(&["ls", "file?.[ch]", "{a,b}"])));
         assert!(!q.is_match(&argv(&["ls", "file1.c", "a"])));
+        // Unquoted braces are the words bash makes of them, as classified.
+        assert_eq!(
+            literal_shell_pattern("{cat,.env} x{1..2}").unwrap(),
+            "cat .env x1 x2"
+        );
+        assert!(literal_shell_pattern("x{1..300}").is_err());
         let bang = compiled("!echo hi $");
         assert!(!bang.negated, "a leading `!` stays literal");
         assert!(
