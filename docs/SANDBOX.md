@@ -33,11 +33,12 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   project or a home read root still stops Codex on Linux. Codex on Linux also runs its
   own executable inside the sandbox, so it starts commands only when installed under
   a read root (npm under `/usr` or `~/.nvm`, or `~/.local/bin`).
-- **Cursor:** not configured. Cursor has a sandbox of its own (Seatbelt on macOS,
-  Landlock and seccomp on Linux, set in `~/.cursor/sandbox.json`), but `moat init`
-  does not generate its settings, and Cursor can rerun a command outside it once its
-  own classifier approves. In the Cursor editor only the hook applies the policy; the
-  Cursor CLI can run under [`moat run`](#cursor-cli-under-moat-run).
+- **Cursor** (`sandbox.json` next to `hooks.json`: `~/.cursor`, or `$CURSOR_CONFIG_DIR`):
+  `type: "workspace_readwrite"`, `readBoundary: "workspace"`, `additionalReadPaths`
+  (the read roots and read allow rules), `additionalReadwritePaths` (write allow rules
+  outside the project) and `networkPolicy` (`default: "deny"`, the allowed and denied
+  domains). Cursor's file tools then ask before reading outside the workspace. See
+  [Cursor's sandbox](#cursors-sandbox) for what its schema cannot express.
 
 Claude Code's sandbox runs on macOS, Linux and WSL2 only, and with `failIfUnavailable`
 Claude Code exits at startup where it cannot run. On native Windows, OpenMoat therefore
@@ -67,7 +68,7 @@ Network has two modes:
 Other settings and comments are kept, and each file is copied to
 `<file>.moat-sandbox-backup` before moat changes it. `moat sandbox show` prints what
 the policy compiles to, with every place a host is stricter or wider than the policy;
-`moat sandbox sync` rewrites both after you edit the policy and re-pins them. Editing
+`moat sandbox sync` rewrites them after you edit the policy and re-pins them. Editing
 the generated parts by hand is drift (`kernel-integrity`), and `moat doctor` names any
 weakened setting. Under Claude Code, sandboxed commands can run `git commit` but cannot
 write `.git/hooks`, `.git/config` or the other paths that make git run code (ADR-021).
@@ -79,9 +80,46 @@ pinned Claude Code and Codex binaries and no account: Claude Code headless again
 local fake API, Codex through `codex sandbox -P moat`.
 
 To undo, delete the `sandbox` key, `permissions.blockReadsOutsideWorkingDirectories`
-and the `Read(./**/…)` rules in `permissions.deny` from Claude Code's settings, and `default_permissions`, `[permissions.moat]` and
-`features.network_proxy` from Codex's `config.toml` (or restore the backups), then run
-`moat doctor --accept`.
+and the `Read(./**/…)` rules in `permissions.deny` from Claude Code's settings,
+`default_permissions`, `[permissions.moat]` and `features.network_proxy` from Codex's
+`config.toml`, and `type`, `readBoundary`, `additionalReadPaths`,
+`additionalReadwritePaths` and `networkPolicy` from Cursor's `sandbox.json` (or restore
+the backups), then run `moat doctor --accept`. `moat uninstall` does this for you.
+
+### Cursor's sandbox
+
+Cursor's sandbox (Seatbelt on macOS, Landlock and seccomp on Linux) confines the
+terminal commands its agent runs. The keys are those of Cursor 3.23's
+[`sandbox.json` reference](https://cursor.com/docs/reference/sandbox) and
+[Run Modes](https://cursor.com/docs/agent/security/run-modes) page; OpenMoat follows
+the documentation, and the generated file has not yet been run under a Cursor build.
+
+`sandbox.json` has no key that denies a path. A read root with a denied path below it
+(`~/.cargo` holds `~/.cargo/credentials.toml`) is therefore left out, which is stricter
+and is listed as such, and what the policy denies by name inside the workspace
+(`**/.env`, `.moat`, `.git`) stays readable and writable to sandboxed commands, listed
+as wider. Cursor itself keeps `.cursor/*.json`, `.claude/**/*.json`, `.vscode`,
+`.git/hooks`, `.git/config` and `.git/info/attributes` unwritable. With the
+workspace read boundary, sandboxed commands read only the workspace, the listed paths,
+the system paths tools need and, of `~/.ssh`, only `known_hosts`.
+
+What no key in `sandbox.json` changes, and `moat sandbox show` lists as wider:
+
+- Cursor runs a command outside its sandbox when its Auto-review classifier approves
+  it (a command that cannot use the sandbox, or a rerun after a sandbox error), in Run
+  Everything mode, in Allowlist mode with sandboxing off, and in the Cursor CLI unless
+  it starts with `--sandbox enabled`. On Linux without Landlock v3 Cursor asks instead.
+- Cursor's Network access setting: its default, "sandbox.json + Defaults", adds
+  Cursor's package-manager domains, and "Allow All" ignores `sandbox.json`. Choose
+  "sandbox.json Only".
+- A project's own `.cursor/sandbox.json` replaces the read boundary and the read list
+  and adds paths and hosts. The default policy denies the agent writes to it, and Cursor
+  keeps sandboxed commands from writing it, but a cloned repository can ship one.
+- `sandbox.proxy_port` has no Cursor equivalent: Cursor's own allowlist decides, and
+  that traffic does not reach `moat proxy`.
+
+Cursor documents its sandbox for macOS and Linux only, so on native Windows `moat init`
+leaves `sandbox.json` alone and `moat status` reports Cursor as `hook only`.
 
 ## `moat run` (Lightweight tier)
 

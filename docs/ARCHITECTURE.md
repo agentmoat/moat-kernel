@@ -411,6 +411,7 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
 <file>.moat-backup             each hook file before OpenMoat's last hook edit
 <file>.moat-sandbox-backup     each host file before OpenMoat's last sandbox edit
 ~/.cursor/hooks.json           Cursor hooks ($CURSOR_CONFIG_DIR overrides)
+~/.cursor/sandbox.json         Cursor sandbox keys, next to hooks.json
 <project>/.moat/policy.yaml    repository policy, committed by the team (ADR-022)
 ```
 
@@ -547,20 +548,23 @@ one IR of ADR-019 (`openmoat_core::ir`, `crates/openmoat-cli/src/sandbox/`).
 
 ```
 policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬─► claude::generate ─► settings.json "sandbox"
-                                                                 └─► codex::generate  ─► config.toml [permissions.moat]
+                                                                 ├─► codex::generate  ─► config.toml [permissions.moat]
+                                                                 └─► cursor::generate ─► sandbox.json
 ```
 
 - **One host-wide lowering.** Host settings are per user, not per session, so the IR
   is lowered once with a placeholder project. Each backend maps project patterns to
   the host's own workspace: Claude Code's working directories (implicit), Codex
-  `:workspace_roots`.
+  `:workspace_roots`, the workspace Cursor opened (implicit).
 - **Reads.** `sandbox.read_roots` lowers to an `Allowance`, kept apart from the IR's
   read rules so the IR's own verdicts stay the hook's or stricter.
   `Checker::check_os` is the reference for OS layers: deny rules, then allowances,
   then the IR's rules. Claude Code gets `allowRead` plus
   `permissions.blockReadsOutsideWorkingDirectories`; Codex gets an explicit profile
   (`:minimal`, the roots, the workspace) that does not extend `:workspace`, which reads
-  the whole disk.
+  the whole disk; Cursor gets `readBoundary: "workspace"` and `additionalReadPaths`.
+  Cursor's `sandbox.json` has no deny key, so a root with a denied path below it is
+  left out (loss) and patterns denied inside the workspace stay open (allowance).
 - **Writes** stay in the project, the temp directory and paths an allow rule names as
   a literal tree. Deny rules become `denyWrite` (Claude Code) or `deny`/`read` entries
   (Codex, which has no write-only glob).
@@ -619,7 +623,8 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
   comments included), and back each file up first. `policy.lock` pins Claude Code's
   `settings.json` whole except the cosmetic `theme` key (§6) and Codex's `config.toml` by the canonical text of the part
   OpenMoat owns (`default_permissions`, `[permissions.moat]`, `features.network_proxy`),
-  because Codex writes trusted projects into that file itself. Drift is
+  because Codex writes trusted projects into that file itself, and Cursor's
+  `sandbox.json` whole. Drift is
   `kernel-integrity`. `doctor` also fails on a weakened or out-of-date setting,
   including a Claude Code proxy port that does not match `sandbox.proxy_port` (missing
   when it is set, present when it is not).
@@ -628,7 +633,8 @@ policy.yaml ─► ir::lower (project = placeholder) ─► Enforcement ─┬�
   `--yes` skip the questions, and without a terminal no agent's files change.
   `moat uninstall` (`commands/uninstall.rs`, a person at a terminal; `kernel-self`
   denies it to agents) is the inverse: it removes exactly the hook entries
-  (`hook_file::remove`) and sandbox keys (`claude::remove`, `codex::remove`) init
+  (`hook_file::remove`) and sandbox keys (`claude::remove`, `codex::remove`,
+  `cursor::remove`) init
   writes. When what is left equals a backup that holds none of OpenMoat's entries, it
   writes that backup's bytes back; when nothing is left and no such backup exists, init
   created the file and it is deleted; otherwise the user's later changes stay with the

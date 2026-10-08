@@ -20,7 +20,7 @@ use crate::home::{Home, user_home, write_private};
 use crate::install::{self, HostConfig, Recorded, read_or_empty};
 use crate::integrity;
 use crate::render::Deferred;
-use crate::sandbox::{claude, codex, codex_config_path};
+use crate::sandbox::{claude, codex, codex_config_path, cursor};
 
 pub fn run(args: &UninstallArgs) -> Result<Code> {
     if !crate::terminal::interactive() {
@@ -47,6 +47,10 @@ pub fn run(args: &UninstallArgs) -> Result<Code> {
         if host == Host::Codex {
             let path = codex_config_path()?;
             files.push((path.clone(), undo_toml(&path)?));
+        }
+        if host == Host::Cursor {
+            let path = crate::sandbox::install::settings_path(host)?;
+            files.push((path.clone(), undo_json(&path, cursor::remove)?));
         }
         if files.iter().all(|(_, done)| done.is_none()) {
             writeln!(out, "· {:<16} not set up", host.display_name())?;

@@ -48,8 +48,17 @@ fn init_installs_fail_closed_hooks_for_every_cursor_event() {
     assert_eq!(status.status.code(), Some(0), "{}", text(&status));
     assert!(text(&status).contains("Cursor"));
     let doctor = text(&sb.moat(&["doctor"]));
+    let level = if cfg!(windows) {
+        "hook only: Cursor's sandbox runs on macOS and Linux only"
+    } else {
+        "hook + OS sandbox"
+    };
     assert!(
-        doctor.contains("Cursor           protection: hook only: no OS sandbox from OpenMoat"),
+        doctor.contains(&format!("Cursor           protection: {level}")),
+        "{doctor}"
+    );
+    assert!(
+        !doctor.contains("is pinned but not this shell's"),
         "{doctor}"
     );
     let again = text(&sb.moat(&["init", "--yes"]));

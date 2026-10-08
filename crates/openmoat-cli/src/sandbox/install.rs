@@ -8,18 +8,19 @@ use anyhow::{Context as _, Result};
 use openmoat_hosts::Host;
 use toml_edit::DocumentMut;
 
-use super::{Plan, Report, claude, codex, codex_config_path};
+use super::{Plan, Report, claude, codex, codex_config_path, cursor};
 use crate::home::write_private;
 use crate::install::{HostConfig, SANDBOX_BACKUP, backup_path, read_or_empty};
 use crate::integrity::Lock;
 
 /// Hosts with a sandbox backend, in the order OpenMoat writes them.
-pub const HOSTS: [Host; 2] = [Host::ClaudeCode, Host::Codex];
+pub const HOSTS: [Host; 3] = [Host::ClaudeCode, Host::Codex, Host::Cursor];
 
 /// Why `host`'s sandbox is not written on this OS, as `init`, `sandbox`,
 /// `doctor` and `status` print it; `None` when it is written. Claude Code's
 /// sandbox runs on macOS, Linux and WSL2 only, and with `failIfUnavailable`
 /// Claude Code exits at startup where it cannot run: native Windows (#327).
+/// Cursor documents its sandbox for macOS and Linux only.
 pub fn unavailable(host: Host) -> Option<&'static str> {
     unavailable_on(host, cfg!(windows))
 }
@@ -30,23 +31,33 @@ pub const OLD_SANDBOX_REMOVED: &str =
     "removed the sandbox settings an older moat wrote, so Claude Code can start";
 
 fn unavailable_on(host: Host, windows: bool) -> Option<&'static str> {
-    (windows && host == Host::ClaudeCode).then_some(
-        "sandbox not available on native Windows; the hook still applies the policy \
-         (use WSL2 for OS confinement)",
-    )
+    match host {
+        Host::ClaudeCode if windows => Some(
+            "sandbox not available on native Windows; the hook still applies the policy \
+             (use WSL2 for OS confinement)",
+        ),
+        Host::Cursor if windows => {
+            Some("Cursor's sandbox runs on macOS and Linux only; the hook still applies the policy")
+        }
+        _ => None,
+    }
 }
 
 /// The file `host`'s sandbox settings live in.
 pub fn settings_path(host: Host) -> Result<PathBuf> {
     match host {
         Host::Codex => codex_config_path(),
+        Host::Cursor => Ok(HostConfig::for_host(host)?
+            .settings_path
+            .with_file_name("sandbox.json")),
         _ => Ok(HostConfig::for_host(host)?.settings_path),
     }
 }
 
 /// Merge the plan's settings for `host` into its file, or, where the host's
-/// sandbox is [`unavailable`], remove what an older version wrote. Returns
-/// whether the file changed (or would, with `dry_run`).
+/// sandbox is [`unavailable`], remove what an older version wrote (Cursor's
+/// file is left alone: no version wrote it there). Returns whether the file
+/// changed (or would, with `dry_run`).
 pub fn write(host: Host, plan: &Plan, dry_run: bool) -> Result<bool> {
     let path = settings_path(host)?;
     let changed;
@@ -54,6 +65,14 @@ pub fn write(host: Host, plan: &Plan, dry_run: bool) -> Result<bool> {
         let mut doc = read_toml(&path)?;
         changed = codex::apply(&mut doc, &plan.codex)?;
         doc.to_string()
+    } else if host == Host::Cursor {
+        if unavailable(host).is_some() {
+            return Ok(false);
+        }
+        let mut root = read_or_empty(&path)?;
+        changed = cursor::apply(&mut root, &plan.cursor)
+            .with_context(|| format!("updating {}", path.display()))?;
+        serde_json::to_string_pretty(&root)? + "\n"
     } else {
         let mut root = read_or_empty(&path)?;
         changed = if unavailable(host).is_some() {
@@ -82,6 +101,7 @@ pub fn write(host: Host, plan: &Plan, dry_run: bool) -> Result<bool> {
 pub fn report(host: Host, plan: &Plan) -> &Report {
     match host {
         Host::Codex => &plan.codex.report,
+        Host::Cursor => &plan.cursor.report,
         _ => &plan.claude.report,
     }
 }
@@ -96,6 +116,17 @@ pub fn codex_profile_files() -> Result<Vec<PathBuf>> {
     let doc = read_toml(&path)?;
     let ours = doc.get("permissions").and_then(|p| p.get(codex::PROFILE));
     Ok(ours.map(|_| path).into_iter().collect())
+}
+
+/// Cursor's `sandbox.json` under this shell's environment when it carries
+/// OpenMoat's keys, which the lock pins whole.
+pub fn cursor_sandbox_files() -> Result<Vec<PathBuf>> {
+    let path = settings_path(Host::Cursor)?;
+    if !path.is_file() {
+        return Ok(Vec::new());
+    }
+    let ours = cursor::remove(&mut read_or_empty(&path)?);
+    Ok(ours.then_some(path).into_iter().collect())
 }
 
 /// SHA-256 of the part of a Codex config OpenMoat owns ([`codex::owned_part`]).
@@ -120,6 +151,16 @@ pub fn problems(host: Host, plan: &Plan, lock: Option<&Lock>) -> Result<Option<V
             found.push(out_of_date);
         }
         if lock.is_some_and(|l| !l.pins_codex_profile(&path)) {
+            found.push("not pinned by the lock; run `moat sandbox sync`".to_owned());
+        }
+        found
+    } else if host == Host::Cursor {
+        let root = read_or_empty(&path)?;
+        let mut found = cursor::weaknesses(&root);
+        if !cursor::in_sync(&root, &plan.cursor) {
+            found.push(out_of_date);
+        }
+        if lock.is_some_and(|l| path.is_file() && !l.pins(&path)) {
             found.push("not pinned by the lock; run `moat sandbox sync`".to_owned());
         }
         found
@@ -149,10 +190,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_claude_code_on_native_windows_goes_without_a_sandbox() {
+    fn claude_code_and_cursor_on_native_windows_go_without_a_sandbox() {
         assert!(unavailable_on(Host::ClaudeCode, true).is_some_and(|n| n.contains("WSL2")));
         assert_eq!(unavailable_on(Host::Codex, true), None);
         assert_eq!(unavailable_on(Host::ClaudeCode, false), None);
+        assert!(unavailable_on(Host::Cursor, true).is_some());
+        assert_eq!(unavailable_on(Host::Cursor, false), None);
         assert_eq!(unavailable(Host::ClaudeCode).is_some(), cfg!(windows));
     }
 }

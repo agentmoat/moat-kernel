@@ -1,10 +1,11 @@
 //! Standard tier (ADR-018): each host's own sandbox settings, generated from
 //! the enforcement IR (ADR-019).
 //!
-//! The settings are host-wide (Claude Code user settings, Codex `config.toml`),
-//! so the IR is lowered once for no particular session: [`PROJECT`] stands in
-//! for the project, and each backend maps it to the host's own notion of the
-//! workspace (Claude Code's working directories, Codex `:workspace_roots`).
+//! The settings are host-wide (Claude Code user settings, Codex `config.toml`,
+//! Cursor `sandbox.json`), so the IR is lowered once for no particular session:
+//! [`PROJECT`] stands in for the project, and each backend maps it to the host's
+//! own notion of the workspace (Claude Code's working directories, Codex
+//! `:workspace_roots`, the workspace Cursor opened).
 //! Backends only narrow, reported as losses, except where a host cannot run
 //! without a wider grant; those are listed as allowances, never silent.
 //!
@@ -15,6 +16,7 @@
 
 pub mod claude;
 pub mod codex;
+pub mod cursor;
 pub mod install;
 pub mod landlock;
 mod patterns;
@@ -77,6 +79,8 @@ pub struct Plan {
     pub claude: claude::Generated,
     /// Codex's permissions profile.
     pub codex: codex::Generated,
+    /// Cursor's `sandbox.json` keys.
+    pub cursor: cursor::Generated,
 }
 
 /// `policy`, with the default policy's `sandbox.read_roots` when it has no
@@ -175,6 +179,7 @@ impl Plan {
             proxy_port,
             claude,
             codex,
+            cursor: cursor::generate(&ir, proxy_port)?,
         })
     }
 }

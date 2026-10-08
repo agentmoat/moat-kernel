@@ -159,8 +159,10 @@ fn gaps(host: Host) -> &'static str {
              unchecked if the hook binary is missing or crashes"
         }
         Host::Cursor => {
-            "OS sandbox not configured by OpenMoat; file-tool asks become denies; Task and \
-             tools that name no path are not hooked; a failed hook blocks the call"
+            "commands Cursor runs outside its sandbox (a rerun or call its Auto-review \
+             classifier approves, Run Everything mode, the CLI without `--sandbox enabled`) \
+             are not confined; file-tool asks become denies; Task and tools that name no path \
+             are not hooked; a failed hook blocks the call"
         }
         Host::Continue => CONTINUE_CLI_WARNING,
     }
