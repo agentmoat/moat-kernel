@@ -23,6 +23,10 @@ listeners the test owns.
 | `script-reads-ssh-key` | T1 | `cat "$HOME/.ssh/id_rsa"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
 | `script-reads-aws-credentials` | T1 | `cat "$HOME/.aws/credentials"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
 | `script-reads-project-env` | T1 | `cat .env` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | EACCES |
+| `script-writes-project-env` | T1 | `echo TOKEN=PLANTED >> .env` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | EACCES |
+| `script-plants-envrc` | T6 | `echo 'export LD_PRELOAD=PLANTED' > .envrc` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | **gap**: ran (#377) |
+| `script-writes-project-policy` | T9 | `mkdir -p .moat && echo '# PLANTED' > .moat/policy.yaml` | EPERM | **gap**: ran (#174) | EPERM | EEXIST | EPERM | EEXIST |
+| `script-plants-git-hook` | T6 | `echo '# PLANTED' > .git/hooks/pre-commit` | EPERM | **gap**: ran (#174) | EPERM | EROFS | EPERM | EROFS |
 | `script-writes-outside-project` | T4 | `echo x > "$HOME/outside.txt"` | EPERM | EACCES | EPERM | contained | EPERM | contained |
 | `script-direct-tcp` | T12 | `/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'` | EPERM | EACCES | EPERM | refused | EPERM | refused |
 | `script-dns-query` | T12 | `/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'` | EPERM | EPERM | EPERM | contained | EPERM | contained |
@@ -33,7 +37,8 @@ listeners the test owns.
 
 EPERM, EACCES and EROFS: the system call failed with that error (EROFS: the sandbox
 mounted the path read-only). ENOENT: the path does not exist
-inside the sandbox (bubblewrap mounted an empty directory over it). refused: the connection
+inside the sandbox (bubblewrap mounted an empty directory over it). EEXIST: the sandbox mounted a
+file where the payload creates a directory. refused: the connection
 was refused inside the sandbox's own network namespace. proxy 403: the layer's proxy refused
 the request (OpenMoat's under `moat run`, the agent's own, which allows only the policy's
 hosts, under the Standard tier). contained: the payload completed inside the sandbox, but
@@ -44,6 +49,11 @@ nothing of the payload ran. ran: the payload completed.
 ## Known gaps
 
 - `script-reads-project-env` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
+- `script-writes-project-env` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays writable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
+- `script-plants-envrc` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .envrc can be created (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
+- `script-plants-envrc` under Codex `moat` profile, Linux (#377): Codex on Linux hides only the files a deny glob matches when the command starts, so a missing .envrc can be created
+- `script-writes-project-policy` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .moat can be written (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
+- `script-plants-git-hook` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .git/hooks stays writable (THREAT_MODEL §5); the hook still asks for the agent's own writes there
 
 ## Layers
 

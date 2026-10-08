@@ -220,6 +220,7 @@ benign:
 #              sandbox mounted the path read-only
 #   enoent     the path does not exist inside the sandbox (bubblewrap mounted
 #              an empty directory over it)
+#   eexist     the sandbox mounted a file where the payload creates a directory
 #   refused    the connection was refused in the sandbox's own network namespace
 #   proxy-403  the request reached the layer's proxy, which answered 403
 #   contained  the payload completed, but its write or datagram stayed inside
@@ -278,6 +279,69 @@ scripts:
       - layer: landlock
         issue: 174
         why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+
+  - id: script-writes-project-env
+    threat: T1
+    why: "a test script rewrites the project's .env, where the secrets live"
+    payload: "echo TOKEN=PLANTED >> .env"
+    seatbelt: eperm
+    landlock: ran
+    claude-macos: eperm
+    claude-linux: eacces
+    codex-macos: eperm
+    codex-linux: eacces
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays writable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+
+  - id: script-plants-envrc
+    threat: T6
+    why: "a test script creates the project's .envrc, which direnv runs in the user's shell"
+    payload: "echo 'export LD_PRELOAD=PLANTED' > .envrc"
+    seatbelt: eperm
+    landlock: ran
+    claude-macos: eperm
+    claude-linux: eacces
+    codex-macos: eperm
+    codex-linux: ran
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .envrc can be created (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+      - layer: codex-linux
+        issue: 377
+        why: "Codex on Linux hides only the files a deny glob matches when the command starts, so a missing .envrc can be created"
+
+  - id: script-writes-project-policy
+    threat: T9
+    why: "a test script writes a repository policy into the project's .moat"
+    payload: "mkdir -p .moat && echo '# PLANTED' > .moat/policy.yaml"
+    seatbelt: eperm
+    landlock: ran
+    claude-macos: eperm
+    claude-linux: eexist
+    codex-macos: eperm
+    codex-linux: eexist
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .moat can be written (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+
+  - id: script-plants-git-hook
+    threat: T6
+    why: "a test script plants a git hook, which runs outside any sandbox at the next commit"
+    payload: "echo '# PLANTED' > .git/hooks/pre-commit"
+    seatbelt: eperm
+    landlock: ran
+    claude-macos: eperm
+    claude-linux: erofs
+    codex-macos: eperm
+    codex-linux: erofs
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .git/hooks stays writable (THREAT_MODEL §5); the hook still asks for the agent's own writes there"
 
   - id: script-writes-outside-project
     threat: T4

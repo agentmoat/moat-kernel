@@ -85,7 +85,11 @@ something the alpha claims to stop.
   project script the `.env` files that exist under the session's working directory when
   the command starts (#359); one created later, or one in another readable directory
   (`/add-dir`, a read root, a path outside the user directories), stays readable.
-  Codex on Linux hides a `**/` deny's matches only after listing every directory below
+  It also drops every glob among the write denies (#372): only `.env`, `.envrc` and
+  `.moat` directly in the working directory, and that directory's own `.git` hooks and
+  config, are kept from sandboxed writes there; a `.env` or `.moat` in a subdirectory,
+  `.env.local`, `.git/info/attributes`, submodule hooks and a project's `bin/moat` stay
+  writable. Codex on Linux hides a `**/` deny's matches only after listing every directory below
   it, and runs no command when one is unreadable, so the generated profile repeats the
   `.env` denies only in the project and the read roots inside the home (#358): a
   sandboxed command can read a `.env` under `/etc`, `/usr` or `/tmp` outside the
@@ -108,7 +112,9 @@ something the alpha claims to stop.
 - **Claude Code's sandbox writes `.git`.** So that `git commit` works, sandboxed
   commands may write any `.git` except `hooks`, `config`, `config.worktree`,
   `info/attributes`, a linked worktree's `commondir` and the same in submodules
-  (ADR-021, #203); renaming `.git` or `.git/hooks` is refused too. A script can still
+  (ADR-021, #203); renaming `.git` or `.git/hooks` is refused too. On Linux only the
+  working directory's own repository is covered, by Claude Code itself, without
+  `info/attributes` and submodules (#372). A script can still
   rewrite refs and objects (history tampering, which `git log`, signatures and review
   can show), write a rebase todo that a person later continues, or write a `.git`
   *file* (`gitdir: …`) below the project, which the hook allows as well. The hook

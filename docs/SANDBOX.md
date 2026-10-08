@@ -23,6 +23,18 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   `EACCES`. A `.env` created after a command starts, or one in another readable
   directory, is not covered, and Claude Code's file tools also refuse `.env.example`.
   `moat sandbox show` lists both.
+  Write lists get no expansion on Linux: Claude Code's sandbox drops every glob in
+  `denyWrite`, `Edit(…)` deny rules included. A rule without a glob is kept and
+  resolved against the working directory, so `moat init` also adds `Edit(./.env)`,
+  `Edit(./.envrc)` and `Edit(./.moat)`. Only names directly in the working directory
+  get such a rule: where a denied path is missing, bubblewrap mounts its first
+  missing component read-only for the command (an empty `.envrc` or `.moat` shows up
+  there meanwhile), and `Edit(./bin/moat)` would do that to a missing `bin`. Claude
+  Code itself keeps the working directory's `.git/hooks`, `.git/config` and
+  `.claude` settings read-only. Everything else the policy denies by a `**/` glob
+  (a `.env` in a subdirectory, `.env.local`, `.git/info/attributes`, submodule hooks,
+  `bin/moat`) stays writable for sandboxed commands on Linux; `moat sandbox show`
+  lists it (`claude-code.linux-write-globs`).
 - **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =
   "moat"` and `features.network_proxy = true`. The `**/` denies (`.env` files) cover
   the project and the read roots inside the home, not system read roots such as
@@ -76,7 +88,9 @@ the policy compiles to, with every place a host is stricter or wider than the po
 `moat sandbox sync` rewrites them after you edit the policy and re-pins them. Editing
 the generated parts by hand is drift (`kernel-integrity`), and `moat doctor` names any
 weakened setting. Under Claude Code, sandboxed commands can run `git commit` but cannot
-write `.git/hooks`, `.git/config` or the other paths that make git run code (ADR-021).
+write `.git/hooks`, `.git/config` or the other paths that make git run code (ADR-021);
+on Linux only in the working directory's own repository, `info/attributes` and
+submodules aside (above).
 Codex keeps `.git` read-only: commit outside its sandbox (Codex asks to).
 
 [EVIDENCE.md](EVIDENCE.md) lists what each agent's sandbox, configured this way, does
@@ -85,7 +99,7 @@ pinned Claude Code and Codex binaries and no account: Claude Code headless again
 local fake API, Codex through `codex sandbox -P moat`.
 
 To undo, delete the `sandbox` key, `permissions.blockReadsOutsideWorkingDirectories`
-and the `Read(./**/…)` rules in `permissions.deny` from Claude Code's settings,
+and the `Read(./**/…)` and `Edit(./…)` rules in `permissions.deny` from Claude Code's settings,
 `default_permissions`, `[permissions.moat]` and `features.network_proxy` from Codex's
 `config.toml`, and `type`, `readBoundary`, `additionalReadPaths`,
 `additionalReadwritePaths` and `networkPolicy` from Cursor's `sandbox.json` (or restore
