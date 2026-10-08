@@ -31,7 +31,7 @@ Each `crates/openmoat-<name>` directory holds the package `openmoat-<name>`; `cr
 | `tests/fixtures/hosts/<host>/*.json` | real host payloads | golden inputs; never include real tokens or personal paths |
 | `tests/fixtures/sandbox/` | generated host sandbox settings and Seatbelt profile for the default policy | golden outputs; `MOAT_UPDATE_GOLDEN=1` rewrites them, review the diff |
 | `crates/*/tests/` | end-to-end tests of the binary in one target, `crates/openmoat-cli/tests/e2e/` (one module per area: `cli`, `guard`, `cursor`, `config_change`, `lock`, `install_path`, `approvals`, `allow`, `allow_files`, `edit`, `home_screen`, `audit`, `export`, `team`, `paths`, `replay_report`, `sandbox`, `sandbox_sync`, `sandbox_exec`, `run`, `uninstall`), conformance runner, architecture invariants | isolated `HOME`/`MOAT_HOME`; no network |
-| `docs/` | ARCHITECTURE, POLICY, THREAT_MODEL, ROADMAP, COVERAGE (generated), `adr/` | describe what the code does today; ADRs are immutable, superseded by new ADRs |
+| `docs/` | ARCHITECTURE, POLICY, THREAT_MODEL, ROADMAP, COVERAGE and EVIDENCE (generated), `adr/` | describe what the code does today; ADRs are immutable, superseded by new ADRs |
 | `scripts/ci/quality-gate.sh` | the one gate | CI and the pre-push hook run exactly this |
 
 ## 3. Invariants (never break; add a test if you touch one)

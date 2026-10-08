@@ -91,6 +91,11 @@ moat run --write ~/.claude --write ~/.claude.json -- claude
 It is weaker per command than the Standard tier: the agent and its scripts share one
 sandbox, so whatever the agent needs, `npm test` gets too.
 
+[EVIDENCE.md](EVIDENCE.md) lists what `moat run` does to hostile project scripts on
+macOS and Linux (reading keys and credentials, writing outside the project, direct
+connections, DNS, symlinks out of the project, editing the policy), as CI asserts it on
+every pull request, with the Linux gaps marked.
+
 ### Cursor CLI under `moat run`
 
 Cursor's CLI (`agent`, formerly `cursor-agent`) needs three things the default policy
