@@ -548,3 +548,13 @@
   action: { shell: "cat '.en?'" }
   files: [/p/.env]
   expect: { verdict: allow, rules: [dev-shell, project-fs] }
+# #362 brace expansion: quoted braces are one literal name, `${…}` is a variable
+- id: benign-brace-quoted-is-literal
+  action: { shell: "cat '.{env,x}'" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-brace-source-files
+  action: { shell: "cat src/{main,lib}.rs" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-brace-parameter-is-not-a-brace
+  action: { shell: "echo ${HOME}" }
+  expect: { verdict: allow, rules: [dev-shell] }

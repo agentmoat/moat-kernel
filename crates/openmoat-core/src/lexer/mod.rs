@@ -21,14 +21,18 @@
 //!   attached to the containing word so it can be classified as its own command.
 //!
 //! Anything the lexer cannot make sense of is an error; the engine maps lexer
-//! errors to `ask`, never to `allow`.
+//! errors to `ask`, never to `allow`. Brace expansion (`brace.rs`) is a separate
+//! step the classifier runs on the tokens, so policy patterns are lexed as written.
 
+mod brace;
 mod heredoc;
 #[cfg(test)]
 mod tests;
 
 use std::fmt;
 use std::ops::Range;
+
+pub use brace::{MAX_BRACE_WORDS, expand_braces};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
@@ -109,6 +113,9 @@ pub struct Word {
     /// Byte ranges of `text` that came from single quotes: the shell does not
     /// expand a `$` inside them, so it names no variable.
     pub literal: Vec<Range<usize>>,
+    /// Byte ranges of `text` taken from unquoted, unescaped source: only there
+    /// are `{`, `,` and `}` brace syntax (`brace.rs`).
+    pub unquoted: Vec<Range<usize>>,
     /// Inner text of every `$( … )` / `` ` … ` `` found inside the word.
     pub substitutions: Vec<String>,
 }
@@ -142,6 +149,8 @@ pub enum LexError {
     TrailingBackslash,
     #[error("command exceeds {max} bytes")]
     TooLong { max: usize },
+    #[error("braces expand past what can be checked ({MAX_BRACE_WORDS} words)")]
+    TooManyBraceWords,
 }
 
 /// Upper bound on input size; larger commands are refused (and therefore `ask`).
@@ -266,7 +275,12 @@ impl Lexer {
                     self.bump();
                     let word = self.word();
                     word.glob |= matches!(c, '*' | '?' | '[');
+                    let at = word.text.len();
                     word.text.push(c);
+                    match word.unquoted.last_mut() {
+                        Some(run) if run.end == at => run.end = word.text.len(),
+                        _ => word.unquoted.push(at..word.text.len()),
+                    }
                 }
             }
         }

@@ -1604,3 +1604,39 @@
   files: [/p/.env]
   expect: { verdict: deny, rules: [secrets-paths] }
 
+# #362: bash makes several words of one with unquoted braces, without the
+# disk, before globbing, so every word it makes is checked
+- id: T1-brace-list-reads-env
+  threat: T1
+  action: { shell: "cat .{env,x}" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-brace-list-reads-ssh-key
+  threat: T1
+  action: { shell: "cat ~/.ssh/{id_rsa,x}" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-brace-inside-name-reads-env
+  threat: T1
+  action: { shell: "cat .e{n,m}v" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-brace-nested-reads-env
+  threat: T1
+  action: { shell: "cat .{e{nv,x},y}" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-brace-sequence-and-empty-item-read-env
+  threat: T1
+  action: { shell: "cat file{1..3} .{env,}" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-brace-in-command-name-reads-env
+  threat: T1
+  action: { shell: "{cat,.env}" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-brace-then-glob-reads-env
+  threat: T1
+  action: { shell: "cat .{e,x}n?" }
+  files: [/p/.env]
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-brace-overflow-keeps-deny
+  threat: T1
+  action: { shell: "cat .env x{1..300}" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+
