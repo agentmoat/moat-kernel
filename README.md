@@ -1,7 +1,7 @@
 # OpenMoat
 
 [![CI](https://github.com/crocodile-labs/openmoat/actions/workflows/ci.yml/badge.svg)](https://github.com/crocodile-labs/openmoat/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/crocodile-labs/openmoat?include_prereleases)](https://github.com/crocodile-labs/openmoat/releases)
+[![Release](https://img.shields.io/github/v/release/crocodile-labs/openmoat)](https://github.com/crocodile-labs/openmoat/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)](#license)
 
 **Security for AI coding agents.** One local policy decides what Claude Code, Codex and
@@ -165,7 +165,7 @@ fails, it blocks. Everything runs locally; the audit log is a SQLite file in `~/
 credentials are redacted before they are stored, and nothing leaves your machine unless
 you export it.
 
-**Status: alpha.** The latest release is `0.1.0-alpha.7`; expect changes until the beta.
+**Status: beta.** The latest release is `0.1.0`; the policy format and commands may still change before 1.0.
 [Roadmap](docs/ROADMAP.md).
 
 ## Limits

@@ -6,11 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-- `moat --help` no longer says the alpha has no OS enforcement; it says where the OS bounds commands and points to `moat status`.
+## [0.1.0] - 2026-10-08
+
+First beta and first release that is not a GitHub pre-release.
 
 ### Changed
 - docs/SANDBOX.md notes a macOS 14 behaviour under `moat run` (#361). On some machines, Seatbelt sometimes refuses the allowed loopback connection to the proxy for a few milliseconds about every 15 seconds. A network request then fails at once, and a retry succeeds. A one-rule `sandbox-exec` profile shows the same without OpenMoat (#280, #351). CI's macOS 15 runners did not show it.
+
+### Fixed
+- `moat --help` no longer says the alpha has no OS enforcement; it says where the OS bounds commands and points to `moat status`.
 
 ### Security
 - On Linux, Codex's sandbox now keeps project scripts from creating `.env` and `.envrc` in the workspace roots (#377). Codex hides only the files a deny glob matches when a command starts, so a script could create a missing `.envrc`, which direnv runs in the user's shell. `moat init` and `moat sandbox sync` now also write `.env` and `.envrc` as deny entries under `:workspace_roots` on Linux; bubblewrap mounts an empty read-only file over a missing one while the command runs, and the script gets `EROFS`. `.env.local`, a `.envrc` in a subdirectory and a project's `bin/moat` stay creatable for sandboxed commands on Linux; `moat sandbox show` lists them (`codex.linux-write-globs`). macOS profiles are unchanged.
