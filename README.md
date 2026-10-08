@@ -4,8 +4,9 @@
 [![Release](https://img.shields.io/github/v/release/crocodile-labs/openmoat?include_prereleases)](https://github.com/crocodile-labs/openmoat/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)](#license)
 
-**Security for AI coding agents.** OpenMoat checks every action an AI coding agent
-takes on your computer and stops the dangerous ones before they run.
+**Security for AI coding agents.** OpenMoat checks each command, file access, web
+request and MCP call an AI coding agent makes through its hooks, and stops the dangerous
+ones before they run.
 
 Works with **Claude Code**, **Codex** and **Cursor**, with more agents to come. Built
 by Crocodile Labs. The command is `moat`.

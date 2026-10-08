@@ -78,7 +78,7 @@ names a hook whose binary is missing or is a different `moat`.
 
 On native Windows, `init` does not turn on Claude Code's sandbox: it runs on macOS,
 Linux and WSL2 only, and Claude Code would not start with it required. The hook still
-checks every Claude Code call, and `init`, `doctor` and `status` say so. For OS
+applies the policy to Claude Code's tool calls, and `init`, `doctor` and `status` say so. For OS
 confinement, run Claude Code and `moat` inside WSL2. Codex's sandbox is set up as on
 other systems.
 

@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- README, the CLI crate README and docs/INSTALL.md no longer say every action is checked: they say OpenMoat checks the commands, file access, web requests and MCP calls the agents report through their hooks, which is what README Limits and THREAT_MODEL describe (#331).
+
 ## [0.1.0-alpha.5] - 2026-10-07
 
 ### Added

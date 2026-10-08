@@ -1,7 +1,8 @@
 # openmoat (binary: `moat`)
 
 The command-line tool of [OpenMoat](https://github.com/crocodile-labs/openmoat):
-it checks every tool call of Claude Code, Codex and Cursor against one policy
+it checks the tool calls Claude Code, Codex and Cursor report through their hooks
+against one policy
 (allow, ask or deny), configures Claude Code's and Codex's own sandboxes from that
 policy, and keeps a local, tamper-evident audit log. This crate owns all I/O: files,
 environment, terminal, host configuration. Decisions come from `openmoat-core`.
