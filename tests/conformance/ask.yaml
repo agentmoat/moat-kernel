@@ -554,3 +554,118 @@
   threat: T5
   action: { shell: "docker build -t app:dev ." }
   expect: { verdict: ask, rules: [default] }
+
+# The neighbours of the #350 allows: what still asks
+# npm exec downloads a package it cannot find, like npx
+- id: ask-npm-exec-like-npx
+  threat: T5
+  action: { shell: "npm exec tsc -- --noEmit" }
+  expect: { verdict: ask, rules: [installs] }
+- id: ask-npm-x-like-npx
+  threat: T5
+  action: { shell: "npm x cowsay" }
+  expect: { verdict: ask, rules: [installs] }
+# a venv outside the project, emptied, upgraded from the network or inside .git
+- id: ask-venv-outside-project
+  threat: T4
+  action: { shell: "python3 -m venv /tmp/env" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-venv-plain-name-after-cd-out-of-project
+  threat: T4
+  action: { shell: "cd /tmp && python3 -m venv env" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-venv-clear-empties-directory
+  threat: T4
+  action: { shell: "python3 -m venv --clear src" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-venv-clear-abbreviated
+  threat: T4
+  action: { shell: "python -m venv --cle src" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-venv-upgrade-deps-downloads
+  threat: T5
+  action: { shell: "python3 -m venv .venv --upgrade-deps" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-venv-into-git-directory
+  threat: T9
+  action: { shell: "python3 -m venv .git/hooks" }
+  expect: { verdict: ask, rules: [default] }
+# source: only the project venv's activate script, spelled exactly
+- id: ask-source-other-project-file
+  threat: T7
+  action: { shell: "source scripts/env.sh" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-source-venv-path-traversal
+  threat: T6
+  action: { shell: "source .venv/bin/../../../Users/me/.zshrc" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-source-activate-outside-project
+  threat: T7
+  action: { shell: "cd /tmp/x && . .venv/bin/activate" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-source-activate-with-arguments
+  threat: T7
+  action: { shell: "source .venv/bin/activate x" }
+  expect: { verdict: ask, rules: [default] }
+# git rebase options that run commands, open or resume a todo list, or pick a program
+- id: ask-git-rebase-exec
+  threat: T7
+  action: { shell: "git rebase --exec 'cat ~/.ssh/id_rsa' main" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-exec-abbreviated
+  threat: T7
+  action: { shell: "git rebase main --exe=id" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-x
+  threat: T7
+  action: { shell: "git rebase -x 'npm test' main" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-x-in-cluster
+  threat: T7
+  action: { shell: "git rebase -qxid main" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-interactive
+  threat: T7
+  action: { shell: "git rebase -i HEAD~3" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-interactive-long
+  threat: T7
+  action: { shell: "git rebase --interactive main" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-edit-todo
+  threat: T7
+  action: { shell: "git rebase --edit-todo" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-continue
+  threat: T7
+  action: { shell: "git rebase --continue" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-skip
+  threat: T7
+  action: { shell: "git rebase --skip" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-strategy-program
+  threat: T7
+  action: { shell: "git rebase --strategy=evil main" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-strategy-short
+  threat: T7
+  action: { shell: "git rebase -s evil main" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-git-rebase-sequence-editor-config
+  threat: T7
+  action: { shell: "git -c sequence.editor=./x rebase main" }
+  expect: { verdict: ask, rules: [default] }
+# make: only the bare default target, not another makefile or directory
+- id: ask-make-other-makefile
+  threat: T7
+  action: { shell: "make -f evil.mk" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-make-other-directory
+  threat: T7
+  action: { shell: "make -C /tmp/x" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-make-default-target-shell-override
+  threat: T7
+  action: { shell: "make SHELL=/tmp/evil" }
+  expect: { verdict: ask, rules: [default] }

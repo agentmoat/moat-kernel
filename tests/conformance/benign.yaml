@@ -498,12 +498,39 @@
 - id: benign-read-node-modules-package
   action: { fs_read: "/p/node_modules/typescript/package.json" }
   expect: { verdict: allow, rules: [project-fs] }
-- id: benign-npm-exec-tsc
-  action: { shell: "npm exec tsc -- --noEmit" }
-  expect: { verdict: allow, rules: [dev-shell] }
 - id: benign-cargo-run
   action: { shell: "cargo run -- --help" }
   expect: { verdict: allow, rules: [dev-shell] }
 - id: benign-git-stash-pop
   action: { shell: "git stash pop" }
+  expect: { verdict: allow, rules: [dev-shell] }
+
+# Developer workflow false positives (#350): a virtual environment in the project,
+# its own activate script, a rebase onto a branch, the default make target
+- id: benign-python3-venv
+  action: { shell: "python3 -m venv .venv" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-python-venv-plain-name
+  action: { shell: "python -m venv venv --prompt app" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-source-project-venv-activate
+  action: { shell: "source .venv/bin/activate" }
+  expect: { verdict: allow, rules: [dev-shell, project-fs] }
+- id: benign-dot-project-venv-activate
+  action: { shell: ". .venv/bin/activate" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-source-venv-activate
+  action: { shell: "source venv/bin/activate" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-rebase-branch
+  action: { shell: "git rebase main" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-rebase-onto-with-options
+  action: { shell: "git rebase --autostash --onto main HEAD~3 -q" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-rebase-abort
+  action: { shell: "git rebase --abort" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-make-default-target
+  action: { shell: "make" }
   expect: { verdict: allow, rules: [dev-shell] }

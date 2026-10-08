@@ -212,6 +212,7 @@ allow:
       - "git switch *"
       - "git fetch*"
       - "git pull*"
+      - "git rebase *"
       - "git stash*"
       - "ls*"
       - "cat *"
@@ -245,7 +246,6 @@ allow:
       - "pnpm typecheck*"
       - "pnpm exec *"
       - "yarn exec *"
-      - "npm exec *"
       - "yarn test*"
       - "yarn run *"
       - "yarn build*"
@@ -269,6 +269,15 @@ allow:
       - "pytest*"
       - "python -m pytest*"
       - "python3 -m pytest*"
+      # the directory operands are fs.write atoms, so outside the project these ask
+      - "python -m venv *"
+      - "python3 -m venv *"
+      # the project's own virtual environment, as written: any other spelling or file asks
+      - "source .venv/bin/activate $"
+      - ". .venv/bin/activate $"
+      - "source venv/bin/activate $"
+      - ". venv/bin/activate $"
+      - "make $"
       - "make test*"
       - "make build*"
       - "make check*"
@@ -294,6 +303,22 @@ allow:
       - "!go * -toolexec*"
       - "!go * -vettool*"
       - "!cargo * --config*"
+      # rebase options that run commands (`--exec`, `-x`), open the todo list
+      # (`--interactive`, `-i`, `--edit-todo`), resume a todo list that may hold `exec`
+      # lines (`--continue`, `--skip`) or run a `git-merge-<name>` program (`--strategy`,
+      # `-s`); git takes an unambiguous prefix of a long option, so `--ex*` is `--exec`
+      - "!git rebase * --ex*"
+      - "!git rebase * --in*"
+      - "!git rebase * --ed*"
+      - "!git rebase * --con*"
+      - "!git rebase * --sk*"
+      - "!git rebase * --str*"
+      - "!git rebase * -[ixs]*"
+      - "!git rebase * -[!-]*[ixs]*"
+      # venv `--clear` empties an existing directory, `--upgrade-deps` downloads
+      # packages; argparse also takes a prefix of a long option
+      - "!python* -m venv * --cl*"
+      - "!python* -m venv * --u*"
   - id: dev-readonly
     reason: read-only inspection tools and non-secret variables
     shell:
@@ -356,7 +381,7 @@ allow:
 ask:
   - id: installs
     reason: new dependency
-    shell: ["npm install *", "npm i *", "npm ci*", "pnpm add *", "pnpm install*", "pnpm dlx *", "yarn add *", "yarn install*", "yarn dlx *", "npx *", "pip install *", "pip3 install *", "cargo add *", "cargo install *", "brew install *", "gem install *"]
+    shell: ["npm install *", "npm i *", "npm ci*", "pnpm add *", "pnpm install*", "pnpm dlx *", "yarn add *", "yarn install*", "yarn dlx *", "npx *", "npm exec *", "npm x *", "pip install *", "pip3 install *", "cargo add *", "cargo install *", "brew install *", "gem install *"]
   - id: push
     reason: publishes to a remote
     shell: ["git push *", "npm publish*", "pnpm publish*", "yarn publish*", "cargo publish*", "gh release *"]

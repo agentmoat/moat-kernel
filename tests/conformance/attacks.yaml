@@ -1544,3 +1544,25 @@
   repo: { policy: "version: 1\nask:\n  - id: deploy\n    shell: ['npm run deploy']\n" }
   expect: { verdict: ask, rules: ["repo:deploy"] }
 
+# The #350 allows do not carry a deny past them
+- id: T1-source-venv-traversal-to-ssh-key
+  threat: T1
+  action: { shell: "source .venv/bin/../../../Users/me/.ssh/id_rsa" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T9-venv-replaces-moat-home
+  threat: T9
+  action: { shell: "python3 -m venv ~/.moat" }
+  expect: { verdict: deny, rules: [kernel-self] }
+- id: T4-git-rebase-then-force-push
+  threat: T4
+  action: { shell: "git rebase main && git push --force-with-lease" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T4-git-rebase-then-reset-hard
+  threat: T4
+  action: { shell: "git rebase main; git reset --hard origin/main" }
+  expect: { verdict: deny, rules: [destructive] }
+- id: T6-activate-then-poison-path
+  threat: T6
+  action: { shell: "source .venv/bin/activate && export PATH=/tmp/evil:$PATH" }
+  expect: { verdict: deny, rules: [env-poison] }
+

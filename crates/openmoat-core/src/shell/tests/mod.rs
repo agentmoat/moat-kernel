@@ -1,6 +1,7 @@
 mod quotes;
 mod stdin;
 mod text;
+mod venv;
 
 use super::tokens::env_refs;
 use super::{ParseOutcome, ShellContext, classify};
