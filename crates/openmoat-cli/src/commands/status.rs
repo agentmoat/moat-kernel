@@ -9,16 +9,21 @@ use openmoat_audit::Store;
 use openmoat_hosts::Host;
 
 use crate::approvals::{GRANT_TTL_MS, Grants};
+use crate::cli::{Format, StatusArgs};
 use crate::exit::Code;
 use crate::home::Home;
 use crate::install::{HookState, HostConfig, Recorded};
 use crate::integrity::{self, HookPinGap, Lock};
 use crate::sandbox::{Plan, install as host_sandbox};
-use crate::{render, time};
+use crate::{protection, render, time};
 
-pub fn run() -> Result<Code> {
+pub fn run(args: &StatusArgs) -> Result<Code> {
     let home = Home::locate()?;
     let binary = crate::install::hook_binary()?;
+    if args.format == Format::Json {
+        render::json(&serde_json::json!({ "agents": protection::report(&home, &binary)? }))?;
+        return Ok(Code::Ok);
+    }
     let mut healthy = true;
     let mut out = io::stdout().lock();
 
@@ -159,6 +164,18 @@ pub fn run() -> Result<Code> {
 
     if let Ok(policy) = home.load_policy() {
         healthy &= sandboxes(&mut out, &Plan::new(&policy)?, &lock_path, &recorded)?;
+    }
+    // Derived from the hook and sandbox lines above, so it leaves `healthy` alone.
+    for agent in protection::report(&home, &binary)? {
+        if let Some(summary) = agent.summary() {
+            let mark = match agent.level {
+                protection::Level::HookAndOsSandbox => "✔",
+                protection::Level::HookOnly => "!",
+                _ => "✗",
+            };
+            writeln!(out, "{:<16} {mark} protection: {summary}", agent.name)?;
+            writeln!(out, "{:<16} · known gaps: {}", agent.name, agent.gaps)?;
+        }
     }
 
     let audit_path = home.audit_path();

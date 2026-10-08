@@ -39,8 +39,8 @@ pub enum Command {
     Guard(GuardArgs),
     /// Show one audit event, a session, or the most recent events.
     Show(ShowArgs),
-    /// Report installation health: policy, hooks, recent activity.
-    Status,
+    /// Report installation health: policy, hooks, each agent's protection level, recent activity.
+    Status(StatusArgs),
     /// Verify policy lock, hooks and binary; `--accept` re-pins edits made by a person.
     Doctor(DoctorArgs),
     /// Approve a shell command for one session, or permanently; or permanently allow
@@ -91,6 +91,13 @@ pub enum SandboxCommand {
 #[derive(Debug, Args)]
 pub struct SandboxShowArgs {
     /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
+}
+
+#[derive(Debug, Args)]
+pub struct StatusArgs {
+    /// Output format; `json` prints each agent's protection level only.
     #[arg(long, value_enum, default_value_t = Format::Text)]
     pub format: Format,
 }

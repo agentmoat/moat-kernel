@@ -14,6 +14,7 @@ mod home;
 mod install;
 mod integrity;
 mod project;
+mod protection;
 mod realpath;
 mod render;
 mod repo;

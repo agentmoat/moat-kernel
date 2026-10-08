@@ -16,7 +16,6 @@ use crate::approvals::{self, Grants, Overlay};
 use crate::cli::DoctorArgs;
 use crate::exit::Code;
 use crate::home::Home;
-use crate::install::{HookState, HostConfig};
 use crate::integrity::Lock;
 
 const MS_PER_DAY: i64 = 86_400_000;
@@ -32,7 +31,7 @@ pub fn run() -> Result<Code> {
     let now = crate::time::now_ms();
     let today = now - now.rem_euclid(MS_PER_DAY);
     let store = home.open_audit()?;
-    println!("{}", health(&store.since(today, None)?)?);
+    println!("{}", health(&home, &store.since(today, None)?)?);
 
     let drift = Lock::load(&lock_path)?.verify();
     if !drift.is_empty() {
@@ -89,18 +88,14 @@ pub fn run() -> Result<Code> {
     super::allow::run_for(&event.host, &event.session_id, &action, always)
 }
 
-/// Agents whose hook is installed, and today's decisions.
-fn health(today: &[Event]) -> Result<String> {
+/// Agents whose hook is installed, with their protection level, and today's decisions.
+fn health(home: &Home, today: &[Event]) -> Result<String> {
     let binary = crate::install::hook_binary()?;
-    let mut protected = Vec::new();
-    for host in Host::ALL {
-        if matches!(
-            HostConfig::for_host(host)?.state(&binary),
-            HookState::Installed
-        ) {
-            protected.push(host.display_name());
-        }
-    }
+    let protected: Vec<String> = crate::protection::report(home, &binary)?
+        .into_iter()
+        .filter(|agent| agent.level.hooked())
+        .map(|agent| format!("{} ({})", agent.name, agent.level.label()))
+        .collect();
     let agents = if protected.is_empty() {
         "No agent is protected (run `moat init`)".to_owned()
     } else {
