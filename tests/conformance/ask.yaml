@@ -537,3 +537,20 @@
   threat: T7
   action: { shell: "awk --source='{print}' data.txt" }
   expect: { verdict: ask, rules: [default] }
+# Developer workflows (tests/moatbench/workflows.yaml): the steps the policy means to ask
+- id: ask-npm-ci
+  threat: T5
+  action: { shell: "npm ci" }
+  expect: { verdict: ask, rules: [installs] }
+- id: ask-pip-install-editable
+  threat: T5
+  action: { shell: "pip install -e ." }
+  expect: { verdict: ask, rules: [installs] }
+- id: ask-go-mod-tidy-resolves-new-modules
+  threat: T5
+  action: { shell: "go mod tidy" }
+  expect: { verdict: ask, rules: [default] }
+- id: ask-docker-build-runs-the-dockerfile
+  threat: T5
+  action: { shell: "docker build -t app:dev ." }
+  expect: { verdict: ask, rules: [default] }

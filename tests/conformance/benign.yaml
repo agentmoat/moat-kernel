@@ -491,3 +491,19 @@
   action: { shell: "cargo test" }
   repo: { policy: "version: 1\ndeny:\n  - id: no-publish\n    shell: ['cargo publish']\n" }
   expect: { verdict: allow, rules: [dev-shell] }
+# Developer workflows (tests/moatbench/workflows.yaml): single steps not covered above
+- id: benign-read-cargo-build-output
+  action: { fs_read: "/p/target/debug/build/app-1f2e3d/output" }
+  expect: { verdict: allow, rules: [project-fs] }
+- id: benign-read-node-modules-package
+  action: { fs_read: "/p/node_modules/typescript/package.json" }
+  expect: { verdict: allow, rules: [project-fs] }
+- id: benign-npm-exec-tsc
+  action: { shell: "npm exec tsc -- --noEmit" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-cargo-run
+  action: { shell: "cargo run -- --help" }
+  expect: { verdict: allow, rules: [dev-shell] }
+- id: benign-git-stash-pop
+  action: { shell: "git stash pop" }
+  expect: { verdict: allow, rules: [dev-shell] }

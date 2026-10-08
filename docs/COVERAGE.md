@@ -11,7 +11,7 @@ the verdict and rule ids the default policy must produce for it.
 | T2 | Secret exfiltration via file tools | 20 | 1 | 1 |
 | T3 | Secret exfiltration via environment | 21 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 49 | 24 | 1 |
-| T5 | Supply-chain execution | 4 | 9 | 0 |
+| T5 | Supply-chain execution | 4 | 13 | 0 |
 | T6 | Environment poisoning | 11 | 2 | 0 |
 | T7 | Obfuscation and nested execution | 54 | 40 | 2 |
 | T8 | MCP tool poisoning / over-privileged tools | 7 | 0 | 0 |
@@ -224,6 +224,10 @@ the verdict and rule ids the default policy must produce for it.
 - `ask-pnpm-install` (ask): Ask [installs]
 - `ask-npx-downloads-a-tool` (ask): Ask [installs]
 - `ask-docker-run` (ask): Ask [default]
+- `ask-npm-ci` (ask): Ask [installs]
+- `ask-pip-install-editable` (ask): Ask [installs]
+- `ask-go-mod-tidy-resolves-new-modules` (ask): Ask [default]
+- `ask-docker-build-runs-the-dockerfile` (ask): Ask [default]
 - `T5-curl-pipe-sh` (attacks): Deny [pipe-to-shell]
 - `T5-curl-pipe-bash-unspaced` (attacks): Deny [pipe-to-shell]
 - `T5-wget-pipe-sh-with-args` (attacks): Deny [pipe-to-shell]

@@ -33,7 +33,10 @@ MoatBench mini
 category          runs  blocked  asked  allowed
 benign               …
 exfiltration         …
+workflows            …
 total                …
+workflows: … steps, … asks (expected …), 0 unexpected, … expected failures
+  docker-image             … steps, … asks (expected …), 0 unexpected, … expected failures
 false positives: …
 known gaps: …
 mismatches: 0
@@ -65,6 +68,7 @@ Each step is one tool call, exactly one of:
 | `shell: <command>` | `Bash` | `Bash` | `beforeShellExecution` |
 | `read: <path>` | `Read` | none | `beforeReadFile` |
 | `write: <path>` | `Write` | `apply_patch` (`Add File`) | `preToolUse` `Write` |
+| `edit: <path>` | `Edit` | `apply_patch` (`Update File`) | `preToolUse` `Write` |
 | `fetch: <url>` | `WebFetch` | none | none |
 | `mcp: { server, tool, args }` | `mcp__<server>__<tool>` | `mcp__<server>__<tool>` | `beforeMCPExecution` |
 
@@ -80,6 +84,41 @@ scenario exposes a bypass or a false positive that is not fixed in the same chan
 open an issue and set `gap: "#<issue>"`. The mismatch is then listed under "known
 gaps" instead of failing the run. Once the fix lands the scenario passes and the
 runner fails until the marker is removed, so a marker never outlives its fix.
+
+A step can carry the same marker (`{ shell: "make", expect: allow, gap: "#123" }`)
+when only that step is wrong; the other steps of the scenario still have to match.
+A scenario has a marker on itself or on its steps, not both.
+
+## Developer workflows
+
+`tests/moatbench/workflows.yaml` measures false positives on real development
+work: one scenario per ecosystem (Rust, Node, Python, Go, git, Docker, Make, and
+editing project files with each agent's file tools), written as the sequence of
+steps an agent runs. Each step expects `allow`, or `ask` where the default policy
+means to ask: a new dependency (`npm ci`, `pip install -e .`, `cargo add`,
+`go mod tidy`), a push, a container build.
+
+The scorecard counts every step on every host that ran it, in total and per
+workflow:
+
+```text
+workflows: 152 steps, 26 asks (expected 17), 0 unexpected, 9 expected failures
+  git-feature-branch       42 steps, 6 asks (expected 3), 0 unexpected, 3 expected failures
+```
+
+`unexpected` is a step whose verdict differs from its `expect` without a marker; it
+fails the run, so a policy change that adds an ask or a deny to everyday work fails
+CI. `expected failures` are known false positives: steps the current policy asks
+for although it should not, kept with the right `expect` and a step `gap` marker
+until the policy is fixed. They are listed under "known gaps".
+
+To add a workflow, write the steps in the order a person or agent runs them, with
+a `why` that names the ecosystem and any intended ask. A `read` step has no Codex
+tool, so a workflow with one does not run on Codex; leave reads out where the point
+is coverage of Codex payloads. If a step asks or denies although it should not, keep
+`expect: allow`, add a step `gap` marker, and open an issue; do not change the
+policy in the same change. A single action worth pinning also gets a conformance
+fixture in `tests/conformance/benign.yaml` or `ask.yaml`.
 
 ## Adding a scenario
 

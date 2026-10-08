@@ -37,19 +37,23 @@ struct Scenario {
     steps: Vec<Step>,
 }
 
-/// One tool call: exactly one of `shell`, `read`, `write`, `fetch`, `mcp`.
+/// One tool call: exactly one of `shell`, `read`, `write`, `edit`, `fetch`, `mcp`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Step {
     shell: Option<String>,
     read: Option<String>,
     write: Option<String>,
+    edit: Option<String>,
     fetch: Option<String>,
     mcp: Option<Mcp>,
     expect: Verdict,
     /// A rule id that must be in the decision.
     #[serde(default)]
     rule: Option<String>,
+    /// The scenario-level `gap` for one step, so the other steps still count.
+    #[serde(default)]
+    gap: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -84,6 +88,7 @@ pub enum Call {
     Shell(String),
     Read(String),
     Write(String),
+    Edit(String),
     Fetch(String),
     Mcp {
         server: String,
@@ -98,6 +103,7 @@ impl Step {
             self.shell.clone().map(Call::Shell),
             self.read.clone().map(Call::Read),
             self.write.clone().map(Call::Write),
+            self.edit.clone().map(Call::Edit),
             self.fetch.clone().map(Call::Fetch),
             self.mcp.as_ref().map(|m| Call::Mcp {
                 server: m.server.clone(),
@@ -143,6 +149,11 @@ fn scenarios() -> Vec<(String, Scenario)> {
                 "{}: why and steps",
                 s.id
             );
+            assert!(
+                s.gap.is_none() || s.steps.iter().all(|step| step.gap.is_none()),
+                "{}: a gap on the scenario or on its steps, not both",
+                s.id
+            );
             all.push((category.clone(), s));
         }
     }
@@ -181,6 +192,7 @@ fn run(sb: &Sandbox, project: &Path, scenario: &Scenario, host: Host) -> Option<
         "{session}: one audit event per step"
     );
     let mut problems = Vec::new();
+    let mut known = Vec::new();
     for (i, ((step, (verdict, rules)), (code, decision, err))) in scenario
         .steps
         .iter()
@@ -194,15 +206,25 @@ fn run(sb: &Sandbox, project: &Path, scenario: &Scenario, host: Host) -> Option<
             *code == Some(expected_code) && *decision == answer.word(),
             "{session} step {i}: kernel said {verdict:?}, host got {decision} exit {code:?}: {err}"
         );
-        if *verdict != step.expect {
-            problems.push(format!(
+        match (&step.gap, *verdict == step.expect) {
+            (Some(issue), false) => known.push(format!(
+                "step {i} {issue}: expected {:?}, got {verdict:?} {rules:?}",
+                step.expect
+            )),
+            (Some(issue), true) => problems.push(format!(
+                "step {i}: marked as gap {issue} but passes; remove the marker"
+            )),
+            (None, false) => problems.push(format!(
                 "step {i}: expected {:?}, got {verdict:?} {rules:?}",
                 step.expect
-            ));
-        } else if let Some(rule) = step.rule.as_ref().filter(|r| !rules.contains(r)) {
-            problems.push(format!(
-                "step {i}: {verdict:?} without rule {rule} ({rules:?})"
-            ));
+            )),
+            (None, true) => {
+                if let Some(rule) = step.rule.as_ref().filter(|r| !rules.contains(r)) {
+                    problems.push(format!(
+                        "step {i}: {verdict:?} without rule {rule} ({rules:?})"
+                    ));
+                }
+            }
         }
     }
     Some(Run {
@@ -211,9 +233,16 @@ fn run(sb: &Sandbox, project: &Path, scenario: &Scenario, host: Host) -> Option<
             .map(|(v, _)| *v)
             .max()
             .unwrap_or(Verdict::Allow),
+        steps: scenario
+            .steps
+            .iter()
+            .zip(&recorded)
+            .map(|(step, (verdict, _))| (*verdict, step.expect, step.gap.is_some()))
+            .collect(),
         outcome: match (&scenario.gap, problems.is_empty()) {
-            (_, true) => Outcome::Pass,
-            (Some(issue), false) => Outcome::Gap(issue.clone(), problems),
+            (_, true) if known.is_empty() => Outcome::Pass,
+            (_, true) => Outcome::Gap(known),
+            (Some(issue), false) => Outcome::Gap(vec![format!("{issue}: {}", problems.join("; "))]),
             (None, false) => Outcome::Fail(problems),
         },
     })

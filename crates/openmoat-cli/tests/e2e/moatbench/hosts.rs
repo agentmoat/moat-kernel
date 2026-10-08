@@ -47,6 +47,17 @@ impl Host {
                     at.file(path)
                 ) }),
             ),
+            (Self::ClaudeCode, Call::Edit(path)) => (
+                "Edit".to_owned(),
+                json!({ "file_path": at.file(path), "old_string": "old", "new_string": CONTENT }),
+            ),
+            (Self::Codex, Call::Edit(path)) => (
+                "apply_patch".to_owned(),
+                json!({ "command": format!(
+                    "*** Begin Patch\n*** Update File: {}\n@@\n-old\n+{CONTENT}\n*** End Patch\n",
+                    at.file(path)
+                ) }),
+            ),
             (Self::ClaudeCode, Call::Fetch(url)) => (
                 "WebFetch".to_owned(),
                 json!({ "url": url, "prompt": "summarise" }),
@@ -72,7 +83,9 @@ impl Host {
     pub fn answer(self, call: &Call, verdict: Verdict) -> Verdict {
         match (self, call, verdict) {
             (Self::Codex, _, Verdict::Ask)
-            | (Self::Cursor, Call::Read(_) | Call::Write(_), Verdict::Ask) => Verdict::Deny,
+            | (Self::Cursor, Call::Read(_) | Call::Write(_) | Call::Edit(_), Verdict::Ask) => {
+                Verdict::Deny
+            }
             (_, _, other) => other,
         }
     }
@@ -126,7 +139,8 @@ fn cursor(call: &Call, at: &Place<'_>) -> Option<Value> {
             "hook_event_name": "beforeReadFile", "file_path": at.file(path),
             "content": "", "attachments": [],
         }),
-        Call::Write(path) => json!({
+        // Cursor's hooks report an edit as `Write` (its third-party hooks reference).
+        Call::Write(path) | Call::Edit(path) => json!({
             "hook_event_name": "preToolUse", "cwd": at.cwd(), "tool_name": "Write",
             "tool_input": { "file_path": at.file(path), "content": CONTENT },
             "tool_use_id": at.call_id,
