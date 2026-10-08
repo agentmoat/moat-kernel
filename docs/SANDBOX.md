@@ -155,7 +155,15 @@ from the policy, with network only through a `moat proxy` it starts (ADR-018):
 moat run --write ~/.claude --write ~/.claude.json -- claude
 ```
 
-- **macOS:** a Seatbelt profile, started with `/usr/bin/sandbox-exec`.
+- **macOS:** a Seatbelt profile, started with `/usr/bin/sandbox-exec`. On some
+  macOS 14 machines, Seatbelt itself sometimes refuses the connection to the proxy
+  that the profile allows. This happens for a few milliseconds about every 15 seconds,
+  so a network request now and then fails at once with `Operation not permitted`.
+  Nothing gets out, and a retry succeeds. A one-rule `sandbox-exec` profile and a
+  plain listener show the same thing without OpenMoat, so the cause is macOS
+  ([#280](https://github.com/crocodile-labs/openmoat/issues/280),
+  [evidence in #351](https://github.com/crocodile-labs/openmoat/pull/351)). CI's
+  macOS 15 runners (`macos-15-intel`) did not show it.
 - **Linux 6.7 or later:** Landlock rules, plus a seccomp filter that allows only TCP
   sockets (no UDP, Unix sockets or `ptrace`). Windows refuses.
 - The agent and every command it starts may read the project, `sandbox.read_roots`,
