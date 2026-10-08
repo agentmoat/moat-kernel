@@ -162,3 +162,55 @@ fn show_prints_the_seatbelt_profile_for_the_project_here() {
         "{seatbelt}"
     );
 }
+
+/// #371: Codex on Linux runs its own executable inside the sandbox, so the
+/// profile lets commands read the `codex` found on `PATH`, or says it found none.
+#[cfg(target_os = "linux")]
+#[test]
+fn show_grants_codex_its_own_executable_on_linux() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let sb = Sandbox::installed(&[".codex"]);
+    let (bin, empty) = (sb.home.join("opt/bin"), sb.home.join("empty"));
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(&empty).unwrap();
+    let codex = bin.join("codex");
+    std::fs::write(&codex, "").unwrap();
+    std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let codex = std::fs::canonicalize(codex).unwrap();
+    let show = |path: &std::path::Path| {
+        let out = output(
+            sb.command()
+                .args(["sandbox", "show", "--format", "json"])
+                .env("PATH", path),
+            None,
+        );
+        assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+        json(&out)["hosts"]["codex"].clone()
+    };
+    let rule = |list: &Value| {
+        list.as_array()
+            .and_then(|l| l.iter().find(|e| e["rule"] == "codex.own-binary"))
+            .cloned()
+    };
+
+    let found = show(&bin);
+    let path = codex.to_string_lossy();
+    let settings = found["settings"].as_str().unwrap_or_default();
+    assert!(
+        settings.contains(&format!("\"{path}\" = \"read\"")),
+        "{settings}"
+    );
+    let allowance = rule(&found["report"]["allowances"]);
+    assert_eq!(
+        allowance.map(|a| a["patterns"][0].clone()),
+        Some(Value::from(path.as_ref()))
+    );
+
+    let missing = show(&empty);
+    assert!(rule(&missing["report"]["losses"]).is_some(), "{missing}");
+    assert!(
+        rule(&missing["report"]["allowances"]).is_none(),
+        "{missing}"
+    );
+}
