@@ -115,7 +115,7 @@ fn ir_verdicts_match_the_engine_on_every_lowerable_fixture() {
             engine.decide_with(&action, &NoResolver, &links).verdict == Verdict::Allow;
         // An action without a host is unparseable: the hook asks, and no OS
         // layer ever sees a connection to judge.
-        let Ok(atoms) = engine.atoms(&action, &links) else {
+        let (atoms, None) = engine.atoms(&action, &links) else {
             assert!(!hook_allows, "{}", fixture.id);
             continue;
         };

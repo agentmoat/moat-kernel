@@ -244,6 +244,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
         ),
         Action::ForeignShell { shell, .. } => ParseOutcome::Unparseable {
             reason: format!("{shell} commands are not parsed; only POSIX shell is classified"),
+            atoms: Vec::new(),
         },
         Action::FsRead { path } => ParseOutcome::Parsed(vec![AtomicAction::FsRead {
             path: paths::normalise(path, &ctx.home, ctx.project.as_deref(), &ctx.cwd),
@@ -253,6 +254,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
         }]),
         Action::Patch { writes } if writes.is_empty() => ParseOutcome::Unparseable {
             reason: "patch names no files".to_owned(),
+            atoms: Vec::new(),
         },
         Action::Patch { writes } => ParseOutcome::Parsed(
             writes
@@ -264,6 +266,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
         ),
         Action::ReadFiles { paths } if paths.is_empty() => ParseOutcome::Unparseable {
             reason: "read names no files".to_owned(),
+            atoms: Vec::new(),
         },
         Action::ReadFiles { paths } => ParseOutcome::Parsed(
             paths
@@ -277,12 +280,14 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
             Some(host) => ParseOutcome::Parsed(vec![AtomicAction::Net { host }]),
             None => ParseOutcome::Unparseable {
                 reason: format!("no host in url `{url}`"),
+                atoms: Vec::new(),
             },
         },
         Action::Fetch { url } => match host::of_url(url) {
             Some(host) => ParseOutcome::Parsed(vec![AtomicAction::Fetch { host }]),
             None => ParseOutcome::Unparseable {
                 reason: format!("no host in url `{url}`"),
+                atoms: Vec::new(),
             },
         },
         Action::McpTool {
@@ -301,17 +306,20 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
                     .iter()
                     .map(|p| AtomicAction::FsWrite { path: norm(p) }),
             );
+            let mut bad_host = None;
             for host in hosts {
                 match host::of_url(host) {
                     Some(host) => atoms.push(AtomicAction::Net { host }),
-                    None => {
-                        return ParseOutcome::Unparseable {
-                            reason: format!("no host in mcp argument `{host}`"),
-                        };
-                    }
+                    None => bad_host = bad_host.or(Some(host)),
                 }
             }
-            ParseOutcome::Parsed(atoms)
+            match bad_host {
+                Some(host) => ParseOutcome::Unparseable {
+                    reason: format!("no host in mcp argument `{host}`"),
+                    atoms,
+                },
+                None => ParseOutcome::Parsed(atoms),
+            }
         }
     }
 }
@@ -326,17 +334,16 @@ impl CompiledPolicy<'_> {
     }
 
     /// The atomic actions [`Self::decide_with`] evaluates for `action`, with an
-    /// extra atom for every read or write `paths` resolves through a symlink;
-    /// `Err` with the reason when the action cannot be classified (`ask`).
+    /// extra atom for every read or write `paths` resolves through a symlink,
+    /// and the reason when part of the action cannot be classified (`ask`).
+    #[must_use]
     pub fn atoms(
         &self,
         action: &Action,
         paths: &dyn PathResolver,
-    ) -> Result<Vec<AtomicAction>, String> {
-        match classify_action(action, &self.ctx) {
-            ParseOutcome::Parsed(atoms) => Ok(with_resolved_paths(atoms, paths)),
-            ParseOutcome::Unparseable { reason } => Err(reason),
-        }
+    ) -> (Vec<AtomicAction>, Option<String>) {
+        let (atoms, unparsed) = classify_action(action, &self.ctx).into_parts();
+        (with_resolved_paths(atoms, paths), unparsed)
     }
 
     /// Decide one host action, resolving shell programs through `resolver` so
@@ -349,20 +356,17 @@ impl CompiledPolicy<'_> {
         resolver: &dyn ProgramResolver,
         paths: &dyn PathResolver,
     ) -> Decision {
-        let atoms = match self.atoms(action, paths) {
-            Ok(atoms) => atoms,
-            Err(reason) => {
-                return unparseable(format!("could not parse action safely: {reason}"));
-            }
-        };
+        let (atoms, unparsed) = self.atoms(action, paths);
         let pins = atoms.iter().filter_map(|atom| match atom {
             AtomicAction::Shell { argv } => {
                 programs::check(&argv[0], &self.policy.executables, resolver)
             }
             _ => None,
         });
-        // Arguments the adapter did not search may name a file or host: ask, and
-        // let a deny on what it did search still win.
+        // A part that could not be parsed, or arguments the adapter did not
+        // search, may name anything: ask, and let a deny on the rest still win.
+        let unparsed =
+            unparsed.map(|reason| unparseable(format!("could not parse action safely: {reason}")));
         let unchecked = match action {
             Action::McpTool {
                 unchecked: Some(limit),
@@ -376,6 +380,7 @@ impl CompiledPolicy<'_> {
             .iter()
             .filter_map(|atom| self.evaluate_atomic(atom))
             .chain(pins)
+            .chain(unparsed)
             .chain(unchecked)
             .reduce(|mut acc, next| {
                 acc.merge(next);

@@ -69,7 +69,9 @@ pub(super) fn classify_into(
             Item::Close => dirs = saved.pop().unwrap_or(dirs),
             Item::Command(cmd) => {
                 let here = ShellContext { cwd: &dirs, ..*ctx };
-                classify_simple(&cmd, &here, sink, depth)?;
+                if let Err(e) = classify_simple(&cmd, &here, sink, depth) {
+                    sink.skip(e);
+                }
                 let moved = cwd::targets(&cmd.words, &here);
                 cwd::merge(&mut dirs, moved)?;
             }

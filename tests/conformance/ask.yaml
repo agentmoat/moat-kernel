@@ -49,7 +49,7 @@
   expect: { verdict: ask, rules: [default] }
 - id: ask-nesting-too-deep
   threat: T7
-  action: { shell: "bash -c \"eval eval eval eval eval eval true\"" }
+  action: { shell: "echo $(echo $(echo $(echo $(echo $(echo hi)))))" }
   expect: { verdict: ask, rules: [unparseable] }
 - id: ask-empty-command
   threat: T7

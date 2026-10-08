@@ -11,7 +11,6 @@ use crate::action::{Action, AtomicAction};
 use crate::pattern::{GlobPattern, any_match};
 use crate::policy::{Policy, PolicyError};
 use crate::realpath::PathResolver;
-use crate::shell::ParseOutcome;
 use crate::verdict::{Decision, Verdict};
 
 /// The rule group whose `fs.read` patterns name secret material, wherever the
@@ -71,17 +70,15 @@ pub(super) fn compile_protected(
 impl CompiledPolicy<'_> {
     /// What running `action` in `cwd` exposed its session to: secret material
     /// from a read the `secrets-paths` group names, untrusted content from a
-    /// fetch or an MCP result. The caller passes only calls that ran; an
-    /// action that cannot be classified exposes nothing it can name.
+    /// fetch or an MCP result. The caller passes only calls that ran; the parts
+    /// of an action that cannot be classified expose nothing they can name.
     #[must_use]
     pub fn exposure(&self, action: &Action, cwd: &str, paths: &dyn PathResolver) -> Taint {
         let ctx = EvalContext {
             cwd: cwd.to_owned(),
             ..self.ctx.clone()
         };
-        let ParseOutcome::Parsed(atoms) = classify_action(action, &ctx) else {
-            return Taint::default();
-        };
+        let (atoms, _) = classify_action(action, &ctx).into_parts();
         let mut taint = Taint::default();
         for atom in with_resolved_paths(atoms, paths) {
             match atom {
@@ -116,11 +113,8 @@ impl CompiledPolicy<'_> {
         paths: &dyn PathResolver,
         taint: &Taint,
     ) -> Decision {
-        // An action that cannot be classified already asks.
-        let Ok(atoms) = self.atoms(action, paths) else {
-            return decision;
-        };
-        atoms
+        self.atoms(action, paths)
+            .0
             .iter()
             .filter_map(|atom| self.tainted(atom, taint))
             .fold(decision, |mut acc, next| {
