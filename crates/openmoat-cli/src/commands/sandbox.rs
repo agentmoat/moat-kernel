@@ -61,7 +61,10 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
         let doc: serde_json::Map<String, Value> = hosts
             .iter()
             .map(|s| {
-                let entry = json!({ "path": s.path, "settings": s.text, "report": s.report });
+                let entry = match install::unavailable(s.host) {
+                    Some(note) => json!({ "path": s.path, "unavailable": note }),
+                    None => json!({ "path": s.path, "settings": s.text, "report": s.report }),
+                };
                 (s.host.id().to_owned(), entry)
             })
             .collect();
@@ -83,6 +86,10 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
         )?;
     }
     for shown in hosts {
+        if let Some(note) = install::unavailable(shown.host) {
+            writeln!(out, "{}  {note}", shown.host.display_name())?;
+            continue;
+        }
         writeln!(
             out,
             "{}  {}",
@@ -123,6 +130,10 @@ pub fn sync() -> Result<Code> {
         let path = install::settings_path(host)?;
         if !path.parent().is_some_and(std::path::Path::is_dir) {
             writeln!(out, "· {:<16} host not found", host.display_name())?;
+            continue;
+        }
+        if let Some(note) = install::unavailable(host) {
+            writeln!(out, "· {:<16} {note}", host.display_name())?;
             continue;
         }
         let verb = if install::write(host, &plan, false)? {

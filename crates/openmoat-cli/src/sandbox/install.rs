@@ -16,6 +16,21 @@ use crate::integrity::Lock;
 /// Hosts with a sandbox backend, in the order OpenMoat writes them.
 pub const HOSTS: [Host; 2] = [Host::ClaudeCode, Host::Codex];
 
+/// Why `host`'s sandbox is not written on this OS, as `init`, `sandbox`,
+/// `doctor` and `status` print it; `None` when it is written. Claude Code's
+/// sandbox runs on macOS, Linux and WSL2 only, and with `failIfUnavailable`
+/// Claude Code exits at startup where it cannot run: native Windows (#327).
+pub fn unavailable(host: Host) -> Option<&'static str> {
+    unavailable_on(host, cfg!(windows))
+}
+
+fn unavailable_on(host: Host, windows: bool) -> Option<&'static str> {
+    (windows && host == Host::ClaudeCode).then_some(
+        "sandbox not available on native Windows; the hook still checks every call \
+         (use WSL2 for OS confinement)",
+    )
+}
+
 /// The file `host`'s sandbox settings live in.
 pub fn settings_path(host: Host) -> Result<PathBuf> {
     match host {
@@ -117,4 +132,17 @@ pub fn read_toml(path: &Path) -> Result<DocumentMut> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     text.parse()
         .with_context(|| format!("parsing {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_claude_code_on_native_windows_goes_without_a_sandbox() {
+        assert!(unavailable_on(Host::ClaudeCode, true).is_some_and(|n| n.contains("WSL2")));
+        assert_eq!(unavailable_on(Host::Codex, true), None);
+        assert_eq!(unavailable_on(Host::ClaudeCode, false), None);
+        assert_eq!(unavailable(Host::ClaudeCode).is_some(), cfg!(windows));
+    }
 }

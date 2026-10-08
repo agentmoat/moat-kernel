@@ -14,6 +14,9 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - README, docs/INSTALL.md and docs/THREAT_MODEL.md no longer say that Cursor has no sandbox of its own. Cursor has one; `moat init` does not configure it, and Cursor can rerun a command outside it, so in the Cursor editor only the hook applies the policy (#324).
 
+### Fixed
+- On native Windows, `moat init` and `moat sandbox sync` no longer write Claude Code's `sandbox` block or `permissions.blockReadsOutsideWorkingDirectories` (#327). Claude Code's sandbox runs on macOS, Linux and WSL2 only, and with `failIfUnavailable: true` Claude Code exits at startup where it cannot run. `init`, `sandbox sync`, `sandbox show`, `doctor` and `status` now say `sandbox not available on native Windows; the hook still checks every call (use WSL2 for OS confinement)` for Claude Code instead of reporting the sandbox missing or weakened. Codex is unchanged. A block an older version wrote stays until `moat uninstall` removes it.
+
 ## [0.1.0-alpha.4] - 2026-10-07
 
 ### Changed

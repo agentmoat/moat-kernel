@@ -56,6 +56,10 @@ fn sandboxes(
     {
         let name = host.display_name();
         let problems = host_sandbox::problems(host, &plan, lock);
+        if let (Ok(Some(_)), Some(note)) = (&problems, host_sandbox::unavailable(host)) {
+            report.note(&format!("{name:<16} {note}"));
+            continue;
+        }
         present |= !matches!(problems, Ok(None));
         let translation = host_sandbox::report(host, &plan);
         match problems {

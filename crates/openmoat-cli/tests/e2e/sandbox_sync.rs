@@ -49,6 +49,7 @@ fn verdict(out: &std::process::Output) -> String {
         .to_owned()
 }
 
+#[cfg(not(windows))] // #327: no Claude Code sandbox on native Windows
 #[test]
 fn init_writes_both_sandboxes_keeps_user_settings_and_pins_them() {
     let sb = installed();
@@ -137,6 +138,7 @@ fn sync_is_person_only_and_idempotent() {
     assert_eq!(sb.moat(&["status"]).status.code(), Some(0));
 }
 
+#[cfg(not(windows))] // #327: no Claude Code sandbox on native Windows
 #[test]
 fn a_tampered_sandbox_block_denies_every_call_and_sync_refuses_over_it() {
     let sb = installed();
@@ -200,4 +202,44 @@ fn codex_may_edit_its_own_keys_but_not_the_moat_profile() {
             .contains("default_permissions = \"moat\"")
     );
     assert_eq!(sb.moat(&["doctor"]).status.code(), Some(0));
+}
+
+/// #327: Claude Code's sandbox cannot run on native Windows (with
+/// `failIfUnavailable` Claude Code would not start), so `init` leaves it out and
+/// every command says why instead of reporting it missing.
+#[cfg(windows)]
+#[test]
+fn native_windows_leaves_out_the_claude_code_sandbox() {
+    let note = "Claude Code      sandbox not available on native Windows; \
+                the hook still checks every call (use WSL2 for OS confinement)";
+    let sb = Sandbox::bare(&[".claude", ".codex"]);
+    let init = sb.moat(&["init", "--yes"]);
+    assert_eq!(init.status.code(), Some(0), "{}", text(&init));
+    assert!(stdout(&init).contains(note), "{}", text(&init));
+    let claude = settings(&sb);
+    assert!(claude.get("sandbox").is_none(), "{claude}");
+    assert!(claude.get("permissions").is_none(), "{claude}");
+    assert!(claude["hooks"]["PreToolUse"].is_array(), "{claude}");
+    let read = sb.guard("claude-code", &fixture("claude-code/read.json"));
+    assert_eq!(verdict(&read), "allow", "{}", text(&read));
+    let codex = fs::read_to_string(codex_config(&sb)).unwrap();
+    assert!(codex.contains("default_permissions = \"moat\""), "{codex}");
+
+    let doctor = sb.moat(&["doctor"]);
+    let status = sb.moat(&["status"]);
+    let sync = sb.moat_as_person(&["sandbox", "sync"]);
+    for out in [doctor, status, sync] {
+        assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+        let shown = stdout(&out);
+        assert!(
+            shown.contains("sandbox not available on native Windows"),
+            "{shown}"
+        );
+        assert!(!shown.contains("failIfUnavailable"), "{shown}");
+        assert!(!shown.contains('\u{2717}'), "no problem reported: {shown}");
+    }
+    assert!(
+        settings(&sb).get("sandbox").is_none(),
+        "sync leaves it out too"
+    );
 }

@@ -76,6 +76,12 @@ Hooks run the `moat` you ran `moat init` with, by its stable path (ADR-016). Aft
 moving or reinstalling the binary somewhere else, run `moat init` again; `moat doctor`
 names a hook whose binary is missing or is a different `moat`.
 
+On native Windows, `init` does not turn on Claude Code's sandbox: it runs on macOS,
+Linux and WSL2 only, and Claude Code would not start with it required. The hook still
+checks every Claude Code call, and `init`, `doctor` and `status` say so. For OS
+confinement, run Claude Code and `moat` inside WSL2. Codex's sandbox is set up as on
+other systems.
+
 | Agent | What is hooked | Hook file |
 |---|---|---|
 | Claude Code | `PreToolUse`: `Bash`, `Monitor`, `PowerShell` (always asks), `Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Glob`, `Grep`, `LSP`, `SendFile`, `WebFetch` (as `fetch`), MCP tools. `ConfigChange`: user, project and local settings | `~/.claude/settings.json` |

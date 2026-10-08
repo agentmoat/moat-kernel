@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use crate::common::{Sandbox, json, output, stdout, text};
 
+#[cfg(not(windows))] // #327: no Claude Code sandbox on native Windows
 #[test]
 fn show_prints_the_settings_and_their_losses_without_writing() {
     let sb = Sandbox::installed(&[".claude"]);
@@ -65,6 +66,31 @@ fn settings_json(host: &Value) -> Value {
     serde_json::from_str(host["settings"].as_str().unwrap_or_default()).unwrap_or(Value::Null)
 }
 
+/// #327: on native Windows `show` says why there is no Claude Code sandbox.
+#[cfg(windows)]
+#[test]
+fn show_says_claude_code_has_no_sandbox_on_native_windows() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let out = sb.moat(&["sandbox", "show"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    let shown = stdout(&out);
+    assert!(
+        shown.contains("Claude Code  sandbox not available on native Windows"),
+        "{shown}"
+    );
+    assert!(!shown.contains("failIfUnavailable"), "{shown}");
+    let doc = json(&sb.moat(&["sandbox", "show", "--format", "json"]));
+    let claude = &doc["hosts"]["claude-code"];
+    assert!(
+        claude["unavailable"]
+            .as_str()
+            .is_some_and(|n| n.contains("WSL2")),
+        "{doc}"
+    );
+    assert_eq!(settings_json(claude), Value::Null, "{doc}");
+}
+
+#[cfg(not(windows))] // #327: no Claude Code sandbox on native Windows
 #[test]
 fn a_policy_without_read_roots_uses_the_default_list() {
     let sb = Sandbox::installed(&[".claude"]);
