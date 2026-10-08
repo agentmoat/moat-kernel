@@ -8,7 +8,7 @@
 //! Bash tool call. `moat proxy` runs on the port the settings name. Nothing
 //! leaves the machine.
 //!
-//! The binary is `MOAT_CLAUDE_BIN` (else `claude` on `PATH`) and the fake API is
+//! The binary is `MOAT_CLAUDE_BIN` only (never `claude` from `PATH`) and the fake API is
 //! `MOAT_FAKE_API` (else `python3`); without either the layer skips visibly.
 //!
 //! Scope: the layer asserts that every attack is **blocked**. Claude Code grants
@@ -31,8 +31,12 @@ use super::{Fixtures, Verdict, scenarios};
 /// The issue tracking the headless benign-verification limitation.
 const BENIGN_GAP: u32 = 238;
 
+/// `MOAT_CLAUDE_BIN` only (scripts/ci/differential.sh sets it from `PATH`): the
+/// quality gate must not run whatever Claude Code a developer has installed.
 fn claude_binary() -> Option<PathBuf> {
-    which("MOAT_CLAUDE_BIN", "claude")
+    std::env::var_os("MOAT_CLAUDE_BIN")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
 }
 
 fn python() -> Option<PathBuf> {
