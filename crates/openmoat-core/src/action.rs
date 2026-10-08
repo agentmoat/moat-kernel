@@ -76,6 +76,11 @@ pub enum Action {
         /// URLs or hosts the call contacts, derived from its arguments.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         hosts: Vec<String>,
+        /// The limit that stopped the adapter searching the arguments (nesting
+        /// depth, number of paths and URLs). What was not searched may name a
+        /// file or host, so the engine decides the call at least `ask`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        unchecked: Option<String>,
     },
 }
 
@@ -101,6 +106,7 @@ impl Action {
             reads: Vec::new(),
             writes: Vec::new(),
             hosts: Vec::new(),
+            unchecked: None,
         }
     }
 }
