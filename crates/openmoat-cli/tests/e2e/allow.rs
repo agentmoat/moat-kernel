@@ -63,6 +63,18 @@ fn allow_always_writes_the_overlay_and_keeps_the_lock_intact() {
     assert_eq!(guard(&sb, "s1", INSTALL).0, "ask");
     let out = sb.moat_as_person(&["allow", "--last", "--always"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    let shown = text(&out);
+    assert!(
+        shown.contains(&format!(
+            "will allow: {INSTALL} (and the same command with extra arguments); \
+             deny rules still win"
+        )),
+        "{shown}"
+    );
+    assert!(
+        shown.contains("undo: moat allow --remove approved-1"),
+        "{shown}"
+    );
 
     let overlay = std::fs::read_to_string(sb.home.join(".moat/policy.d/approved.yaml")).unwrap();
     assert!(

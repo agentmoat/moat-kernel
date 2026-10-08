@@ -85,6 +85,46 @@ fn ask_allowed_once_grants_the_session() {
     assert!(home_as_person(&sb, "n\n").contains("session s2"));
 }
 
+/// `[a]lways` says what the permanent rule will match before writing it: a shell
+/// rule also matches extra arguments, a file rule only the exact path.
+#[test]
+fn ask_allowed_always_shows_what_the_rule_matches() {
+    let sb = Sandbox::installed(&[".claude"]);
+    assert_eq!(verdict(&sb, "s1"), "ask");
+    let shown = home_as_person(&sb, "a\n");
+    assert!(
+        shown.contains(&format!(
+            "will allow: {INSTALL} (and the same command with extra arguments); \
+             deny rules still win"
+        )),
+        "{shown}"
+    );
+    assert!(
+        shown.contains("undo: moat allow --remove approved-1"),
+        "{shown}"
+    );
+    assert_eq!(verdict(&sb, "s2"), "allow");
+
+    let payload = serde_json::json!({
+        "session_id": "s3", "cwd": sb.project().to_string_lossy(),
+        "hook_event_name": "PreToolUse", "tool_name": "Read",
+        "tool_input": {"file_path": sb.home.join("notes.md").to_string_lossy()},
+        "tool_use_id": "t1"
+    })
+    .to_string();
+    sb.guard("claude-code", &payload);
+    let shown = home_as_person(&sb, "a\n");
+    assert!(
+        shown.contains("will allow: read exactly ")
+            && shown.contains("notes.md (no other path); deny rules still win"),
+        "{shown}"
+    );
+    assert!(
+        shown.contains("undo: moat allow --remove approved-2"),
+        "{shown}"
+    );
+}
+
 #[test]
 fn without_a_terminal_nothing_changes() {
     let sb = Sandbox::installed(&[".claude"]);
