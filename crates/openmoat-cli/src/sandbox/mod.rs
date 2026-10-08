@@ -174,6 +174,9 @@ impl Plan {
         if let Some(codex_home) = codex_config_path()?.parent() {
             codex::protect(&mut codex, codex_home);
         }
+        if cfg!(target_os = "linux") {
+            codex::read_own_binary(&mut codex, codex::own_binary().as_deref());
+        }
         Ok(Self {
             default_read_roots,
             proxy_port,

@@ -21,17 +21,23 @@ fn binary() -> Option<PathBuf> {
 }
 
 impl Fixtures {
-    /// `codex` copied into `~/.local/bin`, a default read root, as a user's own
-    /// install there would be. Codex on Linux re-executes its own binary inside
-    /// bubblewrap to apply seccomp (`build_inner_seccomp_command` in
-    /// `codex-rs/linux-sandbox/src/linux_run_main.rs`), so the binary must be
-    /// readable under the profile; the CI download directory is not.
-    fn install_codex(&self, codex: &Path) -> PathBuf {
-        let bin = self.sb.home.join(".local/bin");
-        std::fs::create_dir_all(&bin).unwrap();
-        let installed = bin.join("codex");
-        std::fs::copy(codex, &installed).expect("copying codex");
-        installed
+    /// `moat sandbox sync` with `codex` first on `PATH`, as after a user's
+    /// install: on Linux the profile then lets commands read the executable,
+    /// which Codex runs again inside bubblewrap to apply seccomp (#371). The CI
+    /// download directory is under no read root.
+    fn sync_with_codex(&self, codex: &Path) {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let dirs = std::iter::once(codex.parent().unwrap().to_path_buf())
+            .chain(std::env::split_paths(&path));
+        let synced = self
+            .sb
+            .command()
+            .args(["sandbox", "sync"])
+            .env("MOAT_ASSUME_TTY", "1")
+            .env("PATH", std::env::join_paths(dirs).unwrap())
+            .output()
+            .unwrap();
+        assert_eq!(synced.status.code(), Some(0), "{}", text(&synced));
     }
 
     /// Run `scenario` under `codex sandbox -P moat`: `Allow` if the command (and
@@ -87,7 +93,7 @@ fn hostile_scripts_meet_the_codex_profile() {
         return;
     };
     let fx = fixtures();
-    let codex = fx.install_codex(&codex);
+    fx.sync_with_codex(&codex);
     meet(&format!("codex-{OS}"), &fx, || {
         let out = fx
             .codex_command(&codex, Project::Evil, NPM_TEST)
@@ -110,8 +116,8 @@ fn codex_layer_agrees_with_every_scenario() {
         return;
     };
     let fx = Fixtures::build();
-    let codex = fx.install_codex(&codex);
     let port = fx.sb.use_free_proxy_port();
+    fx.sync_with_codex(&codex);
     let _proxy = fx.sb.start_proxy();
     let mut matrix = String::from("\ndifferential matrix (codex sandbox):\n");
     let mut mismatches = Vec::new();

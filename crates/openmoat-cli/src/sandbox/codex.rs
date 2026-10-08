@@ -34,8 +34,10 @@ use super::patterns::{Spot, domain, is_below, literal_tree, push_unique, split, 
 use super::{PROJECT, Report};
 
 mod config;
+mod own_binary;
 
 pub use config::{apply, in_sync, owned_part, protect, remove, weaknesses};
+pub use own_binary::{own_binary, read_own_binary};
 
 /// The profile name OpenMoat owns and sets as `default_permissions`.
 pub const PROFILE: &str = "moat";

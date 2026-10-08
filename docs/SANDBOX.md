@@ -31,8 +31,13 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   directories. `moat sandbox show` lists these roots (`codex.outside-home`); the hook
   still denies the agent's own reads there. A directory you cannot list inside the
   project or a home read root still stops Codex on Linux. Codex on Linux also runs its
-  own executable inside the sandbox, so it starts commands only when installed under
-  a read root (npm under `/usr` or `~/.nvm`, or `~/.local/bin`).
+  own executable inside the sandbox, so on Linux the profile lets commands read the
+  executable `codex` on `PATH` starts (through npm's launcher, the platform binary),
+  listed as `codex.own-binary`. Run `moat sandbox sync` after installing or moving
+  Codex. When `codex` is not on `PATH`, `moat sandbox show` says so and Codex starts
+  commands only when installed under a read root. An executable inside a denied path,
+  such as the Codex home where Codex's standalone installer puts it, stays denied
+  (a deny wins), so Codex on Linux starts no command; `show` says that too.
 - **Cursor** (`sandbox.json` next to `hooks.json`: `~/.cursor`, or `$CURSOR_CONFIG_DIR`):
   `type: "workspace_readwrite"`, `readBoundary: "workspace"`, `additionalReadPaths`
   (the read roots and read allow rules), `additionalReadwritePaths` (write allow rules
