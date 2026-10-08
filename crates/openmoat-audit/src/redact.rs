@@ -1,13 +1,18 @@
 //! Best-effort removal of credential material before anything is persisted.
 //!
-//! The audit log records *what was attempted*, never the secret itself. The
-//! patterns cover the token formats that routinely appear in shell commands;
-//! policy still blocks the dangerous cases regardless of what is logged here.
+//! The audit log records *what was attempted*, never the secret itself. Two
+//! passes run over every text: the exact values of the secrets OpenMoat knows
+//! ([`KnownSecrets`]) are masked first, then the patterns, which cover the token
+//! formats that routinely appear in shell commands. Policy still blocks the
+//! dangerous cases regardless of what is logged here.
 
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use serde_json::Value;
+
+use crate::StoreError;
 
 const REPLACEMENT: &str = "[redacted]";
 
@@ -45,14 +50,92 @@ static PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
         .collect()
 });
 
+/// Values shorter than this many bytes are not masked by exact match: a short
+/// value (`admin`, `8080`) also occurs in ordinary text, and masking it there
+/// would destroy the record. The patterns still apply to such values.
+pub const MIN_SECRET_LEN: usize = 8;
+
+/// The exact values of the secrets OpenMoat knows (the policy's brokered
+/// secrets), replaced by `[redacted]` wherever they occur in any letter case,
+/// whatever their format. One automaton matches them all, so masking is linear
+/// in the text.
+/// [`KnownSecrets::default`] knows none. `Debug` prints no value.
+#[derive(Default)]
+pub struct KnownSecrets(Option<Regex>);
+
+impl std::fmt::Debug for KnownSecrets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("KnownSecrets")
+    }
+}
+
+impl KnownSecrets {
+    /// Mask `values`, except those shorter than [`MIN_SECRET_LEN`]. Fails only
+    /// when the values are too large to match together; the error names none.
+    pub fn new<'a>(values: impl IntoIterator<Item = &'a str>) -> Result<Self, StoreError> {
+        let mut values: Vec<&str> = values
+            .into_iter()
+            .filter(|v| v.len() >= MIN_SECRET_LEN)
+            .collect();
+        if values.is_empty() {
+            return Ok(Self(None));
+        }
+        // At each position the first alternative that matches wins, so a value
+        // that is a prefix of another must come after it.
+        values.sort_unstable_by(|a, b| b.len().cmp(&a.len()).then(a.cmp(b)));
+        values.dedup();
+        let alternation = values
+            .iter()
+            .map(|v| regex::escape(v))
+            .collect::<Vec<_>>()
+            .join("|");
+        // Any case: the proxy records a host lowercased, so a value sent as part
+        // of a host name would otherwise slip through.
+        // Not passed on: a regex error quotes its pattern, that is the values.
+        RegexBuilder::new(&alternation)
+            .case_insensitive(true)
+            .size_limit(64 << 20)
+            .build()
+            .map(|re| Self(Some(re)))
+            .map_err(|_| StoreError::Secrets)
+    }
+
+    /// [`redact`] after masking the known values. Idempotent.
+    #[must_use]
+    pub fn redact(&self, text: &str) -> String {
+        let masked = match &self.0 {
+            Some(re) => re.replace_all(text, REPLACEMENT),
+            None => Cow::Borrowed(text),
+        };
+        PATTERNS
+            .iter()
+            .fold(masked.into_owned(), |acc, (re, replacement)| {
+                re.replace_all(&acc, *replacement).into_owned()
+            })
+    }
+
+    /// [`redact_value`] after masking the known values.
+    #[must_use]
+    pub fn redact_value(&self, value: Value) -> Value {
+        match value {
+            Value::String(text) => Value::String(self.redact(&text)),
+            Value::Array(items) => {
+                Value::Array(items.into_iter().map(|v| self.redact_value(v)).collect())
+            }
+            Value::Object(map) => Value::Object(
+                map.into_iter()
+                    .map(|(key, item)| (key, self.redact_value(item)))
+                    .collect(),
+            ),
+            other => other,
+        }
+    }
+}
+
 /// Replace credential-looking substrings. Idempotent.
 #[must_use]
 pub fn redact(text: &str) -> String {
-    PATTERNS
-        .iter()
-        .fold(text.to_owned(), |acc, (re, replacement)| {
-            re.replace_all(&acc, *replacement).into_owned()
-        })
+    KnownSecrets::default().redact(text)
 }
 
 /// Redact every string leaf of a JSON document. Used on the structured action
@@ -60,21 +143,12 @@ pub fn redact(text: &str) -> String {
 /// JSON-escaped quotes and the result is re-encoded as valid JSON.
 #[must_use]
 pub fn redact_value(value: Value) -> Value {
-    match value {
-        Value::String(text) => Value::String(redact(&text)),
-        Value::Array(items) => Value::Array(items.into_iter().map(redact_value).collect()),
-        Value::Object(map) => Value::Object(
-            map.into_iter()
-                .map(|(key, item)| (key, redact_value(item)))
-                .collect(),
-        ),
-        other => other,
-    }
+    KnownSecrets::default().redact_value(value)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{redact, redact_value};
+    use super::{KnownSecrets, redact, redact_value};
     use serde_json::json;
 
     #[test]
@@ -128,6 +202,25 @@ mod tests {
         ] {
             assert_eq!(redact(cmd), cmd);
         }
+    }
+
+    /// Generated for the test; no real secret is used.
+    const FAKE: &str = "q7Zp-fake-9xK2mW4v";
+
+    #[test]
+    fn known_values_are_masked_whatever_their_format() {
+        let known = KnownSecrets::new([FAKE, "q7Zp-fake-9xK2mW4v-longer", "short"]).unwrap();
+        let text = format!("curl https://x.test/?k={FAKE}&n=1 /tmp/{FAKE}-longer/f short");
+        assert_eq!(
+            known.redact(&text),
+            "curl https://x.test/?k=[redacted]&n=1 /tmp/[redacted]/f short"
+        );
+        let host = format!("http://{}.x.test:80", FAKE.to_ascii_lowercase());
+        assert_eq!(known.redact(&host), "http://[redacted].x.test:80");
+        let doc = known.redact_value(json!({"mcp": {"args": [FAKE]}}));
+        assert_eq!(doc["mcp"]["args"][0], "[redacted]");
+        assert_eq!(format!("{known:?}"), "KnownSecrets");
+        assert_eq!(KnownSecrets::default().redact(FAKE), FAKE);
     }
 
     #[test]

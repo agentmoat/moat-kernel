@@ -292,6 +292,17 @@ something the alpha claims to stop.
   as it was at export time, no more. Exported cells are the redacted store cells.
   A secret shape that redaction learned after an event was recorded stays in that
   event.
+- **What audit redaction guarantees.** The value of a brokered secret of 8 bytes or
+  more never appears verbatim, in any letter case, in a row the proxy records, nor in
+  the row of a call the policy decides in `moat guard` when the secret has a `file`
+  or `env` source the guard can read. Known token formats are removed by pattern. Nothing else is guaranteed: a
+  secret OpenMoat does not hold (one only in the agent's environment or files) and of
+  no known format is stored as sent; so is a brokered value that was encoded (base64,
+  URL escapes), split, or shorter than 8 bytes; a keychain-sourced value is not
+  masked in guard rows; values from before a secret was added stay in old rows. The
+  matcher's copy of the values is not zeroed when the process exits. Redaction limits
+  what the log reveals; it does not stop the secret being sent, which is the policy's
+  and the proxy's job.
 
 ## 6. How the claims are tested
 

@@ -10,6 +10,7 @@ mod allow;
 mod allow_files;
 mod approvals;
 mod audit;
+mod canary;
 mod cli;
 mod closed_pipe;
 mod codex;

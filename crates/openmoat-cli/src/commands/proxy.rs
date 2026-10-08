@@ -115,10 +115,11 @@ impl Exit {
     /// or the audit log cannot be opened.
     pub(super) fn open(home: &Home, policy: Policy, ctx: EvalContext) -> Result<Self> {
         CompiledPolicy::compile(&policy, &ctx)?;
-        let broker = secrets::broker(&policy.secrets, &ctx.home)?;
+        let (broker, known) = secrets::broker(&policy.secrets, &ctx.home)?;
         let audit_path = home.audit_path();
         let store = Store::open_existing(&audit_path)
-            .with_context(|| format!("opening {}", audit_path.display()))?;
+            .with_context(|| format!("opening {}", audit_path.display()))?
+            .with_secrets(known);
         Ok(Self {
             policy,
             ctx,

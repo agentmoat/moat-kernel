@@ -147,6 +147,31 @@ fn secrets_are_redacted_before_storage() {
 }
 
 #[test]
+fn known_secret_values_are_masked_in_every_agent_text_and_the_chain_holds() {
+    /// Generated for the test; no real secret is used.
+    const FAKE: &str = "Zq81-fake-unknown-format-c3";
+    let known = KnownSecrets::new([FAKE]).unwrap();
+    let store = Store::open_in_memory().unwrap().with_secrets(known);
+    let d = decision(Verdict::Deny, "proxy-secret", &format!("to {FAKE}.x.test"));
+    let a = Action::Net {
+        url: format!("https://x.test/?k={FAKE}"),
+    };
+    let cwd = format!("/p/{FAKE}");
+    let id = store
+        .record(&NewEvent {
+            cwd: Some(&cwd),
+            ..sample(&d, &a)
+        })
+        .unwrap();
+    let event = store.get(id).unwrap().unwrap();
+    let stored = serde_json::to_string(&event).unwrap();
+    assert!(!stored.contains(FAKE), "{stored}");
+    assert_eq!(event.cwd.as_deref(), Some("/p/[redacted]"));
+    let report = store.verify_chain().unwrap();
+    assert!(report.broken.is_none() && report.events == 1);
+}
+
+#[test]
 fn recent_and_session_queries() {
     let store = Store::open_in_memory().unwrap();
     let d = decision(Verdict::Allow, "dev-shell", "ok");

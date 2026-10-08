@@ -12,7 +12,7 @@ use rusqlite::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{redact, redact_value};
+use crate::KnownSecrets;
 
 mod chain;
 mod export;
@@ -53,6 +53,9 @@ pub enum StoreError {
     /// The database file could not be created or restricted.
     #[error("audit database file: {0}")]
     Io(std::io::Error),
+    /// The known secret values are too large to match together (`KnownSecrets`).
+    #[error("the known secret values are too large to mask")]
+    Secrets,
     /// A cell of an exported event does not decode (verdict, rules or reasons).
     #[error("exported event {id}: {reason}")]
     Decode {
@@ -199,6 +202,8 @@ pub struct Store {
     /// The schema has the chain columns. Only a read-only handle on a database
     /// no newer build has opened yet lacks them.
     chained: bool,
+    /// Masked in every event this handle records.
+    secrets: KnownSecrets,
 }
 
 impl Store {
@@ -226,7 +231,11 @@ impl Store {
         let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         conn.busy_timeout(std::time::Duration::from_millis(BUSY_TIMEOUT_MS))?;
         let chained = schema::version(&conn)? >= 2;
-        Ok(Self { conn, chained })
+        Ok(Self {
+            conn,
+            chained,
+            secrets: KnownSecrets::default(),
+        })
     }
 
     /// A throwaway database for tests.
@@ -242,7 +251,14 @@ impl Store {
         Ok(Self {
             conn,
             chained: true,
+            secrets: KnownSecrets::default(),
         })
+    }
+
+    /// This handle, masking `secrets` in every event it records from now on.
+    #[must_use]
+    pub fn with_secrets(self, secrets: KnownSecrets) -> Self {
+        Self { secrets, ..self }
     }
 
     /// Append one decision and return its id.
@@ -252,11 +268,24 @@ impl Store {
 
     /// Append one decision with an explicit timestamp (milliseconds since the epoch).
     pub fn record_at(&self, event: &NewEvent<'_>, ts_ms: i64) -> Result<EventId, StoreError> {
+        // Every text the agent can influence is redacted here, in one place, so
+        // each writer (guard, proxy) and the export built from the rows are
+        // covered. The host, session and call ids and the tool name come from the
+        // host and stay as sent: the session's history is looked up by them.
+        let secrets = &self.secrets;
         let action_json = match event.action {
-            Some(action) => serde_json::to_string(&redact_value(serde_json::to_value(action)?))?,
+            Some(action) => {
+                serde_json::to_string(&secrets.redact_value(serde_json::to_value(action)?))?
+            }
             None => "null".to_owned(),
         };
-        let reasons: Vec<String> = event.decision.reasons.iter().map(|r| redact(r)).collect();
+        let reasons: Vec<String> = event
+            .decision
+            .reasons
+            .iter()
+            .map(|r| secrets.redact(r))
+            .collect();
+        let cwd = event.cwd.map(|c| secrets.redact(c));
         let rules = serde_json::to_string(&event.decision.rules)?;
         let reasons = serde_json::to_string(&reasons)?;
         // Reading the newest hash and appending must be one step, or two
@@ -271,7 +300,7 @@ impl Store {
             host: event.host,
             session_id: event.session_id,
             call_id: event.call_id,
-            cwd: event.cwd,
+            cwd: cwd.as_deref(),
             tool: event.tool,
             action: &action_json,
             verdict: event.decision.verdict.as_str(),

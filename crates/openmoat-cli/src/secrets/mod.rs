@@ -8,21 +8,37 @@
 mod keychain;
 
 use anyhow::{Context as _, Result};
+use openmoat_audit::KnownSecrets;
 use openmoat_core::{Secret, SecretSource};
 use openmoat_proxy::Broker;
 use zeroize::Zeroizing;
 
-/// A broker holding the value of every secret in `secrets`. `home` is the
-/// user's home directory in slash form, for `~/` file sources. Any secret that
-/// cannot be read stops the proxy from starting.
-pub fn broker(secrets: &[Secret], home: &str) -> Result<Broker> {
+/// A broker holding the value of every secret in `secrets`, and the same values
+/// for the audit log to mask. `home` is the user's home directory in slash
+/// form, for `~/` file sources. Any secret that cannot be read stops the proxy
+/// from starting.
+pub fn broker(secrets: &[Secret], home: &str) -> Result<(Broker, KnownSecrets)> {
     let mut held = Vec::with_capacity(secrets.len());
     for secret in secrets {
         let value = read(&secret.source, home)
             .with_context(|| format!("reading secret `{}`", secret.id))?;
         held.push((secret.clone(), value));
     }
-    Ok(Broker::new(held)?)
+    let known = KnownSecrets::new(held.iter().map(|(_, value)| value.as_str()))?;
+    Ok((Broker::new(held)?, known))
+}
+
+/// The values of `secrets` that `moat guard` masks in the audit log: those with
+/// a file or environment source that this process can read. A keychain read
+/// would start a program on every tool call; a secret that cannot be read is
+/// skipped, since the proxy, which needs it, refuses to start without it.
+pub fn known(secrets: &[Secret], home: &str) -> Result<KnownSecrets> {
+    let values: Vec<Zeroizing<String>> = secrets
+        .iter()
+        .filter(|s| !matches!(s.source, SecretSource::Keychain { .. }))
+        .filter_map(|s| read(&s.source, home).ok())
+        .collect();
+    Ok(KnownSecrets::new(values.iter().map(|v| v.as_str()))?)
 }
 
 fn read(source: &SecretSource, home: &str) -> Result<Zeroizing<String>> {
@@ -72,8 +88,14 @@ mod tests {
         let home = dir.path().to_str().unwrap().replace('\\', "/");
         let p = policy("{ file: ~/.config/t }");
         // Kept, the `\r\n` would have been refused as control characters.
-        let b = broker(&p.secrets, &home).unwrap();
+        let (b, known) = broker(&p.secrets, &home).unwrap();
         assert!(b.leak("b.test", VALUE.as_bytes()).is_some());
+        assert_eq!(known.redact(&format!("x{VALUE}x")), "x[redacted]x");
+        // The guard reads it too, and skips what it cannot read.
+        let known = super::known(&p.secrets, &home).unwrap();
+        assert_eq!(known.redact(VALUE), "[redacted]");
+        let missing = super::known(&policy("{ file: ~/nope }").secrets, &home).unwrap();
+        assert_eq!(missing.redact(VALUE), VALUE);
     }
 
     #[test]
