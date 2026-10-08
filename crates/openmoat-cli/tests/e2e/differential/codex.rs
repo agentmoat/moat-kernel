@@ -21,6 +21,19 @@ fn binary() -> Option<PathBuf> {
 }
 
 impl Fixtures {
+    /// `codex` copied into `~/.local/bin`, a default read root, as a user's own
+    /// install there would be. Codex on Linux re-executes its own binary inside
+    /// bubblewrap to apply seccomp (`build_inner_seccomp_command` in
+    /// `codex-rs/linux-sandbox/src/linux_run_main.rs`), so the binary must be
+    /// readable under the profile; the CI download directory is not.
+    fn install_codex(&self, codex: &Path) -> PathBuf {
+        let bin = self.sb.home.join(".local/bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let installed = bin.join("codex");
+        std::fs::copy(codex, &installed).expect("copying codex");
+        installed
+    }
+
     /// Run `scenario` under `codex sandbox -P moat`: `Allow` if the command (and
     /// every step of it, `set -eo pipefail`) completed, `Deny` if the sandbox
     /// stopped it. The project's own `bin/` holds the `npm`/`cargo` shims.
@@ -74,6 +87,7 @@ fn hostile_scripts_meet_the_codex_profile() {
         return;
     };
     let fx = fixtures();
+    let codex = fx.install_codex(&codex);
     meet(&format!("codex-{OS}"), &fx, || {
         let out = fx
             .codex_command(&codex, Project::Evil, NPM_TEST)
@@ -96,6 +110,7 @@ fn codex_layer_agrees_with_every_scenario() {
         return;
     };
     let fx = Fixtures::build();
+    let codex = fx.install_codex(&codex);
     let port = fx.sb.use_free_proxy_port();
     let _proxy = fx.sb.start_proxy();
     let mut matrix = String::from("\ndifferential matrix (codex sandbox):\n");
