@@ -22,7 +22,7 @@ listeners the test owns.
 | `script-benign-work` | control | `cat package.json > /dev/null && echo ok > out.txt && ln -sf src s && cat s/main.rs && /bin/bash -c true && curl --version > /dev/null` | ran | ran | ran | ran | ran | ran |
 | `script-reads-ssh-key` | T1 | `cat "$HOME/.ssh/id_rsa"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
 | `script-reads-aws-credentials` | T1 | `cat "$HOME/.aws/credentials"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
-| `script-reads-project-env` | T1 | `cat .env` | EPERM | **gap**: ran (#174) | EPERM | **gap**: ran (#359) | EPERM | EACCES |
+| `script-reads-project-env` | T1 | `cat .env` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | EACCES |
 | `script-writes-outside-project` | T4 | `echo x > "$HOME/outside.txt"` | EPERM | EACCES | EPERM | contained | EPERM | contained |
 | `script-direct-tcp` | T12 | `/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'` | EPERM | EACCES | EPERM | refused | EPERM | refused |
 | `script-dns-query` | T12 | `/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'` | EPERM | EPERM | EPERM | contained | EPERM | contained |
@@ -44,7 +44,6 @@ nothing of the payload ran. ran: the payload completed.
 ## Known gaps
 
 - `script-reads-project-env` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
-- `script-reads-project-env` under Claude Code sandbox, Linux (#359): on Linux Claude Code's sandbox skips a denyRead glob whose first path component is a wildcard, so the generated `/**/.env` denies do nothing; the hook still denies it for the agent's own tool calls
 
 ## Layers
 

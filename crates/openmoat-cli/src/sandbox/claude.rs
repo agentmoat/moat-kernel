@@ -16,6 +16,15 @@
 //!   the policy sets `sandbox.proxy_port`), sandboxed commands reach the
 //!   network only through those loopback ports (2.1.292; the sandboxing docs,
 //!   "Custom proxy configuration"), so with nothing listening they have none.
+//!
+//! On Linux bubblewrap mounts concrete paths, so the sandbox runtime expands a
+//! `denyRead` glob from its literal leading directory when each command starts
+//! and skips one that has none, such as `/**/.env` (`@anthropic-ai/sandbox-runtime`,
+//! "Glob pattern has no literal directory to start from"). A `Read(…)` deny
+//! rule is added to `denyRead` relative to the session's working directory
+//! (the settings reference: Read deny rules are merged into the sandbox; a
+//! relative path resolves against the current directory), so each `/**/…`
+//! read deny is also written as `Read(./**/…)`.
 
 mod settings;
 
@@ -60,15 +69,24 @@ pub struct Generated {
     pub sandbox: Map<String, Value>,
     /// Whether `permissions.blockReadsOutsideWorkingDirectories` must be on.
     pub block_reads: bool,
+    /// The `permissions.deny` rules OpenMoat owns (Linux only): every
+    /// `Read(./**/…)` rule, the spelling no other writer is expected to use.
+    pub read_rules: Vec<String>,
     /// Losses and allowances of this backend.
     pub report: Report,
 }
 
 /// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`]. With
-/// `proxy_port`, sandboxed commands' traffic goes to `moat proxy` there.
-pub fn generate(ir: &Enforcement, proxy_port: Option<u16>) -> Result<Generated> {
+/// `proxy_port`, sandboxed commands' traffic goes to `moat proxy` there; with
+/// `linux`, for bubblewrap.
+pub fn generate(ir: &Enforcement, proxy_port: Option<u16>, linux: bool) -> Result<Generated> {
     let mut report = Report::default();
     let filesystem = Filesystem::build(ir, &mut report)?;
+    let read_rules = if linux {
+        filesystem.read_rules(&mut report)
+    } else {
+        Vec::new()
+    };
     let network = match proxy_port {
         None => network(&ir.egress.net, &mut report),
         Some(port) => through_moat_proxy(&ir.egress.net, port, &mut report),
@@ -109,6 +127,7 @@ pub fn generate(ir: &Enforcement, proxy_port: Option<u16>) -> Result<Generated> 
     Ok(Generated {
         sandbox,
         block_reads,
+        read_rules,
         report,
     })
 }
@@ -298,6 +317,38 @@ impl Filesystem {
              and only the files below them are denied; renaming or deleting the directory \
              itself is left to the hook",
         );
+    }
+
+    /// The `Read(./**/…)` rules that make Linux deny what each `/**/…` read
+    /// deny names under the working directory, and what that leaves out.
+    fn read_rules(&self, report: &mut Report) -> Vec<String> {
+        let rules: Vec<String> = self
+            .deny_read
+            .iter()
+            .filter_map(|entry| entry.strip_prefix("/**/"))
+            .map(|rest| format!("Read(./**/{rest})"))
+            .collect();
+        if rules.is_empty() {
+            return rules;
+        }
+        report.loss(
+            Kind::FsRead,
+            "claude-code.linux-read-rules",
+            "on Linux these denies are also Claude Code `Read` deny rules, so its file tools \
+             refuse them in the working directory too, an exception the hook allows (such as \
+             `.env.example`) included"
+                .into(),
+        );
+        report.allowance(
+            Kind::FsRead,
+            "claude-code.linux-read-globs",
+            rules.clone(),
+            "on Linux Claude Code denies only the files these match under the session's working \
+             directory when each command starts: a file created after that, or one in another \
+             readable directory (`/add-dir`, a read root, outside the user directories), stays \
+             readable for sandboxed commands",
+        );
+        rules
     }
 
     fn into_json(self) -> Value {

@@ -81,8 +81,10 @@ something the alpha claims to stop.
 - **What the Standard tier does not cover.** It is as strong as each host's sandbox
   and OpenMoat's translation, and every host version bump must keep the generated keys
   working (`moat doctor` names a weakened setting; the differential suite executes
-  them, [EVIDENCE.md](EVIDENCE.md)). On Linux, Claude Code's sandbox skips the
-  generated `.env` denies, so a project script reads the project's `.env` (#359).
+  them, [EVIDENCE.md](EVIDENCE.md)). On Linux, Claude Code's sandbox denies a
+  project script the `.env` files that exist under the session's working directory when
+  the command starts (#359); one created later, or one in another readable directory
+  (`/add-dir`, a read root, a path outside the user directories), stays readable.
   Codex on Linux hides a `**/` deny's matches only after listing every directory below
   it, and runs no command when one is unreadable, so the generated profile repeats the
   `.env` denies only in the project and the read roots inside the home (#358): a
@@ -98,7 +100,8 @@ something the alpha claims to stop.
   and allowance; ADR-018 lists the open risks.
 - **Translation losses (stricter than the policy).** Neither host can re-allow
   `.env.example`, `.env.sample` or `.env.template` inside the `**/.env.*` deny, so
-  sandboxed commands cannot read them. Codex keeps `.git` read-only for sandboxed
+  sandboxed commands cannot read them; on Linux Claude Code's file tools refuse them
+  too. Codex keeps `.git` read-only for sandboxed
   commands and asks to run `git commit` outside. Claude Code's file tools refuse reads outside the
   working directories (`permissions.blockReadsOutsideWorkingDirectories`) where the
   hook would ask.
