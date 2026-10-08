@@ -216,7 +216,7 @@ fn evidence_table_is_current() {
          | `moat run`, macOS (Seatbelt) | verified by the `macos-14` and `macos-15-intel` CI jobs |\n\
          | `moat run`, Linux (Landlock + seccomp) | verified by the `ubuntu-latest` CI job (Linux 6.7 or later) |\n\
          | Claude Code sandbox and Codex profile, macOS | verified by the `standard tier (macos-14)` CI job |\n\
-         | Claude Code sandbox and Codex profile, Linux | verified by the `standard tier (ubuntu-latest)` CI job (bubblewrap and socat installed); Codex runs no command there (#358) |\n\
+         | Claude Code sandbox and Codex profile, Linux | verified by the `standard tier (ubuntu-latest)` CI job (bubblewrap and socat installed) |\n\
          | `moat run`, Windows | not run: `moat run` refuses on Windows, where OpenMoat generates no OS sandbox (#135) |\n\
          | Claude Code sandbox, Windows | not run: Claude Code's sandbox does not run on native Windows, so `moat init` writes no sandbox settings there ([SANDBOX.md](SANDBOX.md)) |\n\
          | Codex profile, Windows | not verified: the scripts and the project's `npm` shim are POSIX shell |\n\
@@ -348,7 +348,7 @@ pub mod executing {
         if out.completed {
             Some(Outcome::Ran)
         } else if shows("error building bubblewrap command") {
-            // Codex on Linux, before the payload starts (#358).
+            // Codex on Linux could not build its sandbox; nothing of the payload ran.
             Some(Outcome::SandboxError)
         } else if shows("returned error: 403") {
             Some(Outcome::Proxy403)

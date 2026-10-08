@@ -152,6 +152,9 @@ impl Plan {
     pub fn new(policy: &Policy) -> anyhow::Result<Self> {
         let (policy, default_read_roots) = with_read_roots(policy)?;
         let (home, real_home) = crate::context::home_spellings()?;
+        let homes: Vec<String> = std::iter::once(home.clone())
+            .chain(real_home.clone())
+            .collect();
         let ir = lower_for_hosts(
             &policy,
             &home,
@@ -163,7 +166,7 @@ impl Plan {
         let mut claude = claude::generate(&ir, proxy_port)?;
         let claude_settings = install::settings_path(openmoat_hosts::Host::ClaudeCode)?;
         claude::protect(&mut claude, &claude_settings);
-        let mut codex = codex::generate(&ir, proxy_port)?;
+        let mut codex = codex::generate(&ir, &homes, proxy_port)?;
         if let Some(codex_home) = codex_config_path()?.parent() {
             codex::protect(&mut codex, codex_home);
         }

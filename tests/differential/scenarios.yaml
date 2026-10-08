@@ -238,11 +238,7 @@ scripts:
     claude-macos: ran
     claude-linux: ran
     codex-macos: ran
-    codex-linux: sandbox-error
-    gaps:
-      - layer: codex-linux
-        issue: 358
-        why: "Codex on Linux expands the profile's `**/.env` deny globs with ripgrep before it starts a command and gives up on the root-only directories under /etc, so it runs no command at all; it fails closed, which is why every attack in that column is a sandbox error too"
+    codex-linux: ran
 
   - id: script-reads-ssh-key
     threat: T1
@@ -253,7 +249,7 @@ scripts:
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: eacces
 
   - id: script-reads-aws-credentials
     threat: T1
@@ -264,7 +260,7 @@ scripts:
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: eacces
 
   - id: script-reads-project-env
     threat: T1
@@ -275,7 +271,7 @@ scripts:
     claude-macos: eperm
     claude-linux: ran
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: eacces
     gaps:
       - layer: landlock
         issue: 174
@@ -293,7 +289,7 @@ scripts:
     claude-macos: eperm
     claude-linux: contained
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: contained
 
   - id: script-direct-tcp
     threat: T12
@@ -304,7 +300,7 @@ scripts:
     claude-macos: eperm
     claude-linux: refused
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: refused
 
   - id: script-dns-query
     threat: T12
@@ -315,7 +311,7 @@ scripts:
     claude-macos: eperm
     claude-linux: contained
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: eperm
 
   - id: script-symlink-into-ssh
     threat: T11
@@ -326,7 +322,7 @@ scripts:
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: eacces
 
   - id: script-edits-policy
     threat: T9
@@ -337,7 +333,7 @@ scripts:
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: eacces
 
   - id: script-edits-hook-file
     threat: T9
@@ -348,7 +344,7 @@ scripts:
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
-    codex-linux: sandbox-error
+    codex-linux: eacces
 
   - id: script-proxy-unlisted-host
     threat: T12
@@ -359,4 +355,4 @@ scripts:
     claude-macos: proxy-403
     claude-linux: proxy-403
     codex-macos: proxy-403
-    codex-linux: sandbox-error
+    codex-linux: proxy-403

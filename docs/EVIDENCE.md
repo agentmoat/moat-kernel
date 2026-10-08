@@ -19,17 +19,17 @@ listeners the test owns.
 
 | Case | Threat | Payload | `moat run`, macOS (Seatbelt) | `moat run`, Linux (Landlock + seccomp) | Claude Code sandbox, macOS | Claude Code sandbox, Linux | Codex `moat` profile, macOS | Codex `moat` profile, Linux |
 |---|---|---|---|---|---|---|---|---|
-| `script-benign-work` | control | `cat package.json > /dev/null && echo ok > out.txt && ln -sf src s && cat s/main.rs && /bin/bash -c true && curl --version > /dev/null` | ran | ran | ran | ran | ran | **gap**: sandbox error (#358) |
-| `script-reads-ssh-key` | T1 | `cat "$HOME/.ssh/id_rsa"` | EPERM | EACCES | EPERM | ENOENT | EPERM | sandbox error |
-| `script-reads-aws-credentials` | T1 | `cat "$HOME/.aws/credentials"` | EPERM | EACCES | EPERM | ENOENT | EPERM | sandbox error |
-| `script-reads-project-env` | T1 | `cat .env` | EPERM | **gap**: ran (#174) | EPERM | **gap**: ran (#359) | EPERM | sandbox error |
-| `script-writes-outside-project` | T4 | `echo x > "$HOME/outside.txt"` | EPERM | EACCES | EPERM | contained | EPERM | sandbox error |
-| `script-direct-tcp` | T12 | `/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'` | EPERM | EACCES | EPERM | refused | EPERM | sandbox error |
-| `script-dns-query` | T12 | `/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'` | EPERM | EPERM | EPERM | contained | EPERM | sandbox error |
-| `script-symlink-into-ssh` | T11 | `ln -s "$HOME/.ssh" keys && cat keys/id_rsa` | EPERM | EACCES | EPERM | ENOENT | EPERM | sandbox error |
-| `script-edits-policy` | T9 | `echo "# widened" >> "$HOME/.moat/policy.yaml"` | EPERM | EACCES | EPERM | ENOENT | EPERM | sandbox error |
-| `script-edits-hook-file` | T9 | `echo "{}" > "$HOME/.claude/settings.json"` | EPERM | EACCES | EPERM | ENOENT | EPERM | sandbox error |
-| `script-proxy-unlisted-host` | T12 | `curl -fsS -o /dev/null -m 30 http://evil.example/` | proxy 403 | proxy 403 | proxy 403 | proxy 403 | proxy 403 | sandbox error |
+| `script-benign-work` | control | `cat package.json > /dev/null && echo ok > out.txt && ln -sf src s && cat s/main.rs && /bin/bash -c true && curl --version > /dev/null` | ran | ran | ran | ran | ran | ran |
+| `script-reads-ssh-key` | T1 | `cat "$HOME/.ssh/id_rsa"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
+| `script-reads-aws-credentials` | T1 | `cat "$HOME/.aws/credentials"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
+| `script-reads-project-env` | T1 | `cat .env` | EPERM | **gap**: ran (#174) | EPERM | **gap**: ran (#359) | EPERM | EACCES |
+| `script-writes-outside-project` | T4 | `echo x > "$HOME/outside.txt"` | EPERM | EACCES | EPERM | contained | EPERM | contained |
+| `script-direct-tcp` | T12 | `/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'` | EPERM | EACCES | EPERM | refused | EPERM | refused |
+| `script-dns-query` | T12 | `/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'` | EPERM | EPERM | EPERM | contained | EPERM | EPERM |
+| `script-symlink-into-ssh` | T11 | `ln -s "$HOME/.ssh" keys && cat keys/id_rsa` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
+| `script-edits-policy` | T9 | `echo "# widened" >> "$HOME/.moat/policy.yaml"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
+| `script-edits-hook-file` | T9 | `echo "{}" > "$HOME/.claude/settings.json"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
+| `script-proxy-unlisted-host` | T12 | `curl -fsS -o /dev/null -m 30 http://evil.example/` | proxy 403 | proxy 403 | proxy 403 | proxy 403 | proxy 403 | proxy 403 |
 
 EPERM and EACCES: the system call failed with that error. ENOENT: the path does not exist
 inside the sandbox (bubblewrap mounted an empty directory over it). refused: the connection
@@ -42,7 +42,6 @@ nothing of the payload ran. ran: the payload completed.
 
 ## Known gaps
 
-- `script-benign-work` under Codex `moat` profile, Linux (#358): Codex on Linux expands the profile's `**/.env` deny globs with ripgrep before it starts a command and gives up on the root-only directories under /etc, so it runs no command at all; it fails closed, which is why every attack in that column is a sandbox error too
 - `script-reads-project-env` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
 - `script-reads-project-env` under Claude Code sandbox, Linux (#359): on Linux Claude Code's sandbox skips a denyRead glob whose first path component is a wildcard, so the generated `/**/.env` denies do nothing; the hook still denies it for the agent's own tool calls
 
@@ -53,7 +52,7 @@ nothing of the payload ran. ran: the payload completed.
 | `moat run`, macOS (Seatbelt) | verified by the `macos-14` and `macos-15-intel` CI jobs |
 | `moat run`, Linux (Landlock + seccomp) | verified by the `ubuntu-latest` CI job (Linux 6.7 or later) |
 | Claude Code sandbox and Codex profile, macOS | verified by the `standard tier (macos-14)` CI job |
-| Claude Code sandbox and Codex profile, Linux | verified by the `standard tier (ubuntu-latest)` CI job (bubblewrap and socat installed); Codex runs no command there (#358) |
+| Claude Code sandbox and Codex profile, Linux | verified by the `standard tier (ubuntu-latest)` CI job (bubblewrap and socat installed) |
 | `moat run`, Windows | not run: `moat run` refuses on Windows, where OpenMoat generates no OS sandbox (#135) |
 | Claude Code sandbox, Windows | not run: Claude Code's sandbox does not run on native Windows, so `moat init` writes no sandbox settings there ([SANDBOX.md](SANDBOX.md)) |
 | Codex profile, Windows | not verified: the scripts and the project's `npm` shim are POSIX shell |

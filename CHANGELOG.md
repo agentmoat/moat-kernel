@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Codex on Linux runs commands again under the profile `moat init` generates (#358). Before it starts a command, Codex on Linux lists every file below each deny glob with `rg --files` so bubblewrap can hide the matches, and it refuses to start the command when ripgrep reports any error; the profile repeated the `**/.env`, `**/.env.*` and `**/.envrc` denies below every read root, and root-only directories such as `/etc/ssl/private` and `/tmp/systemd-private-*` stopped every command. The profile now repeats those denies only in the project and below the read roots inside the home; `moat sandbox show` lists the roots outside it (`codex.outside-home`), where the hook still denies the agent's own reads. docs/EVIDENCE.md's Codex Linux column now shows what the operating system does to each hostile script instead of a sandbox error.
+
 ### Added
 - docs/EVIDENCE.md now covers the Standard tier (#346): CI's new `standard tier` job (macOS and Linux) runs the same hostile project scripts as `npm test` under Claude Code's sandbox and Codex's `moat` profile, each configured with the settings `moat init` generates, and asserts what the operating system did (`EPERM`, `EACCES`, the agent's proxy's 403) and that nothing was read, written or reached. Claude Code 2.1.290 runs headless (`claude -p --bare`) against a local fake Anthropic API, and codex-cli 0.160.1 runs `codex sandbox -P moat`; no account, API key or internet is used, and `scripts/ci/host-binaries.sh` fetches both binaries pinned by checksum. On Linux it found two gaps, now listed there: Claude Code's sandbox skips the generated `.env` denies, so a script reads the project `.env` (#359), and Codex runs no command at all under the generated profile, failing closed (#358). Windows is listed as not run, with the reason.
 
