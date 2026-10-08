@@ -130,13 +130,6 @@ OpenMoat does not replace the agent's prompt or sandbox. It fills the gaps betwe
 | Blocks the call when its own check errors or hangs | – | – | yes (the agent still runs the call if the hook binary is missing; THREAT_MODEL §5) |
 | Published tests of what the OS layer stops | no | no | yes, [docs/EVIDENCE.md](docs/EVIDENCE.md) |
 
-Other hook-based tools also check agent tool calls. As of October 2026 their own docs
-say [Sage](https://github.com/gendigitalinc/sage/blob/main/docs/user-guide.md),
-[Numbat](https://github.com/perplexityai/numbat/blob/main/docs/enforcement.md) and
-[ggshield's AI hooks](https://docs.gitguardian.com/endpoint-protection/ai-hooks) allow
-the call when their check fails, and none of them configures the agents' OS sandboxes.
-OpenMoat supports fewer agents than some of them.
-
 ## Supported agents
 
 | Agent | Status |
