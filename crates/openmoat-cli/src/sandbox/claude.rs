@@ -25,6 +25,15 @@
 //! (the settings reference: Read deny rules are merged into the sandbox; a
 //! relative path resolves against the current directory), so each `/**/…`
 //! read deny is also written as `Read(./**/…)`.
+//!
+//! Write lists get no expansion: the runtime drops every `denyWrite` entry that
+//! still has a glob once a trailing `/**` is removed ("Skipping glob write
+//! pattern on Linux"), `Edit(…)` deny rules included, which Claude Code merges
+//! into `denyWrite`. A rule without a glob survives and resolves against the
+//! working directory like a `Read` rule, so a `/**/<name>` write deny is also
+//! written as `Edit(./<name>)`. Bubblewrap mounts a missing deny path's first
+//! missing component read-only, so only a name directly in the working
+//! directory gets a rule: `Edit(./bin/moat)` would make a missing `bin` read-only.
 
 mod settings;
 
@@ -70,8 +79,9 @@ pub struct Generated {
     /// Whether `permissions.blockReadsOutsideWorkingDirectories` must be on.
     pub block_reads: bool,
     /// The `permissions.deny` rules OpenMoat owns (Linux only): every
-    /// `Read(./**/…)` rule, the spelling no other writer is expected to use.
-    pub read_rules: Vec<String>,
+    /// `Read(./**/…)` rule and every `Edit(./<name>)` rule naming one entry of
+    /// the working directory, spellings no other writer is expected to use.
+    pub deny_rules: Vec<String>,
     /// Losses and allowances of this backend.
     pub report: Report,
 }
@@ -82,8 +92,10 @@ pub struct Generated {
 pub fn generate(ir: &Enforcement, proxy_port: Option<u16>, linux: bool) -> Result<Generated> {
     let mut report = Report::default();
     let filesystem = Filesystem::build(ir, &mut report)?;
-    let read_rules = if linux {
-        filesystem.read_rules(&mut report)
+    let deny_rules = if linux {
+        let mut rules = filesystem.read_rules(&mut report);
+        rules.extend(filesystem.edit_rules(&mut report));
+        rules
     } else {
         Vec::new()
     };
@@ -127,7 +139,7 @@ pub fn generate(ir: &Enforcement, proxy_port: Option<u16>, linux: bool) -> Resul
     Ok(Generated {
         sandbox,
         block_reads,
-        read_rules,
+        deny_rules,
         report,
     })
 }
@@ -348,6 +360,39 @@ impl Filesystem {
              readable directory (`/add-dir`, a read root, outside the user directories), stays \
              readable for sandboxed commands",
         );
+        rules
+    }
+
+    /// The `Edit(./<name>)` rules that make Linux deny each `/**/<name>` write
+    /// deny directly in the working directory, and what Linux leaves out.
+    fn edit_rules(&self, report: &mut Report) -> Vec<String> {
+        let mut rules = Vec::new();
+        let mut dropped = Vec::new();
+        for entry in &self.deny_write {
+            let path = entry.strip_suffix("/**").unwrap_or(entry);
+            if !has_glob(path) {
+                continue;
+            }
+            if let Some(name) = path.strip_prefix("/**/")
+                && !name.contains('/')
+                && !has_glob(name)
+            {
+                push_unique(&mut rules, format!("Edit(./{name})"));
+            }
+            dropped.push(entry.clone());
+        }
+        if !dropped.is_empty() {
+            report.allowance(
+                Kind::FsWrite,
+                "claude-code.linux-write-globs",
+                dropped,
+                "on Linux Claude Code drops every glob in denyWrite, so sandboxed commands may \
+                 write these, except a name directly in the session's working directory, which \
+                 an `Edit(./…)` rule denies there (Claude Code's file tools obey it too), and \
+                 that directory's `.git` hooks and config and `.claude` settings, which Claude \
+                 Code keeps read-only itself",
+            );
+        }
         rules
     }
 

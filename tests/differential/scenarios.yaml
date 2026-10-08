@@ -220,6 +220,7 @@ benign:
 #              sandbox mounted the path read-only
 #   enoent     the path does not exist inside the sandbox (bubblewrap mounted
 #              an empty directory over it)
+#   eexist     the sandbox mounted a file where the payload creates a directory
 #   refused    the connection was refused in the sandbox's own network namespace
 #   proxy-403  the request reached the layer's proxy, which answered 403
 #   contained  the payload completed, but its write or datagram stayed inside
@@ -301,16 +302,16 @@ scripts:
     seatbelt: eperm
     landlock: ran
     claude-macos: eperm
-    claude-linux: ran
+    claude-linux: eacces
     codex-macos: eperm
-    codex-linux: eacces
+    codex-linux: ran
     gaps:
       - layer: landlock
         issue: 174
         why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .envrc can be created (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
-      - layer: claude-linux
-        issue: 372
-        why: "Claude Code's Linux sandbox drops every glob in denyWrite"
+      - layer: codex-linux
+        issue: 377
+        why: "Codex on Linux hides only the files a deny glob matches when the command starts, so a missing .envrc can be created"
 
   - id: script-writes-project-policy
     threat: T9
@@ -319,16 +320,13 @@ scripts:
     seatbelt: eperm
     landlock: ran
     claude-macos: eperm
-    claude-linux: ran
+    claude-linux: erofs
     codex-macos: eperm
-    codex-linux: erofs
+    codex-linux: eexist
     gaps:
       - layer: landlock
         issue: 174
         why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .moat can be written (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
-      - layer: claude-linux
-        issue: 372
-        why: "Claude Code's Linux sandbox drops every glob in denyWrite"
 
   - id: script-plants-git-hook
     threat: T6

@@ -30,6 +30,9 @@ pub enum Outcome {
     /// A call failed with `ENOENT`: bubblewrap mounted an empty directory over
     /// the path, so it does not exist inside the sandbox.
     Enoent,
+    /// A call failed with `EEXIST`: the sandbox mounted a file where the
+    /// payload creates a directory.
+    Eexist,
     /// The connection was refused: the sandbox has its own network namespace,
     /// where nothing listens.
     Refused,
@@ -54,6 +57,7 @@ impl Outcome {
             Self::Eacces => "EACCES",
             Self::Erofs => "EROFS",
             Self::Enoent => "ENOENT",
+            Self::Eexist => "EEXIST",
             Self::Refused => "refused",
             Self::Proxy403 => "proxy 403",
             Self::Contained => "contained",
@@ -205,7 +209,8 @@ fn evidence_table_is_current() {
     }
     doc.push_str(
         "\nEPERM, EACCES and EROFS: the system call failed with that error (EROFS: the \
-         sandbox\nmounted the path read-only). ENOENT: the path does not exist\ninside the sandbox (bubblewrap mounted an empty directory over it). refused: the \
+         sandbox\nmounted the path read-only). ENOENT: the path does not exist\ninside the sandbox (bubblewrap mounted an empty directory over it). EEXIST: the sandbox \
+         mounted a\nfile where the payload creates a directory. refused: the \
          connection\nwas refused inside the sandbox's own network namespace. proxy 403: the \
          layer's proxy refused\nthe request (OpenMoat's under `moat run`, the agent's own, which \
          allows only the policy's\nhosts, under the Standard tier). contained: the payload \
@@ -391,6 +396,8 @@ pub mod executing {
             Some(Outcome::Erofs)
         } else if shows("No such file or directory") || shows("Directory nonexistent") {
             Some(Outcome::Enoent)
+        } else if shows("File exists") {
+            Some(Outcome::Eexist)
         } else if shows("Connection refused") {
             Some(Outcome::Refused)
         } else {
