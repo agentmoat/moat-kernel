@@ -43,7 +43,7 @@ answer from the [roadmap](ROADMAP.md).
 
 | # | Class | Alpha (decide-only) | Beta |
 |---|---|---|---|
-| T1 | Secret exfiltration via shell (`curl -d @~/.ssh/id_rsa …`) | `secrets-paths` denies reads and writes of secret paths, also through `cd`, relative operands, `~name`, symlinks and nested shells; unlisted hosts are denied by `default.net` | Sandbox with no read access to secret paths and no direct network |
+| T1 | Secret exfiltration via shell (`curl -d @~/.ssh/id_rsa …`) | `secrets-paths` denies reads and writes of secret paths, also through `cd`, relative operands, glob operands, `~name`, symlinks and nested shells; unlisted hosts are denied by `default.net` | Sandbox with no read access to secret paths and no direct network |
 | T2 | Secret exfiltration via file tools (`Read ~/.aws/credentials`) | The same path rules for Claude Code `Read`/`Glob`/`Grep`/`LSP`, Cursor `beforeReadFile` and `preToolUse` `Read`/`Grep`/`Glob`, and MCP path arguments | Same, plus the sandbox |
 | T3 | Secret exfiltration via the environment (`echo $OPENAI_API_KEY`, `env`) | `env-secrets` denies reads of secret-shaped names; `env-dump` denies argument-less `env`, `printenv`, `set`, `export`, `declare`, `typeset` | Scrubbed environment |
 | T4 | Destructive git and filesystem operations | `destructive` denies force pushes in every spelling, remote branch deletion, `reset --hard`, `clean -fdx`, `branch -D`, `stash drop/clear`, `rm -rf` of `/` and `~`, `sudo`, `mkfs`, `dd if=`; recursive `rm` and discarding checkouts ask | Same |
@@ -276,6 +276,16 @@ something the alpha claims to stop.
   allowed.
 - **TOCTOU and hard links.** A link swapped between the check and the command
   running, and hard links, are not seen (ADR-009).
+- **Glob operands are expanded at decision time.** An unquoted `* ? [` path operand
+  is checked as every file it matches when the hook runs (POLICY.md §4), with
+  `bash` defaults (no `dotglob`, `nocaseglob` or `extglob`; `**` as `globstar`). A
+  file created between the check and the command that a pattern's last component
+  matches is not seen. Shell options that change matching (`shopt -s dotglob
+  nocaseglob extglob`, `zsh` `EXTENDED_GLOB` and `GLOB_DOTS`), `zsh` qualifiers and
+  `<1-9>` ranges, and brace expansion (`.{env,x}`) are not modelled. Claude Code
+  `Glob` and `Grep` are checked as reads of their search directory, as before:
+  `Glob` returns names, not contents, and `Grep` searches the whole directory
+  whatever its `glob` filter.
 - **The terminal check is not a boundary.** `moat allow`, `moat trust`, `moat uninstall` and `moat doctor --accept`
   check for a TTY. The `kernel-self` rules and the lock are what stop an agent from
   re-pinning or granting itself anything.

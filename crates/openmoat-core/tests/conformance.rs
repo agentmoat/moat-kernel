@@ -42,6 +42,9 @@ struct Fixture {
     /// Symlink path → target, as the filesystem would resolve it.
     #[serde(default)]
     links: BTreeMap<String, String>,
+    /// Files that exist, for the expansion of glob operands (`cat .en?`).
+    #[serde(default)]
+    files: Vec<String>,
     /// Working directory and project for this fixture instead of `/p` and `/p`.
     context: Option<FixtureContext>,
     /// Earlier calls of the same session that ran, oldest first: the action is
@@ -232,6 +235,7 @@ fn default_policy_conformance() {
         };
         let links = MapPathResolver {
             links: fixture.links.clone(),
+            files: fixture.files.clone(),
         };
         let merged = fixture.repo.as_ref().map(|r| {
             RepoPolicy::parse(&r.policy)

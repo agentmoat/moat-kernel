@@ -79,7 +79,8 @@ pub fn collapse(path: &str) -> String {
     format!("{root}{}", out.join("/"))
 }
 
-fn split_root(path: &str) -> (String, &str) {
+/// The root of a canonical path (`/`, `C:/` or `//server/`) and the rest.
+pub(crate) fn split_root(path: &str) -> (String, &str) {
     if let Some(drive) = drive_prefix(path) {
         let rest = &path[2..];
         let root = format!("{}:/", drive[..1].to_ascii_uppercase());

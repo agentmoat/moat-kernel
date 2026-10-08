@@ -6,12 +6,13 @@
 //! is expressed through per-kind `defaults`, never through a deny rule.
 
 use crate::action::{Action, AtomicAction};
+use crate::expand::Expansion;
 use crate::kind::Kind;
 use crate::pattern::{GlobPattern, ShellPattern, any_match};
 use crate::policy::{Policy, PolicyError, RuleGroup};
 use crate::programs::{self, NoResolver, ProgramResolver};
 use crate::realpath::PathResolver;
-use crate::shell::{ParseOutcome, ShellContext, classify};
+use crate::shell::{ParseOutcome, ShellContext, classify_globs};
 use crate::verdict::{Decision, Verdict};
 use crate::{host, paths};
 
@@ -230,18 +231,21 @@ impl EvalContext {
     }
 }
 
-/// Classify an [`Action`] into atomic actions for the given context.
+/// Classify an [`Action`] into atomic actions for the given context, and list
+/// the reads and writes among them whose path is a glob the shell expands.
 #[must_use]
-pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
-    match action {
-        Action::Shell { command } => classify(
-            command,
-            &ShellContext {
-                home: &ctx.home,
-                project: ctx.project.as_deref(),
-                cwd: &[Some(ctx.cwd.clone())],
-            },
-        ),
+pub fn classify_action(action: &Action, ctx: &EvalContext) -> (ParseOutcome, Vec<AtomicAction>) {
+    let outcome = match action {
+        Action::Shell { command } => {
+            return classify_globs(
+                command,
+                &ShellContext {
+                    home: &ctx.home,
+                    project: ctx.project.as_deref(),
+                    cwd: &[Some(ctx.cwd.clone())],
+                },
+            );
+        }
         Action::ForeignShell { shell, .. } => ParseOutcome::Unparseable {
             reason: format!("{shell} commands are not parsed; only POSIX shell is classified"),
             atoms: Vec::new(),
@@ -321,7 +325,29 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
                 None => ParseOutcome::Parsed(atoms),
             }
         }
+    };
+    (outcome, Vec::new())
+}
+
+/// The atoms of `action` in `ctx` with an extra atom for every path a glob
+/// operand names (`crate::expand`) and for every read or write `paths`
+/// resolves through a symlink, and why part of the action cannot be checked.
+fn checked_atoms(
+    action: &Action,
+    ctx: &EvalContext,
+    paths: &dyn PathResolver,
+) -> (Vec<AtomicAction>, Option<String>) {
+    let (outcome, globs) = classify_action(action, ctx);
+    let (mut atoms, unparsed) = outcome.into_parts();
+    let mut expansion = Expansion::new(paths);
+    for glob in &globs {
+        if let Some(pattern) = glob.subject() {
+            let named = expansion.paths(pattern);
+            atoms.extend(named.into_iter().filter_map(|path| glob.with_path(path)));
+        }
     }
+    let unexpanded = expansion.overflow();
+    (with_resolved_paths(atoms, paths), unparsed.or(unexpanded))
 }
 
 impl CompiledPolicy<'_> {
@@ -334,16 +360,17 @@ impl CompiledPolicy<'_> {
     }
 
     /// The atomic actions [`Self::decide_with`] evaluates for `action`, with an
-    /// extra atom for every read or write `paths` resolves through a symlink,
-    /// and the reason when part of the action cannot be classified (`ask`).
+    /// extra atom for every path an unquoted glob operand names in the
+    /// directories `paths` lists, and for every read or write `paths` resolves
+    /// through a symlink; and the reason when part of the action cannot be
+    /// classified or a glob not expanded in full (`ask`).
     #[must_use]
     pub fn atoms(
         &self,
         action: &Action,
         paths: &dyn PathResolver,
     ) -> (Vec<AtomicAction>, Option<String>) {
-        let (atoms, unparsed) = classify_action(action, &self.ctx).into_parts();
-        (with_resolved_paths(atoms, paths), unparsed)
+        checked_atoms(action, &self.ctx, paths)
     }
 
     /// Decide one host action, resolving shell programs through `resolver` so
@@ -395,16 +422,11 @@ impl CompiledPolicy<'_> {
 fn with_resolved_paths(atoms: Vec<AtomicAction>, paths: &dyn PathResolver) -> Vec<AtomicAction> {
     let resolved: Vec<AtomicAction> = atoms
         .iter()
-        .filter_map(|atom| match atom {
-            AtomicAction::FsRead { path } => paths
-                .resolve(path)
-                .filter(|real| real != path)
-                .map(|path| AtomicAction::FsRead { path }),
-            AtomicAction::FsWrite { path } => paths
-                .resolve(path)
-                .filter(|real| real != path)
-                .map(|path| AtomicAction::FsWrite { path }),
-            _ => None,
+        .filter_map(|atom| {
+            let (AtomicAction::FsRead { path } | AtomicAction::FsWrite { path }) = atom else {
+                return None;
+            };
+            atom.with_path(paths.resolve(path).filter(|real| real != path)?)
         })
         .collect();
     atoms.into_iter().chain(resolved).collect()

@@ -1,4 +1,5 @@
 mod fetch;
+mod glob;
 mod taint;
 
 use super::*;
@@ -233,6 +234,7 @@ fn symlinked_paths_are_checked_at_both_locations() {
             ("/p/s".to_owned(), "/h/.ssh".to_owned()),
             ("/p/lib".to_owned(), "/p/vendor/lib".to_owned()),
         ]),
+        ..MapPathResolver::default()
     };
     let decide = |a: &Action| compiled.decide_with(a, &NoResolver, &links);
     let d = decide(&shell("cat ./s/id_rsa"));
@@ -390,6 +392,7 @@ fn roots_match_under_their_resolved_spelling_too() {
             .into_iter()
             .map(|(l, t)| (l.to_owned(), t.to_owned()))
             .collect(),
+        ..MapPathResolver::default()
     };
     let compiled = CompiledPolicy::compile(&p, &linked).unwrap();
     let decide = |a: Action| {

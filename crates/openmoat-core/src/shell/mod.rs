@@ -10,7 +10,7 @@
 //! | a decoder stage piped into an interpreter reading stdin (`decoders.rs`) | canonical `Pipeline { <decoder> -d \| <interpreter> }` |
 //! | leading `VAR=value`, `export`/`declare`/`set` assignments | `EnvSet` |
 //! | `$VAR` / `${VAR}` references, `printenv NAME` | `EnvRead` |
-//! | path-looking arguments, relative operands (`operands.rs`), `<` targets, `source`/`.` files | `FsRead`, one per directory `cd` may have moved to (`cwd.rs`) |
+//! | path-looking arguments, relative operands (`operands.rs`), `<` targets, `source`/`.` files | `FsRead`, one per directory `cd` may have moved to (`cwd.rs`); also listed as a glob when unquoted `* ? [` make the shell expand it (`crate::expand`) |
 //! | `>`/`>>`/`&>` targets, `tee`, destructive/destination args | `FsWrite` |
 //! | URLs with any host, bare dotted names under a known TLD, IPv4 literals (`crate::host`) | `Net` |
 //! | `$( … )`, backticks, `sh -c` (any option spelling, `invocation.rs`), `eval`, `xargs`, `sudo`, `env`, … | nested classification |
@@ -59,7 +59,7 @@ mod text;
 pub(crate) mod tokens;
 
 use crate::action::AtomicAction;
-use crate::lexer::LexError;
+use crate::lexer::{LexError, Token};
 use crate::paths;
 
 /// Result of classifying a command line.
@@ -122,11 +122,20 @@ pub const MAX_ATOMS: usize = 2048;
 pub const MAX_DIRS: usize = 16;
 
 /// Classify a shell command string into atomic actions.
+#[cfg(test)]
 #[must_use]
 pub fn classify(command: &str, ctx: &ShellContext<'_>) -> ParseOutcome {
+    classify_globs(command, ctx).0
+}
+
+/// Classify a shell command string into atomic actions, and list the reads
+/// and writes among them whose path is a glob the shell expands
+/// (`crate::expand`).
+#[must_use]
+pub fn classify_globs(command: &str, ctx: &ShellContext<'_>) -> (ParseOutcome, Vec<AtomicAction>) {
     let mut sink = Sink::default();
     let stopped = commands::classify_into(command, ctx, &mut sink, 0).err();
-    match sink.skipped.or(stopped) {
+    let outcome = match sink.skipped.or(stopped) {
         Some(e) => ParseOutcome::Unparseable {
             reason: e.to_string(),
             atoms: sink.atoms,
@@ -136,7 +145,8 @@ pub fn classify(command: &str, ctx: &ShellContext<'_>) -> ParseOutcome {
             atoms: Vec::new(),
         },
         None => ParseOutcome::Parsed(sink.atoms),
-    }
+    };
+    (outcome, sink.globs)
 }
 
 /// Why a command line could not be classified safely; the engine turns it into `ask`.
@@ -165,6 +175,12 @@ pub(crate) struct Sink {
     atoms: Vec<AtomicAction>,
     /// The first part classification went past without understanding it.
     skipped: Option<ClassifyError>,
+    /// Words of the command line, nested commands included, that the shell
+    /// expands as globs ([`crate::lexer::Word::glob`]).
+    glob_words: Vec<String>,
+    /// Read and write atoms whose path is one of those globs: the engine
+    /// evaluates every file it matches as well as the literal path.
+    globs: Vec<AtomicAction>,
 }
 
 impl Sink {
@@ -193,12 +209,21 @@ impl Sink {
         })
     }
 
+    /// Remember the words of `tokens` the shell expands as globs.
+    pub(crate) fn note_globs(&mut self, tokens: &[Token]) {
+        for token in tokens {
+            if let Token::Word(w) = token
+                && w.glob
+                && !self.glob_words.contains(&w.text)
+            {
+                self.glob_words.push(w.text.clone());
+            }
+        }
+    }
+
     /// An `FsRead` for every path `word` may name.
     pub(crate) fn read(&mut self, ctx: &ShellContext<'_>, word: &str) -> Result<(), ClassifyError> {
-        for path in self.paths(ctx, word) {
-            self.push(AtomicAction::FsRead { path })?;
-        }
-        Ok(())
+        self.fs(ctx, word, |path| AtomicAction::FsRead { path })
     }
 
     /// An `FsWrite` for every path `word` may name.
@@ -207,8 +232,27 @@ impl Sink {
         ctx: &ShellContext<'_>,
         word: &str,
     ) -> Result<(), ClassifyError> {
+        self.fs(ctx, word, |path| AtomicAction::FsWrite { path })
+    }
+
+    /// An atom for every path `word` may name, also kept as a glob when `word`
+    /// is, or ends, a word the shell expands (`@file` and `--out=FILE` keep
+    /// the glob of their word). An operand with the text of a glob elsewhere
+    /// in the command line is expanded too: stricter, never looser.
+    fn fs(
+        &mut self,
+        ctx: &ShellContext<'_>,
+        word: &str,
+        atom: fn(String) -> AtomicAction,
+    ) -> Result<(), ClassifyError> {
+        let glob =
+            word.contains(['*', '?', '[']) && self.glob_words.iter().any(|w| w.ends_with(word));
         for path in self.paths(ctx, word) {
-            self.push(AtomicAction::FsWrite { path })?;
+            let atom = atom(path);
+            if glob && !self.globs.contains(&atom) {
+                self.globs.push(atom.clone());
+            }
+            self.push(atom)?;
         }
         Ok(())
     }

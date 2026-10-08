@@ -177,7 +177,7 @@ for each and the CLI implements it:
 | Trait | ADR | Implementation | What it adds |
 |---|---|---|---|
 | `ProgramResolver` | ADR-008 | `environment.rs` (`Snapshot`) | The first word of each command is resolved through the search path recorded at `moat init` (`environment.json`), not the hook's inherited `PATH`. A pinned program (policy `executables:` or the snapshot) that now resolves elsewhere is a deny with rule `executables` |
-| `PathResolver` | ADR-009 | `realpath.rs` (`FsPathResolver`) | Every `fs.read`/`fs.write` path is also checked at its symlink-resolved location; both are evaluated and the strictest wins. New files resolve through their deepest existing ancestor |
+| `PathResolver` | ADR-009 | `realpath.rs` (`FsPathResolver`) | Every `fs.read`/`fs.write` path is also checked at its symlink-resolved location; both are evaluated and the strictest wins. New files resolve through their deepest existing ancestor. `read_dir` lists the directories an unquoted glob operand searches, so every path it names is checked too (`expand.rs`, POLICY.md §4) |
 
 Patterns naming `${project}` or `~` are compiled for both the written and the resolved
 spelling of the root, so a project under macOS `/tmp` → `/private/tmp` matches either

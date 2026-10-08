@@ -1566,3 +1566,41 @@
   action: { shell: "source .venv/bin/activate && export PATH=/tmp/evil:$PATH" }
   expect: { verdict: deny, rules: [env-poison] }
 
+# #355: the shell expands an unquoted `* ? [` operand to the files it matches
+# (`files` is what exists), so each match is checked as well as the word itself
+- id: T1-glob-question-mark-reads-env
+  threat: T1
+  action: { shell: "cat .en?" }
+  files: [/p/.env, /p/src/main.rs]
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-glob-star-reads-env
+  threat: T1
+  action: { shell: "cat .e*" }
+  files: [/p/.env, /p/src/main.rs]
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-glob-class-reads-env
+  threat: T1
+  action: { shell: "cat .[e]nv" }
+  files: [/p/.env]
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-glob-class-head-reads-env
+  threat: T1
+  action: { shell: "head -c 99 .en[v]" }
+  files: [/p/.env]
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-glob-negated-class-reads-env
+  threat: T1
+  action: { shell: "cat .[^x]nv" }
+  files: [/p/.env]
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-glob-directory-component-reads-ssh-key
+  threat: T1
+  action: { shell: "cat ~/.ss?/id_rsa" }
+  files: [/Users/me/.ssh/id_rsa]
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T1-glob-redirect-reads-env
+  threat: T1
+  action: { shell: "base64 < .en?" }
+  files: [/p/.env]
+  expect: { verdict: deny, rules: [secrets-paths] }
+

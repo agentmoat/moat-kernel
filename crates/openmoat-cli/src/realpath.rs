@@ -4,7 +4,9 @@
 //! points as well as where it was written, so `cat ./s/id_rsa` after
 //! `ln -s ~/.ssh ./s` meets the `~/.ssh/**` deny. Resolution happens at
 //! decision time; a link swapped afterwards is out of reach until OS
-//! enforcement exists (ADR-009).
+//! enforcement exists (ADR-009). It also lists the directories an unquoted
+//! glob operand (`cat .en?`) searches, so the files the shell would pass are
+//! checked too.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -29,6 +31,20 @@ impl PathResolver for FsPathResolver {
     fn resolve(&self, path: &str) -> Option<String> {
         let real = path_string(&real_path(Path::new(path), MAX_LINK_HOPS)?);
         (real != path).then_some(real)
+    }
+
+    /// Follows links, as the shell's glob does; a name that is not UTF-8 is
+    /// checked in its lossy spelling.
+    fn read_dir(&self, dir: &str) -> Vec<String> {
+        fs::read_dir(dir).map_or_else(
+            |_| Vec::new(),
+            |entries| {
+                entries
+                    .flatten()
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .collect()
+            },
+        )
     }
 }
 
@@ -108,6 +124,23 @@ mod tests {
             Some(format!("{h}/.ssh/known_hosts")),
             "a dangling relative link resolves through its target"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn directories_list_their_names_through_links() {
+        let (_dir, h, p) = setup();
+        symlink(format!("{h}/.ssh"), format!("{p}/s")).unwrap();
+        let mut names = FsPathResolver.read_dir(&p);
+        names.sort();
+        assert_eq!(names, ["s", "src"]);
+        assert_eq!(FsPathResolver.read_dir(&format!("{p}/s")), ["id_rsa"]);
+        assert!(
+            FsPathResolver
+                .read_dir(&format!("{h}/.ssh/id_rsa"))
+                .is_empty()
+        );
+        assert!(FsPathResolver.read_dir(&format!("{p}/missing")).is_empty());
     }
 
     #[cfg(unix)]

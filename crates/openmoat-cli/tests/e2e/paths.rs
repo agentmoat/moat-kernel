@@ -87,6 +87,33 @@ fn tilde_user_paths_are_home_directories() {
     assert_verdict(&sb, &project, "cat ~-/notes.txt", "ask", "unparseable");
 }
 
+/// An unquoted glob operand is checked as the files the shell expands it to
+/// in the real directories (#355); a quoted one stays one literal name.
+#[test]
+fn glob_operands_are_checked_as_the_files_they_match() {
+    let sb = Sandbox::installed(&[".claude"]);
+    let project = sb.project();
+    std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
+    std::fs::write(sb.home.join(".ssh/id_rsa"), "key").unwrap();
+    std::fs::write(project.join(".env"), "TOKEN=x").unwrap();
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(project.join("src/main.rs"), "fn main() {}").unwrap();
+    for command in [
+        "cat .env",
+        "cat .en?",
+        "cat .e*",
+        "cat .[e]nv",
+        "head -c 99 .en[v]",
+        "cat ~/.ss?/id_rsa",
+        "cat < .en?",
+    ] {
+        assert_verdict(&sb, &project, command, "deny", "secrets-paths");
+    }
+    for command in ["cat src/*.rs", "cat '.en?'", "cat *"] {
+        assert_verdict(&sb, &project, command, "allow", "project-fs");
+    }
+}
+
 /// After `ln -s ~/.ssh s` in the project, every spelling of a read through the
 /// link meets the deny, not only `./s/…` (POLICY.md §4). Symlinks are only
 /// created on Unix here; Windows needs a privilege for them.
@@ -101,6 +128,7 @@ fn relative_operands_are_resolved_through_symlinks() {
     std::os::unix::fs::symlink(sb.home.join(".ssh/id_rsa"), project.join("k")).unwrap();
     for command in [
         "cat s/id_rsa",
+        "cat s/*",
         "head s/id_rsa",
         "grep -r . s/",
         "cat k",

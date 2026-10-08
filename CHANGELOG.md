@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- Glob characters in a path operand no longer get past deny rules (#355). The shell expands an unquoted `*`, `?` or `[` before the command runs, but the operand was checked only as the literal word, so `cat .en?`, `cat .e*`, `cat .[e]nv` and `head -c 99 .en[v]` were allowed and `cat ~/.ss?/id_rsa` only asked while `cat .env` was denied. Such an operand, and a redirection target, is now checked as written and as every path it names in the real directories, resolved through symlinks, with `bash` matching rules (`*` skips dotfiles unless the pattern starts with `.`; an unmatched pattern is only its literal word). Quoted and escaped patterns stay literal, and directories are listed only for glob operands. A call whose globs name more than 256 paths, list more than 1024 directories or descend more than 8 levels of `**` asks (`unparseable`), and a deny among the named paths still wins. On hook-only setups (the Cursor editor, Claude Code on native Windows) this read secrets; the Standard tier's sandbox already blocked it.
+
 ## [0.1.0-alpha.6] - 2026-10-08
 
 ### Added

@@ -28,6 +28,20 @@ fn splits_unspaced_operators() {
 }
 
 #[test]
+fn only_unquoted_glob_characters_make_a_glob() {
+    let glob = |input: &str| match lex(input).unwrap().pop() {
+        Some(Token::Word(w)) => w.glob,
+        other => panic!("expected a word, got {other:?}"),
+    };
+    for input in [".en?", ".e*", ".[e]nv", "'.e'*", "\"src\"/*.rs", "a\\*b*"] {
+        assert!(glob(input), "{input}");
+    }
+    for input in ["'.en?'", "\".e*\"", ".en\\?", "\\[e]", "$'*'", "plain"] {
+        assert!(!glob(input), "{input}");
+    }
+}
+
+#[test]
 fn single_quoted_spans_are_recorded() {
     let spans = |input: &str| match lex(input).unwrap().pop() {
         Some(Token::Word(w)) => w.literal,
