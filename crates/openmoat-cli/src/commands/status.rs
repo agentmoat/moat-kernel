@@ -199,6 +199,10 @@ fn sandboxes(
     {
         let name = host.display_name();
         let problems = host_sandbox::problems(host, plan, lock.as_ref());
+        if let (Ok(Some(_)), Some(note)) = (&problems, host_sandbox::unavailable(host)) {
+            writeln!(out, "{name:<16} · {note}")?;
+            continue;
+        }
         present |= !matches!(problems, Ok(None));
         match problems {
             Ok(None) => {}
