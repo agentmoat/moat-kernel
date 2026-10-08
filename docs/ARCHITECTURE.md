@@ -92,7 +92,10 @@ exits. There is no daemon.
     the reason line on stderr and exits 2.
 
 A panic inside steps 1–10 is caught and answered with a deny and exit 2, because
-Claude Code treats exit 101 as a non-blocking error.
+Claude Code treats exit 101 as a non-blocking error. A `guard` with no answer after
+10 s (`GUARD_BUDGET_S`, below every hook timeout `moat init` sets) writes a deny,
+unrecorded, and exits 2, since a host that times the hook out runs the call
+(THREAT_MODEL §5, "When the hook fails"). Only one response is ever written.
 
 ## 3. Classification
 

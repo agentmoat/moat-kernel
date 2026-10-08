@@ -22,6 +22,7 @@ mod edit;
 mod export;
 mod guard;
 mod home_screen;
+mod host_failures;
 #[cfg(unix)]
 mod install_path;
 mod lock;

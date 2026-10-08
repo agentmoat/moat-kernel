@@ -145,21 +145,22 @@ fn sandbox(host: Host, plan: Option<&Plan>, lock: Option<&Lock>) -> Result<(), S
     }
 }
 
-/// What each agent's hook and sandbox do not cover. Mirrors README "Limits" and
-/// `docs/THREAT_MODEL.md` §5; change them together.
+/// What each agent's hook and sandbox do not cover, and what the agent does when
+/// the hook fails. Mirrors README "Limits" and `docs/THREAT_MODEL.md` §5 (the
+/// "When the hook fails" table); change them together.
 fn gaps(host: Host) -> &'static str {
     match host {
         Host::ClaudeCode => {
             "WebSearch is not hooked; file tools, WebFetch and MCP servers run outside the OS \
-             sandbox; calls run unchecked if the hook binary is missing"
+             sandbox; calls run unchecked if the hook binary is missing or crashes"
         }
         Host::Codex => {
             "web search and hosted tools are not hooked; asks become denies; calls run \
-             unchecked if the hook binary is missing"
+             unchecked if the hook binary is missing or crashes"
         }
         Host::Cursor => {
             "OS sandbox not configured by OpenMoat; file-tool asks become denies; Task and \
-             tools that name no path are not hooked"
+             tools that name no path are not hooked; a failed hook blocks the call"
         }
         Host::Continue => CONTINUE_CLI_WARNING,
     }
