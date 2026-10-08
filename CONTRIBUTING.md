@@ -1,21 +1,20 @@
 # Contributing to OpenMoat
 
-Thank you for helping build the kernel AI agents run on. This file is short on
-purpose; the detail lives in `docs/`.
+Thank you for helping. This file is short on purpose; the detail lives in `docs/` and
+in `AGENTS.md`, the working contract for people and coding agents.
 
-## Before you start
+## Where to start
 
-- Read `AGENTS.md` (the contract for humans and coding agents working here) and
-  `docs/POLICY.md` and `docs/ARCHITECTURE.md` §3–4 if you touch policy or shell
-  classification.
-- To support another AI coding agent, follow `docs/ADDING_AN_AGENT.md`.
-- Security-relevant findings go through a private advisory, never a public issue.
-  See `SECURITY.md`.
-- A safe command the default policy denies or asks about is a *false positive*: open an
-  issue with the false-positive form and paste `moat policy check` output. A dangerous
-  command it allows is a vulnerability: report it privately.
-- Changes to semantics, invariants or crate boundaries start as a design proposal issue
-  and land with an ADR.
+- **A safe command is denied or asked about** (a *false positive*): open an issue with
+  the false-positive form and paste the `moat policy check` output.
+- **A dangerous action is allowed**, or anything else security-relevant: report it
+  privately through a security advisory ([SECURITY.md](SECURITY.md)), never in a
+  public issue or pull request.
+- **Support another AI coding agent:** follow
+  [docs/ADDING_AN_AGENT.md](docs/ADDING_AN_AGENT.md).
+- **Change a rule or the shell classifier:** read [docs/POLICY.md](docs/POLICY.md)
+  and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3–4 first.
+- Issues labelled `good first issue` and `help wanted` are open for contributors.
 
 ## Setup
 
@@ -27,22 +26,30 @@ scripts/ci/quality-gate.sh                 # fmt, clippy -D warnings, doc, tests
 
 Rust 1.95 (pinned in `rust-toolchain.toml`). No other tooling is required.
 
-## Making a change
+## Your first pull request
 
 Every change lands through a pull request, including maintainers' own work; nothing
 is pushed to `main` directly.
 
-1. Open an issue first for anything that changes what an agent is allowed to do.
-2. Branch from `main` as `<type>/<short-topic>` (for example `feat/doctor-command`,
-   `fix/windows-paths`); keep the PR to one concern and under 500 changed lines.
-   Larger changes are split into a stack of PRs or justified with the `size: override` label.
-3. Behaviour changes come with tests at the right level:
+1. **Open an issue first** for anything that changes what an agent may do: a rule, a
+   verdict, a host adapter, a sandbox setting. Changes to semantics, invariants or
+   crate boundaries start as a design proposal issue and land with an ADR. A docs or
+   test fix can go straight to a pull request.
+2. **Branch** from `main` as `<type>/<short-topic>` (for example `fix/windows-paths`).
+   Keep the PR to one concern and under 500 changed lines; split larger changes into a
+   stack of PRs, or justify them with the `size: override` label.
+3. **Add tests at the right level** for a behaviour change:
    - unit tests next to the code (`#[cfg(test)]`),
    - conformance fixtures in `tests/conformance/` for every rule or parser change,
    - end-to-end tests in `crates/openmoat-cli/tests/` for CLI and hook behaviour,
    - architecture tests (`crates/*/tests/architecture.rs`) when crate boundaries move.
-4. Run `scripts/ci/quality-gate.sh`. CI runs the same script on macOS, Linux and Windows.
-5. Fill in the PR template: **Testing** and **Security impact** are required sections.
+4. **Run `scripts/ci/quality-gate.sh`.** CI runs the same script on macOS, Linux and
+   Windows.
+5. **Open the PR with the template.** The title follows Conventional Commits
+   (`fix(cli): …`); **Testing** and **Security impact** are required sections, and the
+   **Release note** line feeds `CHANGELOG.md`. Labels are set for you (below).
+6. **Answer the review.** `moat-reviewer` posts a first pass; address or answer its
+   🔴 and 🟠 items. A maintainer makes the call.
 
 ## Pull request standards
 
@@ -61,9 +68,9 @@ PR): `macos-14`, `macos-15-intel`, `ubuntu-latest`, `windows-latest` (the qualit
 `openmoat-core builds for wasm32 (no I/O)`, `cargo-deny`, `crates package and build from
 their tarballs`, `workflows (actionlint, zizmor)`, `conventional` (title) and
 `labels · size · risk · body` (pr-standards). The branch must be up to date with `main`
-(strict checks), so rebase before merging. `fuzz (smoke)` and `latency` run on every PR
-but are not required: a fuzz finding or a noisy runner should not block an unrelated
-change, so read them before merging. The PR body must have non-empty **Testing** and
+(strict checks), so rebase before merging. `fuzz (smoke)`, `guard latency` and
+`standard tier` run on every PR but are not required: a fuzz finding or a noisy runner
+should not block an unrelated change, so read them before merging. The PR body must have non-empty **Testing** and
 **Security impact** sections. CODEOWNERS requests the maintainer's review on `risk:
 high` paths; with one maintainer it is not enforced by the ruleset (two-maintainer
 review is a v1.0 item). Squash-merge; the PR title becomes the commit subject and the
@@ -95,9 +102,8 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
 
 ## Conventions
 
-- Commit and PR titles follow Conventional Commits:
-  `feat`, `fix`, `sec`, `policy`, `host(claude-code)`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`.
-  Squash-merge; the PR title becomes the commit.
+- Commit and PR title types: `feat`, `fix`, `sec`, `policy`, `host(claude-code)`,
+  `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, lowercase subject.
 - Library crates (`openmoat-core`, `openmoat-hosts`, `openmoat-audit`) use typed `thiserror`
   errors and never print. `anyhow` and terminal output live only in `openmoat-cli`.
 - `openmoat-core` has no I/O, no `unsafe`, and no internal dependencies; CI builds it
@@ -114,9 +120,9 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
 
 `fuzz/` holds `cargo fuzz` targets for every surface that takes untrusted input:
 `decide_shell` (any command line through the lexer, classifier and engine),
-`policy_parse` (any policy file), `host_payload` (any hook payload, every host) and
+`policy_parse` (any policy file), `host_payload` (any hook payload, every host),
 `literal_pattern` (`moat allow --always` must produce a rule that lints and matches its
-command). It is a separate workspace built with nightly:
+command) and `proxy_parse` (any request head or TLS `ClientHello` `moat proxy` reads). It is a separate workspace built with nightly:
 
 ```bash
 cargo install cargo-fuzz --version 0.13.1 --locked
@@ -129,7 +135,7 @@ crash becomes a unit test or fixture next to the fix.
 
 ## Releasing
 
-`.github/workflows/release.yml` is driven by [dist](https://opensource.axo.dev/cargo-dist/)
+`.github/workflows/release.yml` is driven by [dist](https://axodotdev.github.io/cargo-dist/)
 (config in `dist-workspace.toml`). A `v*` tag builds the seven targets, writes the shell and
 PowerShell installers, the Homebrew formula and `sha256.sum`, attests every file, creates
 the GitHub release, pushes `Formula/moat.rb` to `crocodile-labs/homebrew-tap` and, after an owner
@@ -138,18 +144,16 @@ touch the manifests or the workflow run `dist plan` only. Running the workflow b
 (Actions → release → Run workflow) is a dry run: it builds every target and publishes nothing.
 
 1. Dry-run the workflow on `main` if the build changed since the last release.
-2. In a PR (`build: release vX.Y.Z-alpha.N`): bump `version` in `[workspace.package]` and
+2. In a PR (`build: release vX.Y.Z-pre.N`): bump `version` in `[workspace.package]` and
    the four `openmoat-*` entries of `[workspace.dependencies]` in `Cargo.toml`, run
-   `cargo check` to update `Cargo.lock`, move the `[Unreleased]` entries of `CHANGELOG.md`
-   under `## [X.Y.Z-alpha.N] - YYYY-MM-DD`, and update the version in the README install
-   commands and in `crates/openmoat-cli/README.md`. The release fails without that
-   CHANGELOG section; its text becomes the release notes, after a line saying what the
-   operating system does and does not enforce (ADR-013). For the first release, also
-   drop the "not yet released" wording: the README status note and the first paragraph
-   of its Install section, `docs/ROADMAP.md` "Where it is today", and the supported
-   versions note in `SECURITY.md`.
-3. After the merge, tag the merge commit: `git tag -s vX.Y.Z-alpha.N -m vX.Y.Z-alpha.N`
-   and `git push origin vX.Y.Z-alpha.N`.
+   `cargo check` to update `Cargo.lock` (and `fuzz/Cargo.lock`), move the `[Unreleased]`
+   entries of `CHANGELOG.md` under `## [X.Y.Z-pre.N] - YYYY-MM-DD`, and update the
+   version in the README status line, the install commands of `docs/INSTALL.md`,
+   `crates/openmoat-cli/README.md` and `docs/ROADMAP.md` "Where it is today". The
+   release fails without that CHANGELOG section; its text becomes the release notes,
+   after a line saying what the operating system does and does not enforce (ADR-013).
+3. After the merge, tag the merge commit: `git tag -s vX.Y.Z-pre.N -m vX.Y.Z-pre.N`
+   and `git push origin vX.Y.Z-pre.N`.
 4. Check the GitHub release and the tap commit, then approve the `release` environment in
    the workflow run; `publish-crates` publishes openmoat-core, then openmoat-hosts,
    openmoat-audit and openmoat-proxy, then openmoat.
@@ -163,7 +167,7 @@ for a crate that exists. Reject the `release` deployment in the workflow run, th
 2. From a clean checkout of the tag:
 
    ```bash
-   git checkout vX.Y.Z-alpha.N
+   git checkout vX.Y.Z-pre.N
    cargo login                                   # paste the token
    cargo publish --locked --workspace --dry-run
    cargo publish --locked --workspace            # openmoat-core, then openmoat-hosts,
@@ -195,9 +199,8 @@ make the smallest change that turns it into `ask`.
 
 ## Governance
 
-Single maintainer during v0.x. CODEOWNERS routes review; the trusted core, the
-default policy and CI require maintainer approval. A maintainer team and a public
-roadmap board follow with v0.2.
+Single maintainer for now. CODEOWNERS routes review; the trusted core, the default
+policy and CI require maintainer approval.
 
 ## License
 

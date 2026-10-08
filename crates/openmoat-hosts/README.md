@@ -12,4 +12,5 @@ Supported today: Claude Code and Codex (shared `PreToolUse` contract,
 (`beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse`;
 `{"permission": …}` responses). Golden payloads live in `tests/fixtures/hosts/`.
 
-Adding a host: see `AGENTS.md` §5 "Add a host adapter".
+Adding a host: see
+[docs/ADDING_AN_AGENT.md](https://github.com/crocodile-labs/openmoat/blob/main/docs/ADDING_AN_AGENT.md).

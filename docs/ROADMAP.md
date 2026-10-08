@@ -23,8 +23,8 @@ crates.io (README, Install). What exists:
   (ADR-020).
 - Repository policy (`<repo>/.moat/policy.yaml`) that only tightens until `moat trust`
   (ADR-022).
-- Standard tier: Claude Code's and Codex's own sandboxes configured and pinned from
-  the policy (ADR-018).
+- Standard tier: Claude Code's, Codex's and Cursor's own sandboxes configured and
+  pinned from the policy (ADR-018), and a protection level per agent in `moat status`.
 - Lightweight tier: `moat run` with a generated Seatbelt profile (macOS), or Landlock
   rules and a seccomp filter (Linux), around the whole agent.
 - `moat proxy`: default-deny egress with an SNI check, its own DNS and an audit row
@@ -32,12 +32,13 @@ crates.io (README, Install). What exists:
   wrong host (ADR-020). HTTPS injection is not built yet (#247).
 - Fail-closed exit codes (ADR-004, ADR-015), a conformance suite tagged by threat
   ([COVERAGE.md](COVERAGE.md)), a differential suite across the hook and the host
-  sandboxes, MoatBench mini, and fuzz targets that run in CI.
+  sandboxes with hostile project scripts ([EVIDENCE.md](EVIDENCE.md)), MoatBench mini,
+  and fuzz targets that run in CI.
 
-What it is not yet: enforcement for every call. The hook's decision is not backed by
-the operating system; only commands inside the host sandboxes or `moat run` are
-confined. Outside them an allowed command runs with your permissions, so a classifier
-mistake is a security bug.
+What it does not do: confine every call. Only commands inside the host sandboxes or
+`moat run` are confined by the operating system. Elsewhere an allowed call runs with
+your permissions and the hook's decision is the only check, so a classifier mistake is
+a security bug ([THREAT_MODEL.md](THREAT_MODEL.md) §5).
 
 ## Positioning
 
@@ -45,8 +46,9 @@ The shell classifier triages and the operating system is the boundary. A policy
 decision on a command string can be wrong (quoting, encodings, interpreters, programs
 that run other programs), and no amount of parser work closes that gap. So:
 
-- Where no OS layer applies (Claude Code's file tools, `WebFetch` and MCP calls, and
-  Cursor, unless the agent runs under `moat run`), the classifier is the only layer.
+- Where no OS layer applies (Claude Code's and Cursor's file tools, `WebFetch` and MCP
+  calls, and commands Cursor runs outside its sandbox, unless the agent runs under
+  `moat run`), the classifier is the only layer.
   Bypass reports are in scope ([SECURITY.md](../SECURITY.md)) and become fixtures.
 - The parser is frozen (AGENTS.md §5, CONTRIBUTING.md "Decisions"). A newly found
   bypass gets an attack fixture and the smallest change that turns it into `ask`, not
@@ -54,67 +56,71 @@ that run other programs), and no amount of parser work closes that gap. So:
 - From the beta on, allowed commands run under OS enforcement derived from the same
   policy. A parser mistake then costs a prompt or a confusing message, not a breach.
   Every layer is generated from the one policy and the layers are tested against each
-  other (ADR-018 to ADR-020): the host's own sandbox, configured and pinned by OpenMoat, by
-  default; a container or VM with OpenMoat outside it for strict use; one egress proxy and a
-  secrets broker so the agent never holds credentials.
+  other (ADR-018 to ADR-020): the host's own sandbox, configured and pinned by OpenMoat,
+  by default; a container or VM with OpenMoat outside it for strict use (planned); one
+  egress proxy and a secrets broker so the agent never holds credentials.
 
 ## Stages
 
-### Alpha: `0.1.0-alpha.N`, decide-only
+### Alpha: `0.1.0-alpha.N`
 
-Milestone `v0.1.0-alpha`; #144 section P1.
+Milestone `v0.1.0-alpha`. Released from `0.1.0-alpha.0` on, with the release workflow
+and attestations (#89), the tag ruleset (#91), the guard latency budget (#95) and the
+host and CLI follow-ups (#137–#143).
 
-| Issue | Work |
+| Issue | Still open |
 |---|---|
-| #89 | Release workflow: installers for macOS (arm64, x64), Linux (x64, arm64, musl) and Windows (x64), Homebrew tap, crates.io trusted publishing, attestations |
-| #91 | Tag ruleset and strict required checks |
-| #94 | This documentation restructure |
-| #95 | `moat guard` p95 within 15 ms, with a CI latency check |
-| #137–#143 | Host and CLI follow-ups: Claude Code `SendFile`, Cursor payload schema, `Glob` patterns with a directory, `.proposed-*` settings files, exit on a closed pipe, Scoop path in `kernel-self`, shell hardening |
 | #124 | A week of daily use by the maintainer, every false positive turned into a fixture |
-| #125 | Tag `v0.1.0-alpha.0` |
+| #138 | Cursor `Grep` and `Glob` tool names checked against a real Cursor payload |
 
 Exit (ADR-013): installs from a tag on every target, the conformance suite green on
 every CI platform, and a week of daily use with every false positive turned into a
 fixture.
 
-ADR-013 also listed repo-level policy and a conservative PowerShell tokenizer under
-the alpha. #144 now orders repo-level policy (#128) in the beta milestone. A
-PowerShell tokenizer has no issue in #144. Until one lands, Claude Code `PowerShell`
-always asks.
+ADR-013 also listed a conservative PowerShell tokenizer under the alpha. It has no
+issue yet; until one lands, Claude Code `PowerShell` always asks.
 
 ### Beta: `0.1.0-beta.N`, enforcement
 
-Milestone `v0.1.0-beta`; #144 section P2.
+Milestone `v0.1.0-beta`.
 
-| Issue | Work |
+| Issue | Done |
 |---|---|
-| #119 | Spike (done): Seatbelt does not nest, host defaults leak; outcome in ADR-018, evidence in `spikes/sandbox/` |
-| #167 | Policy compiler: one IR, the hook backend over it, "never widens" property tests (ADR-019) |
-| #168, #169 | Standard tier: generated and pinned Claude Code `sandbox` settings and Codex permissions (ADR-018) |
-| #170 | Executing differential fixtures across the hook, both host sandboxes and every tier, with public CVE replays (ADR-019) |
+| #119 | Spike: Seatbelt does not nest, host defaults leak; outcome in ADR-018, evidence in `spikes/sandbox/` |
+| #168, #169, #324 | Standard tier: generated and pinned Claude Code, Codex and Cursor sandbox settings (ADR-018) |
+| #176 | Lightweight tier: `moat run` with generated Seatbelt, or Landlock and seccomp |
+| #170, #335, #346 | Executing differential fixtures across the hook and the host sandboxes, and hostile project scripts under every OS layer ([EVIDENCE.md](EVIDENCE.md)) |
 | #171, #172, #173 | `moat proxy` (default deny, SNI, own DNS), secrets broker, minimal session taint (ADR-020) |
-| #174, #175 | Isolated tier: `moat run --isolate` in a rootless container (Linux) or an Apple Virtualization guest (macOS) |
-| #176 | Lightweight tier: generated Seatbelt or Landlock and seccomp around the agent |
 | #177, #129 | Hash-chained audit log; audit export and a team report |
-| #178 | Codex asks through its own `PermissionRequest` prompt: investigated; Codex runs that hook only after it decides to prompt, so a Codex `ask` stays a deny (ARCHITECTURE §5) |
-| #128 | Repo-level policy (`<repo>/.moat/policy.yaml`) and `moat trust` |
-| #131 | Bypass challenge with 5–10 security people |
-| #132 | MoatBench mini (about 40 scenarios) and the launch demo |
+| #128 | Repository policy (`<repo>/.moat/policy.yaml`) and `moat trust` |
+| #178 | Codex `PermissionRequest`: investigated; Codex runs that hook only after it decides to prompt, so a Codex `ask` stays a deny (ARCHITECTURE §5) |
+| #132, #336, #337 | MoatBench mini, the developer-workflow suite and the host failure matrix |
+| #334 | A protection level per agent in `moat status` and `moat doctor` |
+
+| Issue | Open |
+|---|---|
+| #167 | Policy compiler (ADR-019): the IR, `moat policy compile` and the "never widens" tests are on `main`; the issue is still open |
+| #356 | Beta gate: every protection claim has executable evidence |
+| #321 | Landing page |
+| #322 | First non-pre-release |
+| #131, #323 | Bypass challenge with security people, then a public challenge and the announcement |
 
 Exit (ADR-013): executing fixtures show obfuscated exfiltration failing at the OS
 level, and read-then-exfiltrate fixtures are blocked.
 
 ### 1.0
 
-Milestone `v1.0.0`; #144 section P3.
+Milestone `v1.0.0`.
 
 | Issue | Work |
 |---|---|
 | #133 | MCP stdio proxy with tool description pinning, for hosts whose hooks skip MCP |
-| #134 | OpenClaw plugin and `moat serve` |
+| #134, #320 | OpenClaw plugin and `moat serve` |
 | #135 | Windows enforcement |
 | #136 | Stable policy schema, `moat policy migrate`, signed policy packs |
+| #174, #175 | Isolated tier: `moat run --isolate` in a rootless container (Linux) or an Apple Virtualization guest (macOS) |
+| #363 | Policy secrets compiled into Claude Code's credential masking |
+| #364 | `moat bench --hook` to run the fixtures against any hook |
 
 Exit (ADR-013): MoatBench meets its gate and the policy schema is stable.
 

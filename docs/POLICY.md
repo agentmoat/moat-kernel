@@ -6,8 +6,9 @@ user policy lives at `~/.moat/policy.yaml` (or `$MOAT_HOME/policy.yaml`).
 explains a decision. A project can add rules of its own in `<project>/.moat/policy.yaml`
 (§10).
 
-During the alpha a decision is not enforced by the operating system (ADR-013): `allow`
-means the host runs the tool call with your permissions.
+A decision is not itself enforced by the operating system: `allow` means the host runs
+the tool call with your permissions. Where a host sandbox (§9) or `moat run` applies,
+the operating system also bounds what the call can reach ([SANDBOX.md](SANDBOX.md)).
 
 ## 1. Shape
 
@@ -246,7 +247,7 @@ These appear in responses and in `moat show` alongside the ids from `policy.yaml
 | `default`, `default.<kind>` | from `defaults` | no rule matched the atomic action |
 | `unparseable` | ask | the shell command or URL, or part of it, could not be classified safely (§4 step 5) |
 | `executables` | deny | the command's program resolves to a path other than its pin (§8.1) |
-| `kernel-integrity` | deny | a file pinned by `policy.lock` changed, disappeared or was replaced by a symlink (§8); every action is denied until a person re-pins |
+| `kernel-integrity` | deny | a file pinned by `policy.lock` changed, disappeared or was replaced by a symlink (§8); every call is denied until a person re-pins |
 | `kernel-error` | deny | `moat guard` could not evaluate at all: missing state directory, malformed payload, unreadable policy, a repository policy that cannot be read or parsed (§10); exit 2 |
 | `repo:<id>` | from its list | a rule of the project's repository policy (§10) |
 | `ungoverned` | allow | the host tool is outside policy scope (for example Claude Code `Task`, or `Shell` under Cursor's `preToolUse`, which `beforeShellExecution` already governs); recorded, not evaluated |
@@ -285,12 +286,12 @@ first. Differences from the hook:
   matching that text still wins. Patterns starting with `*`, `?`, `[` or `{`, and name
   patterns such as `*.corp.example`, never open a private address.
 
-### 5.2 What an operating-system layer can enforce
+### 5.3 What an operating-system layer can enforce
 
 The policy compiler (ADR-019) derives from `policy.yaml` what an OS layer (a host's
 sandbox, Seatbelt, Landlock, the egress proxy) enforces. `moat policy compile [--format
-json]` prints it. Claude Code's and Codex's sandboxes are configured from it today (§9);
-the other layers are planned.
+json]` prints it. The host sandboxes of Claude Code, Codex and Cursor (§9) and the
+Seatbelt and Landlock rules of `moat run` are generated from it.
 
 - **OS-enforceable:** `fs.read`, `fs.write`, `net` and `fetch` rules and their defaults.
   Patterns are expanded for the session (`~`, `${project}`, both spellings of a linked
@@ -381,7 +382,7 @@ warning does not prove a rule is reachable.
 
 `moat init` records SHA-256 digests of the policy file and of every host hook file it
 installed in `~/.moat/policy.lock`. `moat guard` recomputes them on every call; if any
-pinned file changed or disappeared, every action is denied with rule `kernel-integrity`
+pinned file changed or disappeared, every call is denied with rule `kernel-integrity`
 until a person re-pins with `moat doctor --accept` (refused outside an interactive terminal) or
 by re-running `moat init`. Edit the policy, then run `moat doctor --accept`. Which hook files are pinned is decided only by `moat init`: it keeps the ones already in the lock and adds those installed in the directories it records (its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR`, else the recorded or default ones). `moat doctor --accept`, `moat allow` and `moat trust` re-pin exactly the files already in the lock, plus OpenMoat's own state files (`trust.json` once `moat trust` writes it), so running them from a shell where those variables differ from the agent's never drops the agent's hook file; `moat doctor` and `moat status` name a hook file installed under the current environment that the lock does not pin, and a pinned one outside it. A pinned file is identified by its location, so replacing it with a symlink, or re-pointing an existing link, counts as a modification even when the bytes read through it are unchanged. The same holds for a directory on its path: if `~/.claude` is moved and replaced by a link to a copy, `settings.json` resolves somewhere else and is reported as modified.
 
@@ -406,7 +407,7 @@ absolute path. Checked against the installed policy (no `--policy`), it also ver
 `policy.lock` first and, when a pinned file changed, reports the `kernel-integrity` deny
 (exit 2) that `guard` answers instead of the policy's verdict.
 
-## 8.2 Approvals
+### 8.2 Approvals
 
 When a host prompts you because the verdict was `ask`, you can make the answer stick:
 
@@ -597,8 +598,3 @@ its digest, and say which form applies: `trusted`, `not trusted: tightening only
 `changed since moat trust: tightening only`, or `tightening only` for a file without
 allow rules. A file that does not parse is reported as a problem (exit 64), because
 every call in the project is denied.
-
-## 11. Planned, not yet available
-
-A prompt of OpenMoat's own for `ask`, managed organisation policy and Telegram
-approvals have no issue yet. Status and order: [ROADMAP.md](ROADMAP.md).

@@ -71,9 +71,9 @@ for each. It backs up every file before changing it, and `moat uninstall` undoes
    also  : shell "cat ~/.ssh/id_rsa"
 ```
 
-Start your agent as usual. Every tool call now goes through OpenMoat; `moat show`
-lists the decisions. `moat status` shows how each agent is protected (`hook + OS
-sandbox`, `hook only` or `not protected`) and what its hook does not see.
+Start your agent as usual. Every tool call its hook reports now goes through OpenMoat;
+`moat show` lists the decisions. `moat status` shows how each agent is protected
+(`hook + OS sandbox`, `hook only` or `not protected`) and what its hook does not see.
 
 When something is blocked or asked, run `moat`. It shows which agents are protected and
 today's decisions, then anything that needs you: a changed policy to accept, or the
@@ -98,8 +98,9 @@ agent action ──► OpenMoat ──► allow ──► runs, and is recorded
 ```
 
 The same policy also configures the operating system's sandbox for each agent. Code
-hidden inside an approved command (a test script, a build step) still cannot read your
-secrets or write outside the project.
+hidden inside an approved command (a test script, a build step) then runs inside that
+sandbox, which keeps it from your secrets and from files outside the project; the
+exceptions are under [Limits](#limits).
 
 ## What it protects
 
@@ -109,10 +110,10 @@ secrets or write outside the project.
 - **Your files and history.** Recursive deletes of your home directory, force pushes,
   hard resets and edits to shell startup files are blocked.
 - **Your network.** Agents connect only to destinations the policy allows. Cloud
-  metadata and local network addresses are refused.
+  metadata services are refused, and connections to this machine ask first.
 - **OpenMoat itself.** The agent cannot edit, approve or switch off OpenMoat. If its
   policy or settings change behind its back, everything is blocked until you review.
-- **A record of everything.** Every decision goes into a local audit log that detects
+- **A record of every decision.** Every decision goes into a local audit log that detects
   tampering and can be exported and verified by your team.
 
 ## How it compares
@@ -176,12 +177,15 @@ you export it.
   sandbox covers only `Bash`, `PowerShell` and `Monitor`. `moat run` covers a whole
   agent but is weaker per command.
 - Allowed scripts (`npm test`, `make test`) run whatever they contain; the sandbox
-  bounds them, OpenMoat does not inspect them. What `moat run` stops in such a script,
-  and what it does not (on Linux, `.env` in the project stays readable), is tested on
-  every pull request: [docs/EVIDENCE.md](docs/EVIDENCE.md).
+  bounds them, OpenMoat does not inspect them. What `moat run` and the agents' own
+  sandboxes stop in such a script, and what they do not (on Linux, `moat run` leaves
+  `.env` in the project readable), is tested on every pull request:
+  [docs/EVIDENCE.md](docs/EVIDENCE.md).
 - Hosts the policy allows (`api.github.com`, the registries) can receive data from an
   allowed or approved command.
 - Tools no hook exposes are not seen (Claude Code `WebSearch`, Codex web search).
+- If the hook binary is missing or is killed, Claude Code and Codex run the call
+  unchecked; `moat status` reports a missing hook.
 
 The full list, with the reasons: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 

@@ -80,7 +80,8 @@ On native Windows, `init` does not turn on Claude Code's sandbox: it runs on mac
 Linux and WSL2 only, and Claude Code would not start with it required. The hook still
 applies the policy to Claude Code's tool calls, and `init`, `doctor` and `status` say so. For OS
 confinement, run Claude Code and `moat` inside WSL2. Codex's sandbox is set up as on
-other systems.
+other systems; Cursor's `sandbox.json` is not written, because Cursor documents its
+sandbox for macOS and Linux only.
 
 | Agent | What is hooked | Hook file |
 |---|---|---|
