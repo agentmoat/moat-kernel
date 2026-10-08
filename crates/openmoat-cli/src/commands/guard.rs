@@ -8,7 +8,7 @@ use std::io::{self, Read as _, Write as _};
 use std::time::Instant;
 
 use anyhow::{Context as _, Result, bail};
-use openmoat_audit::{NewEvent, Store};
+use openmoat_audit::{KnownSecrets, NewEvent, Store};
 use openmoat_core::{CompiledPolicy, Decision, Verdict};
 use openmoat_hosts::{HookEvent, HookRequest, Host};
 
@@ -20,7 +20,7 @@ use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity::{self, INTEGRITY_RULE, Lock};
 use crate::realpath::FsPathResolver;
-use crate::taint;
+use crate::{secrets, taint};
 
 const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024;
 const UNGOVERNED_RULE: &str = "ungoverned";
@@ -51,20 +51,22 @@ fn decide_and_respond(installed_for: Host) -> Code {
     // refused in the format its hook expects.
     let mut host = installed_for;
     let mut event = HookEvent::default();
+    let mut known = KnownSecrets::default();
     let (request, mut decision) = match read_stdin() {
         Ok(payload) => {
             // The Continue CLI runs the Claude Code hook but cannot ask.
             let continue_env = std::env::var_os(openmoat_hosts::CONTINUE_ENV).is_some();
             host = installed_for.sender(&payload, continue_env);
             event = host.event_of(&payload);
-            evaluate(host, &payload).unwrap_or_else(|error| (None, kernel_error(&error)))
+            evaluate(host, &payload, &mut known)
+                .unwrap_or_else(|error| (None, kernel_error(&error)))
         }
         Err(error) => (None, kernel_error(&error)),
     };
 
     // The audit log is part of the decision: a call that cannot be recorded
     // is not allowed, so a missing or unwritable log cannot hide activity.
-    if let Err(error) = record(host, request.as_ref(), &decision, started) {
+    if let Err(error) = record(host, request.as_ref(), &decision, started, known) {
         decision = kernel_error(&error.context("audit log unavailable"));
     }
 
@@ -91,7 +93,14 @@ fn decide_and_respond(installed_for: Host) -> Code {
     }
 }
 
-fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)> {
+/// Decide one hook payload. `known` gets the brokered secret values to mask in
+/// the audit row as soon as the policy is loaded, so it holds them even when a
+/// later step fails.
+fn evaluate(
+    host: Host,
+    payload: &str,
+    known: &mut KnownSecrets,
+) -> Result<(Option<HookRequest>, Decision)> {
     let request = host
         .parse_request(payload)
         .context("parsing hook payload")?;
@@ -122,6 +131,7 @@ fn evaluate(host: Host, payload: &str) -> Result<(Option<HookRequest>, Decision)
         .context("resolving working directory")?;
     let ctx = context::eval_context(Some(&cwd), None)?;
     let policy = crate::repo::effective_policy(&home, &ctx)?;
+    *known = secrets::known(&policy.secrets, &ctx.home)?;
     let snapshot = Snapshot::load(&home.environment_path())?;
     let compiled = CompiledPolicy::compile(&policy, &ctx)?;
     let mut decision = compiled.decide_with(action, &snapshot, &FsPathResolver);
@@ -153,12 +163,13 @@ fn record(
     request: Option<&HookRequest>,
     decision: &Decision,
     started: Instant,
+    known: KnownSecrets,
 ) -> Result<()> {
     let home = Home::locate()?;
     if !home.exists() {
         bail!("{} does not exist; run `moat init`", home.root().display());
     }
-    let store = Store::open_existing(&home.audit_path())?;
+    let store = Store::open_existing(&home.audit_path())?.with_secrets(known);
     let latency_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
     let event = NewEvent {
         host: host.id(),

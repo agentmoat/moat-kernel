@@ -117,7 +117,7 @@ const FAKE: &str = "fake-e2e-secret-31b7c04e9a";
 
 /// An installed sandbox whose policy brokers `MOAT_E2E_FAKE` for api.github.com,
 /// re-pinned as a person would.
-fn brokered() -> Sandbox {
+pub(crate) fn brokered() -> Sandbox {
     let sb = Sandbox::installed(&[]);
     let policy = sb.home.join(".moat/policy.yaml");
     let mut text = std::fs::read_to_string(&policy).unwrap();

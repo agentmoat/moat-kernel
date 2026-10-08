@@ -13,6 +13,9 @@ All notable changes to this project are documented here. The format follows
 - README, the CLI crate README and docs/INSTALL.md no longer say every action is checked: they say OpenMoat checks the commands, file access, web requests and MCP calls the agents report through their hooks, which is what README Limits and THREAT_MODEL describe (#331).
 - A permanent approval (`moat allow --always`, `moat allow --last --always`, or `a` in `moat`) prints what the rule will match before writing it (#333). For a shell command: `will allow: npm test (and the same command with extra arguments); deny rules still win`, since a command rule matches the approved command as a prefix. For files it says the rule names exactly those paths. The undo line is unchanged, and so is what a rule matches.
 
+### Security
+- The audit log masks the exact values of the policy's brokered secrets (`secrets:`), whatever their format, before an event is stored, so they reach neither `audit.db` nor `moat audit export` (#338). Previously only known token formats were redacted, and a value sent as part of a host name was recorded by `moat proxy`. Matching ignores letter case and skips values shorter than 8 bytes, which occur in ordinary text. `moat guard` masks the values with a `file` or `env` source it can read in every call the policy decides; the proxy masks all of them. The working directory is now redacted too. Canary tests plant fake secrets in shell commands, paths, URLs, proxy headers and MCP arguments and check that none is stored and the hash chain still verifies.
+
 ## [0.1.0-alpha.5] - 2026-10-07
 
 ### Added

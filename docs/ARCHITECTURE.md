@@ -304,10 +304,29 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
 
 `~/.moat/audit.db` is SQLite in WAL mode, created with mode 0600, with one `events`
 table (time, host, session, call id, working directory, tool, action, verdict, rules,
-reasons, latency). Every governed and ungoverned call is recorded. Command, path and
-URL fields pass through `openmoat_audit::redact` first (bearer and basic auth,
-`key=value` credentials, common token shapes, URL passwords). `show`, `replay` and
-`report` read it; nothing leaves the machine unless a person runs `moat audit export`.
+reasons, latency). Every governed and ungoverned call is recorded. `Store::record`
+redacts every text the agent can influence (each string of the action, the reasons,
+the working directory) in one place, so guard rows, proxy rows and exports are all
+covered; host, session and call ids and the tool name come from the host and are
+stored as sent. Redaction is two passes (`crates/openmoat-audit/src/redact.rs`):
+
+1. **Exact values.** The values of the policy's brokered secrets (`secrets:`) are
+   replaced by `[redacted]` wherever they occur, in any letter case (the proxy
+   records host names lowercased), whatever their format. All values are matched by
+   one automaton, so the cost is linear in the text. Values shorter than 8 bytes
+   (`MIN_SECRET_LEN`) are not matched this way: they occur in ordinary text too. The
+   proxy masks every value it holds. `moat guard` masks, in every call the policy
+   decides, the values it can read, those with a `file` or `env` source; it does not
+   start the keychain tool per call, and it skips a source it cannot read. Rows of an
+   ungoverned tool, a settings change or a call refused for lock drift are written
+   before or without loading the policy and get the patterns only.
+2. **Patterns.** Bearer and basic auth, `key=value` credentials, common token shapes,
+   URL passwords.
+
+The policy has no other declaration of secret environment variables: `env-secrets` is
+a list of names the agent may not read (it includes `AWS_REGION`-style names), not of
+values to mask. `show`, `replay` and `report` read the log; nothing leaves the machine
+unless a person runs `moat audit export`.
 
 **Hash chain** (schema 2, `crates/openmoat-audit/src/store/chain.rs`). Each event also
 stores `prev_hash`, the `hash` of the event before it, and `hash`, the lowercase hex

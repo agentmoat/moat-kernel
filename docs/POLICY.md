@@ -119,6 +119,9 @@ What the proxy does with them:
   built (#172).
 - **Leak blocking.** The proxy refuses a request to any other host that carries the
   placeholder or the value, in its head or plain-HTTP body (`proxy-secret`, §5.1).
+- **Audit masking.** A value of 8 bytes or more is replaced by `[redacted]` wherever it
+  occurs in an audit row the proxy records, and in the row of a call `moat guard`
+  decides when its source is a `file` or `env` the guard can read (ARCHITECTURE.md §7).
 
 `moat proxy` reads every source at start-up and refuses to start (exit 64) if one cannot
 be read or holds a control character. It prints each secret's id, host, header and
