@@ -80,8 +80,10 @@ something the alpha claims to stop.
   still a bypass, and in scope as a vulnerability ([SECURITY.md](../SECURITY.md)).
 - **What the Standard tier does not cover.** It is as strong as each host's sandbox
   and OpenMoat's translation, and every host version bump must keep the generated keys
-  working (`moat doctor` names a weakened setting; the differential suite, #170, will
-  execute them). Claude Code's file tools, `WebFetch`, MCP servers and hooks run
+  working (`moat doctor` names a weakened setting; the differential suite executes
+  them, [EVIDENCE.md](EVIDENCE.md)). On Linux, Claude Code's sandbox skips the
+  generated `.env` denies, so a project script reads the project's `.env` (#359), and
+  Codex runs no command under the generated profile (#358). Claude Code's file tools, `WebFetch`, MCP servers and hooks run
   outside its sandbox; only the hook governs them. Writes by a sandboxed command to
   the session's working directory are allowed even when the session started above
   the git root, and Claude Code leaves paths outside the user directories (`/Users`,
@@ -364,10 +366,11 @@ something the alpha claims to stop.
   request and weekly.
 - **Differential suite** (`tests/differential/scenarios.yaml`): each scenario runs
   against the hook decision and each host sandbox whose binary is present, and hostile
-  project scripts run under `moat run` on macOS and Linux, with the OS outcome
-  (`EPERM`, `EACCES`, the proxy's 403) asserted. [EVIDENCE.md](EVIDENCE.md) is the
-  results table, generated from the same file; known gaps are listed there as gaps.
-- **Planned:** differential testing of the lexer against real `bash`, the Codex and
-  Claude Code sandboxes in CI, and the full MoatBench, which measures attack success
-  with and without OpenMoat across live agents ([ROADMAP.md](ROADMAP.md)). Prompt fatigue is measured
+  project scripts run under `moat run`, Claude Code's sandbox and Codex's `moat`
+  profile on macOS and Linux, with the OS outcome (`EPERM`, `EACCES`, a proxy's 403)
+  asserted. CI's `standard tier` job runs the host sandboxes with pinned Claude Code
+  and Codex binaries, a local fake API and no account. [EVIDENCE.md](EVIDENCE.md) is
+  the results table, generated from the same file; known gaps are listed there as gaps.
+- **Planned:** differential testing of the lexer against real `bash`, and the full
+  MoatBench, which measures attack success with and without OpenMoat across live agents ([ROADMAP.md](ROADMAP.md)). Prompt fatigue is measured
   today only by `moat report` (asks per active hour).

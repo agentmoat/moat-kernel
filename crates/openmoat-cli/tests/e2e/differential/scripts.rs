@@ -1,11 +1,13 @@
-//! Hostile project scripts against the OS layer (#335). The hook allows `npm
-//! test` and cannot see the project's scripts, so whatever stops a payload in
-//! them is the operating system. Each `scripts` entry of
+//! Hostile project scripts against the OS layer (#335, #346). The hook allows
+//! `npm test` and cannot see the project's scripts, so whatever stops a payload
+//! in them is the operating system. Each `scripts` entry of
 //! `tests/differential/scenarios.yaml` becomes the evil project's test script
 //! and runs as `npm test` under `moat run` (Seatbelt on macOS, Landlock and
-//! seccomp on Linux); the test asserts what the OS did to it (EPERM, EACCES,
-//! the proxy's 403) and the side effects, and `docs/EVIDENCE.md` is the table
-//! generated from the same list.
+//! seccomp on Linux), under Claude Code's sandbox (`claude.rs`) and under
+//! Codex's `moat` profile (`codex.rs`), each configured as `moat init` leaves
+//! it; the test asserts what the OS did to it (EPERM, EACCES, a proxy's 403)
+//! and the side effects, and `docs/EVIDENCE.md` is the table generated from
+//! the same list.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -22,9 +24,22 @@ pub enum Outcome {
     Eperm,
     /// A call failed with `EACCES` ("Permission denied").
     Eacces,
-    /// OpenMoat's proxy answered the request with 403.
+    /// A call failed with `ENOENT`: bubblewrap mounted an empty directory over
+    /// the path, so it does not exist inside the sandbox.
+    Enoent,
+    /// The connection was refused: the sandbox has its own network namespace,
+    /// where nothing listens.
+    Refused,
+    /// The layer's proxy answered the request with 403.
     #[serde(rename = "proxy-403")]
     Proxy403,
+    /// The payload completed inside the sandbox, but what it wrote or sent
+    /// stayed there (an empty in-memory directory, its own network namespace):
+    /// the side-effect checks show nothing reached the host.
+    Contained,
+    /// The sandbox failed to start the command; nothing of the payload ran.
+    #[serde(rename = "sandbox-error")]
+    SandboxError,
     /// The payload completed.
     Ran,
 }
@@ -34,7 +49,11 @@ impl Outcome {
         match self {
             Self::Eperm => "EPERM",
             Self::Eacces => "EACCES",
+            Self::Enoent => "ENOENT",
+            Self::Refused => "refused",
             Self::Proxy403 => "proxy 403",
+            Self::Contained => "contained",
+            Self::SandboxError => "sandbox error",
             Self::Ran => "ran",
         }
     }
@@ -55,27 +74,48 @@ pub struct Script {
     pub seatbelt: Outcome,
     /// The outcome under `moat run` on Linux.
     pub landlock: Outcome,
+    /// The outcome under Claude Code's sandbox on macOS.
+    #[serde(rename = "claude-macos")]
+    pub claude_macos: Outcome,
+    /// The outcome under Claude Code's sandbox on Linux.
+    #[serde(rename = "claude-linux")]
+    pub claude_linux: Outcome,
+    /// The outcome under `codex sandbox -P moat` on macOS.
+    #[serde(rename = "codex-macos")]
+    pub codex_macos: Outcome,
+    /// The outcome under `codex sandbox -P moat` on Linux.
+    #[serde(rename = "codex-linux")]
+    pub codex_linux: Outcome,
+    /// Layers where the script is a known gap, each tracked by an issue.
     #[serde(default)]
-    pub gap: Option<Gap>,
+    pub gaps: Vec<Gap>,
 }
 
 /// The executing layers: id (as `gap.layer` names it) and the column heading.
-const LAYERS: [(&str, &str); 2] = [
+const LAYERS: [(&str, &str); 6] = [
     ("seatbelt", "`moat run`, macOS (Seatbelt)"),
     ("landlock", "`moat run`, Linux (Landlock + seccomp)"),
+    ("claude-macos", "Claude Code sandbox, macOS"),
+    ("claude-linux", "Claude Code sandbox, Linux"),
+    ("codex-macos", "Codex `moat` profile, macOS"),
+    ("codex-linux", "Codex `moat` profile, Linux"),
 ];
 
 impl Script {
     fn expected(&self, layer: &str) -> Outcome {
-        if layer == "seatbelt" {
-            self.seatbelt
-        } else {
-            self.landlock
+        match layer {
+            "seatbelt" => self.seatbelt,
+            "landlock" => self.landlock,
+            "claude-macos" => self.claude_macos,
+            "claude-linux" => self.claude_linux,
+            "codex-macos" => self.codex_macos,
+            "codex-linux" => self.codex_linux,
+            _ => panic!("no layer {layer}"),
         }
     }
 
     fn gap_at(&self, layer: &str) -> Option<&Gap> {
-        self.gap.as_ref().filter(|g| g.layer == layer)
+        self.gaps.iter().find(|g| g.layer == layer)
     }
 }
 
@@ -90,16 +130,18 @@ fn script_list_is_well_formed() {
     for s in scripts() {
         assert!(ids.insert(s.id.clone()), "duplicate id {}", s.id);
         assert!(!s.why.trim().is_empty(), "{}: empty why", s.id);
-        if let Some(gap) = &s.gap {
+        for gap in &s.gaps {
             assert!(LAYERS.iter().any(|(id, _)| *id == gap.layer), "{}", s.id);
             assert!(gap.issue > 0 && !gap.why.trim().is_empty(), "{}", s.id);
         }
         for (layer, _) in LAYERS {
             let ran = s.expected(layer) == Outcome::Ran;
+            let gap = s.gap_at(layer).is_some();
             match &s.threat {
                 // An attack the layer lets through is a known gap, never silent.
-                Some(_) => assert!(!ran || s.gap_at(layer).is_some(), "{}: {layer}", s.id),
-                None => assert!(ran, "{}: the control must run at {layer}", s.id),
+                Some(_) => assert!(!ran || gap, "{}: {layer}", s.id),
+                // So is a layer that stops the ordinary work.
+                None => assert!(ran != gap, "{}: the control must run at {layer}", s.id),
             }
         }
     }
@@ -116,17 +158,24 @@ fn evidence_table_is_current() {
          `MOAT_UPDATE_EVIDENCE=1 cargo test -p openmoat --test e2e differential`.\n\n\
          The hook allows project scripts (`npm test`, `make test`) and cannot see what they\n\
          do ([THREAT_MODEL.md](THREAT_MODEL.md) §5). Each row is such a script: the payload is\n\
-         the project's test script, started as `npm test` under `moat run`, in a throwaway home\n\
-         with fake secrets. A cell is what the operating system did to the payload. CI asserts\n\
-         it on every pull request, together with its side effects (no secret printed, no file\n\
-         written, nothing reached the listener), and fails when it changes. Network targets are\n\
-         loopback listeners the test owns.\n\n",
+         the project's test script, started as `npm test` in a throwaway home with fake secrets,\n\
+         under `moat run` (Lightweight tier) and under each agent's own sandbox as `moat init`\n\
+         configures it (Standard tier, [SANDBOX.md](SANDBOX.md)): Claude Code 2.1.290 runs\n\
+         `claude -p --bare` against a local fake Anthropic API that asks for that one Bash call,\n\
+         with only the generated settings (no hook, so the sandbox alone is measured), and\n\
+         codex-cli 0.160.1 runs `codex sandbox -P moat`. No account, API key or internet is\n\
+         used. A cell is what the operating system did to the payload. CI asserts it on every\n\
+         pull request, together with its side effects (no secret printed, no file written,\n\
+         nothing reached the listener), and fails when it changes. Network targets are loopback\n\
+         listeners the test owns.\n\n",
     );
     doc.push_str("| Case | Threat | Payload |");
     for (_, heading) in LAYERS {
         let _ = write!(doc, " {heading} |");
     }
-    doc.push_str("\n|---|---|---|---|---|\n");
+    doc.push_str("\n|---|---|---|");
+    doc.push_str(&"---|".repeat(LAYERS.len()));
+    doc.push('\n');
     let mut gaps = String::new();
     for s in scripts() {
         let threat = s.threat.as_deref().unwrap_or("control");
@@ -151,17 +200,34 @@ fn evidence_table_is_current() {
         doc.push('\n');
     }
     doc.push_str(
-        "\nEPERM and EACCES: the system call failed with that error. proxy 403: OpenMoat's \
-         proxy\nrefused the request. ran: the payload completed.\n\n## Known gaps\n\n",
+        "\nEPERM and EACCES: the system call failed with that error. ENOENT: the path does not \
+         exist\ninside the sandbox (bubblewrap mounted an empty directory over it). refused: the \
+         connection\nwas refused inside the sandbox's own network namespace. proxy 403: the \
+         layer's proxy refused\nthe request (OpenMoat's under `moat run`, the agent's own, which \
+         allows only the policy's\nhosts, under the Standard tier). contained: the payload \
+         completed inside the sandbox, but\nwhat it wrote or sent stayed there (an empty \
+         in-memory directory, its own network namespace)\nand nothing reached the host. sandbox \
+         error: the sandbox failed to start the command, so\nnothing of the payload ran. ran: \
+         the payload completed.\n\n## Known gaps\n\n",
     );
     doc.push_str(&gaps);
     doc.push_str(
         "\n## Layers\n\n| Layer | Status |\n|---|---|\n\
          | `moat run`, macOS (Seatbelt) | verified by the `macos-14` and `macos-15-intel` CI jobs |\n\
          | `moat run`, Linux (Landlock + seccomp) | verified by the `ubuntu-latest` CI job (Linux 6.7 or later) |\n\
+         | Claude Code sandbox and Codex profile, macOS | verified by the `standard tier (macos-14)` CI job |\n\
+         | Claude Code sandbox and Codex profile, Linux | verified by the `standard tier (ubuntu-latest)` CI job (bubblewrap and socat installed); Codex runs no command there (#358) |\n\
          | `moat run`, Windows | not run: `moat run` refuses on Windows, where OpenMoat generates no OS sandbox (#135) |\n\
-         | Codex profile (`codex sandbox -P moat`) | not verified headlessly in CI, which has no `codex` binary; `scripts/ci/differential.sh` runs the command-level scenarios (`npm-test-reads-ssh` among them) under it where one is installed |\n\
-         | Claude Code sandbox settings | not verified headlessly in CI, which has no `claude` binary; `scripts/ci/differential.sh` runs the command-level attacks under it where one is installed, and headless `claude -p` cannot verify benign project work (#238) |\n",
+         | Claude Code sandbox, Windows | not run: Claude Code's sandbox does not run on native Windows, so `moat init` writes no sandbox settings there ([SANDBOX.md](SANDBOX.md)) |\n\
+         | Codex profile, Windows | not verified: the scripts and the project's `npm` shim are POSIX shell |\n\
+         \nThe Standard tier columns cover the commands the agent runs and the processes they \
+         start.\nNot verified here: what the agent's own process does outside its sandbox (Claude \
+         Code's file\ntools and hooks), a real model choosing the command, and the opt-in \
+         `sandbox.proxy_port` mode\n(the command-level scenarios of the differential suite \
+         use it; CI does not run them under the\nhost sandboxes). \
+         `scripts/ci/host-binaries.sh` fetches the pinned binaries, and\n\
+         `scripts/ci/differential.sh hostile_scripts` runs these rows under every layer the \
+         machine has.\n",
     );
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/EVIDENCE.md");
     if std::env::var_os("MOAT_UPDATE_EVIDENCE").is_some() {
@@ -176,71 +242,50 @@ fn evidence_table_is_current() {
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-mod executing {
+pub mod executing {
     use std::fmt::Write as _;
     use std::io::ErrorKind;
     use std::net::{TcpListener, UdpSocket};
     use std::path::Path;
-    use std::process::Output;
 
     use super::super::{Fixtures, Project, Verdict};
     use super::{Outcome, scripts};
     use crate::common::{output, text};
     use crate::run::confined::{ran, retried};
 
+    /// This system, as the layer ids name it (`claude-macos`, `codex-linux`).
     #[cfg(target_os = "macos")]
-    const LAYER: &str = "seatbelt";
+    pub const OS: &str = "macos";
     #[cfg(target_os = "linux")]
-    const LAYER: &str = "landlock";
+    pub const OS: &str = "linux";
 
     /// What the agent runs; the project's `bin/npm` shim starts its test script.
-    const NPM_TEST: &str = "npm test --silent";
+    pub const NPM_TEST: &str = "npm test --silent";
 
     /// The fake secrets' contents: printed only where a read went through.
     const SECRETS: [&str; 3] = ["FAKE-PRIVATE-KEY", "key=FAKE", "TOKEN=secret"];
 
-    impl Fixtures {
-        /// `payload` as the evil project's test script, run as `npm test` under
-        /// `moat run`, with the temp directory outside the home so that a home
-        /// write is not a temp-directory write.
-        fn run_script(&self, payload: &str) -> Output {
-            let project = self.tree(Project::Evil);
-            std::fs::write(project.join(".build.sh"), format!("{payload}\n")).unwrap();
-            let tmp = self.sb.home.with_file_name("tmp");
-            std::fs::create_dir_all(&tmp).unwrap();
-            output(
-                self.sb
-                    .command()
-                    .current_dir(project)
-                    .env("PATH", format!("{}/bin:/usr/bin:/bin", project.display()))
-                    .env("TMPDIR", &tmp)
-                    .args(["run", "--", "/bin/sh", "-c", NPM_TEST]),
-                None,
-            )
-        }
+    /// What a layer reported for one run of `npm test`.
+    pub struct Run {
+        /// The payload completed (exit status 0).
+        pub completed: bool,
+        /// Everything it printed.
+        pub shown: String,
     }
 
-    /// The outcome the payload's exit status and messages show, if any.
-    fn observe(out: &Output) -> Option<Outcome> {
-        let shown = text(out);
-        if out.status.success() {
-            Some(Outcome::Ran)
-        } else if shown.contains("returned error: 403") {
-            Some(Outcome::Proxy403)
-        } else if shown.contains("Operation not permitted") {
-            Some(Outcome::Eperm)
-        } else if shown.contains("Permission denied") {
-            Some(Outcome::Eacces)
-        } else {
-            None
-        }
+    /// The fixtures the scripts run in, with the home outside the temp
+    /// directory: Landlock cannot deny inside a granted tree, `/tmp` is a read
+    /// root and the host sandboxes let commands write their temp directory, so
+    /// the home lives elsewhere, as a real home does.
+    pub fn fixtures() -> Fixtures {
+        Fixtures::build_in(Path::new(env!("CARGO_TARGET_TMPDIR")))
     }
 
-    #[test]
-    fn hostile_scripts_meet_the_os_layer() {
-        // Landlock cannot deny inside a granted tree, and `/tmp` is a read root,
-        // so the home lives outside it, as a real home does.
-        let fx = Fixtures::build_in(Path::new(env!("CARGO_TARGET_TMPDIR")));
+    /// Run every script as the evil project's test script with `run`, under
+    /// the layer `layer`, and compare what the operating system did with
+    /// `scenarios.yaml`; then check that no refused call had its effect. `run`
+    /// returns `None` when the layer cannot run on this machine (it says why).
+    pub fn meet(layer: &str, fx: &Fixtures, mut run: impl FnMut() -> Option<Run>) {
         let hook = fx.hook_decision("scripts", Project::Evil, NPM_TEST);
         assert_eq!(hook, Verdict::Allow, "the hook allows `npm test`");
         let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -250,28 +295,32 @@ mod executing {
         let pinned = [".moat/policy.yaml", ".claude/settings.json"]
             .map(|file| (file, std::fs::read(fx.sb.home.join(file)).unwrap()));
 
-        let mut matrix = format!("\nhostile scripts under moat run ({LAYER}):\n");
+        let mut matrix = format!("\nhostile scripts under {layer}:\n");
         let mut mismatches = Vec::new();
         for s in scripts() {
             let payload = s
                 .payload
                 .replace("{tcp}", &tcp.local_addr().unwrap().port().to_string())
                 .replace("{udp}", &udp.local_addr().unwrap().port().to_string());
-            let out = retried(|| fx.run_script(&payload));
-            if !ran(&out) {
-                return;
-            }
-            let got = observe(&out);
-            let expected = s.expected(LAYER);
-            let leaked = SECRETS.iter().any(|secret| text(&out).contains(secret));
+            let build = fx.tree(Project::Evil).join(".build.sh");
+            std::fs::write(build, format!("{payload}\n")).unwrap();
+            let Some(out) = run() else { return };
+            let expected = s.expected(layer);
+            // A contained payload completes; the checks below the loop prove
+            // that its write or datagram did not reach the host.
+            let got = observe(&out).map(|got| match (got, expected) {
+                (Outcome::Ran, Outcome::Contained) => Outcome::Contained,
+                _ => got,
+            });
+            let leaked = SECRETS.iter().any(|secret| out.shown.contains(secret));
             let label = got.map_or("unexpected", Outcome::label);
             let _ = writeln!(matrix, "  {:<30} {label}", s.id);
-            if got != Some(expected) || (leaked && got != Some(Outcome::Ran)) {
+            if got != Some(expected) || (leaked && expected != Outcome::Ran) {
                 mismatches.push(format!(
                     "{}: {label} (leaked: {leaked}) but scenarios.yaml expects {}:\n{}",
                     s.id,
                     expected.label(),
-                    text(&out)
+                    out.shown
                 ));
             }
         }
@@ -292,6 +341,63 @@ mod executing {
         let received = udp.recv(&mut [0; 16]).map(drop).map_err(|e| e.kind());
         assert_eq!(received, Err(ErrorKind::WouldBlock), "a datagram arrived");
     }
+
+    /// The outcome the payload's exit status and messages show, if any.
+    fn observe(out: &Run) -> Option<Outcome> {
+        let shows = |message: &str| out.shown.contains(message);
+        if out.completed {
+            Some(Outcome::Ran)
+        } else if shows("error building bubblewrap command") {
+            // Codex on Linux, before the payload starts (#358).
+            Some(Outcome::SandboxError)
+        } else if shows("returned error: 403") {
+            Some(Outcome::Proxy403)
+        } else if shows("Operation not permitted") {
+            Some(Outcome::Eperm)
+        } else if shows("Permission denied") {
+            Some(Outcome::Eacces)
+        } else if shows("No such file or directory") || shows("Directory nonexistent") {
+            Some(Outcome::Enoent)
+        } else if shows("Connection refused") {
+            Some(Outcome::Refused)
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn hostile_scripts_meet_the_os_layer() {
+        let fx = fixtures();
+        let project = fx.tree(Project::Evil);
+        // The temp directory is outside the home, so a home write is not a
+        // temp-directory write.
+        let tmp = fx.sb.home.with_file_name("tmp");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let layer = if OS == "macos" {
+            "seatbelt"
+        } else {
+            "landlock"
+        };
+        meet(layer, &fx, || {
+            // Seatbelt on macos-14 sometimes refuses the connection to the
+            // proxy (#280); `retried` recognises it by `moat run`'s notice.
+            let out = retried(|| {
+                output(
+                    fx.sb
+                        .command()
+                        .current_dir(project)
+                        .env("PATH", format!("{}/bin:/usr/bin:/bin", project.display()))
+                        .env("TMPDIR", &tmp)
+                        .args(["run", "--", "/bin/sh", "-c", NPM_TEST]),
+                    None,
+                )
+            });
+            ran(&out).then(|| Run {
+                completed: out.status.success(),
+                shown: text(&out),
+            })
+        });
+    }
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
@@ -299,7 +405,8 @@ mod executing {
 fn hostile_scripts_are_not_run_without_an_os_layer() {
     eprintln!(
         "skipped: hostile scripts — `moat run` refuses on {}, where OpenMoat generates no OS \
-         sandbox (#135); run.rs checks that it refuses",
+         sandbox (#135; run.rs checks that it refuses), Claude Code's sandbox does not run, and \
+         the scripts are POSIX shell",
         std::env::consts::OS
     );
 }

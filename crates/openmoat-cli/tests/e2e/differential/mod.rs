@@ -205,10 +205,14 @@ impl Fixtures {
         w(".build.sh", &format!("{payload}\n"));
         for shim in ["npm", "cargo"] {
             let path = root.join("bin").join(shim);
-            // The real command name reaches the hook; the shim runs .build.sh.
+            // The real command name reaches the hook; the shim runs .build.sh
+            // for `npm test` and `cargo build` only: Claude Code itself runs
+            // `npm root -g` from `PATH`, outside its sandbox, which must not
+            // count as the payload escaping.
             std::fs::write(
                 &path,
-                "#!/bin/sh\nexec /bin/sh \"$(dirname \"$0\")/../.build.sh\"\n",
+                "#!/bin/sh\ncase \"$1\" in test|build) \
+                 exec /bin/sh \"$(dirname \"$0\")/../.build.sh\" ;; esac\n",
             )
             .unwrap();
             make_executable(&path);

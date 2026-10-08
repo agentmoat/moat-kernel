@@ -210,23 +210,39 @@ benign:
     codex: allow
     claude: allow
 
-# Hostile project scripts (#335). The hook allows `npm test`, so the payload in
-# the project's test script meets only the OS layer. Each `payload` becomes the
-# evil project's test script and runs as `npm test` under `moat run`; the
-# executing layer records what the operating system did to it:
+# Hostile project scripts (#335, #346). The hook allows `npm test`, so the
+# payload in the project's test script meets only the OS layer. Each `payload`
+# becomes the evil project's test script and runs as `npm test` under each
+# executing layer, which records what the operating system did to it:
 #   eperm      the call failed with EPERM ("Operation not permitted")
 #   eacces     the call failed with EACCES ("Permission denied")
-#   proxy-403  the request reached OpenMoat's proxy, which answered 403
+#   enoent     the path does not exist inside the sandbox (bubblewrap mounted
+#              an empty directory over it)
+#   refused    the connection was refused in the sandbox's own network namespace
+#   proxy-403  the request reached the layer's proxy, which answered 403
+#   contained  the payload completed, but its write or datagram stayed inside
+#              the sandbox; the test checks that nothing reached the host
+#   sandbox-error  the sandbox failed to start the command
 #   ran        the payload completed: for an attack, always a recorded `gap`
 # Layers: `seatbelt` is `moat run` on macOS, `landlock` is `moat run` on Linux
-# (Landlock and seccomp). `{tcp}` and `{udp}` are loopback listeners the test
-# owns; nothing leaves the machine. docs/EVIDENCE.md is generated from this list.
+# (Landlock and seccomp); `claude-<os>` is Claude Code's sandbox and
+# `codex-<os>` is `codex sandbox -P moat`, both as `moat init` configures them.
+# `{tcp}` and `{udp}` are loopback listeners the test owns; nothing leaves the
+# machine. docs/EVIDENCE.md is generated from this list.
 scripts:
   - id: script-benign-work
     why: "the control: a normal test script reads and writes the project and runs bash and curl"
     payload: "cat package.json > /dev/null && echo ok > out.txt && ln -sf src s && cat s/main.rs && /bin/bash -c true && curl --version > /dev/null"
     seatbelt: ran
     landlock: ran
+    claude-macos: ran
+    claude-linux: ran
+    codex-macos: ran
+    codex-linux: sandbox-error
+    gaps:
+      - layer: codex-linux
+        issue: 358
+        why: "Codex on Linux expands the profile's `**/.env` deny globs with ripgrep before it starts a command and gives up on the root-only directories under /etc, so it runs no command at all; it fails closed, which is why every attack in that column is a sandbox error too"
 
   - id: script-reads-ssh-key
     threat: T1
@@ -234,6 +250,10 @@ scripts:
     payload: 'cat "$HOME/.ssh/id_rsa"'
     seatbelt: eperm
     landlock: eacces
+    claude-macos: eperm
+    claude-linux: enoent
+    codex-macos: eperm
+    codex-linux: sandbox-error
 
   - id: script-reads-aws-credentials
     threat: T1
@@ -241,6 +261,10 @@ scripts:
     payload: 'cat "$HOME/.aws/credentials"'
     seatbelt: eperm
     landlock: eacces
+    claude-macos: eperm
+    claude-linux: enoent
+    codex-macos: eperm
+    codex-linux: sandbox-error
 
   - id: script-reads-project-env
     threat: T1
@@ -248,10 +272,17 @@ scripts:
     payload: "cat .env"
     seatbelt: eperm
     landlock: ran
-    gap:
-      layer: landlock
-      issue: 174
-      why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+    claude-macos: eperm
+    claude-linux: ran
+    codex-macos: eperm
+    codex-linux: sandbox-error
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+      - layer: claude-linux
+        issue: 359
+        why: "on Linux Claude Code's sandbox skips a denyRead glob whose first path component is a wildcard, so the generated `/**/.env` denies do nothing; the hook still denies it for the agent's own tool calls"
 
   - id: script-writes-outside-project
     threat: T4
@@ -259,6 +290,10 @@ scripts:
     payload: 'echo x > "$HOME/outside.txt"'
     seatbelt: eperm
     landlock: eacces
+    claude-macos: eperm
+    claude-linux: contained
+    codex-macos: eperm
+    codex-linux: sandbox-error
 
   - id: script-direct-tcp
     threat: T12
@@ -266,6 +301,10 @@ scripts:
     payload: "/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'"
     seatbelt: eperm
     landlock: eacces
+    claude-macos: eperm
+    claude-linux: refused
+    codex-macos: eperm
+    codex-linux: sandbox-error
 
   - id: script-dns-query
     threat: T12
@@ -273,6 +312,10 @@ scripts:
     payload: "/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'"
     seatbelt: eperm
     landlock: eperm
+    claude-macos: eperm
+    claude-linux: contained
+    codex-macos: eperm
+    codex-linux: sandbox-error
 
   - id: script-symlink-into-ssh
     threat: T11
@@ -280,6 +323,10 @@ scripts:
     payload: 'ln -s "$HOME/.ssh" keys && cat keys/id_rsa'
     seatbelt: eperm
     landlock: eacces
+    claude-macos: eperm
+    claude-linux: enoent
+    codex-macos: eperm
+    codex-linux: sandbox-error
 
   - id: script-edits-policy
     threat: T9
@@ -287,6 +334,10 @@ scripts:
     payload: 'echo "# widened" >> "$HOME/.moat/policy.yaml"'
     seatbelt: eperm
     landlock: eacces
+    claude-macos: eperm
+    claude-linux: enoent
+    codex-macos: eperm
+    codex-linux: sandbox-error
 
   - id: script-edits-hook-file
     threat: T9
@@ -294,6 +345,10 @@ scripts:
     payload: 'echo "{}" > "$HOME/.claude/settings.json"'
     seatbelt: eperm
     landlock: eacces
+    claude-macos: eperm
+    claude-linux: enoent
+    codex-macos: eperm
+    codex-linux: sandbox-error
 
   - id: script-proxy-unlisted-host
     threat: T12
@@ -301,3 +356,7 @@ scripts:
     payload: "curl -fsS -o /dev/null -m 30 http://evil.example/"
     seatbelt: proxy-403
     landlock: proxy-403
+    claude-macos: proxy-403
+    claude-linux: proxy-403
+    codex-macos: proxy-403
+    codex-linux: sandbox-error

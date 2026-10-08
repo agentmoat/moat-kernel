@@ -3,7 +3,9 @@
 # tests/differential/scenarios.yaml run against every enforcement point this
 # machine has. `cargo test` alone runs the fast subset (the hook decision, and
 # any host sandbox whose binary is already on PATH); this script also points the
-# suite at the host binaries so the executing host-sandbox layers run too.
+# suite at the host binaries so the executing host-sandbox layers run too, the
+# hostile project scripts of docs/EVIDENCE.md among them (#346). CI's
+# `standard tier` job fetches pinned binaries with scripts/ci/host-binaries.sh.
 #
 # A layer whose binary is missing prints a visible "skipped" line and the suite
 # still passes on the layers it can run. No step touches the network.
@@ -24,5 +26,7 @@ echo "▶ differential suite"
 echo "  codex:  ${MOAT_CODEX_BIN:-<none; codex layer skipped>}"
 echo "  claude: ${MOAT_CLAUDE_BIN:-<none; claude layer skipped>}"
 
-cargo test --locked -p openmoat --test e2e differential -- --nocapture
+# An argument (CI: `hostile_scripts`) narrows the run to the tests whose name
+# contains it.
+cargo test --locked -p openmoat --test e2e "${1:-differential}" -- --nocapture
 echo "✔ differential suite passed"

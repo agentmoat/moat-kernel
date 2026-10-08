@@ -57,6 +57,11 @@ weakened setting. Under Claude Code, sandboxed commands can run `git commit` but
 write `.git/hooks`, `.git/config` or the other paths that make git run code (ADR-021).
 Codex keeps `.git` read-only: commit outside its sandbox (Codex asks to).
 
+[EVIDENCE.md](EVIDENCE.md) lists what each agent's sandbox, configured this way, does
+to hostile project scripts on macOS and Linux. CI runs them on every pull request with
+pinned Claude Code and Codex binaries and no account: Claude Code headless against a
+local fake API, Codex through `codex sandbox -P moat`.
+
 To undo, delete the `sandbox` key and `permissions.blockReadsOutsideWorkingDirectories`
 from Claude Code's settings, and `default_permissions`, `[permissions.moat]` and
 `features.network_proxy` from Codex's `config.toml` (or restore the backups), then run
