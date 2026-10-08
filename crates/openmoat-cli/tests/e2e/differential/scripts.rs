@@ -250,7 +250,7 @@ pub mod executing {
     use std::fmt::Write as _;
     use std::io::ErrorKind;
     use std::net::{TcpListener, UdpSocket};
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use super::super::{Fixtures, Project, Verdict};
     use super::{Outcome, scripts};
@@ -298,6 +298,8 @@ pub mod executing {
         udp.set_nonblocking(true).unwrap();
         let pinned = [".moat/policy.yaml", ".claude/settings.json"]
             .map(|file| (file, std::fs::read(fx.sb.home.join(file)).unwrap()));
+        let project = fx.tree(Project::Evil);
+        let env = std::fs::read(project.join(".env")).unwrap();
 
         let mut matrix = format!("\nhostile scripts under {layer}:\n");
         let mut mismatches = Vec::new();
@@ -317,15 +319,23 @@ pub mod executing {
                 _ => got,
             });
             let leaked = SECRETS.iter().any(|secret| out.shown.contains(secret));
+            let planted = planted(project);
             let label = got.map_or("unexpected", Outcome::label);
             let _ = writeln!(matrix, "  {:<30} {label}", s.id);
-            if got != Some(expected) || (leaked && expected != Outcome::Ran) {
+            let escaped = leaked || !planted.is_empty();
+            if got != Some(expected) || (escaped && expected != Outcome::Ran) {
                 mismatches.push(format!(
-                    "{}: {label} (leaked: {leaked}) but scenarios.yaml expects {}:\n{}",
+                    "{}: {label} (leaked: {leaked}, planted: {planted:?}) but scenarios.yaml \
+                     expects {}:\n{}",
                     s.id,
                     expected.label(),
                     out.shown
                 ));
+            }
+            // The next script starts from the same project.
+            std::fs::write(project.join(".env"), &env).unwrap();
+            for path in planted.iter().filter(|p| !p.ends_with(".env")) {
+                std::fs::remove_file(path).unwrap();
             }
         }
         eprintln!("{matrix}");
@@ -344,6 +354,23 @@ pub mod executing {
         );
         let received = udp.recv(&mut [0; 16]).map(drop).map_err(|e| e.kind());
         assert_eq!(received, Err(ErrorKind::WouldBlock), "a datagram arrived");
+    }
+
+    /// The files below `dir` holding `PLANTED`, which the payloads that write
+    /// into the project write, the script itself (`.build.sh`) aside.
+    fn planted(dir: &Path) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                found.extend(planted(&path));
+            } else if !path.ends_with(".build.sh")
+                && std::fs::read(&path).is_ok_and(|b| b.windows(7).any(|w| w == b"PLANTED"))
+            {
+                found.push(path);
+            }
+        }
+        found
     }
 
     /// The outcome the payload's exit status and messages show, if any.

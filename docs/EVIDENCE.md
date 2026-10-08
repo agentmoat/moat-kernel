@@ -23,6 +23,10 @@ listeners the test owns.
 | `script-reads-ssh-key` | T1 | `cat "$HOME/.ssh/id_rsa"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
 | `script-reads-aws-credentials` | T1 | `cat "$HOME/.aws/credentials"` | EPERM | EACCES | EPERM | ENOENT | EPERM | EACCES |
 | `script-reads-project-env` | T1 | `cat .env` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | EACCES |
+| `script-writes-project-env` | T1 | `echo TOKEN=PLANTED >> .env` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | EACCES |
+| `script-plants-envrc` | T6 | `echo 'export LD_PRELOAD=PLANTED' > .envrc` | EPERM | **gap**: ran (#174) | EPERM | **gap**: ran (#372) | EPERM | EACCES |
+| `script-writes-project-policy` | T9 | `mkdir -p .moat && echo '# PLANTED' > .moat/policy.yaml` | EPERM | **gap**: ran (#174) | EPERM | **gap**: ran (#372) | EPERM | EROFS |
+| `script-plants-git-hook` | T6 | `echo '# PLANTED' > .git/hooks/pre-commit` | EPERM | **gap**: ran (#174) | EPERM | EROFS | EPERM | EROFS |
 | `script-writes-outside-project` | T4 | `echo x > "$HOME/outside.txt"` | EPERM | EACCES | EPERM | contained | EPERM | contained |
 | `script-direct-tcp` | T12 | `/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'` | EPERM | EACCES | EPERM | refused | EPERM | refused |
 | `script-dns-query` | T12 | `/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'` | EPERM | EPERM | EPERM | contained | EPERM | contained |
@@ -44,6 +48,12 @@ nothing of the payload ran. ran: the payload completed.
 ## Known gaps
 
 - `script-reads-project-env` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
+- `script-writes-project-env` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays writable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
+- `script-plants-envrc` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .envrc can be created (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
+- `script-plants-envrc` under Claude Code sandbox, Linux (#372): Claude Code's Linux sandbox drops every glob in denyWrite
+- `script-writes-project-policy` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .moat can be written (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls
+- `script-writes-project-policy` under Claude Code sandbox, Linux (#372): Claude Code's Linux sandbox drops every glob in denyWrite
+- `script-plants-git-hook` under `moat run`, Linux (Landlock + seccomp) (#174): Landlock only grants: a deny inside the granted project tree cannot be enforced, so .git/hooks stays writable (THREAT_MODEL §5); the hook still asks for the agent's own writes there
 
 ## Layers
 

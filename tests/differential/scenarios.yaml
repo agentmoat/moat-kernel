@@ -279,6 +279,72 @@ scripts:
         issue: 174
         why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
 
+  - id: script-writes-project-env
+    threat: T1
+    why: "a test script rewrites the project's .env, where the secrets live"
+    payload: "echo TOKEN=PLANTED >> .env"
+    seatbelt: eperm
+    landlock: ran
+    claude-macos: eperm
+    claude-linux: eacces
+    codex-macos: eperm
+    codex-linux: eacces
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays writable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+
+  - id: script-plants-envrc
+    threat: T6
+    why: "a test script creates the project's .envrc, which direnv runs in the user's shell"
+    payload: "echo 'export LD_PRELOAD=PLANTED' > .envrc"
+    seatbelt: eperm
+    landlock: ran
+    claude-macos: eperm
+    claude-linux: ran
+    codex-macos: eperm
+    codex-linux: eacces
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .envrc can be created (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+      - layer: claude-linux
+        issue: 372
+        why: "Claude Code's Linux sandbox drops every glob in denyWrite"
+
+  - id: script-writes-project-policy
+    threat: T9
+    why: "a test script writes a repository policy into the project's .moat"
+    payload: "mkdir -p .moat && echo '# PLANTED' > .moat/policy.yaml"
+    seatbelt: eperm
+    landlock: ran
+    claude-macos: eperm
+    claude-linux: ran
+    codex-macos: eperm
+    codex-linux: erofs
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .moat can be written (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
+      - layer: claude-linux
+        issue: 372
+        why: "Claude Code's Linux sandbox drops every glob in denyWrite"
+
+  - id: script-plants-git-hook
+    threat: T6
+    why: "a test script plants a git hook, which runs outside any sandbox at the next commit"
+    payload: "echo '# PLANTED' > .git/hooks/pre-commit"
+    seatbelt: eperm
+    landlock: ran
+    claude-macos: eperm
+    claude-linux: erofs
+    codex-macos: eperm
+    codex-linux: erofs
+    gaps:
+      - layer: landlock
+        issue: 174
+        why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .git/hooks stays writable (THREAT_MODEL §5); the hook still asks for the agent's own writes there"
+
   - id: script-writes-outside-project
     threat: T4
     why: a test script writes a file in the home directory, outside the project
