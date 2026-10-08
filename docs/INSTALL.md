@@ -3,22 +3,21 @@
 ## Install
 
 Release builds cover macOS (arm64, x64), Linux (x64, arm64; glibc and static musl)
-and Windows (x64). Every alpha is a GitHub pre-release, so installer
-URLs name the version; take the newest from
-[Releases](https://github.com/crocodile-labs/openmoat/releases).
+and Windows (x64). The installer URLs below always fetch the latest release; every
+release is listed on [Releases](https://github.com/crocodile-labs/openmoat/releases).
 
 ```bash
 # macOS and Linux: installs moat into ~/.cargo/bin
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.7/openmoat-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/crocodile-labs/openmoat/releases/latest/download/openmoat-installer.sh | sh
 
 # Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/crocodile-labs/openmoat/releases/download/v0.1.0-alpha.7/openmoat-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/crocodile-labs/openmoat/releases/latest/download/openmoat-installer.ps1 | iex"
 
 # Homebrew (macOS, Linux)
 brew install crocodile-labs/tap/moat
 
-# From crates.io (Rust 1.95); cargo installs a pre-release only when asked by version
-cargo install openmoat --locked --version 0.1.0-alpha.7
+# From crates.io (Rust 1.95)
+cargo install openmoat --locked
 ```
 
 To build from a clone instead (Rust 1.95, pinned by `rust-toolchain.toml`):
@@ -35,7 +34,7 @@ Each release carries `sha256.sum` and GitHub build attestations:
 
 ```bash
 brew update && brew upgrade moat                              # Homebrew: update the tap first
-cargo install openmoat --locked --force --version <version>   # crates.io
+cargo install openmoat --locked --force                       # crates.io
 ```
 
 With the installers, run the installer of the new release. Hooks keep working after an
