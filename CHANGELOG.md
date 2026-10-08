@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- On Linux, Codex's sandbox now keeps project scripts from creating `.env` and `.envrc` in the workspace roots (#377). Codex hides only the files a deny glob matches when a command starts, so a script could create a missing `.envrc`, which direnv runs in the user's shell. `moat init` and `moat sandbox sync` now also write `.env` and `.envrc` as deny entries under `:workspace_roots` on Linux; bubblewrap mounts an empty read-only file over a missing one while the command runs, and the script gets `EROFS`. `.env.local`, a `.envrc` in a subdirectory and a project's `bin/moat` stay creatable for sandboxed commands on Linux; `moat sandbox show` lists them (`codex.linux-write-globs`). macOS profiles are unchanged.
+
 ## [0.1.0-alpha.7] - 2026-10-08
 
 ### Added

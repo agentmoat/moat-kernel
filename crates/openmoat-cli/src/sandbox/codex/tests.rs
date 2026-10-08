@@ -150,6 +150,46 @@ fn deny_globs_are_repeated_only_below_roots_in_the_home() {
 }
 
 #[test]
+fn linux_denies_each_glob_name_directly_in_the_workspace_roots() {
+    let mut out = generated(DEFAULT_POLICY);
+    deny_names(&mut out);
+    let ws = [":workspace_roots"];
+    assert_eq!(mode(&out, &ws, ".env"), Some("deny"));
+    assert_eq!(mode(&out, &ws, ".envrc"), Some("deny"));
+    assert_eq!(
+        mode(&out, &ws, ".moat"),
+        Some("read"),
+        "`.moat/**` is a tree"
+    );
+    assert_eq!(
+        mode(&out, &ws, "bin"),
+        None,
+        "a missing bin must stay creatable"
+    );
+    assert_eq!(mode(&out, &ws, ".env.*"), None);
+    let globs = out
+        .report
+        .allowances
+        .iter()
+        .find(|a| a.rule == "codex.linux-write-globs")
+        .map(|a| a.patterns.clone())
+        .unwrap_or_default();
+    assert!(globs.contains(&"**/.env.*".to_owned()), "{globs:?}");
+    assert!(globs.contains(&"**/bin/moat".to_owned()), "{globs:?}");
+
+    let mut quiet = generated("version: 1\n");
+    deny_names(&mut quiet);
+    assert!(
+        !quiet
+            .report
+            .allowances
+            .iter()
+            .any(|a| a.rule == "codex.linux-write-globs"),
+        "no glob, nothing reported"
+    );
+}
+
+#[test]
 fn network_lists_domains_and_keeps_addresses_unlisted() {
     let out = generated(DEFAULT_POLICY);
     let net = &out.profile["network"];

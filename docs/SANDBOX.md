@@ -42,7 +42,13 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   before each command and runs none when one is unreadable, and those hold root-only
   directories. `moat sandbox show` lists these roots (`codex.outside-home`); the hook
   still denies the agent's own reads there. A directory you cannot list inside the
-  project or a home read root still stops Codex on Linux. Codex on Linux also runs its
+  project or a home read root still stops Codex on Linux. There a glob hides only the
+  files it matches when a command starts, so a command could create a missing match;
+  on Linux the profile therefore also denies each `**/<name>` deny's name directly in
+  the workspace roots (`.env`, `.envrc`): bubblewrap mounts an empty read-only file
+  over a missing one while the command runs. The rest (`.env.local`, a `.envrc` in a
+  subdirectory, `bin/moat`) can still be created by sandboxed commands on Linux;
+  `moat sandbox show` lists it (`codex.linux-write-globs`). Codex on Linux also runs its
   own executable inside the sandbox, so on Linux the profile lets commands read the
   executable `codex` on `PATH` starts (through npm's launcher, the platform binary),
   listed as `codex.own-binary`. Run `moat sandbox sync` after installing or moving

@@ -93,7 +93,10 @@ something the alpha claims to stop.
   it, and runs no command when one is unreadable, so the generated profile repeats the
   `.env` denies only in the project and the read roots inside the home (#358): a
   sandboxed command can read a `.env` under `/etc`, `/usr` or `/tmp` outside the
-  project, and on Linux a `.env` created after the command started. Claude Code's file tools, `WebFetch`, MCP servers and hooks run
+  project, and on Linux a `.env` created after the command started. It can also
+  create a missing match there, except `.env` and `.envrc` directly in a workspace
+  root, which the profile denies by name (#377): `.env.local`, a `.envrc` in a
+  subdirectory and a project's `bin/moat` stay creatable. Claude Code's file tools, `WebFetch`, MCP servers and hooks run
   outside its sandbox; only the hook governs them. Writes by a sandboxed command to
   the session's working directory are allowed even when the session started above
   the git root, and Claude Code leaves paths outside the user directories (`/Users`,
