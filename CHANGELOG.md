@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-alpha.5] - 2026-10-07
+
 ### Added
 - docs/ADDING_AN_AGENT.md: how to add support for another AI coding agent, from mapping its hook payload to an action, through installing the hook and capturing fixtures, to what the pull request must include (#319). Linked from CONTRIBUTING.md and the README.
 - docs/SANDBOX.md: how to run the Cursor CLI (`agent`) under `moat run` on macOS: its installation directory in `sandbox.read_roots`, an allow rule for `api2.cursor.sh`, `--write ~/.cursor`, `CURSOR_API_KEY` instead of the keychain, and `--sandbox disabled` for that run (#324).
