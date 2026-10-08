@@ -79,6 +79,11 @@ fn claude_code_read_ask_is_approved_for_good() {
     assert!(shown.contains("wanted to read"), "{shown}");
     assert!(shown.contains("fs.read"), "{shown}");
     assert!(
+        shown.contains("will allow: read exactly ")
+            && shown.contains("plan.md (no other path); deny rules still win"),
+        "{shown}"
+    );
+    assert!(
         shown.contains("undo: moat allow --remove approved-1"),
         "{shown}"
     );

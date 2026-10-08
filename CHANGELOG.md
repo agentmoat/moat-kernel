@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - README, the CLI crate README and docs/INSTALL.md no longer say every action is checked: they say OpenMoat checks the commands, file access, web requests and MCP calls the agents report through their hooks, which is what README Limits and THREAT_MODEL describe (#331).
+- A permanent approval (`moat allow --always`, `moat allow --last --always`, or `a` in `moat`) prints what the rule will match before writing it (#333). For a shell command: `will allow: npm test (and the same command with extra arguments); deny rules still win`, since a command rule matches the approved command as a prefix. For files it says the rule names exactly those paths. The undo line is unchanged, and so is what a rule matches.
 
 ## [0.1.0-alpha.5] - 2026-10-07
 

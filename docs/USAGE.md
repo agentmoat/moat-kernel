@@ -86,7 +86,10 @@ The last ask can be a shell command or a file read, write or delete (a Claude Co
 file tool, a Codex `apply_patch`, a Cursor file tool). A session grant covers that
 exact command, or those exact files for that action. `--always` adds a rule for the
 command, or an `fs.read` or `fs.write` rule for exactly those paths, and prints it
-with the `moat allow --remove` command that undoes it. For a whole directory use
+with the `moat allow --remove` command that undoes it. Before writing it, it prints
+what the rule will match: a command rule also matches that command with extra
+arguments (`will allow: npm test (and the same command with extra arguments); deny
+rules still win`), a file rule only the exact paths. For a whole directory use
 `moat allow --dir <path>`; for a pattern, `moat edit`. Deny rules still win.
 
 Both refuse to run without a terminal, and the default policy denies them to agents.

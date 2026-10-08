@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use openmoat_audit::Event;
-use openmoat_core::{Action, PathResolver as _, Verdict};
+use openmoat_core::{Action, PathResolver as _, RuleGroup, Verdict};
 
 use crate::approvals::{self, GRANT_TTL_MS, Grants, Overlay};
 use crate::cli::AllowArgs;
@@ -101,30 +101,31 @@ fn approve(
         let path = home.overlay_path();
         let mut overlay = Overlay::load(&path)?;
         let rule = if let Action::Shell { command } = action {
-            let rule = overlay.allow_command(command)?.clone();
+            overlay.allow_command(command)?.clone()
+        } else {
+            let (reads, writes) = approvals::files(action);
+            overlay
+                .allow_files(&spellings(reads), &spellings(writes))?
+                .clone()
+        };
+        writeln!(out, "{}", will_allow(&rule))?;
+        overlay.save(&path)?;
+        if let Action::Shell { command } = action {
             writeln!(
                 out,
                 "✔ permanent rule {} allows shell \"{command}\"",
                 rule.id
             )?;
-            rule
         } else {
-            let (reads, writes) = approvals::files(action);
-            let rule = overlay
-                .allow_files(&spellings(reads), &spellings(writes))?
-                .clone();
             writeln!(out, "✔ added to {}:", path.display())?;
             for line in serde_yaml_ng::to_string(&[&rule])?.lines() {
                 writeln!(out, "    {line}")?;
             }
             writeln!(
                 out,
-                "  only this exact path; `moat allow --dir <dir>` allows a whole directory, \
-                 `moat edit` any pattern"
+                "  `moat allow --dir <dir>` allows a whole directory, `moat edit` any pattern"
             )?;
-            rule
-        };
-        overlay.save(&path)?;
+        }
         writeln!(out, "  undo: moat allow --remove {}", rule.id)?;
         warn_if_shadowed(home, &rule.id, &mut out)?;
     } else {
@@ -154,6 +155,26 @@ fn approve(
         )?;
     }
     repin(home, out)
+}
+
+/// What a permanent rule from `--always` will match, printed before it is
+/// written: shell rules are prefixes (`Overlay::allow_command`), file rules
+/// name exact paths.
+fn will_allow(rule: &RuleGroup) -> String {
+    let what = if rule.shell.is_empty() {
+        let files: Vec<String> = [("read", &rule.fs_read), ("write", &rule.fs_write)]
+            .iter()
+            .filter(|(_, paths)| !paths.is_empty())
+            .map(|(verb, paths)| format!("{verb} exactly {}", paths.join(", ")))
+            .collect();
+        format!("{} (no other path)", files.join(" and "))
+    } else {
+        format!(
+            "{} (and the same command with extra arguments)",
+            rule.shell.join(", ")
+        )
+    };
+    format!("will allow: {what}; deny rules still win")
 }
 
 /// Each path as asked and with its symlinks resolved, since the hook checks a
