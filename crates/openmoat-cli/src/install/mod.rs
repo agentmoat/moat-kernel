@@ -53,6 +53,12 @@ pub struct HookSpec {
 const TOOL_HOOK_TIMEOUT_S: u64 = 600;
 /// Seconds for the settings-change veto, which never waits for a person.
 const CONFIG_HOOK_TIMEOUT_S: u64 = 60;
+/// Seconds `moat guard` may take before it denies on its own. A host that times
+/// a hook out treats it as failed, and Claude Code, Codex and the Continue CLI
+/// then run the call; below every timeout above, so the host gets the deny.
+pub const GUARD_BUDGET_S: u64 = 10;
+const _: () = assert!(GUARD_BUDGET_S < CONFIG_HOOK_TIMEOUT_S);
+const _: () = assert!(GUARD_BUDGET_S < TOOL_HOOK_TIMEOUT_S);
 
 /// Every Claude Code tool `openmoat-hosts` maps to an action; a tool missing here
 /// never reaches `moat guard`.

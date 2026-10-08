@@ -205,15 +205,46 @@ something the alpha claims to stop.
   - Codex's own API requests then go through `moat proxy` too. Its API hosts
     (`api.openai.com`, `chatgpt.com`) need a `fetch` allow rule, or Codex cannot reach
     its model.
-- **Hosts proceed when the hook binary is missing.** Claude Code and Codex treat a
-  hook that cannot start as a non-blocking error and run the tool call. Cursor blocks
-  because `moat init` sets `failClosed`. `moat status` and `moat doctor` report a
-  missing hook binary.
-- **Continue CLI runs the call when the hook fails.** `cn` loads hooks from
+- **When the hook fails, most hosts run the call.** The host rows below come from
+  each host's documentation or source as of 2026-10-07 ([Claude Code hooks][cc-hooks],
+  [Codex hooks][codex-hooks] and [`pre_tool_use.rs`][codex-pre],
+  [`command_runner.rs`][codex-runner], [Cursor hooks][cursor-hooks], Continue
+  [`hookRunner.ts`][cn-runner]); *unverified* marks what the source does not state.
+  The rows marked "ours" are tested end to end with the real binary
+  (`crates/openmoat-cli/tests/e2e/host_failures.rs`), and `protection.rs` (`gaps`)
+  repeats the host rows in each agent's `known gaps` line.
+
+  | Case | Claude Code | Codex | Cursor | Continue CLI |
+  |---|---|---|---|---|
+  | Hook binary missing or cannot start | runs the call | runs the call | blocks: `moat init` sets `failClosed` (*unverified* for a missing binary; Cursor runs a shell string, which exits 127) | runs the call |
+  | Hook crashes or exits non-zero, not 2, without output | runs the call | runs the call | blocks (`failClosed`) | runs the call |
+  | Hook times out | runs the call | runs the call | blocks (`failClosed`) | runs the call (a killed hook counts as exit 0) |
+  | Timeout: host default / set by `moat init` | 600 s / 600 s (`ConfigChange` 60 s) | 600 s / 600 s | not documented (*unverified*) / 600 s | 600 s / 600 s (Claude Code's entry) |
+  | Hook prints no or malformed JSON, exit 0 | runs the call | runs the call | blocks (permission hooks) | runs the call |
+  | Exit 2 | blocks | blocks when stderr is not empty | blocks | blocks |
+  | Ours: malformed or truncated payload, unknown event | deny, exit 2 | deny, exit 2 | deny, exit 2 | deny, exit 2 |
+  | Ours: tool OpenMoat does not know | allow, rule `ungoverned`, recorded; the installed matcher sends only mapped tools | as Claude Code | a tool naming a path is checked as reading it; otherwise allow, `ungoverned` | as Claude Code |
+  | Ours: no decision within 10 s (`GUARD_BUDGET_S`) | deny, exit 2, not recorded | same | same | same |
+  | Ours: hook missing, out of date or naming a binary that does not exist | `moat status` and `moat doctor`: `not protected` | same | same | not applicable: `cn` fires no hooks (below) |
+
+  `guard` writes the reason of every deny to stderr, so Codex honours its exit 2, and
+  turns its own panics into a deny. A crash that bypasses that (killed, aborted, out of
+  memory) or a missing binary leaves Claude Code, Codex and `cn` with no way to block:
+  none of them has a fail-closed setting. A `guard` that hangs denies after 10 s, well
+  before any host timeout `moat init` sets, so the host never reaches the timeout that
+  would run the call; that deny is not recorded, because what hangs may be the audit
+  log.
+
+  [cc-hooks]: https://code.claude.com/docs/en/hooks
+  [codex-hooks]: https://developers.openai.com/codex/hooks
+  [codex-pre]: https://github.com/openai/codex/blob/main/codex-rs/hooks/src/events/pre_tool_use.rs
+  [codex-runner]: https://github.com/openai/codex/blob/main/codex-rs/hooks/src/engine/command_runner.rs
+  [cursor-hooks]: https://cursor.com/docs/agent/hooks
+  [cn-runner]: https://github.com/continuedev/continue/blob/main/extensions/cli/src/hooks/hookRunner.ts
+- **The Continue CLI.** `cn` loads hooks from
   `~/.claude/settings.json` and `.claude/settings.json`, so OpenMoat's Claude Code hook
   also runs inside `cn`. `guard` recognises `cn` and sends it every `ask` as a deny
-  (ARCHITECTURE §5), but `cn` still runs the call when the hook crashes, cannot start,
-  times out (600 s by default) or prints bad JSON; only exit 2 or a deny stops it.
+  (ARCHITECTURE §5); on a hook failure `cn` runs the call (table above).
   The released Continue CLI does not run hooks: `cn` 1.5.47 (continuedev/continue
   `main` at `5522c6f`) loads them but fires no event (continuedev/continue#11043 closed
   unmerged), so OpenMoat cannot check its tool calls today. Run `cn` under `moat run`.

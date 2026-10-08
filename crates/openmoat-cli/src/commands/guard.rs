@@ -5,7 +5,8 @@
 //! that cannot evaluate must not let the action through.
 
 use std::io::{self, Read as _, Write as _};
-use std::time::Instant;
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use openmoat_audit::{KnownSecrets, NewEvent, Store};
@@ -18,6 +19,7 @@ use crate::context;
 use crate::environment::Snapshot;
 use crate::exit::Code;
 use crate::home::Home;
+use crate::install::GUARD_BUDGET_S;
 use crate::integrity::{self, INTEGRITY_RULE, Lock};
 use crate::realpath::FsPathResolver;
 use crate::{secrets, taint};
@@ -30,18 +32,64 @@ const SESSION_GRANT_RULE: &str = "approved-session";
 
 pub fn run(args: &GuardArgs) -> Code {
     let host = args.host;
+    deny_when_over_budget(host);
     // A panic would exit 101, which Claude Code treats as a non-blocking hook
     // failure, i.e. the call would proceed. Turn it into an explicit deny.
     if let Ok(code) = std::panic::catch_unwind(|| decide_and_respond(host)) {
         return code;
     }
     let decision = kernel_error(&anyhow::Error::msg("internal error while deciding"));
-    let response = host.render_response(&HookEvent::default(), &decision);
-    // `println!` would panic again on a closed pipe and exit 101; exit 2 is
-    // the deny every host honours whether or not the response arrives.
-    let _ = writeln!(io::stdout(), "{response}");
-    eprintln!("{}", openmoat_hosts::reason_line(&decision));
-    Code::Deny
+    respond(host, &HookEvent::default(), &decision)
+}
+
+/// A hook the host times out counts as failed, and most hosts then run the
+/// call, so after [`GUARD_BUDGET_S`] the guard denies on its own, unrecorded
+/// (what is stuck may be the audit log), in the default event's format; exit
+/// 2 denies whatever the event.
+fn deny_when_over_budget(host: Host) {
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(GUARD_BUDGET_S));
+        let decision = kernel_error(&anyhow::Error::msg(format!(
+            "no decision within {GUARD_BUDGET_S} s"
+        )));
+        if let Some(code) = answer_once(host, &HookEvent::default(), &decision) {
+            std::process::exit(code as i32);
+        }
+    });
+}
+
+/// Whether a response was written: the decision's or the budget's deny,
+/// whichever comes first. The guard answers once.
+static RESPONDED: Mutex<bool> = Mutex::new(false);
+
+/// [`answer_once`]; when the budget's deny came first, its exit code.
+fn respond(host: Host, event: &HookEvent, decision: &Decision) -> Code {
+    answer_once(host, event, decision).unwrap_or(Code::Deny)
+}
+
+/// Write `decision` for `event` and return the exit code that goes with it, or
+/// `None` when a response was already written.
+fn answer_once(host: Host, event: &HookEvent, decision: &Decision) -> Option<Code> {
+    let mut responded = RESPONDED.lock().unwrap_or_else(PoisonError::into_inner);
+    if *responded {
+        return None;
+    }
+    *responded = true;
+    let response = host.render_response(event, decision);
+    let mut stdout = io::stdout().lock();
+    if let Err(error) = writeln!(stdout, "{response}").and_then(|()| stdout.flush()) {
+        // Without a response the host falls back to its own default, which
+        // may be to proceed; exit 2 is the one signal every host honours.
+        eprintln!("moat: could not write the hook response: {error}");
+        return Some(Code::Deny);
+    }
+    Some(match decision.verdict {
+        Verdict::Allow | Verdict::Ask => Code::Ok,
+        Verdict::Deny => {
+            eprintln!("{}", openmoat_hosts::reason_line(decision));
+            Code::Deny
+        }
+    })
 }
 
 fn decide_and_respond(installed_for: Host) -> Code {
@@ -74,23 +122,7 @@ fn decide_and_respond(installed_for: Host) -> Code {
     // What the host receives can be stricter than what was decided and recorded
     // (Codex and the Continue CLI cannot ask, so an `ask` reaches them as a `deny`).
     let decision = host.answer(&event, &decision);
-    let response = host.render_response(&event, &decision);
-    let mut stdout = io::stdout().lock();
-    let written = writeln!(stdout, "{response}").and_then(|()| stdout.flush());
-    if let Err(error) = written {
-        // Without a response the host falls back to its own default, which
-        // may be to proceed; exit 2 is the one signal every host honours.
-        eprintln!("moat: could not write the hook response: {error}");
-        return Code::Deny;
-    }
-
-    match decision.verdict {
-        Verdict::Allow | Verdict::Ask => Code::Ok,
-        Verdict::Deny => {
-            eprintln!("{}", openmoat_hosts::reason_line(&decision));
-            Code::Deny
-        }
-    }
+    respond(host, &event, &decision)
 }
 
 /// Decide one hook payload. `known` gets the brokered secret values to mask in
