@@ -2,8 +2,9 @@
 //! runs under `codex sandbox -P moat`, the Seatbelt (macOS) or Landlock (Linux)
 //! profile Codex derives from the `[permissions.moat]` profile `moat init`
 //! generates, with `moat proxy` running as Codex's upstream. The binary is
-//! `MOAT_CODEX_BIN`, else `codex` on `PATH`; without one the layer prints a
-//! visible skip and the suite passes on the other layers.
+//! `MOAT_CODEX_BIN` only (scripts/ci/differential.sh sets it from `PATH`), so the
+//! quality gate never picks up whatever `codex` a developer has installed; without
+//! it the layer prints a visible skip and the suite passes on the other layers.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -14,12 +15,9 @@ use crate::common::text;
 
 /// The codex binary, or `None` to skip the layer.
 fn binary() -> Option<PathBuf> {
-    if let Some(explicit) = std::env::var_os("MOAT_CODEX_BIN").filter(|v| !v.is_empty()) {
-        return Some(PathBuf::from(explicit));
-    }
-    std::env::split_paths(&std::env::var_os("PATH")?)
-        .map(|dir| dir.join("codex"))
-        .find(|p| p.is_file())
+    std::env::var_os("MOAT_CODEX_BIN")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
 }
 
 impl Fixtures {

@@ -4,15 +4,16 @@
 [![Release](https://img.shields.io/github/v/release/crocodile-labs/openmoat?include_prereleases)](https://github.com/crocodile-labs/openmoat/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)](#license)
 
-**Security for AI coding agents.** OpenMoat checks each command, file access, web
-request and MCP call an AI coding agent makes through its hooks, and stops the dangerous
-ones before they run.
+**Security for AI coding agents.** One local policy decides what Claude Code, Codex and
+Cursor may run, read, write and send, and the same policy configures every layer that
+enforces it: the agent's hook, its OS sandbox, the network and its secrets. What each
+layer stops is tested in CI and published in [docs/EVIDENCE.md](docs/EVIDENCE.md).
 
 Works with **Claude Code**, **Codex** and **Cursor**, with more agents to come. Built
 by Crocodile Labs. The command is `moat`.
 
-**Single Rust binary · about 10 ms per check · no AI model decides · 40 MoatBench
-scenarios in CI · nothing leaves your machine unless you export it**
+**Single Rust binary · about 10 ms per check · no AI model decides · blocks when its own
+check fails · published evidence · nothing leaves your machine unless you export it**
 
 [Install](docs/INSTALL.md) · [Usage](docs/USAGE.md) · [Policy](docs/POLICY.md) ·
 [Threat model](docs/THREAT_MODEL.md) · [Demo](docs/DEMO.md) · [Roadmap](docs/ROADMAP.md)
@@ -126,6 +127,15 @@ OpenMoat does not replace the agent's prompt or sandbox. It fills the gaps betwe
 | One policy for Claude Code, Codex and Cursor | no | no, a format per agent | yes |
 | Blocks everything when its policy or the agent's settings change behind its back | no | no | yes, with a policy lock |
 | Tamper-evident record of every decision | no | no | yes |
+| Blocks the call when its own check errors or hangs | – | – | yes (the agent still runs the call if the hook binary is missing; THREAT_MODEL §5) |
+| Published tests of what the OS layer stops | no | no | yes, [docs/EVIDENCE.md](docs/EVIDENCE.md) |
+
+Other hook-based tools also check agent tool calls. As of October 2026 their own docs
+say [Sage](https://github.com/gendigitalinc/sage/blob/main/docs/user-guide.md),
+[Numbat](https://github.com/perplexityai/numbat/blob/main/docs/enforcement.md) and
+[ggshield's AI hooks](https://docs.gitguardian.com/endpoint-protection/ai-hooks) allow
+the call when their check fails, and none of them configures the agents' OS sandboxes.
+OpenMoat supports fewer agents than some of them.
 
 ## Supported agents
 
