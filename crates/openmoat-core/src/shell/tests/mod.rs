@@ -17,7 +17,7 @@ fn ctx() -> ShellContext<'static> {
 fn parsed(cmd: &str) -> Vec<AtomicAction> {
     match classify(cmd, &ctx()) {
         ParseOutcome::Parsed(atoms) => atoms,
-        ParseOutcome::Unparseable { reason } => panic!("unparseable `{cmd}`: {reason}"),
+        ParseOutcome::Unparseable { reason, .. } => panic!("unparseable `{cmd}`: {reason}"),
     }
 }
 
@@ -370,10 +370,21 @@ fn tilde_user_words_name_home_directories() {
     assert!(has_read(&parsed("cat ~+/.env"), "/p/.env"));
     for input in ["cat ~-/.ssh/id_rsa", "echo x > ~-/f"] {
         match classify(input, &ctx()) {
-            ParseOutcome::Unparseable { reason } => assert!(reason.contains("~-"), "{reason}"),
+            ParseOutcome::Unparseable { reason, .. } => assert!(reason.contains("~-"), "{reason}"),
             ParseOutcome::Parsed(a) => panic!("`{input}` must not resolve: {a:?}"),
         }
     }
+}
+
+#[test]
+fn a_part_that_cannot_be_classified_keeps_the_others() {
+    let ParseOutcome::Unparseable { atoms, .. } = classify(
+        "cd \"$X\"; cat a /etc/hosts; sh -ee.a; cat /etc/passwd",
+        &ctx(),
+    ) else {
+        panic!("an unknown directory and option must stay unparseable");
+    };
+    assert!(has_read(&atoms, "/etc/hosts") && has_read(&atoms, "/etc/passwd"));
 }
 
 #[test]
@@ -442,7 +453,7 @@ fn atom_bound_holds_on_every_classification_path() {
         format!("make test --eval 'x:;cat {}'", many.join(" ")),
     ] {
         match classify(&command, &ctx()) {
-            ParseOutcome::Unparseable { reason } => {
+            ParseOutcome::Unparseable { reason, .. } => {
                 assert!(reason.contains(&super::MAX_ATOMS.to_string()), "{reason}");
             }
             ParseOutcome::Parsed(atoms) => panic!("{} atoms accepted", atoms.len()),

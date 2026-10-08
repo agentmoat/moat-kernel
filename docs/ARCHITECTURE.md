@@ -125,7 +125,9 @@ Claude Code treats exit 101 as a non-blocking error.
 - **Fetch** (Claude Code `WebFetch`). A `fetch` atom for the URL's host (ADR-017).
 
 Anything the lexer or classifier cannot make sense of is `unparseable`, which the
-engine turns into `ask`, never `allow`.
+engine turns into `ask`, never `allow`. `ParseOutcome::Unparseable` carries the atoms
+classified around the part that failed (other simple commands, other MCP arguments), and
+the engine merges its `ask` with their decisions, so the failing part cannot hide a deny.
 
 ### Host tool mapping
 

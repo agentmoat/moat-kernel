@@ -23,7 +23,9 @@
 //!
 //! Classification is conservative by design: when the input cannot be parsed
 //! safely the result is [`ParseOutcome::Unparseable`], which the engine maps to
-//! `ask`, never `allow`. `<<<` here-strings and here-document bodies are data,
+//! `ask`, never `allow`. A simple command (or a path in it) that cannot be
+//! classified does not stop the others: their atoms are kept, so a `deny` among
+//! them still wins over the `ask`. `<<<` here-strings and here-document bodies are data,
 //! except that the substitutions and variables the shell expands in them are
 //! classified and a shell or interpreter reading stdin runs them as its program.
 //!
@@ -64,7 +66,23 @@ use crate::paths;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseOutcome {
     Parsed(Vec<AtomicAction>),
-    Unparseable { reason: String },
+    /// Some part could not be classified (`reason`); `atoms` are the parts that
+    /// were, still decided so that a `deny` among them is not lost.
+    Unparseable {
+        reason: String,
+        atoms: Vec<AtomicAction>,
+    },
+}
+
+impl ParseOutcome {
+    /// The atoms classified, and why the rest could not be, if anything was left.
+    #[must_use]
+    pub fn into_parts(self) -> (Vec<AtomicAction>, Option<String>) {
+        match self {
+            Self::Parsed(atoms) => (atoms, None),
+            Self::Unparseable { reason, atoms } => (atoms, Some(reason)),
+        }
+    }
 }
 
 /// Context needed to normalise paths inside a command. No I/O.
@@ -107,14 +125,17 @@ pub const MAX_DIRS: usize = 16;
 #[must_use]
 pub fn classify(command: &str, ctx: &ShellContext<'_>) -> ParseOutcome {
     let mut sink = Sink::default();
-    match commands::classify_into(command, ctx, &mut sink, 0) {
-        Ok(()) if sink.atoms.is_empty() => ParseOutcome::Unparseable {
-            reason: "no command found".to_owned(),
-        },
-        Ok(()) => ParseOutcome::Parsed(sink.atoms),
-        Err(e) => ParseOutcome::Unparseable {
+    let stopped = commands::classify_into(command, ctx, &mut sink, 0).err();
+    match sink.skipped.or(stopped) {
+        Some(e) => ParseOutcome::Unparseable {
             reason: e.to_string(),
+            atoms: sink.atoms,
         },
+        None if sink.atoms.is_empty() => ParseOutcome::Unparseable {
+            reason: "no command found".to_owned(),
+            atoms: Vec::new(),
+        },
+        None => ParseOutcome::Parsed(sink.atoms),
     }
 }
 
@@ -142,6 +163,8 @@ pub(crate) enum ClassifyError {
 #[derive(Debug, Default)]
 pub(crate) struct Sink {
     atoms: Vec<AtomicAction>,
+    /// The first part classification went past without understanding it.
+    skipped: Option<ClassifyError>,
 }
 
 impl Sink {
@@ -156,9 +179,23 @@ impl Sink {
         Ok(())
     }
 
+    /// Note a part that could not be classified and carry on with the rest:
+    /// the command still asks, and what else it does is still decided.
+    pub(crate) fn skip(&mut self, error: ClassifyError) {
+        self.skipped.get_or_insert(error);
+    }
+
+    /// Every path `word` may name, or none when one of them is not known (skipped).
+    fn paths(&mut self, ctx: &ShellContext<'_>, word: &str) -> Vec<String> {
+        ctx.paths(word).unwrap_or_else(|e| {
+            self.skip(e);
+            Vec::new()
+        })
+    }
+
     /// An `FsRead` for every path `word` may name.
     pub(crate) fn read(&mut self, ctx: &ShellContext<'_>, word: &str) -> Result<(), ClassifyError> {
-        for path in ctx.paths(word)? {
+        for path in self.paths(ctx, word) {
             self.push(AtomicAction::FsRead { path })?;
         }
         Ok(())
@@ -170,7 +207,7 @@ impl Sink {
         ctx: &ShellContext<'_>,
         word: &str,
     ) -> Result<(), ClassifyError> {
-        for path in ctx.paths(word)? {
+        for path in self.paths(ctx, word) {
             self.push(AtomicAction::FsWrite { path })?;
         }
         Ok(())

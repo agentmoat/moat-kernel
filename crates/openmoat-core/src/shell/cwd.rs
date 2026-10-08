@@ -105,7 +105,7 @@ mod tests {
                     _ => None,
                 })
                 .collect(),
-            ParseOutcome::Unparseable { reason } => panic!("`{cmd}`: {reason}"),
+            ParseOutcome::Unparseable { reason, .. } => panic!("`{cmd}`: {reason}"),
         }
     }
 

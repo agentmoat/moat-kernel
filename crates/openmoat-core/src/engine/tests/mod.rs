@@ -138,6 +138,39 @@ fn unparseable_is_never_allowed() {
     );
 }
 
+/// A part that cannot be parsed asks without hiding the other parts' decisions:
+/// next to a secret read it still denies, alone it asks (#345).
+#[test]
+fn an_unparseable_part_never_softens_a_deny() {
+    let p =
+        policy("version: 1\ndefaults: allow\ndeny:\n  - id: keys\n    fs.read: ['~/.ssh/**']\n");
+    let compiled = CompiledPolicy::compile(&p, &ctx()).unwrap();
+    let mcp = |reads: &[&str]| Action::McpTool {
+        name: "mcp__fs__read".into(),
+        reads: reads.iter().map(|r| (*r).to_owned()).collect(),
+        writes: Vec::new(),
+        hosts: vec!["https://".into(), "example.org".into()],
+        unchecked: None,
+    };
+    let verdict = |action: &Action| {
+        let d = compiled.decide(action);
+        (d.verdict, d.rules)
+    };
+    let deny = (Verdict::Deny, vec!["keys".to_owned()]);
+    let ask = (Verdict::Ask, vec!["unparseable".to_owned()]);
+    assert_eq!(verdict(&mcp(&["~/.ssh/id_rsa"])), deny);
+    assert_eq!(verdict(&mcp(&["/p/notes"])), ask);
+    for (command, expected) in [
+        ("cd \"$X\" && cat notes ~/.ssh/id_rsa", &deny),
+        ("cd \"$X\" && cat notes /p/a", &ask),
+        ("sh -ee.a; cat ~/.ssh/id_rsa", &deny),
+        ("echo $(sh -ee.a) $(cat ~/.ssh/id_rsa)", &deny),
+        ("echo $(sh -ee.a) $(cat /p/a)", &ask),
+    ] {
+        assert_eq!(&verdict(&shell(command)), expected, "{command}");
+    }
+}
+
 /// An approval cannot make an unparseable command run: `sh -ee.a` has an option
 /// cluster the shell grammar does not know, so even a literal allow of exactly
 /// that command asks (found by the `literal_pattern` fuzz target).
@@ -328,9 +361,10 @@ fn reads_after_cd_are_checked_where_cd_went() {
             "{command}"
         );
     }
+    // The read in an unknown directory asks; the `$DIR` read is still decided.
     assert_eq!(
         compiled.decide(&shell("cd \"$DIR\" && cat id_rsa")).rules,
-        ["unparseable"]
+        ["default", "unparseable"]
     );
 }
 
