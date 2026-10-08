@@ -271,16 +271,13 @@ scripts:
     seatbelt: eperm
     landlock: ran
     claude-macos: eperm
-    claude-linux: ran
+    claude-linux: masked
     codex-macos: eperm
     codex-linux: eacces
     gaps:
       - layer: landlock
         issue: 174
         why: "Landlock only grants: a deny inside the granted project tree cannot be enforced, so .env stays readable (THREAT_MODEL §5); the hook still denies it for the agent's own tool calls"
-      - layer: claude-linux
-        issue: 359
-        why: "on Linux Claude Code's sandbox skips a denyRead glob whose first path component is a wildcard, so the generated `/**/.env` denies do nothing; the hook still denies it for the agent's own tool calls"
 
   - id: script-writes-outside-project
     threat: T4

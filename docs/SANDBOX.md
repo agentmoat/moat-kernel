@@ -14,7 +14,15 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   `failIfUnavailable: true`, `allowUnsandboxedCommands: false`, `excludedCommands: []`,
   read and write lists, `network.allowedDomains` with `strictAllowlist`) and
   `permissions.blockReadsOutsideWorkingDirectories: true`. Claude Code's file tools
-  then refuse reads outside the working directories; `/add-dir` adds one.
+  then refuse reads outside the working directories; `/add-dir` adds one. On Linux
+  (and WSL2) it also adds `Read(./**/.env)`, `Read(./**/.env.*)` and
+  `Read(./**/.envrc)` to `permissions.deny`. There, bubblewrap needs concrete paths,
+  and Claude Code's sandbox expands a `denyRead` glob from its first literal directory
+  when each command starts, so it skips `/**/.env`. A `Read` deny rule is expanded
+  under the session's working directory instead, and each match is replaced by
+  `/dev/null`. A `.env` created after a command starts, or one in another readable
+  directory, is not covered, and Claude Code's file tools also refuse `.env.example`.
+  `moat sandbox show` lists both.
 - **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =
   "moat"` and `features.network_proxy = true`. The `**/` denies (`.env` files) cover
   the project and the read roots inside the home, not system read roots such as
@@ -70,8 +78,8 @@ to hostile project scripts on macOS and Linux. CI runs them on every pull reques
 pinned Claude Code and Codex binaries and no account: Claude Code headless against a
 local fake API, Codex through `codex sandbox -P moat`.
 
-To undo, delete the `sandbox` key and `permissions.blockReadsOutsideWorkingDirectories`
-from Claude Code's settings, and `default_permissions`, `[permissions.moat]` and
+To undo, delete the `sandbox` key, `permissions.blockReadsOutsideWorkingDirectories`
+and the `Read(./**/…)` rules in `permissions.deny` from Claude Code's settings, and `default_permissions`, `[permissions.moat]` and
 `features.network_proxy` from Codex's `config.toml` (or restore the backups), then run
 `moat doctor --accept`.
 

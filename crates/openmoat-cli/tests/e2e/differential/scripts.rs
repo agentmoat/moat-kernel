@@ -40,6 +40,9 @@ pub enum Outcome {
     /// stayed there (an empty in-memory directory, its own network namespace):
     /// the side-effect checks show nothing reached the host.
     Contained,
+    /// The payload completed, but the file it read was empty: bubblewrap binds
+    /// `/dev/null` over a denied file (the side-effect checks show no secret).
+    Masked,
     /// The sandbox failed to start the command; nothing of the payload ran.
     #[serde(rename = "sandbox-error")]
     SandboxError,
@@ -57,6 +60,7 @@ impl Outcome {
             Self::Refused => "refused",
             Self::Proxy403 => "proxy 403",
             Self::Contained => "contained",
+            Self::Masked => "masked",
             Self::SandboxError => "sandbox error",
             Self::Ran => "ran",
         }
@@ -210,7 +214,9 @@ fn evidence_table_is_current() {
          layer's proxy refused\nthe request (OpenMoat's under `moat run`, the agent's own, which \
          allows only the policy's\nhosts, under the Standard tier). contained: the payload \
          completed inside the sandbox, but\nwhat it wrote or sent stayed there (an empty \
-         in-memory directory, its own network namespace)\nand nothing reached the host. sandbox \
+         in-memory directory, its own network namespace)\nand nothing reached the host. masked: \
+         the payload completed, but the denied file read as empty\n(bubblewrap binds /dev/null \
+         over it). sandbox \
          error: the sandbox failed to start the command, so\nnothing of the payload ran. ran: \
          the payload completed.\n\n## Known gaps\n\n",
     );
@@ -310,10 +316,11 @@ pub mod executing {
             std::fs::write(build, format!("{payload}\n")).unwrap();
             let Some(out) = run() else { return };
             let expected = s.expected(layer);
-            // A contained payload completes; the checks below the loop prove
-            // that its write or datagram did not reach the host.
+            // A contained or masked payload completes; the checks below the
+            // loop prove that its write or datagram did not reach the host, and
+            // `leaked` that it printed no secret.
             let got = observe(&out).map(|got| match (got, expected) {
-                (Outcome::Ran, Outcome::Contained) => Outcome::Contained,
+                (Outcome::Ran, Outcome::Contained | Outcome::Masked) => expected,
                 _ => got,
             });
             let leaked = SECRETS.iter().any(|secret| out.shown.contains(secret));

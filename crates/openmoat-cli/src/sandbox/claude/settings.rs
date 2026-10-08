@@ -32,7 +32,52 @@ pub fn apply(root: &mut Value, generated: &Generated) -> Result<bool> {
     if generated.block_reads {
         object_at(top, "permissions")?.insert(BLOCK_READS.into(), json!(true));
     }
+    if let Some(Value::Object(permissions)) = top.get_mut("permissions") {
+        strip_read_rules(permissions);
+    }
+    if !generated.read_rules.is_empty() {
+        let deny = object_at(top, "permissions")?
+            .entry("deny")
+            .or_insert_with(|| json!([]));
+        let Value::Array(deny) = deny else {
+            bail!("`permissions.deny` in the settings file is not an array");
+        };
+        deny.extend(generated.read_rules.iter().map(|rule| json!(rule)));
+    }
     Ok(*top != before)
+}
+
+/// How the `permissions.deny` rules OpenMoat owns begin.
+const READ_RULE: &str = "Read(./**/";
+
+fn is_read_rule(rule: &Value) -> bool {
+    rule.as_str().is_some_and(|r| r.starts_with(READ_RULE))
+}
+
+/// Remove OpenMoat's rules from `permissions.deny`, and the list when that
+/// empties it. Returns whether anything was removed.
+fn strip_read_rules(permissions: &mut Map<String, Value>) -> bool {
+    let Some(Value::Array(deny)) = permissions.get_mut("deny") else {
+        return false;
+    };
+    let before = deny.len();
+    deny.retain(|rule| !is_read_rule(rule));
+    let removed = deny.len() != before;
+    if removed && deny.is_empty() {
+        permissions.remove("deny");
+    }
+    removed
+}
+
+/// OpenMoat's rules in `permissions.deny`, in order.
+fn read_rules(root: &Value) -> Vec<&str> {
+    root.pointer("/permissions/deny")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|rule| is_read_rule(rule))
+        .filter_map(Value::as_str)
+        .collect()
 }
 
 /// Every key of the `sandbox` object [`apply`] may write, with the sub-keys it
@@ -84,6 +129,7 @@ pub fn remove(root: &mut Value) -> bool {
     }
     if let Some(Value::Object(permissions)) = top.get_mut("permissions") {
         removed |= permissions.remove(BLOCK_READS).is_some();
+        removed |= strip_read_rules(permissions);
     }
     if removed {
         for key in ["sandbox", "permissions"] {
@@ -129,7 +175,9 @@ pub fn in_sync(root: &Value, generated: &Generated) -> bool {
             .all(|(sub, v)| root.pointer(&format!("/sandbox/{key}/{sub}")) == Some(v)),
         other => root.pointer(&format!("/sandbox/{key}")) == Some(other),
     });
-    owned && (!generated.block_reads || block_reads_on(root))
+    owned
+        && (!generated.block_reads || block_reads_on(root))
+        && read_rules(root) == generated.read_rules
 }
 
 fn block_reads_on(root: &Value) -> bool {
@@ -223,7 +271,7 @@ mod tests {
     use openmoat_core::DEFAULT_POLICY;
     use serde_json::{Value, json};
 
-    use super::super::tests::generated;
+    use super::super::tests::{generated, generated_for};
     use super::*;
 
     #[test]
@@ -280,6 +328,38 @@ mod tests {
         .unwrap();
         assert!(remove(&mut root));
         assert_eq!(root, json!({}), "every key apply writes is owned");
+    }
+
+    #[test]
+    fn linux_read_rules_join_the_user_deny_list_and_leave_with_uninstall() {
+        let out = generated_for(DEFAULT_POLICY, true);
+        let original = json!({ "permissions": { "deny": ["Read(~/secret)", "Read(./**/old)"] } });
+        let mut root = original.clone();
+        assert!(apply(&mut root, &out).unwrap());
+        assert!(!apply(&mut root, &out).unwrap(), "idempotent");
+        assert!(in_sync(&root, &out));
+        let mut expected = vec![json!("Read(~/secret)")];
+        expected.extend(out.read_rules.iter().map(|r| json!(r)));
+        assert_eq!(
+            root["permissions"]["deny"],
+            json!(expected),
+            "a stale rule goes"
+        );
+        assert!(
+            !in_sync(&root, &generated(DEFAULT_POLICY)),
+            "rules macOS does not write"
+        );
+        assert!(remove(&mut root));
+        assert_eq!(
+            root,
+            json!({ "permissions": { "deny": ["Read(~/secret)"] } })
+        );
+
+        let mut root = json!({});
+        apply(&mut root, &out).unwrap();
+        assert!(remove(&mut root));
+        assert_eq!(root, json!({}), "the deny list it created goes too");
+        assert!(apply(&mut json!({ "permissions": { "deny": {} } }), &out).is_err());
     }
 
     #[test]

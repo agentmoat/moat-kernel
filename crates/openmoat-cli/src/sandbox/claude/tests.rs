@@ -5,9 +5,13 @@ use super::*;
 use crate::sandbox::{assert_golden, lower_for_hosts};
 
 pub(super) fn generated(yaml: &str) -> Generated {
+    generated_for(yaml, false)
+}
+
+pub(super) fn generated_for(yaml: &str, linux: bool) -> Generated {
     let policy = Policy::parse(yaml).expect("test policy lints");
     let ir = lower_for_hosts(&policy, "/Users/me", None, Vec::new(), false).expect("lowers");
-    generate(&ir, crate::sandbox::proxy_port(&policy)).expect("generates")
+    generate(&ir, crate::sandbox::proxy_port(&policy), linux).expect("generates")
 }
 
 fn list(generated: &Generated, pointer: &str) -> Vec<String> {
@@ -61,6 +65,34 @@ fn every_pattern_is_absolute() {
         "a `**/` exception would re-open .env.example everywhere"
     );
     assert!(out.block_reads);
+}
+
+/// #359: on Linux the runtime skips `/**/.env`, so each such read deny is also
+/// a `Read(./**/…)` rule, which it expands under the working directory.
+#[test]
+fn linux_adds_a_working_directory_read_rule_for_each_wildcard_deny() {
+    let mac = generated(DEFAULT_POLICY);
+    assert!(mac.read_rules.is_empty(), "macOS keeps its settings");
+    let linux = generated_for(DEFAULT_POLICY, true);
+    assert_eq!(
+        linux.read_rules,
+        ["Read(./**/.env)", "Read(./**/.env.*)", "Read(./**/.envrc)"]
+    );
+    assert_eq!(linux.sandbox, mac.sandbox, "the sandbox block is the same");
+    for rule in [
+        "claude-code.linux-read-rules",
+        "claude-code.linux-read-globs",
+    ] {
+        let reported = linux.report.losses.iter().any(|l| l.rule == rule)
+            || linux.report.allowances.iter().any(|a| a.rule == rule);
+        assert!(reported, "{rule}: {:?}", linux.report);
+    }
+    let none = generated_for(
+        "version: 1\ndeny:\n  - id: s\n    fs.read: ['~/.ssh/**']\n",
+        true,
+    );
+    assert!(none.read_rules.is_empty(), "absolute denies need no rule");
+    assert!(!none.report.losses.iter().any(|l| l.rule.contains("linux")));
 }
 
 #[test]

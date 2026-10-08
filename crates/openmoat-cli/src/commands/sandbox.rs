@@ -43,11 +43,13 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
     ];
     let mut codex_doc = DocumentMut::new();
     codex::apply(&mut codex_doc, &plan.codex)?;
+    let mut claude_doc = json!({});
+    claude::apply(&mut claude_doc, &plan.claude)?;
     let hosts = [
         Shown {
             host: Host::ClaudeCode,
             path: HostConfig::for_host(Host::ClaudeCode)?.settings_path,
-            text: serde_json::to_string_pretty(&claude_settings(&plan.claude))?,
+            text: serde_json::to_string_pretty(&claude_doc)?,
             report: &plan.claude.report,
         },
         Shown {
@@ -164,15 +166,6 @@ pub fn sync() -> Result<Code> {
     )?;
     out.finish()?;
     Ok(Code::Ok)
-}
-
-/// The part of Claude Code's settings OpenMoat owns, as it would appear in the file.
-fn claude_settings(generated: &claude::Generated) -> Value {
-    let mut settings = json!({ "sandbox": generated.sandbox });
-    if generated.block_reads {
-        settings["permissions"] = json!({ claude::BLOCK_READS: true });
-    }
-    settings
 }
 
 /// Losses and allowances, as `sandbox show`, `sandbox sync` and `doctor` print them.
