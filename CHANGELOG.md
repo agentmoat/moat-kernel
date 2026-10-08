@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- `moat --help` no longer says the alpha has no OS enforcement; it says where the OS bounds commands and points to `moat status`.
+
 ### Changed
 - docs/SANDBOX.md notes a macOS 14 behaviour under `moat run` (#361). On some machines, Seatbelt sometimes refuses the allowed loopback connection to the proxy for a few milliseconds about every 15 seconds. A network request then fails at once, and a retry succeeds. A one-rule `sandbox-exec` profile shows the same without OpenMoat (#280, #351). CI's macOS 15 runners did not show it.
 

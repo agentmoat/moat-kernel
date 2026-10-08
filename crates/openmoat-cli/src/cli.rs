@@ -12,9 +12,9 @@ use openmoat_hosts::Host;
     about = "OpenMoat: decides what AI coding agents may do, and records every decision",
     long_about = "OpenMoat decides what AI coding agents may do on this machine and records\n\
                   every decision.\n\
-                  Alpha: the hook's decisions are not enforced by the operating system. The host\n\
-                  sandboxes `moat init` configures, and `moat run`, confine commands at the OS\n\
-                  level; outside them an allowed command runs with your permissions.\n\
+                  The hook decides each call; the operating system also bounds commands inside the\n\
+                  agents' sandboxes `moat init` configures and under `moat run`. Outside them an\n\
+                  allowed command runs with your permissions (`moat status` shows each agent's level).\n\
                   Exit codes: 0 allow/ok, 1 the agent `run` started failed, 2 deny, 3 ask (unresolved),\n\
                   64 usage or configuration error\n\
                   (`guard` exits 2 instead, so a broken hook blocks rather than fails open).\n\n\
