@@ -28,8 +28,9 @@ Claude Code exits at startup where it cannot run. On native Windows, OpenMoat th
 writes neither the `sandbox` block nor `blockReadsOutsideWorkingDirectories`; `moat
 init`, `sandbox sync`, `sandbox show`, `doctor` and `status` print `sandbox not
 available on native Windows; the hook still checks every call (use WSL2 for OS
-confinement)` for Claude Code instead. `moat uninstall` still removes a block an older
-version wrote. Codex is configured as on other systems.
+confinement)` for Claude Code instead. `moat init` and `moat sandbox sync` remove those
+settings where an older version wrote them, keep the rest of the file and re-pin it.
+Codex is configured as on other systems.
 
 Network has two modes:
 

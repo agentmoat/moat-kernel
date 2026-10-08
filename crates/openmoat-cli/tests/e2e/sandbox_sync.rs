@@ -243,3 +243,39 @@ fn native_windows_leaves_out_the_claude_code_sandbox() {
         "sync leaves it out too"
     );
 }
+
+/// #327: on native Windows `init` removes the sandbox settings an older version
+/// wrote, which stopped Claude Code from starting, and keeps the user's own.
+#[cfg(windows)]
+#[test]
+fn native_windows_init_removes_an_old_claude_code_sandbox() {
+    let sb = Sandbox::bare(&[".claude"]);
+    fs::write(
+        claude_settings(&sb),
+        r#"{"theme":"dark","permissions":{"allow":["Bash(ls)"],"blockReadsOutsideWorkingDirectories":true},
+            "sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false}}"#,
+    )
+    .unwrap();
+    let init = sb.moat(&["init", "--yes"]);
+    assert_eq!(init.status.code(), Some(0), "{}", text(&init));
+    assert!(
+        stdout(&init).contains("removed the sandbox settings an older moat wrote"),
+        "{}",
+        text(&init)
+    );
+    let claude = settings(&sb);
+    assert!(claude.get("sandbox").is_none(), "{claude}");
+    assert_eq!(
+        claude["permissions"],
+        serde_json::json!({"allow": ["Bash(ls)"]})
+    );
+    assert_eq!(claude["theme"], "dark");
+    assert!(claude["hooks"]["PreToolUse"].is_array(), "{claude}");
+    let doctor = sb.moat(&["doctor"]);
+    assert_eq!(
+        doctor.status.code(),
+        Some(0),
+        "re-pinned: {}",
+        text(&doctor)
+    );
+}

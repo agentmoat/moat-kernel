@@ -24,6 +24,11 @@ pub fn unavailable(host: Host) -> Option<&'static str> {
     unavailable_on(host, cfg!(windows))
 }
 
+/// What `init` and `sandbox sync` print when [`write()`] removed the sandbox
+/// settings of an older version from a host whose sandbox is [`unavailable`].
+pub const OLD_SANDBOX_REMOVED: &str =
+    "removed the sandbox settings an older moat wrote, so Claude Code can start";
+
 fn unavailable_on(host: Host, windows: bool) -> Option<&'static str> {
     (windows && host == Host::ClaudeCode).then_some(
         "sandbox not available on native Windows; the hook still checks every call \
@@ -39,8 +44,9 @@ pub fn settings_path(host: Host) -> Result<PathBuf> {
     }
 }
 
-/// Merge the plan's settings for `host` into its file. Returns whether the file
-/// changed (or would, with `dry_run`).
+/// Merge the plan's settings for `host` into its file, or, where the host's
+/// sandbox is [`unavailable`], remove what an older version wrote. Returns
+/// whether the file changed (or would, with `dry_run`).
 pub fn write(host: Host, plan: &Plan, dry_run: bool) -> Result<bool> {
     let path = settings_path(host)?;
     let changed;
@@ -50,8 +56,12 @@ pub fn write(host: Host, plan: &Plan, dry_run: bool) -> Result<bool> {
         doc.to_string()
     } else {
         let mut root = read_or_empty(&path)?;
-        changed = claude::apply(&mut root, &plan.claude)
-            .with_context(|| format!("updating {}", path.display()))?;
+        changed = if unavailable(host).is_some() {
+            claude::remove(&mut root)
+        } else {
+            claude::apply(&mut root, &plan.claude)
+                .with_context(|| format!("updating {}", path.display()))?
+        };
         serde_json::to_string_pretty(&root)? + "\n"
     };
     if !changed {

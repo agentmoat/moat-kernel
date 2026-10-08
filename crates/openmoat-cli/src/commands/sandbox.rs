@@ -132,15 +132,17 @@ pub fn sync() -> Result<Code> {
             writeln!(out, "· {:<16} host not found", host.display_name())?;
             continue;
         }
+        let changed = install::write(host, &plan, false)?;
         if let Some(note) = install::unavailable(host) {
+            if changed {
+                let removed = install::OLD_SANDBOX_REMOVED;
+                writeln!(out, "✔ {:<16} {removed}", host.display_name())?;
+                files.push(path);
+            }
             writeln!(out, "· {:<16} {note}", host.display_name())?;
             continue;
         }
-        let verb = if install::write(host, &plan, false)? {
-            "updated"
-        } else {
-            "unchanged"
-        };
+        let verb = if changed { "updated" } else { "unchanged" };
         writeln!(
             out,
             "✔ {:<16} {} (sandbox {verb})",

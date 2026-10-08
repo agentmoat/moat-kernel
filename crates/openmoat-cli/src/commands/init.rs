@@ -287,15 +287,20 @@ fn sandboxes(home: &Home, hosts: &[Host], dry_run: bool, out: &mut Deferred) -> 
         }
     };
     for host in selected {
+        let changed = sandbox::install::write(host, &plan, dry_run)?;
         if let Some(note) = sandbox::install::unavailable(host) {
+            if changed {
+                writeln!(
+                    out,
+                    "{prefix} {:<16} {}",
+                    host.display_name(),
+                    sandbox::install::OLD_SANDBOX_REMOVED
+                )?;
+            }
             writeln!(out, "· {:<16} {note}", host.display_name())?;
             continue;
         }
-        let verb = if sandbox::install::write(host, &plan, dry_run)? {
-            "updated"
-        } else {
-            "unchanged"
-        };
+        let verb = if changed { "updated" } else { "unchanged" };
         let report = sandbox::install::report(host, &plan);
         writeln!(
             out,
