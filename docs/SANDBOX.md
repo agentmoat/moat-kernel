@@ -19,8 +19,8 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   `Read(./**/.envrc)` to `permissions.deny`. There, bubblewrap needs concrete paths,
   and Claude Code's sandbox expands a `denyRead` glob from its first literal directory
   when each command starts, so it skips `/**/.env`. A `Read` deny rule is expanded
-  under the session's working directory instead, and each match is replaced by
-  `/dev/null`. A `.env` created after a command starts, or one in another readable
+  under the session's working directory instead, so a script reading one gets
+  `EACCES`. A `.env` created after a command starts, or one in another readable
   directory, is not covered, and Claude Code's file tools also refuse `.env.example`.
   `moat sandbox show` lists both.
 - **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =

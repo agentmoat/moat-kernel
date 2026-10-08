@@ -271,7 +271,7 @@ scripts:
     seatbelt: eperm
     landlock: ran
     claude-macos: eperm
-    claude-linux: masked
+    claude-linux: eacces
     codex-macos: eperm
     codex-linux: eacces
     gaps:
