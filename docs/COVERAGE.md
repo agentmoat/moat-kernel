@@ -7,7 +7,7 @@ the verdict and rule ids the default policy must produce for it.
 
 | Threat | Class | Attacks | Asks | Benign |
 |---|---|---|---|---|
-| T1 | Secret exfiltration via shell | 43 | 23 | 3 |
+| T1 | Secret exfiltration via shell | 51 | 23 | 3 |
 | T2 | Secret exfiltration via file tools | 20 | 1 | 1 |
 | T3 | Secret exfiltration via environment | 21 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 51 | 28 | 1 |
@@ -88,6 +88,14 @@ the verdict and rule ids the default policy must produce for it.
 - `T1-glob-negated-class-reads-env` (attacks): Deny [secrets-paths]
 - `T1-glob-directory-component-reads-ssh-key` (attacks): Deny [secrets-paths]
 - `T1-glob-redirect-reads-env` (attacks): Deny [secrets-paths]
+- `T1-brace-list-reads-env` (attacks): Deny [secrets-paths]
+- `T1-brace-list-reads-ssh-key` (attacks): Deny [secrets-paths]
+- `T1-brace-inside-name-reads-env` (attacks): Deny [secrets-paths]
+- `T1-brace-nested-reads-env` (attacks): Deny [secrets-paths]
+- `T1-brace-sequence-and-empty-item-read-env` (attacks): Deny [secrets-paths]
+- `T1-brace-in-command-name-reads-env` (attacks): Deny [secrets-paths]
+- `T1-brace-then-glob-reads-env` (attacks): Deny [secrets-paths]
+- `T1-brace-overflow-keeps-deny` (attacks): Deny [secrets-paths]
 - `benign-cd-src-then-cargo-test` (benign): Allow [dev-shell]
 - `benign-cd-crate-then-ls` (benign): Allow [dev-shell]
 - `benign-recursive-read-of-project-root` (benign): Allow [dev-shell, project-fs]

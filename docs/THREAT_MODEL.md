@@ -284,7 +284,8 @@ something the alpha claims to stop.
   file created between the check and the command that a pattern's last component
   matches is not seen. Shell options that change matching (`shopt -s dotglob
   nocaseglob extglob`, `zsh` `EXTENDED_GLOB` and `GLOB_DOTS`), `zsh` qualifiers and
-  `<1-9>` ranges, and brace expansion (`.{env,x}`) are not modelled. Claude Code
+  `<1-9>` ranges are not modelled. Brace expansion follows `bash`, also for shells
+  that do not expand braces (`sh` as `dash`), where the literal word is not checked. Claude Code
   `Glob` and `Grep` are checked as reads of their search directory, as before:
   `Glob` returns names, not contents, and `Grep` searches the whole directory
   whatever its `glob` filter.

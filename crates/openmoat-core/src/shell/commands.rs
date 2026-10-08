@@ -60,7 +60,10 @@ pub(super) fn classify_into(
     if depth > MAX_DEPTH {
         return Err(ClassifyError::TooDeep);
     }
-    let tokens = lexer::lex(command)?;
+    let (tokens, too_many) = lexer::expand_braces(lexer::lex(command)?);
+    if let Some(e) = too_many {
+        sink.skip(e.into());
+    }
     sink.note_globs(&tokens);
     let mut dirs = ctx.cwd.to_vec();
     let mut saved = Vec::new();

@@ -103,7 +103,8 @@ unrecorded, and exits 2, since a host that times the hook out runs the call
 `Pipeline`, `FsRead`, `FsWrite`, `Net`, `Fetch`, `EnvRead`, `EnvSet`, `McpTool`.
 
 - **Shell** (ADR-005). The lexer (`lexer/`) reads words, quotes, escapes, operators,
-  redirections, `$( … )`, backticks, here-documents and here-strings, up to 64 KB. The
+  redirections, `$( … )`, backticks, here-documents and here-strings, up to 64 KB, and
+  makes the words bash makes of unquoted braces (`lexer/brace.rs`). The
   classifier (`shell/`) emits one `Shell` atom per simple command and one `Pipeline`
   atom per pipeline suffix. It recurses into `sh -c`, `eval`, substitutions and
   wrappers (`sudo`, `env`, `xargs`, `timeout`, …) to depth 4. It adds `fs.read`/`fs.write`
