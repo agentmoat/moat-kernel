@@ -31,7 +31,7 @@ pub const OLD_SANDBOX_REMOVED: &str =
 
 fn unavailable_on(host: Host, windows: bool) -> Option<&'static str> {
     (windows && host == Host::ClaudeCode).then_some(
-        "sandbox not available on native Windows; the hook still checks every call \
+        "sandbox not available on native Windows; the hook still applies the policy \
          (use WSL2 for OS confinement)",
     )
 }

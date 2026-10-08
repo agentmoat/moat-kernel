@@ -71,7 +71,8 @@ for each. It backs up every file before changing it, and `moat uninstall` undoes
 ```
 
 Start your agent as usual. Every tool call now goes through OpenMoat; `moat show`
-lists the decisions.
+lists the decisions. `moat status` shows how each agent is protected (`hook + OS
+sandbox`, `hook only` or `not protected`) and what its hook does not see.
 
 When something is blocked or asked, run `moat`. It shows which agents are protected and
 today's decisions, then anything that needs you: a changed policy to accept, or the

@@ -45,7 +45,7 @@ upgrade in the same place; `moat doctor` confirms it.
 
 ```bash
 moat init      # policy, lock, audit log; asks before hooking each agent it finds
-moat status    # policy, lock, hooks per agent, recent decisions
+moat status    # policy, lock, hooks and protection level per agent, recent decisions
 ```
 
 `moat init` writes `~/.moat/policy.yaml` (the default policy), pins it and the hook

@@ -40,7 +40,7 @@ denied or asked) and then whatever needs a person:
 
 ```
 $ moat
-Protecting Claude Code · today: 14 decisions, 1 denied, 1 asked
+Protecting Claude Code (hook + OS sandbox) · today: 14 decisions, 1 denied, 1 asked
 Claude Code asked to run "npm install left-pad" (rule installs, session 4f2a…)
 Allow? [o]nce for this session / [a]lways / [n]o
 ```
@@ -50,6 +50,29 @@ A changed pinned file is shown first, with `Accept these changes? [y/N]`; `y` do
 nothing needs you it says `Nothing needs you.` Questions are asked only at a terminal;
 without one (a script, an agent's shell) it prints the command a person should run and
 changes nothing.
+
+## How each agent is protected
+
+`moat status` and `moat doctor` print one protection level per agent, derived from the
+hook and sandbox checks above them, and one line of what that agent's hook and sandbox
+do not cover (the full list is in [THREAT_MODEL.md](THREAT_MODEL.md) §5):
+
+```
+Claude Code      ✔ protection: hook + OS sandbox
+Claude Code      · known gaps: WebSearch is not hooked; file tools, WebFetch and MCP servers run outside the OS sandbox; …
+Cursor           ! protection: hook only: no OS sandbox from OpenMoat; `moat run` covers the Cursor CLI (docs/SANDBOX.md)
+```
+
+| Level | Means |
+|---|---|
+| `hook + OS sandbox` | the hook is installed and current, and the sandbox `moat init` generated is in place and matches the policy (Claude Code, Codex) |
+| `hook only` | the hook is installed, but no OS sandbox from OpenMoat is in force: the Cursor editor, Claude Code on native Windows, or a sandbox that is missing, weakened or out of date (the line says which) |
+| `not protected` | the hook is missing, out of date or unreadable; run `moat init` |
+
+Agents that are not set up or not found keep their `·` line. `moat status --format
+json` prints the same per agent (`host`, `name`, `level`, `reason`, `gaps`; `level` is
+`hook-and-os-sandbox`, `hook-only`, `not-protected`, `not-set-up` or `not-found`) and
+exits 0; the text form exits 64 when something needs fixing.
 
 ## A call is denied
 
@@ -170,7 +193,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat` | see which agents are protected and today's decisions; answer drift or the last ask (terminal only) |
 | `moat init [--hosts …] [--yes] [--dry-run]` | install policy, lock and audit log; asks before hooking each agent found (`--hosts`, `--yes` skip the questions) |
 | `moat uninstall [--hosts …] [--purge]` | remove OpenMoat's hooks and sandbox settings, restoring the backups (`--purge` also deletes `~/.moat`) |
-| `moat status` · `moat doctor [--accept] [--verbose]` | check the installation · list drift and re-pin (`--verbose` lists where each sandbox is stricter or wider than the policy) |
+| `moat status [--format json]` · `moat doctor [--accept] [--verbose]` | check the installation and each agent's protection level · list drift and re-pin (`--verbose` lists where each sandbox is stricter or wider than the policy) |
 | `moat show [id] [--session …] [--since …]` | see events |
 | `moat replay --since today` · `moat report --since 7d` | per-session timeline · summary |
 | `moat audit export [--since …] [--host …] [--session …]` | write events as JSON Lines with their chain hashes |

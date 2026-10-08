@@ -211,7 +211,7 @@ fn codex_may_edit_its_own_keys_but_not_the_moat_profile() {
 #[test]
 fn native_windows_leaves_out_the_claude_code_sandbox() {
     let note = "Claude Code      sandbox not available on native Windows; \
-                the hook still checks every call (use WSL2 for OS confinement)";
+                the hook still applies the policy (use WSL2 for OS confinement)";
     let sb = Sandbox::bare(&[".claude", ".codex"]);
     let init = sb.moat(&["init", "--yes"]);
     assert_eq!(init.status.code(), Some(0), "{}", text(&init));

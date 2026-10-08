@@ -49,7 +49,7 @@ fn init_installs_fail_closed_hooks_for_every_cursor_event() {
     assert!(text(&status).contains("Cursor"));
     let doctor = text(&sb.moat(&["doctor"]));
     assert!(
-        doctor.contains("Cursor           no OS sandbox from OpenMoat: only the hook applies"),
+        doctor.contains("Cursor           protection: hook only: no OS sandbox from OpenMoat"),
         "{doctor}"
     );
     let again = text(&sb.moat(&["init", "--yes"]));

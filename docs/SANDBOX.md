@@ -27,10 +27,12 @@ Claude Code's sandbox runs on macOS, Linux and WSL2 only, and with `failIfUnavai
 Claude Code exits at startup where it cannot run. On native Windows, OpenMoat therefore
 writes neither the `sandbox` block nor `blockReadsOutsideWorkingDirectories`; `moat
 init`, `sandbox sync`, `sandbox show`, `doctor` and `status` print `sandbox not
-available on native Windows; the hook still checks every call (use WSL2 for OS
+available on native Windows; the hook still applies the policy (use WSL2 for OS
 confinement)` for Claude Code instead. `moat init` and `moat sandbox sync` remove those
 settings where an older version wrote them, keep the rest of the file and re-pin it.
-Codex is configured as on other systems.
+Codex is configured as on other systems. `moat status` reports such an agent as
+`hook only`, and a sandbox that is missing, weakened or out of date the same way, with
+the reason ([USAGE.md](USAGE.md#how-each-agent-is-protected)).
 
 Network has two modes:
 
