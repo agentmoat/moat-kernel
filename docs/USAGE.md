@@ -57,12 +57,6 @@ changes nothing.
 hook and sandbox checks above them, and one line of what that agent's hook and sandbox
 do not cover (the full list is in [THREAT_MODEL.md](THREAT_MODEL.md) §5):
 
-```
-Claude Code      ✔ protection: hook + OS sandbox
-Claude Code      · known gaps: WebSearch is not hooked; file tools, WebFetch and MCP servers run outside the OS sandbox; …
-Cursor           ! protection: hook only: no OS sandbox from OpenMoat; `moat run` covers the Cursor CLI (docs/SANDBOX.md)
-```
-
 | Level | Means |
 |---|---|
 | `hook + OS sandbox` | the hook is installed and current, and the sandbox `moat init` generated is in place and matches the policy (Claude Code, Codex) |

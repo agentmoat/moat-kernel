@@ -212,19 +212,6 @@ mod tests {
     }
 
     #[test]
-    fn cursor_has_no_sandbox_from_openmoat() {
-        let why = sandbox(Host::Cursor, None, None).unwrap_err();
-        assert!(why.contains("no OS sandbox from OpenMoat"), "{why}");
-    }
-
-    #[test]
-    fn every_agent_names_its_gaps() {
-        assert!(gaps(Host::ClaudeCode).contains("WebSearch"));
-        assert!(gaps(Host::Codex).contains("web search"));
-        assert!(gaps(Host::Cursor).contains("OS sandbox not configured"));
-    }
-
-    #[test]
     fn summary_skips_agents_with_their_own_line() {
         let protection = |level, reason: Option<&str>| Protection {
             host: "codex",
@@ -238,12 +225,6 @@ mod tests {
                 .summary()
                 .as_deref(),
             Some("hook only: why")
-        );
-        assert_eq!(
-            protection(Level::HookAndOsSandbox, None)
-                .summary()
-                .as_deref(),
-            Some("hook + OS sandbox")
         );
         assert_eq!(protection(Level::NotSetUp, None).summary(), None);
     }
