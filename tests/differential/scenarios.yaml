@@ -320,7 +320,7 @@ scripts:
     seatbelt: eperm
     landlock: ran
     claude-macos: eperm
-    claude-linux: erofs
+    claude-linux: eexist
     codex-macos: eperm
     codex-linux: eexist
     gaps:

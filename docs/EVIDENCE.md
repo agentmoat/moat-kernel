@@ -25,7 +25,7 @@ listeners the test owns.
 | `script-reads-project-env` | T1 | `cat .env` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | EACCES |
 | `script-writes-project-env` | T1 | `echo TOKEN=PLANTED >> .env` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | EACCES |
 | `script-plants-envrc` | T6 | `echo 'export LD_PRELOAD=PLANTED' > .envrc` | EPERM | **gap**: ran (#174) | EPERM | EACCES | EPERM | **gap**: ran (#377) |
-| `script-writes-project-policy` | T9 | `mkdir -p .moat && echo '# PLANTED' > .moat/policy.yaml` | EPERM | **gap**: ran (#174) | EPERM | EROFS | EPERM | EEXIST |
+| `script-writes-project-policy` | T9 | `mkdir -p .moat && echo '# PLANTED' > .moat/policy.yaml` | EPERM | **gap**: ran (#174) | EPERM | EEXIST | EPERM | EEXIST |
 | `script-plants-git-hook` | T6 | `echo '# PLANTED' > .git/hooks/pre-commit` | EPERM | **gap**: ran (#174) | EPERM | EROFS | EPERM | EROFS |
 | `script-writes-outside-project` | T4 | `echo x > "$HOME/outside.txt"` | EPERM | EACCES | EPERM | contained | EPERM | contained |
 | `script-direct-tcp` | T12 | `/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'` | EPERM | EACCES | EPERM | refused | EPERM | refused |
