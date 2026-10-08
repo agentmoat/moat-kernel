@@ -365,6 +365,19 @@ fn mcp_arguments_are_checked_as_paths() {
     assert_eq!(d["permissionDecision"], "deny");
     let reason = d["permissionDecisionReason"].to_string();
     assert!(reason.contains("secrets-paths"), "{reason}");
+
+    // Searched at 8 levels of nesting, the path is denied; one level deeper it is
+    // not searched, and the call asks instead of being allowed.
+    for (levels, verdict, why) in [(8, "deny", "secrets-paths"), (9, "ask", "8 levels")] {
+        let (open, close) = (r#"{"o":"#.repeat(levels), "}".repeat(levels));
+        let input = format!(r#"{open}{{"path":"~/.ssh/id_rsa"}}{close}"#);
+        let payload =
+            format!(r#"{{"tool_name":"mcp__filesystem__read_file","tool_input":{input}}}"#);
+        let d = decision(&sb.guard("claude-code", &payload));
+        assert_eq!(d["permissionDecision"], verdict, "{levels}");
+        let reason = d["permissionDecisionReason"].to_string();
+        assert!(reason.contains(why), "{reason}");
+    }
 }
 
 /// Symlinks are only created on Unix here; Windows needs a privilege for them.

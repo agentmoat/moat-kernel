@@ -106,7 +106,7 @@ struct ForeignShellFixture {
     command: String,
 }
 
-/// `mcp_tool: "name"` or `mcp_tool: { name, reads, writes, hosts }`.
+/// `mcp_tool: "name"` or `mcp_tool: { name, reads, writes, hosts, unchecked }`.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum McpFixture {
@@ -119,6 +119,7 @@ enum McpFixture {
         writes: Vec<String>,
         #[serde(default)]
         hosts: Vec<String>,
+        unchecked: Option<String>,
     },
 }
 
@@ -150,11 +151,13 @@ impl FixtureAction {
                     reads,
                     writes,
                     hosts,
+                    unchecked,
                 } => Action::McpTool {
                     name,
                     reads,
                     writes,
                     hosts,
+                    unchecked,
                 },
             }),
         ];

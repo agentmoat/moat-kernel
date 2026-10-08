@@ -2,10 +2,11 @@
 //!
 //! Servers are not standardised, so this is key-based: arguments named like a
 //! path become `fs.read` (or `fs.write` for write-shaped tools), arguments named
-//! like a URL become `net`, at any depth of nesting. Unknown shapes add nothing
+//! like a URL become `net`, down to `MAX_DEPTH` levels. Unknown shapes add nothing
 //! and the call is judged by its name alone. Adding resources can only make a
 //! verdict stricter, so arguments that cannot be read are an error (the guard
-//! fails closed) rather than silently ignored.
+//! fails closed) rather than silently ignored, and arguments nested past
+//! `MAX_DEPTH` are reported in `unchecked` so the call is decided at least `ask`.
 
 use openmoat_core::Action;
 use serde_json::Value;
@@ -75,6 +76,7 @@ pub(crate) fn action(name: &str, input: &Value) -> Result<Action, HostError> {
         reads: found.reads,
         writes: found.writes,
         hosts: found.hosts,
+        unchecked: found.unchecked,
     })
 }
 
@@ -84,6 +86,8 @@ struct Resources {
     reads: Vec<String>,
     writes: Vec<String>,
     hosts: Vec<String>,
+    /// Set when nesting stopped the search.
+    unchecked: Option<String>,
 }
 
 impl Resources {
@@ -92,7 +96,20 @@ impl Resources {
     }
 
     fn walk(&mut self, value: &Value, depth: usize) {
-        if depth > MAX_DEPTH || self.count() > MAX_RESOURCES {
+        if self.count() > MAX_RESOURCES {
+            return;
+        }
+        if depth > MAX_DEPTH {
+            // Only an object's keys name resources; the strings of an array were
+            // already taken by the key that holds it.
+            let may_name_resources = value.is_object()
+                || value
+                    .as_array()
+                    .is_some_and(|items| items.iter().any(|i| i.is_object() || i.is_array()));
+            if may_name_resources {
+                self.unchecked
+                    .get_or_insert_with(|| format!("nested deeper than {MAX_DEPTH} levels"));
+            }
             return;
         }
         match value {
@@ -139,7 +156,7 @@ fn strings(value: &Value) -> impl Iterator<Item = String> + '_ {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_RESOURCES, action};
+    use super::{MAX_DEPTH, MAX_RESOURCES, action};
     use openmoat_core::Action;
     use serde_json::json;
 
@@ -157,6 +174,18 @@ mod tests {
             } => (reads, writes, hosts),
             other => panic!("not an mcp action: {other:?}"),
         }
+    }
+
+    fn unchecked(a: &Action) -> Option<&str> {
+        match a {
+            Action::McpTool { unchecked, .. } => unchecked.as_deref(),
+            other => panic!("not an mcp action: {other:?}"),
+        }
+    }
+
+    /// `leaf` wrapped in `levels` objects, so its keys are searched at that depth.
+    fn nested(levels: usize, leaf: serde_json::Value) -> serde_json::Value {
+        (0..levels).fold(leaf, |inner, _| json!({ "options": inner }))
     }
 
     #[test]
@@ -234,7 +263,49 @@ mod tests {
             err.to_string().contains("mcp__filesystem__read_file"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn arguments_at_the_depth_limit_are_searched() {
+        let a = ok(
+            "mcp__custom__run",
+            &nested(
+                MAX_DEPTH,
+                json!({"path": "~/.ssh/id_rsa", "paths": ["/p/a"]}),
+            ),
+        );
+        assert_eq!(unchecked(&a), None);
+        assert_eq!(parts(a).0, ["~/.ssh/id_rsa", "/p/a"]);
+    }
+
+    #[test]
+    fn arguments_past_the_depth_limit_are_reported_unchecked() {
+        let deep = nested(MAX_DEPTH + 1, json!({"path": "~/.ssh/id_rsa"}));
+        let a = ok(
+            "mcp__custom__run",
+            &json!({"deep": deep, "url": "https://evil.com"}),
+        );
+        assert_eq!(unchecked(&a), Some("nested deeper than 8 levels"));
+        let (reads, _, hosts) = parts(a);
+        assert!(reads.is_empty());
+        assert_eq!(
+            hosts,
+            ["https://evil.com"],
+            "what was searched still counts"
+        );
+        let deep = nested(MAX_DEPTH + 1, json!([{"path": "~/.ssh/id_rsa"}]));
+        assert!(unchecked(&ok("mcp__custom__run", &deep)).is_some());
+        let scalars = nested(MAX_DEPTH, json!({"list": [1, "x"], "empty": []}));
+        assert_eq!(unchecked(&ok("mcp__custom__run", &scalars)), None);
+    }
+
+    #[test]
+    fn paths_past_the_resource_limit_are_errors() {
         let many: Vec<String> = (0..=MAX_RESOURCES).map(|i| format!("/p/{i}")).collect();
-        assert!(action("mcp__fs__read_multiple_files", &json!({"paths": many})).is_err());
+        let err = action("mcp__fs__read_multiple_files", &json!({"paths": many})).unwrap_err();
+        assert!(err.to_string().contains("more than 1024"), "{err}");
+        let exactly = &many[..MAX_RESOURCES];
+        let a = ok("mcp__fs__read_multiple_files", &json!({"paths": exactly}));
+        assert_eq!(parts(a).0.len(), MAX_RESOURCES);
     }
 }

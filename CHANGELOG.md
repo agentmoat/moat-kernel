@@ -15,6 +15,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Security
 - The audit log masks the exact values of the policy's brokered secrets (`secrets:`), whatever their format, before an event is stored, so they reach neither `audit.db` nor `moat audit export` (#338). Previously only known token formats were redacted, and a value sent as part of a host name was recorded by `moat proxy`. Matching ignores letter case and skips values shorter than 8 bytes, which occur in ordinary text. `moat guard` masks the values with a `file` or `env` source it can read in every call the policy decides; the proxy masks all of them. The working directory is now redacted too. Canary tests plant fake secrets in shell commands, paths, URLs, proxy headers and MCP arguments and check that none is stored and the hash chain still verifies.
+- An MCP call whose arguments nest a path or URL deeper than 8 levels is now `ask` (rule `unparseable`, reason `mcp arguments not fully checked: nested deeper than 8 levels`) instead of being decided on the tool name alone (#332). The paths and URLs found above that depth are still checked, so a `deny` among them still wins. More than 1024 paths and URLs still denies the call.
 
 ## [0.1.0-alpha.5] - 2026-10-07
 

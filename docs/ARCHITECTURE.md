@@ -119,7 +119,9 @@ Claude Code treats exit 101 as a non-blocking error.
 - **Patch** (Codex `apply_patch`). One `fs.write` per added, updated, deleted or
   moved-to file; a patch naming no file asks.
 - **McpTool.** An `mcp` atom for the tool name, plus `fs.*` and `net` atoms for path-
-  and URL-shaped arguments found at any depth (`openmoat-hosts/src/mcp.rs`).
+  and URL-shaped arguments found down to 8 levels of nesting (`openmoat-hosts/src/mcp.rs`).
+  When deeper nesting stops the search, the adapter names the limit in `unchecked`, and
+  the engine adds an `unparseable` ask to the decision.
 - **Fetch** (Claude Code `WebFetch`). A `fetch` atom for the URL's host (ADR-017).
 
 Anything the lexer or classifier cannot make sense of is `unparseable`, which the

@@ -290,6 +290,7 @@ pub fn classify_action(action: &Action, ctx: &EvalContext) -> ParseOutcome {
             reads,
             writes,
             hosts,
+            ..
         } => {
             let norm =
                 |p: &String| paths::normalise(p, &ctx.home, ctx.project.as_deref(), &ctx.cwd);
@@ -360,10 +361,22 @@ impl CompiledPolicy<'_> {
             }
             _ => None,
         });
+        // Arguments the adapter did not search may name a file or host: ask, and
+        // let a deny on what it did search still win.
+        let unchecked = match action {
+            Action::McpTool {
+                unchecked: Some(limit),
+                ..
+            } => Some(unparseable(format!(
+                "mcp arguments not fully checked: {limit}"
+            ))),
+            _ => None,
+        };
         atoms
             .iter()
             .filter_map(|atom| self.evaluate_atomic(atom))
             .chain(pins)
+            .chain(unchecked)
             .reduce(|mut acc, next| {
                 acc.merge(next);
                 acc
