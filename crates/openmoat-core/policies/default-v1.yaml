@@ -131,9 +131,11 @@ deny:
       - "~/.claude/settings.local.json"
       - "~/.codex/**"
       - "~/.cursor/hooks.json"
+      - "~/.cursor/sandbox.json"
       - "**/.claude/settings.json"
       - "**/.claude/settings.local.json"
       - "**/.cursor/hooks.json"
+      - "**/.cursor/sandbox.json"
       - "**/.codex/hooks.json"
       - "**/.moat/**"
       # the binary every installed hook runs

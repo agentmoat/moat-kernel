@@ -17,6 +17,7 @@ mod codex;
 mod config_change;
 mod continue_cli;
 mod cursor;
+mod cursor_sandbox;
 mod differential;
 mod edit;
 mod export;

@@ -246,6 +246,9 @@ fn host_files(config: &HostConfig) -> Vec<PathBuf> {
     if config.host == Host::Codex {
         files.push(config.settings_path.with_file_name("config.toml"));
     }
+    if config.host == Host::Cursor {
+        files.push(config.settings_path.with_file_name("sandbox.json"));
+    }
     files
 }
 

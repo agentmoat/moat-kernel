@@ -59,8 +59,8 @@ do not cover (the full list is in [THREAT_MODEL.md](THREAT_MODEL.md) §5):
 
 | Level | Means |
 |---|---|
-| `hook + OS sandbox` | the hook is installed and current, and the sandbox `moat init` generated is in place and matches the policy (Claude Code, Codex) |
-| `hook only` | the hook is installed, but no OS sandbox from OpenMoat is in force: the Cursor editor, Claude Code on native Windows, or a sandbox that is missing, weakened or out of date (the line says which) |
+| `hook + OS sandbox` | the hook is installed and current, and the sandbox `moat init` generated is in place and matches the policy (Claude Code, Codex, Cursor) |
+| `hook only` | the hook is installed, but no OS sandbox from OpenMoat is in force: Claude Code or Cursor on native Windows, or a sandbox that is missing, weakened or out of date (the line says which) |
 | `not protected` | the hook is missing, out of date or unreadable; run `moat init` |
 
 Agents that are not set up or not found keep their `·` line. `moat status --format

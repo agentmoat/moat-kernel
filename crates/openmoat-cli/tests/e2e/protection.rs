@@ -27,8 +27,8 @@ fn each_agent_reports_its_level_and_gaps() {
         "Claude Code      · known gaps: WebSearch is not hooked",
         "Codex            ✔ protection: hook + OS sandbox",
         "Codex            · known gaps: web search and hosted tools are not hooked; asks become denies",
-        "Cursor           ! protection: hook only: no OS sandbox from OpenMoat",
-        "Cursor           · known gaps: OS sandbox not configured by OpenMoat",
+        "Cursor           ✔ protection: hook + OS sandbox",
+        "Cursor           · known gaps: commands Cursor runs outside its sandbox",
     ] {
         assert!(status.contains(line), "{line:?} in {status}");
     }
@@ -38,13 +38,10 @@ fn each_agent_reports_its_level_and_gaps() {
         "{doctor}"
     );
     assert!(
-        doctor.contains("· Cursor           protection: hook only"),
+        doctor.contains("· Cursor           protection: hook + OS sandbox"),
         "{doctor}"
     );
-    assert!(
-        doctor.contains("healthy"),
-        "hook only is no problem: {doctor}"
-    );
+    assert!(doctor.contains("healthy"), "{doctor}");
 
     let claude = agent(&sb, "claude-code");
     assert_eq!(claude["level"], "hook-and-os-sandbox", "{claude}");
@@ -52,12 +49,12 @@ fn each_agent_reports_its_level_and_gaps() {
     assert_eq!(claude["name"], "Claude Code");
     assert!(claude["gaps"].as_str().unwrap().contains("WebSearch"));
     let cursor = agent(&sb, "cursor");
-    assert_eq!(cursor["level"], "hook-only", "{cursor}");
+    assert_eq!(cursor["level"], "hook-and-os-sandbox", "{cursor}");
 
     let home = text(&output(&mut sb.command(), Some("")));
     assert!(
         home.contains(
-            "Protecting Claude Code (hook + OS sandbox), Codex (hook + OS sandbox), Cursor (hook only)"
+            "Protecting Claude Code (hook + OS sandbox), Codex (hook + OS sandbox), Cursor (hook + OS sandbox)"
         ),
         "{home}"
     );

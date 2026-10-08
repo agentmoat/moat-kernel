@@ -156,11 +156,14 @@ something the alpha claims to stop.
   project's activate script in the agent's shell, and the `PATH` it sets makes later
   commands in that shell run programs from the project's `.venv/bin`. An agent that can write into the project can therefore run
   any code through an allowed command. In the Standard tier that code runs inside the
-  host's sandbox, and under `moat run` inside OpenMoat's, with the bounds above. In the
-  Cursor editor OpenMoat configures no sandbox: the code runs in Cursor's own sandbox
-  as Cursor's `sandbox.json` sets it when that is on, and with the user's permissions
-  when it is off or Cursor reruns the command outside it after its own classifier
-  approves. The Cursor CLI can run under `moat run` (SANDBOX.md).
+  host's sandbox, and under `moat run` inside OpenMoat's, with the bounds above. Under
+  Cursor the code runs in Cursor's sandbox as the `sandbox.json` OpenMoat generates
+  sets it (macOS and Linux), which cannot deny a path inside the workspace (`.env`,
+  `.git` stay open to it), and with the user's permissions when Cursor runs the
+  command outside it: after its Auto-review classifier approves it, in Run Everything
+  mode, in Allowlist mode with sandboxing off, in the Cursor CLI without `--sandbox
+  enabled`, and on native Windows. The Cursor CLI can also run under `moat run`
+  (SANDBOX.md).
 - **Allowed hosts are relays.** `registries` allows network to `api.github.com`,
   `github.com` and the package registries. The host check passes for any command
   that reaches them, so a command that is itself allowed (a project script) or that

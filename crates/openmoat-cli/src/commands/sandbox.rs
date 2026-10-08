@@ -58,6 +58,12 @@ pub fn show(args: &SandboxShowArgs) -> Result<Code> {
             text: codex_doc.to_string(),
             report: &plan.codex.report,
         },
+        Shown {
+            host: Host::Cursor,
+            path: install::settings_path(Host::Cursor)?,
+            text: serde_json::to_string_pretty(&plan.cursor.settings)?,
+            report: &plan.cursor.report,
+        },
     ];
     if args.format == Format::Json {
         let doc: serde_json::Map<String, Value> = hosts

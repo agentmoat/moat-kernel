@@ -98,6 +98,7 @@ pub fn repin_with(
     if hooks == HookPins::Adopt || !had_lock {
         paths.extend(installed_hook_files(binary)?);
         profiles.extend(crate::sandbox::install::codex_profile_files()?);
+        paths.extend(crate::sandbox::install::cursor_sandbox_files()?);
     }
     let mut lock = Lock::pin(binary, &paths)?;
     for path in profiles.iter().filter(|p| p.is_file()) {
@@ -143,7 +144,10 @@ pub struct HookPinGap {
 
 impl HookPinGap {
     pub fn new(lock: &Lock, home: &Home, installed: &[PathBuf]) -> Self {
-        let state: Vec<String> = state_files(home).iter().map(|p| key(p)).collect();
+        // This shell's Cursor `sandbox.json` is pinned whole, but is no hook file.
+        let mut state = state_files(home);
+        state.extend(crate::sandbox::install::cursor_sandbox_files().unwrap_or_default());
+        let state: Vec<String> = state.iter().map(|p| key(p)).collect();
         let here: Vec<String> = installed.iter().map(|p| key(p)).collect();
         Self {
             unpinned: installed
