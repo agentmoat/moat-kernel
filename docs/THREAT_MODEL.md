@@ -141,9 +141,11 @@ something the alpha claims to stop.
   project script, per operating system, and the gaps above, are executed in CI and
   listed in [EVIDENCE.md](EVIDENCE.md).
 - **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
-  `cargo run`, `make test`, `pytest` and similar are allowed by `dev-shell`. They run
-  whatever the project's scripts, build files and test files say, and OpenMoat sees
-  only the command line. An agent that can write into the project can therefore run
+  `cargo run`, `make`, `make test`, `pytest`, `python -m venv` and similar are allowed
+  by `dev-shell`. They run whatever the project's scripts, build files and test files
+  say, and OpenMoat sees only the command line. `source .venv/bin/activate` runs the
+  project's activate script in the agent's shell, and the `PATH` it sets makes later
+  commands in that shell run programs from the project's `.venv/bin`. An agent that can write into the project can therefore run
   any code through an allowed command. In the Standard tier that code runs inside the
   host's sandbox, and under `moat run` inside OpenMoat's, with the bounds above. In the
   Cursor editor OpenMoat configures no sandbox: the code runs in Cursor's own sandbox

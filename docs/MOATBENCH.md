@@ -102,8 +102,8 @@ The scorecard counts every step on every host that ran it, in total and per
 workflow:
 
 ```text
-workflows: 152 steps, 26 asks (expected 17), 0 unexpected, 9 expected failures
-  git-feature-branch       42 steps, 6 asks (expected 3), 0 unexpected, 3 expected failures
+workflows: 152 steps, 19 asks (expected 19), 0 unexpected, 0 expected failures
+  git-feature-branch       42 steps, 3 asks (expected 3), 0 unexpected, 0 expected failures
 ```
 
 `unexpected` is a step whose verdict differs from its `expect` without a marker; it

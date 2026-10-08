@@ -1,9 +1,10 @@
 //! Options of ordinary programs that run another command or write a file.
 //!
 //! `find . -exec cmd {} \;` runs `cmd`; `git diff --output=FILE` writes `FILE`.
-//! Neither shows up as a separate command or a path-looking token, so they are
-//! surfaced here: the `-exec` command is classified as a command of its own and
-//! the `--output` value becomes an `fs.write`.
+//! `python -m venv dir` creates `dir`. None of these shows up as a separate
+//! command or a path-looking token, so they are surfaced here: the `-exec`
+//! command is classified as a command of its own, and the `--output` value and
+//! the venv directory become `fs.write`s.
 
 use super::commands::classify_wrapped;
 use super::{ClassifyError, ShellContext, Sink};
@@ -22,6 +23,15 @@ pub(super) fn classify(
     sink: &mut Sink,
     depth: u8,
 ) -> Result<(), ClassifyError> {
+    // `python -m venv DIR…` creates each `DIR`, a plain name included. An option
+    // value (`--prompt NAME`) is treated as a directory too: stricter, never looser.
+    if program.starts_with("python")
+        && matches!(argv.get(1..3), Some([m, venv]) if m == "-m" && venv == "venv")
+    {
+        for dir in argv[3..].iter().filter(|a| !a.starts_with('-')) {
+            sink.write(ctx, dir)?;
+        }
+    }
     let mut i = 1;
     while let Some(arg) = argv.get(i) {
         i += 1;
