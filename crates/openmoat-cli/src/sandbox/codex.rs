@@ -16,13 +16,21 @@
 //! - that proxy hands allowed connections to an upstream proxy only when Codex
 //!   itself runs with `HTTP(S)_PROXY` and `allow_upstream_proxy` is on; no
 //!   `config.toml` key names the upstream (`network-proxy/src/upstream.rs`).
+//!
+//! On Linux, bubblewrap can only hide paths that exist, so before each command
+//! Codex lists every file below a deny glob's literal prefix with `rg --files`
+//! and refuses to start the command when ripgrep reports any error
+//! (`expand_unreadable_globs_with_ripgrep` in `linux-sandbox/src/bwrap.rs`).
+//! System directories hold root-only directories (`/etc/ssl/private`, the
+//! `systemd-private-*` directories in `/tmp`), so `**/` denies are repeated only
+//! below the roots inside the home directory, which the user can list.
 
 use anyhow::Result;
 use openmoat_core::ir::{Access, Effect, Enforcement};
 use openmoat_core::{AtomicAction, Kind};
 use toml_edit::{Item, Table, value};
 
-use super::patterns::{Spot, domain, is_below, literal_tree, split, spot};
+use super::patterns::{Spot, domain, is_below, literal_tree, push_unique, split, spot};
 use super::{PROJECT, Report};
 
 mod config;
@@ -59,11 +67,12 @@ pub struct Generated {
     pub report: Report,
 }
 
-/// Generate the profile for `ir`, lowered by [`super::lower_for_hosts`]. With
-/// `proxy_port`, Codex's proxy may hand allowed traffic to `moat proxy` there.
-pub fn generate(ir: &Enforcement, proxy_port: Option<u16>) -> Result<Generated> {
+/// Generate the profile for `ir`, lowered by [`super::lower_for_hosts`] for a
+/// user whose home directory is spelled as in `homes`. With `proxy_port`,
+/// Codex's proxy may hand allowed traffic to `moat proxy` there.
+pub fn generate(ir: &Enforcement, homes: &[String], proxy_port: Option<u16>) -> Result<Generated> {
     let mut report = Report::default();
-    let fs = Filesystem::build(ir, &mut report)?;
+    let fs = Filesystem::build(ir, homes, &mut report)?;
     let mut profile = Table::new();
     profile.insert(
         "description",
@@ -96,10 +105,16 @@ struct Filesystem {
     paths: Vec<(String, Mode)>,
     /// Entries under `:workspace_roots`, relative to each root.
     workspace: Vec<(String, Mode)>,
-    /// Absolute directories reads are granted in, for `**/` read denies.
+    /// The home directory's spellings.
+    homes: Vec<String>,
+    /// Directories inside the home reads are granted in, for `**/` read denies.
     roots: Vec<String>,
-    /// Absolute directories writes are granted in, for `**/` write denies.
+    /// Directories inside the home writes are granted in, for `**/` write denies.
     write_roots: Vec<String>,
+    /// Directories outside the home access is granted in, where `**/` denies
+    /// are not repeated, and whether there was any `**/` deny to repeat.
+    outside_home: Vec<String>,
+    denies_anywhere: bool,
     /// Deny entries naming a directory node only, and whole trees.
     nodes: Vec<String>,
     trees: Vec<String>,
@@ -123,14 +138,17 @@ fn widen(list: &mut Vec<(String, Mode)>, key: String, mode: Mode) {
 }
 
 impl Filesystem {
-    fn build(ir: &Enforcement, report: &mut Report) -> Result<Self> {
+    fn build(ir: &Enforcement, homes: &[String], report: &mut Report) -> Result<Self> {
         let checker = ir.checker()?;
         let readable = |path: &str| {
             checker.check_os(&AtomicAction::FsRead {
                 path: path.to_owned(),
             }) == Some(Effect::Allow)
         };
-        let mut fs = Self::default();
+        let mut fs = Self {
+            homes: homes.to_vec(),
+            ..Self::default()
+        };
         grant(&mut fs.paths, ":minimal".into(), Mode::Read);
         report.allowance(
             Kind::FsRead,
@@ -189,6 +207,18 @@ impl Filesystem {
             }
         }
         fs.drop_directory_nodes(report);
+        if fs.denies_anywhere && !fs.outside_home.is_empty() {
+            report.allowance(
+                Kind::FsRead,
+                "codex.outside-home",
+                fs.outside_home.clone(),
+                "Codex on Linux lists every directory below a deny glob before each command \
+                 and runs no command when one is unreadable (root-only directories under /etc \
+                 and /tmp), so `**/` denies (`.env` files) cover the project and the read roots \
+                 in the home but not these directories; the hook still denies the agent's own \
+                 reads there",
+            );
+        }
         report.loss(
             Kind::FsWrite,
             "codex.git",
@@ -201,11 +231,13 @@ impl Filesystem {
 
     fn grant_root(&mut self, path: &str, mode: Mode) {
         widen(&mut self.paths, path.to_owned(), mode);
-        if !self.roots.iter().any(|r| r == path) {
-            self.roots.push(path.to_owned());
+        if !self.homes.iter().any(|h| path == h || is_below(path, h)) {
+            push_unique(&mut self.outside_home, path.to_owned());
+            return;
         }
-        if mode == Mode::Write && !self.write_roots.iter().any(|r| r == path) {
-            self.write_roots.push(path.to_owned());
+        push_unique(&mut self.roots, path.to_owned());
+        if mode == Mode::Write {
+            push_unique(&mut self.write_roots, path.to_owned());
         }
     }
 
@@ -262,8 +294,9 @@ impl Filesystem {
     }
 
     /// Deny (or make read-only) what `pattern` names. A `**/` glob is denied in
-    /// the workspace roots and below every directory granted for the access
-    /// (`write`: writes, else reads); elsewhere the profile denies by default.
+    /// the workspace roots and below every directory inside the home granted
+    /// for the access (`write`: writes, else reads); elsewhere the profile
+    /// denies by default.
     fn deny(&mut self, pattern: &str, mode: Mode, write: bool) {
         let roots = if write {
             &self.write_roots
@@ -280,6 +313,7 @@ impl Filesystem {
                 .chain(roots.iter().map(|r| (false, format!("{r}/**/{rest}"))))
                 .collect(),
         };
+        self.denies_anywhere |= matches!(spot(pattern), Spot::Anywhere(_));
         for (in_workspace, target) in targets {
             if tree {
                 &mut self.trees

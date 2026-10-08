@@ -82,8 +82,12 @@ something the alpha claims to stop.
   and OpenMoat's translation, and every host version bump must keep the generated keys
   working (`moat doctor` names a weakened setting; the differential suite executes
   them, [EVIDENCE.md](EVIDENCE.md)). On Linux, Claude Code's sandbox skips the
-  generated `.env` denies, so a project script reads the project's `.env` (#359), and
-  Codex runs no command under the generated profile (#358). Claude Code's file tools, `WebFetch`, MCP servers and hooks run
+  generated `.env` denies, so a project script reads the project's `.env` (#359).
+  Codex on Linux hides a `**/` deny's matches only after listing every directory below
+  it, and runs no command when one is unreadable, so the generated profile repeats the
+  `.env` denies only in the project and the read roots inside the home (#358): a
+  sandboxed command can read a `.env` under `/etc`, `/usr` or `/tmp` outside the
+  project, and on Linux a `.env` created after the command started. Claude Code's file tools, `WebFetch`, MCP servers and hooks run
   outside its sandbox; only the hook governs them. Writes by a sandboxed command to
   the session's working directory are allowed even when the session started above
   the git root, and Claude Code leaves paths outside the user directories (`/Users`,

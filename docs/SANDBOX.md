@@ -16,7 +16,15 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   `permissions.blockReadsOutsideWorkingDirectories: true`. Claude Code's file tools
   then refuse reads outside the working directories; `/add-dir` adds one.
 - **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =
-  "moat"` and `features.network_proxy = true`.
+  "moat"` and `features.network_proxy = true`. The `**/` denies (`.env` files) cover
+  the project and the read roots inside the home, not system read roots such as
+  `/etc`, `/usr` and `/tmp`: on Linux Codex lists every directory below a deny glob
+  before each command and runs none when one is unreadable, and those hold root-only
+  directories. `moat sandbox show` lists these roots (`codex.outside-home`); the hook
+  still denies the agent's own reads there. A directory you cannot list inside the
+  project or a home read root still stops Codex on Linux. Codex on Linux also runs its
+  own executable inside the sandbox, so it starts commands only when installed under
+  a read root (npm under `/usr` or `~/.nvm`, or `~/.local/bin`).
 - **Cursor:** not configured. Cursor has a sandbox of its own (Seatbelt on macOS,
   Landlock and seccomp on Linux, set in `~/.cursor/sandbox.json`), but `moat init`
   does not generate its settings, and Cursor can rerun a command outside it once its

@@ -7,7 +7,12 @@ use crate::sandbox::{assert_golden, lower_for_hosts};
 pub(super) fn generated(yaml: &str) -> Generated {
     let policy = Policy::parse(yaml).expect("test policy lints");
     let ir = lower_for_hosts(&policy, "/Users/me", None, Vec::new(), false).expect("lowers");
-    generate(&ir, crate::sandbox::proxy_port(&policy)).expect("generates")
+    generate(
+        &ir,
+        &["/Users/me".into()],
+        crate::sandbox::proxy_port(&policy),
+    )
+    .expect("generates")
 }
 
 fn mode<'a>(generated: &'a Generated, table: &[&str], key: &str) -> Option<&'a str> {
@@ -56,7 +61,13 @@ fn reads_are_granted_exactly_and_secrets_win() {
         Some("deny"),
         "**/ below a root"
     );
-    assert_eq!(mode(&out, &[], "/usr/**/.env"), Some("deny"));
+    for system in ["/usr/**/.env", "/etc/**/.env", "/tmp/**/.env.*"] {
+        assert_eq!(
+            mode(&out, &[], system),
+            None,
+            "{system}: Codex on Linux cannot list root-only directories"
+        );
+    }
     assert!(
         out.profile.get("extends").is_none(),
         ":workspace reads the whole disk"
@@ -100,9 +111,42 @@ fn losses_name_the_exceptions_and_git() {
         "sandbox.read_roots",
         "codex.tmpdir",
         "codex.directory-nodes",
+        "codex.outside-home",
     ] {
         assert!(rules.contains(&rule), "{rule}: {rules:?}");
     }
+}
+
+#[test]
+fn deny_globs_are_repeated_only_below_roots_in_the_home() {
+    let out = generated(
+        "version: 1\ndeny:\n  - id: s\n    fs.read: ['**/.env']\n\
+         sandbox:\n  read_roots: ['/etc', '/Users/me', '~/.cargo']\n",
+    );
+    assert_eq!(mode(&out, &[], "/etc"), Some("read"));
+    assert_eq!(mode(&out, &[], "/etc/**/.env"), None);
+    assert_eq!(mode(&out, &[], "/Users/me/**/.env"), Some("deny"));
+    assert_eq!(mode(&out, &[], "/Users/me/.cargo/**/.env"), Some("deny"));
+    assert_eq!(mode(&out, &[":workspace_roots"], "**/.env"), Some("deny"));
+    let outside = out
+        .report
+        .allowances
+        .iter()
+        .find(|a| a.rule == "codex.outside-home");
+    assert_eq!(
+        outside.map(|a| a.patterns.clone()),
+        Some(vec!["/etc".into()])
+    );
+
+    let quiet = generated("version: 1\nsandbox:\n  read_roots: ['/etc']\n");
+    assert!(
+        !quiet
+            .report
+            .allowances
+            .iter()
+            .any(|a| a.rule == "codex.outside-home"),
+        "nothing to repeat, nothing reported"
+    );
 }
 
 #[test]
