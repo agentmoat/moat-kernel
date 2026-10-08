@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 - docs/ADDING_AN_AGENT.md: how to add support for another AI coding agent, from mapping its hook payload to an action, through installing the hook and capturing fixtures, to what the pull request must include (#319). Linked from CONTRIBUTING.md and the README.
+- docs/SANDBOX.md: how to run the Cursor CLI (`agent`) under `moat run` on macOS: its installation directory in `sandbox.read_roots`, an allow rule for `api2.cursor.sh`, `--write ~/.cursor`, `CURSOR_API_KEY` instead of the keychain, and `--sandbox disabled` for that run (#324).
+- `moat doctor` notes, when the Cursor hook is installed, that OpenMoat gives Cursor no OS sandbox, so only the hook applies the policy, and that `moat run` covers the Cursor CLI (#324).
+
+### Changed
+- README, docs/INSTALL.md and docs/THREAT_MODEL.md no longer say that Cursor has no sandbox of its own. Cursor has one; `moat init` does not configure it, and Cursor can rerun a command outside it, so in the Cursor editor only the hook applies the policy (#324).
 
 ## [0.1.0-alpha.4] - 2026-10-07
 

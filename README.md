@@ -131,7 +131,7 @@ OpenMoat does not replace the agent's prompt or sandbox. It fills the gaps betwe
 |---|---|
 | Claude Code | hooks and its OS sandbox |
 | Codex | hooks and its OS sandbox; an `ask` becomes a deny you approve with `moat allow --last` |
-| Cursor | hooks; asks only for shell and MCP calls; no OS sandbox of its own |
+| Cursor | hooks; asks only for shell and MCP calls; OpenMoat does not configure Cursor's own sandbox; the Cursor CLI can run under `moat run` |
 | Continue CLI (`cn`) | partial: the released `cn` does not run hooks yet; use `moat run` |
 
 What each hook covers: [docs/INSTALL.md](docs/INSTALL.md). The OS sandboxes
@@ -164,8 +164,10 @@ you export it.
 
 ## Limits
 
-- Cursor has no OS sandbox of its own, and Claude Code's covers only `Bash`,
-  `PowerShell` and `Monitor`. `moat run` covers a whole agent but is weaker per command.
+- OpenMoat does not configure Cursor's own sandbox, so in the Cursor editor only the
+  hook applies the policy; the Cursor CLI can run under `moat run`. Claude Code's
+  sandbox covers only `Bash`, `PowerShell` and `Monitor`. `moat run` covers a whole
+  agent but is weaker per command.
 - Allowed scripts (`npm test`, `make test`) run whatever they contain; the sandbox
   bounds them, OpenMoat does not inspect them.
 - Hosts the policy allows (`api.github.com`, the registries) can receive data from an
