@@ -88,8 +88,8 @@ Network has two modes:
     `HTTP_PROXY` and `HTTPS_PROXY` set to `http://127.0.0.1:18080`. Codex's own API
     hosts then need an allow rule.
 
-Claude Code's own broker also runs from the policy. `moat sandbox sync` writes the
-policy's `secrets:` entries into Claude Code's `sandbox.credentials` as `mask` entries
+Claude Code's own broker also runs from the policy (#363). `moat sandbox sync` writes
+the policy's `secrets:` entries into Claude Code's `sandbox.credentials` as `mask` entries
 with the host in `injectHosts`, and turns on `network.tlsTerminate` so Claude Code's
 built-in proxy substitutes the real value inside HTTPS for sandboxed `Bash`,
 `PowerShell` and `Monitor` commands. One policy therefore drives both Claude Code's
