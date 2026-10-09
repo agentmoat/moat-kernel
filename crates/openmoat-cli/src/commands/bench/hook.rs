@@ -1,0 +1,190 @@
+//! Running the hook under test: a throwaway home, an environment that carries
+//! nothing of the person's, the payload on stdin and a time limit.
+
+use std::ffi::OsString;
+use std::io::{Read, Write as _};
+use std::path::PathBuf;
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::mpsc::{self, Receiver};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use anyhow::{Context as _, Result};
+
+/// How long the hook may take for one call before it counts as failed.
+pub const TIMEOUT: Duration = Duration::from_secs(10);
+
+/// A hook reply larger than this is cut off; no real decision needs more.
+const MAX_REPLY_BYTES: u64 = 1024 * 1024;
+
+/// What came back from one run of the hook.
+pub enum Reply {
+    /// The hook exited; `code` is `None` when a signal ended it.
+    Exited {
+        code: Option<i32>,
+        stdout: String,
+        stderr: String,
+    },
+    /// No exit within [`TIMEOUT`]; the hook was killed.
+    TimedOut,
+    /// The hook could not be started.
+    NotStarted(String),
+}
+
+impl Reply {
+    /// One line for `--verbose`.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Exited { code, stdout, .. } => {
+                let code = code.map_or_else(|| "killed".to_owned(), |c| c.to_string());
+                format!("exit {code}: {}", stdout.trim())
+            }
+            Self::TimedOut => format!("no exit within {} s", TIMEOUT.as_secs()),
+            Self::NotStarted(error) => format!("could not start: {error}"),
+        }
+    }
+}
+
+/// A throwaway directory holding the home and the project the hook sees,
+/// removed when dropped.
+pub struct Scratch {
+    root: PathBuf,
+    pub home: PathBuf,
+    pub project: PathBuf,
+}
+
+impl Scratch {
+    /// A new directory under the system temporary directory, with the agents'
+    /// configuration directories and a git project in its home. `create_dir`
+    /// fails on an existing path, so nothing already there is reused.
+    pub fn new() -> Result<Self> {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let root = std::env::temp_dir().join(format!("moat-bench-{}-{nanos}", std::process::id()));
+        std::fs::create_dir(&root).with_context(|| format!("creating {}", root.display()))?;
+        let home = root.join("home");
+        let project = home.join("proj");
+        let scratch = Self {
+            root,
+            home,
+            project,
+        };
+        for dir in [".claude", ".codex", ".cursor", "proj/.git"] {
+            let path = scratch.home.join(dir);
+            std::fs::create_dir_all(&path)
+                .with_context(|| format!("creating {}", path.display()))?;
+        }
+        Ok(scratch)
+    }
+
+    /// `program` with `args`, run in the project with the environment cleared but
+    /// for the search path and the throwaway home (and, on Windows, `SYSTEMROOT`,
+    /// without which programs cannot start). No agent configuration variable
+    /// (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `MOAT_HOME`, …) and no secret reaches it.
+    pub fn command(&self, program: impl Into<OsString>, args: &[OsString]) -> Command {
+        let mut cmd = Command::new(program.into());
+        cmd.args(args)
+            .current_dir(&self.project)
+            .env_clear()
+            .envs(self.environment());
+        cmd
+    }
+
+    /// The variables [`Scratch::command`] passes, for `--verbose`.
+    pub fn environment(&self) -> Vec<(&'static str, OsString)> {
+        let mut vars = vec![
+            ("PATH", std::env::var_os("PATH").unwrap_or_default()),
+            ("HOME", self.home.clone().into_os_string()),
+            ("USERPROFILE", self.home.clone().into_os_string()),
+        ];
+        if let Some(root) = std::env::var_os("SYSTEMROOT") {
+            vars.push(("SYSTEMROOT", root));
+        }
+        vars
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+/// The program and arguments that run a hook command line the way hosts do:
+/// through the system shell.
+pub fn shell(command_line: &str) -> (OsString, Vec<OsString>) {
+    let (shell, flag) = if cfg!(windows) {
+        ("cmd", "/C")
+    } else {
+        ("sh", "-c")
+    };
+    (shell.into(), vec![flag.into(), command_line.into()])
+}
+
+/// Run `cmd` with `payload` on stdin and wait at most [`TIMEOUT`].
+pub fn send(cmd: &mut Command, payload: &str) -> Reply {
+    let deadline = Instant::now() + TIMEOUT;
+    let spawned = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
+    let mut child = match spawned {
+        Ok(child) => child,
+        Err(error) => return Reply::NotStarted(error.to_string()),
+    };
+    // Pipes are written and read on threads, so a hook that ignores its input or
+    // fills a pipe cannot stall the wait. A hook may exit without reading its
+    // input; its reply is what counts.
+    if let Some(mut stdin) = child.stdin.take() {
+        let payload = payload.to_owned();
+        std::thread::spawn(move || stdin.write_all(payload.as_bytes()));
+    }
+    let stdout = child.stdout.take().map(read_on_thread);
+    let stderr = child.stderr.take().map(read_on_thread);
+    let Some(status) = wait(&mut child, deadline) else {
+        return Reply::TimedOut;
+    };
+    // A process the hook started may still hold its pipes open: read until the
+    // deadline at most.
+    let collect = |reader: Option<Receiver<String>>| {
+        reader
+            .and_then(|r| {
+                r.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                    .ok()
+            })
+            .unwrap_or_default()
+    };
+    Reply::Exited {
+        code: status.code(),
+        stdout: collect(stdout),
+        stderr: collect(stderr),
+    }
+}
+
+/// The exit status once the child exits, or `None` after killing it at `deadline`.
+fn wait(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Some(status),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+}
+
+fn read_on_thread(pipe: impl Read + Send + 'static) -> Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = pipe.take(MAX_REPLY_BYTES).read_to_end(&mut bytes);
+        let _ = tx.send(String::from_utf8_lossy(&bytes).into_owned());
+    });
+    rx
+}

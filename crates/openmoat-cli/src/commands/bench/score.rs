@@ -1,10 +1,12 @@
-//! The `MoatBench` scorecard: verdicts per category, asks per developer workflow,
+//! The `MoatBench` scorecard: answers per category, asks per developer workflow,
 //! false positives, known gaps and mismatches.
 
 use std::collections::BTreeMap;
 use std::fmt;
 
-use super::Verdict;
+use serde::Serialize;
+
+use super::hosts::Answer;
 
 /// The category whose scenarios must stay allowed; anything stricter there is
 /// a false positive.
@@ -14,12 +16,20 @@ const BENIGN: &str = "benign";
 /// ask the policy intends (installs, push), and asks are counted per workflow.
 const WORKFLOWS: &str = "workflows";
 
+/// One step of a run.
+pub struct StepResult {
+    pub got: Answer,
+    /// The step's `expect` was an ask.
+    pub expects_ask: bool,
+    /// `got` meets the expectation.
+    pub ok: bool,
+    /// The step carries a gap marker.
+    pub gap: bool,
+}
+
 /// One scenario on one host.
 pub struct Run {
-    /// The strictest kernel verdict across its steps.
-    pub strictest: Verdict,
-    /// Each step's kernel verdict, its `expect`, and whether it carries a gap.
-    pub steps: Vec<(Verdict, Verdict, bool)>,
+    pub steps: Vec<StepResult>,
     pub outcome: Outcome,
 }
 
@@ -30,32 +40,59 @@ pub enum Outcome {
     Fail(Vec<String>),
 }
 
-#[derive(Default)]
+/// Runs of one category by their strictest answer.
+#[derive(Default, Serialize)]
 struct Row {
     runs: usize,
-    by_verdict: [usize; 3],
+    blocked: usize,
+    asked: usize,
+    allowed: usize,
+    passthrough: usize,
+    error: usize,
+}
+
+impl Row {
+    fn count(&mut self, strictest: Answer) {
+        self.runs += 1;
+        *match strictest {
+            Answer::Deny => &mut self.blocked,
+            Answer::Ask => &mut self.asked,
+            Answer::Allow => &mut self.allowed,
+            Answer::Passthrough => &mut self.passthrough,
+            Answer::Error => &mut self.error,
+        } += 1;
+    }
+
+    fn add(&mut self, other: &Self) {
+        self.runs += other.runs;
+        self.blocked += other.blocked;
+        self.asked += other.asked;
+        self.allowed += other.allowed;
+        self.passthrough += other.passthrough;
+        self.error += other.error;
+    }
 }
 
 /// Step counts of one workflow across the hosts that ran it.
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Serialize)]
 struct Tally {
     steps: usize,
     asks: usize,
-    expected: usize,
-    /// Verdicts that differ from `expect` without a gap marker: these fail the run.
+    expected_asks: usize,
+    /// Steps that miss their `expect` without a gap marker.
     unexpected: usize,
-    /// Verdicts that differ from `expect` under a gap marker.
-    known: usize,
+    /// Steps that miss their `expect` under a gap marker.
+    expected_failures: usize,
 }
 
 impl Tally {
-    fn add(&mut self, steps: &[(Verdict, Verdict, bool)]) {
-        for &(got, expect, gap) in steps {
+    fn add(&mut self, steps: &[StepResult]) {
+        for step in steps {
             self.steps += 1;
-            self.asks += usize::from(got == Verdict::Ask);
-            self.expected += usize::from(expect == Verdict::Ask);
-            self.unexpected += usize::from(got != expect && !gap);
-            self.known += usize::from(got != expect && gap);
+            self.asks += usize::from(step.got == Answer::Ask);
+            self.expected_asks += usize::from(step.expects_ask);
+            self.unexpected += usize::from(!step.ok && !step.gap);
+            self.expected_failures += usize::from(!step.ok && step.gap);
         }
     }
 
@@ -63,9 +100,9 @@ impl Tally {
         all.fold(Self::default(), |t, a| Self {
             steps: t.steps + a.steps,
             asks: t.asks + a.asks,
-            expected: t.expected + a.expected,
+            expected_asks: t.expected_asks + a.expected_asks,
             unexpected: t.unexpected + a.unexpected,
-            known: t.known + a.known,
+            expected_failures: t.expected_failures + a.expected_failures,
         })
     }
 }
@@ -75,27 +112,35 @@ impl fmt::Display for Tally {
         write!(
             f,
             "{} steps, {} asks (expected {}), {} unexpected, {} expected failures",
-            self.steps, self.asks, self.expected, self.unexpected, self.known
+            self.steps, self.asks, self.expected_asks, self.unexpected, self.expected_failures
         )
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct Scorecard {
-    rows: BTreeMap<String, Row>,
+    categories: BTreeMap<String, Row>,
     workflows: BTreeMap<String, Tally>,
     false_positives: Vec<String>,
-    gaps: Vec<String>,
-    failures: Vec<String>,
+    known_gaps: Vec<String>,
+    mismatches: Vec<String>,
     /// Scenario id → (gap issue, whether any run still shows it).
+    #[serde(skip)]
     gap_seen: BTreeMap<String, (String, bool)>,
 }
 
 impl Scorecard {
     pub fn add(&mut self, category: &str, id: &str, host: &str, run: Run) {
-        let row = self.rows.entry(category.to_owned()).or_default();
-        row.runs += 1;
-        row.by_verdict[run.strictest as usize] += 1;
+        let strictest = run
+            .steps
+            .iter()
+            .map(|s| s.got)
+            .max()
+            .unwrap_or(Answer::Allow);
+        self.categories
+            .entry(category.to_owned())
+            .or_default()
+            .count(strictest);
         if category == WORKFLOWS {
             self.workflows
                 .entry(id.to_owned())
@@ -103,9 +148,9 @@ impl Scorecard {
                 .add(&run.steps);
         }
         let name = format!("{id} ({host})");
-        if category == BENIGN && run.strictest != Verdict::Allow {
+        if category == BENIGN && !strictest.meets(Answer::Allow) {
             self.false_positives
-                .push(format!("{name}: {:?}", run.strictest));
+                .push(format!("{name}: {}", strictest.word()));
         }
         match run.outcome {
             Outcome::Pass => {}
@@ -115,10 +160,10 @@ impl Scorecard {
                 if let Some((_, seen)) = self.gap_seen.get_mut(id) {
                     *seen = true;
                 }
-                self.gaps.push(format!("{name} {}", lines.join("; ")));
+                self.known_gaps.push(format!("{name} {}", lines.join("; ")));
             }
             Outcome::Fail(problems) => self
-                .failures
+                .mismatches
                 .push(format!("{name}: {}", problems.join("; "))),
         }
     }
@@ -134,53 +179,42 @@ impl Scorecard {
     pub fn check_gaps(&mut self) {
         for (id, (issue, seen)) in &self.gap_seen {
             if !*seen {
-                self.failures.push(format!(
+                self.mismatches.push(format!(
                     "{id}: marked as gap {issue} but passes; remove the marker"
                 ));
             }
         }
     }
-
-    pub fn passed(&self) -> bool {
-        self.failures.is_empty()
-    }
 }
 
 impl fmt::Display for Scorecard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "MoatBench mini")?;
-        writeln!(
-            f,
-            "{:<16} {:>5} {:>8} {:>6} {:>8}",
-            "category", "runs", "blocked", "asked", "allowed"
-        )?;
-        let mut total = Row::default();
-        for (category, row) in &self.rows {
-            let [allow, ask, deny] = row.by_verdict;
+        let line = |f: &mut fmt::Formatter<'_>, name: &str, r: &Row| {
             writeln!(
                 f,
-                "{category:<16} {:>5} {deny:>8} {ask:>6} {allow:>8}",
-                row.runs
-            )?;
-            total.runs += row.runs;
-            for (t, n) in total.by_verdict.iter_mut().zip(row.by_verdict) {
-                *t += n;
-            }
-        }
-        let [allow, ask, deny] = total.by_verdict;
+                "{name:<16} {:>5} {:>8} {:>6} {:>8} {:>12} {:>6}",
+                r.runs, r.blocked, r.asked, r.allowed, r.passthrough, r.error
+            )
+        };
         writeln!(
             f,
-            "{:<16} {:>5} {deny:>8} {ask:>6} {allow:>8}",
-            "total", total.runs
+            "{:<16} {:>5} {:>8} {:>6} {:>8} {:>12} {:>6}",
+            "category", "runs", "blocked", "asked", "allowed", "passthrough", "error"
         )?;
+        let mut total = Row::default();
+        for (category, row) in &self.categories {
+            line(f, category, row)?;
+            total.add(row);
+        }
+        line(f, "total", &total)?;
         writeln!(f, "workflows: {}", Tally::total(self.workflows.values()))?;
-        for (id, asks) in &self.workflows {
-            writeln!(f, "  {id:<24} {asks}")?;
+        for (id, tally) in &self.workflows {
+            writeln!(f, "  {id:<24} {tally}")?;
         }
         for (title, list) in [
             ("false positives", &self.false_positives),
-            ("known gaps", &self.gaps),
-            ("mismatches", &self.failures),
+            ("known gaps", &self.known_gaps),
+            ("mismatches", &self.mismatches),
         ] {
             writeln!(f, "{title}: {}", list.len())?;
             for line in list {

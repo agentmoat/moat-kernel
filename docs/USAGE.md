@@ -199,6 +199,7 @@ again. Repository rules apply in the hook, not in the host sandboxes
 | `moat trust [<repo>] [--revoke]` | let a repository's `.moat/policy.yaml` allow, until the file changes |
 | `moat policy lint` · `moat policy check "<cmd>"` · `moat policy compile` | validate a policy · test an action against it · print what the OS layers enforce |
 | `moat sandbox show` · `moat sandbox sync` | see the host sandbox settings the policy compiles to · write and re-pin them |
+| `moat bench [--host …] [--hook <command>] [--verbose] [--format json]` | send the bundled MoatBench scenarios to OpenMoat in a throwaway home, or to any hook command with `--hook` and `--host`, and print the scorecard; the scenarios' commands never run ([MOATBENCH.md](MOATBENCH.md#reproduce-it-moat-bench)) |
 | `moat run [--write PATH]… [--verbose] -- <agent> [args]` | run an agent in a sandbox generated from the policy (macOS, Linux) |
 | `moat proxy [--listen 127.0.0.1:<port>]` | run the egress proxy on its own |
 | `moat guard --host <id>` | the hook entry point; agents call it, you do not |

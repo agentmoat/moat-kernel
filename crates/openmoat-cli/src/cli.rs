@@ -72,6 +72,10 @@ pub enum Command {
         #[command(subcommand)]
         command: PolicyCommand,
     },
+    /// Send the bundled `MoatBench` scenarios to OpenMoat, or to any hook (`--hook`), as each
+    /// host's hook payloads in a throwaway home, and print the scorecard. The scenarios'
+    /// commands never run; only the hook does.
+    Bench(BenchArgs),
     /// The host sandboxes OpenMoat configures from the policy (Standard tier, ADR-018).
     Sandbox {
         #[command(subcommand)]
@@ -245,6 +249,27 @@ pub struct RunArgs {
     /// The agent and its arguments, after `--`.
     #[arg(required = true, last = true, value_name = "AGENT")]
     pub command: Vec<std::ffi::OsString>,
+}
+
+#[derive(Debug, Args)]
+pub struct BenchArgs {
+    /// A hook command line to test instead of OpenMoat, run through the system shell
+    /// with each payload on stdin, the way hosts run hooks. Needs --host.
+    #[arg(long, requires = "host")]
+    pub hook: Option<String>,
+
+    /// The host whose payloads to send and whose hook protocol reads the replies.
+    /// Defaults to every host when testing OpenMoat.
+    #[arg(long, value_parser = parse_host)]
+    pub host: Option<Host>,
+
+    /// Print on stderr the environment the hook gets and every payload sent.
+    #[arg(long)]
+    pub verbose: bool,
+
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
 }
 
 #[derive(Debug, Args)]
