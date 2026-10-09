@@ -173,19 +173,49 @@ fn http_target(
 }
 
 /// Refuse the framing ambiguities request smuggling relies on: both
-/// `Content-Length` and `Transfer-Encoding`, or more than one length.
+/// `Content-Length` and `Transfer-Encoding`, repeated or list-form length,
+/// or a `Transfer-Encoding` whose tokens are anything but a single `chunked`.
 fn check_framing(headers: &[httparse::Header<'_>]) -> Result<(), RequestError> {
-    let count = |name: &str| {
-        headers
-            .iter()
-            .filter(|h| h.name.eq_ignore_ascii_case(name))
-            .count()
-    };
-    let lengths = count("content-length");
-    if lengths > 1 || (lengths == 1 && count("transfer-encoding") > 0) {
-        return Err(RequestError::Unsupported(
-            "ambiguous body framing (Content-Length with Transfer-Encoding, or repeated)",
-        ));
+    const AMBIGUOUS: RequestError = RequestError::Unsupported(
+        "ambiguous body framing (Content-Length with Transfer-Encoding, repeated, \
+         list-form length, or a transfer coding other than chunked)",
+    );
+    let mut lengths: Vec<&[u8]> = Vec::new();
+    let mut encodings: Vec<&[u8]> = Vec::new();
+    for h in headers {
+        if h.name.eq_ignore_ascii_case("content-length") {
+            lengths.push(h.value);
+        } else if h.name.eq_ignore_ascii_case("transfer-encoding") {
+            encodings.push(h.value);
+        }
+    }
+    if lengths.len() > 1 || (!lengths.is_empty() && !encodings.is_empty()) {
+        return Err(AMBIGUOUS);
+    }
+    if encodings.len() > 1 {
+        return Err(AMBIGUOUS);
+    }
+    if let Some(bytes) = encodings.first() {
+        let value = std::str::from_utf8(bytes).map_err(|_| AMBIGUOUS)?;
+        let tokens: Vec<String> = value
+            .split(',')
+            .map(|t| t.trim().to_ascii_lowercase())
+            .collect();
+        if tokens.as_slice() != ["chunked"] {
+            return Err(AMBIGUOUS);
+        }
+    }
+    if let Some(bytes) = lengths.first() {
+        let value = std::str::from_utf8(bytes).map_err(|_| AMBIGUOUS)?;
+        let trimmed = value.trim();
+        // RFC 9112 §8.6: a `Content-Length` is one or more decimal digits.
+        // The explicit all-ASCII-digit check rejects `+10`, `-10`, embedded
+        // whitespace (`10 10`), hex (`0x0a`) and the list form (`10, 10`);
+        // `u64::from_str` guards against overflow after that.
+        let digits_only = !trimmed.is_empty() && trimmed.bytes().all(|b| b.is_ascii_digit());
+        if !digits_only || trimmed.parse::<u64>().is_err() {
+            return Err(AMBIGUOUS);
+        }
     }
     Ok(())
 }
