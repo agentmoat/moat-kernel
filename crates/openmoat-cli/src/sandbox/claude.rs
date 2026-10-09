@@ -35,13 +35,15 @@
 //! missing component read-only, so only a name directly in the working
 //! directory gets a rule: `Edit(./bin/moat)` would make a missing `bin` read-only.
 
+mod credentials;
 mod settings;
 
 use anyhow::Result;
 use openmoat_core::ir::{Access, Effect, Enforcement, Rule};
-use openmoat_core::{AtomicAction, Kind};
+use openmoat_core::{AtomicAction, Kind, Secret};
 use serde_json::{Map, Value, json};
 
+use credentials::credentials;
 pub use settings::{apply, in_sync, protect, remove, weaknesses};
 
 use super::Report;
@@ -73,8 +75,8 @@ const GIT_EXEC_VECTORS: &[&str] = &[
 /// What OpenMoat writes into the user settings.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Generated {
-    /// The keys of the `sandbox` object OpenMoat owns; `filesystem` and `network`
-    /// are owned key by key, so other keys in them survive.
+    /// The keys of the `sandbox` object OpenMoat owns; `filesystem`, `network`
+    /// and `credentials` are owned key by key, so other keys in them survive.
     pub sandbox: Map<String, Value>,
     /// Whether `permissions.blockReadsOutsideWorkingDirectories` must be on.
     pub block_reads: bool,
@@ -86,10 +88,15 @@ pub struct Generated {
     pub report: Report,
 }
 
-/// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`]. With
-/// `proxy_port`, sandboxed commands' traffic goes to `moat proxy` there; with
-/// `linux`, for bubblewrap.
-pub fn generate(ir: &Enforcement, proxy_port: Option<u16>, linux: bool) -> Result<Generated> {
+/// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`], and
+/// the policy's `secrets:` list. With `proxy_port`, sandboxed commands' traffic
+/// goes to `moat proxy` there; with `linux`, for bubblewrap.
+pub fn generate(
+    ir: &Enforcement,
+    secrets: &[Secret],
+    proxy_port: Option<u16>,
+    linux: bool,
+) -> Result<Generated> {
     let mut report = Report::default();
     let filesystem = Filesystem::build(ir, &mut report)?;
     let deny_rules = if linux {
@@ -99,10 +106,11 @@ pub fn generate(ir: &Enforcement, proxy_port: Option<u16>, linux: bool) -> Resul
     } else {
         Vec::new()
     };
-    let network = match proxy_port {
+    let mut network = match proxy_port {
         None => network(&ir.egress.net, &mut report),
         Some(port) => through_moat_proxy(&ir.egress.net, port, &mut report),
     };
+    let credentials = credentials(secrets, &mut network, &mut report);
     let mut sandbox = Map::new();
     sandbox.insert("enabled".into(), json!(true));
     sandbox.insert("failIfUnavailable".into(), json!(true));
@@ -110,6 +118,9 @@ pub fn generate(ir: &Enforcement, proxy_port: Option<u16>, linux: bool) -> Resul
     sandbox.insert("excludedCommands".into(), json!([]));
     sandbox.insert("filesystem".into(), filesystem.into_json());
     sandbox.insert("network".into(), network);
+    if let Some(credentials) = credentials {
+        sandbox.insert("credentials".into(), credentials);
+    }
     let block_reads = ir.fs.read.default == Effect::Deny;
     if block_reads {
         report.loss(

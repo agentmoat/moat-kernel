@@ -16,6 +16,7 @@ pub fn apply(root: &mut Value, generated: &Generated) -> Result<bool> {
     };
     let before = top.clone();
     let sandbox = object_at(top, "sandbox")?;
+    strip_stale(sandbox, generated);
     for (key, value) in &generated.sandbox {
         match value {
             Value::Object(owned) => {
@@ -45,6 +46,34 @@ pub fn apply(root: &mut Value, generated: &Generated) -> Result<bool> {
         deny.extend(generated.deny_rules.iter().map(|rule| json!(rule)));
     }
     Ok(*top != before)
+}
+
+/// Remove OpenMoat-owned sub-keys that aren't in `generated`, so a secret
+/// dropped from the policy (or opting out of `moat proxy`) does not leave
+/// stale `credentials` entries, `tlsTerminate`, or `httpProxyPort` behind.
+/// Scalar owned keys ([`OWNED`] with empty subs) are overwritten by [`apply`],
+/// so only objects with sub-keys need pruning here. An object that empties out
+/// is removed; `remove()` is the inverse that also strips keys OpenMoat
+/// wrote when there is no policy at all.
+fn strip_stale(sandbox: &mut Map<String, Value>, generated: &Generated) {
+    for (key, subs) in OWNED {
+        if subs.is_empty() {
+            continue;
+        }
+        let keep: Vec<&str> = generated
+            .sandbox
+            .get(*key)
+            .and_then(Value::as_object)
+            .into_iter()
+            .flat_map(|m| m.keys().map(String::as_str))
+            .collect();
+        if let Some(Value::Object(nested)) = sandbox.get_mut(*key) {
+            nested.retain(|sub, _| !subs.contains(&sub.as_str()) || keep.contains(&sub.as_str()));
+            if nested.is_empty() {
+                sandbox.remove(*key);
+            }
+        }
+    }
 }
 
 /// Whether `rule` is spelled the way OpenMoat writes its `permissions.deny`
@@ -85,7 +114,8 @@ fn deny_rules(root: &Value) -> Vec<&str> {
 }
 
 /// Every key of the `sandbox` object [`apply`] may write, with the sub-keys it
-/// owns in `filesystem` and `network` (the proxy ports only with `proxy_port`).
+/// owns in `filesystem`, `network` and `credentials` (the proxy ports only
+/// with `proxy_port`; `tlsTerminate` and `credentials` only with `secrets`).
 const OWNED: &[(&str, &[&str])] = &[
     ("enabled", &[]),
     ("failIfUnavailable", &[]),
@@ -103,8 +133,10 @@ const OWNED: &[(&str, &[&str])] = &[
             "strictAllowlist",
             "httpProxyPort",
             "socksProxyPort",
+            "tlsTerminate",
         ],
     ),
+    ("credentials", &["envVars", "files", "allowPlaintextInject"]),
 ];
 
 /// The inverse of [`apply`]: remove every key OpenMoat writes, then the objects
@@ -417,5 +449,50 @@ mod tests {
         let count = |p: &str| deny.as_array().unwrap().iter().filter(|v| *v == p).count();
         assert_eq!(count("/cfg/claude/settings.json"), 1, "once, however often");
         assert_eq!(count("/cfg/claude/settings.local.json"), 1);
+    }
+
+    const WITH_SECRET: &str = "version: 1\n\
+         allow:\n  - id: a\n    net: ['api.github.com']\n\
+         secrets:\n  \
+         - id: gh\n    host: api.github.com\n    header: Authorization\n    source: { env: GITHUB_TOKEN }\n";
+
+    #[test]
+    fn apply_writes_credentials_and_tls_terminate_from_the_policy() {
+        let out = generated(WITH_SECRET);
+        let aws = json!([{ "idName": "A", "secretName": "B" }]);
+        let mut root = json!({ "sandbox": { "credentials": { "awsPairs": aws.clone() } } });
+        assert!(apply(&mut root, &out).unwrap());
+        assert!(!apply(&mut root, &out).unwrap(), "idempotent");
+        assert!(in_sync(&root, &out));
+        assert_eq!(root["sandbox"]["network"]["tlsTerminate"], json!({}));
+        let env = &root["sandbox"]["credentials"]["envVars"][0];
+        assert_eq!(env["name"], json!("GITHUB_TOKEN"));
+        assert_eq!(env["mode"], json!("mask"));
+        assert_eq!(
+            root["sandbox"]["credentials"]["awsPairs"], aws,
+            "user keys survive"
+        );
+        assert!(remove(&mut root));
+        assert_eq!(
+            root,
+            json!({ "sandbox": { "credentials": { "awsPairs": aws } } })
+        );
+    }
+
+    #[test]
+    fn dropping_a_secret_strips_the_stale_mask_entry_and_tls_terminate() {
+        let with = generated(WITH_SECRET);
+        let without = generated(DEFAULT_POLICY);
+        let mut root = json!({});
+        apply(&mut root, &with).unwrap();
+        assert!(root["sandbox"].get("credentials").is_some());
+        assert_eq!(root["sandbox"]["network"]["tlsTerminate"], json!({}));
+        assert!(
+            apply(&mut root, &without).unwrap(),
+            "removes the stale keys"
+        );
+        assert!(root["sandbox"].get("credentials").is_none());
+        assert!(root["sandbox"]["network"].get("tlsTerminate").is_none());
+        assert!(in_sync(&root, &without));
     }
 }

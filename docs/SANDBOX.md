@@ -88,6 +88,17 @@ Network has two modes:
     `HTTP_PROXY` and `HTTPS_PROXY` set to `http://127.0.0.1:18080`. Codex's own API
     hosts then need an allow rule.
 
+Claude Code's own broker also runs from the policy. `moat sandbox sync` writes the
+policy's `secrets:` entries into Claude Code's `sandbox.credentials` as `mask` entries
+with the host in `injectHosts`, and turns on `network.tlsTerminate` so Claude Code's
+built-in proxy substitutes the real value inside HTTPS for sandboxed `Bash`,
+`PowerShell` and `Monitor` commands. One policy therefore drives both Claude Code's
+broker and `moat proxy`. A secret whose host is not in `net` allow is skipped with a
+loss, as is a `keychain` source (Claude Code's broker reads env and file sources only);
+both still work through `moat proxy`. On macOS, Claude Code denies a `file` source
+instead of masking it, so the tool that reads the file does not authenticate inside
+the sandbox; `moat sandbox show` lists this and the HTTPS allowance.
+
 Other settings and comments are kept, and each file is copied to
 `<file>.moat-sandbox-backup` before moat changes it. `moat sandbox show` prints what
 the policy compiles to, with every place a host is stricter or wider than the policy;

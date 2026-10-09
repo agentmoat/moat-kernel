@@ -11,7 +11,13 @@ pub(super) fn generated(yaml: &str) -> Generated {
 pub(super) fn generated_for(yaml: &str, linux: bool) -> Generated {
     let policy = Policy::parse(yaml).expect("test policy lints");
     let ir = lower_for_hosts(&policy, "/Users/me", None, Vec::new(), false).expect("lowers");
-    generate(&ir, crate::sandbox::proxy_port(&policy), linux).expect("generates")
+    generate(
+        &ir,
+        &policy.secrets,
+        crate::sandbox::proxy_port(&policy),
+        linux,
+    )
+    .expect("generates")
 }
 
 fn list(generated: &Generated, pointer: &str) -> Vec<String> {
@@ -252,4 +258,129 @@ fn a_policy_that_denies_git_keeps_it_denied() {
     );
     let deny = list(&out, "/filesystem/denyWrite");
     assert!(deny.contains(&"/**/.git".to_owned()), "{deny:?}");
+}
+
+/// The settings and report for a policy with one env mask and one file mask,
+/// as a reviewer reads them: the paired fixture is the stable contract that
+/// Claude Code sees from `moat sandbox sync`.
+#[test]
+fn secrets_policy_matches_the_golden_settings() {
+    let out = generated(SECRETS_POLICY);
+    let actual = serde_json::to_string_pretty(&json!({
+        "sandbox": out.sandbox,
+        "permissions": { BLOCK_READS: out.block_reads },
+        "losses": out.report.losses.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        "allowances": out.report.allowances.iter().map(ToString::to_string).collect::<Vec<_>>(),
+    }))
+    .unwrap();
+    assert_golden("claude-secrets.json", &(actual + "\n"));
+}
+
+const SECRETS_POLICY: &str = "version: 1\n\
+     allow:\n  - id: hosts\n    net: ['api.github.com', 'registry.npmjs.org']\n\
+     secrets:\n  \
+     - id: gh\n    host: api.github.com\n    header: Authorization\n    source: { env: GITHUB_TOKEN }\n  \
+     - id: npm\n    host: registry.npmjs.org\n    header: Authorization\n    source: { file: ~/.config/moat/npm }\n";
+
+/// #363: policy `secrets:` compile into `sandbox.credentials` with the `mask`
+/// mode plus `tlsTerminate`, which Claude Code's own broker needs for HTTPS
+/// injection; the entry's `injectHosts` matches the policy's host.
+#[test]
+fn secrets_become_claude_mask_credentials() {
+    let out = generated(
+        "version: 1\n\
+         allow:\n  - id: a\n    net: ['api.github.com', 'registry.npmjs.org']\n\
+         secrets:\n  \
+         - id: gh\n    host: api.github.com\n    header: Authorization\n    source: { env: GITHUB_TOKEN }\n  \
+         - id: npm\n    host: registry.npmjs.org\n    header: Authorization\n    source: { file: ~/.config/moat/npm }\n",
+    );
+    assert_eq!(out.sandbox["network"]["tlsTerminate"], json!({}));
+    let env_vars = out.sandbox["credentials"]["envVars"].as_array().unwrap();
+    assert_eq!(env_vars.len(), 1);
+    assert_eq!(env_vars[0]["name"], json!("GITHUB_TOKEN"));
+    assert_eq!(env_vars[0]["mode"], json!("mask"));
+    assert_eq!(env_vars[0]["injectHosts"], json!(["api.github.com"]));
+    let files = out.sandbox["credentials"]["files"].as_array().unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["path"], json!("~/.config/moat/npm"));
+    assert_eq!(files[0]["injectHosts"], json!(["registry.npmjs.org"]));
+    assert!(
+        out.sandbox["credentials"]
+            .get("allowPlaintextInject")
+            .is_none()
+    );
+    assert!(
+        out.report
+            .allowances
+            .iter()
+            .any(|a| a.rule == "claude-code.mask-credentials"
+                && a.patterns == vec!["gh".to_owned(), "npm".to_owned()])
+    );
+}
+
+/// `plain_http: true` on any mask entry turns `allowPlaintextInject` on so the
+/// value may reach plain-HTTP destinations, and the allowance lists the
+/// affected secrets so a reviewer sees which ones a plain-HTTP request may carry.
+#[test]
+fn plain_http_turns_on_allow_plaintext_inject() {
+    let out = generated(
+        "version: 1\n\
+         allow:\n  - id: a\n    net: ['localhost']\n\
+         secrets:\n  \
+         - id: local\n    host: localhost\n    header: Authorization\n    source: { env: LOCAL_TOKEN }\n    plain_http: true\n",
+    );
+    assert_eq!(
+        out.sandbox["credentials"]["allowPlaintextInject"],
+        json!(true)
+    );
+    assert!(out.report.allowances.iter().any(
+        |a| a.rule == "claude-code.plain-http-inject" && a.patterns == vec!["local".to_owned()]
+    ));
+}
+
+/// `keychain` sources and secrets whose host is not in `allowedDomains` cannot
+/// be injected by Claude Code's broker, so each is dropped from the mask block
+/// with a loss that names the secret; the broker still works through `moat proxy`.
+#[test]
+fn unsupported_sources_and_unlisted_hosts_are_dropped_with_a_loss() {
+    let out = generated(
+        "version: 1\n\
+         allow:\n  - id: a\n    net: ['api.github.com']\n\
+         secrets:\n  \
+         - id: gh\n    host: api.github.com\n    header: Authorization\n    source: { env: GITHUB_TOKEN }\n  \
+         - id: kc\n    host: api.github.com\n    header: X-Api-Key\n    source: { keychain: { service: moat, account: k } }\n  \
+         - id: elsewhere\n    host: example.com\n    header: Authorization\n    source: { env: EX }\n",
+    );
+    let env_vars = out.sandbox["credentials"]["envVars"].as_array().unwrap();
+    assert_eq!(
+        env_vars.len(),
+        1,
+        "only the env entry survives: {env_vars:?}"
+    );
+    assert!(out.sandbox["credentials"].get("files").is_none());
+    let keychain = out.report.losses.iter().find(|l| l.rule == "secrets.kc");
+    let unlisted = out
+        .report
+        .losses
+        .iter()
+        .find(|l| l.rule == "secrets.elsewhere");
+    assert!(
+        keychain.is_some_and(|l| l.message.contains("keychain")),
+        "{:?}",
+        out.report.losses
+    );
+    assert!(
+        unlisted.is_some_and(|l| l.message.contains("`example.com` is not in `net` allow")),
+        "{:?}",
+        out.report.losses
+    );
+}
+
+/// No `secrets:` means no `credentials` block and no `tlsTerminate`, so the
+/// default policy keeps its current settings and golden fixture unchanged.
+#[test]
+fn no_secrets_means_no_credentials_or_tls_terminate() {
+    let out = generated(DEFAULT_POLICY);
+    assert!(out.sandbox.get("credentials").is_none());
+    assert!(out.sandbox["network"].get("tlsTerminate").is_none());
 }
