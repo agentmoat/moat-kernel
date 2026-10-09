@@ -240,9 +240,15 @@ It needs `bwrap` on `PATH` (`apt install bubblewrap`, `dnf install bubblewrap`) 
 unprivileged user namespaces; on Ubuntu 24.04 AppArmor restricts them unless
 `kernel.apparmor_restrict_unprivileged_userns` is 0 or an AppArmor profile allows
 `bwrap`. Where bubblewrap is missing or cannot create its namespaces, `moat run
---isolate` refuses (exit 64) and never falls back to the Lightweight tier. On macOS it
-refuses too: the Isolated tier there needs a virtual machine
-([#175](https://github.com/crocodile-labs/openmoat/issues/175)).
+--isolate` refuses (exit 64) and never falls back to the Lightweight tier.
+
+macOS: tracked in [ADR-023](adr/ADR-023-isolated-tier-macos.md), first stub ships
+here. On macOS `moat run --isolate` refuses with exit 64 and names what is missing:
+Apple's `container` CLI if the toolchain is not installed (install hint included),
+or "not yet implemented, see ADR-023" when it is. The ADR picks Apple's
+`containerization` toolchain for the implementation and lists the follow-up PRs
+under [#175](https://github.com/crocodile-labs/openmoat/issues/175). Never a silent
+fallback to the Lightweight tier.
 
 Limits:
 
