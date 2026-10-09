@@ -47,6 +47,7 @@ impl Fixtures {
     /// own proxy hands what it allows on to OpenMoat's.
     fn codex_verdict(&self, codex: &Path, proxy_port: u16, scenario: &Scenario) -> Verdict {
         let proxy = format!("http://127.0.0.1:{proxy_port}");
+        let codex = Command::new(codex);
         let mut cmd = self.codex_command(codex, scenario.project, &scenario.command);
         let out = cmd
             .env("HTTP_PROXY", &proxy)
@@ -61,14 +62,13 @@ impl Fixtures {
     }
 
     /// `command` in `project` under `codex sandbox -P moat`, in the installed
-    /// home and nothing else of the caller's environment.
-    fn codex_command(&self, codex: &Path, project: Project, command: &str) -> Command {
+    /// home and nothing else of the caller's environment; `cmd` starts codex.
+    fn codex_command(&self, mut cmd: Command, project: Project, command: &str) -> Command {
         let project = self.tree(project);
         let path = format!("{}/bin:/usr/bin:/bin", project.display());
         // bash (not dash) for `pipefail`, so a blocked `curl … | sh` is a Deny
         // rather than the trailing shell's exit 0.
         let script = format!("set -eo pipefail; {command}");
-        let mut cmd = Command::new(codex);
         cmd.args(["sandbox", "-P", "moat", "-C"])
             .arg(project)
             .args(["--", "/bin/bash", "-c", &script])
@@ -87,6 +87,7 @@ impl Fixtures {
 #[test]
 fn hostile_scripts_meet_the_codex_profile() {
     use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet};
+    use super::start;
 
     let Some(codex) = binary() else {
         eprintln!("skipped: hostile scripts under codex (set MOAT_CODEX_BIN)");
@@ -94,9 +95,9 @@ fn hostile_scripts_meet_the_codex_profile() {
     };
     let fx = fixtures();
     fx.sync_with_codex(&codex);
-    meet(&format!("codex-{OS}"), &fx, || {
+    meet(&format!("codex-{OS}"), &fx, |terminal| {
         let out = fx
-            .codex_command(&codex, Project::Evil, NPM_TEST)
+            .codex_command(start(&codex, terminal), Project::Evil, NPM_TEST)
             .output()
             .expect("running codex sandbox");
         Some(Run {

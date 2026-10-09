@@ -102,7 +102,12 @@ something OpenMoat claims to stop.
   project, and on Linux a `.env` created after the command started. It can also
   create a missing match there, except `.env` and `.envrc` directly in a workspace
   root, which the profile denies by name (#377): `.env.local`, a `.envrc` in a
-  subdirectory and a project's `bin/moat` stay creatable. Claude Code's file tools, `WebFetch`, MCP servers and hooks run
+  subdirectory and a project's `bin/moat` stay creatable. OpenMoat does not configure
+  terminal input (`TIOCSTI`) in the host sandboxes; what EVIDENCE.md shows is the hosts'
+  own behaviour: Claude Code starts its commands without a terminal, Codex's macOS
+  profile refuses `TIOCSTI`, and Codex's Linux sandbox does not, so only a kernel with
+  `dev.tty.legacy_tiocsti` at 0 (`EIO`, as on CI's runner) stops a sandboxed script
+  there from typing a command into the terminal for the user's shell. Claude Code's file tools, `WebFetch`, MCP servers and hooks run
   outside its sandbox; only the hook governs them. Writes by a sandboxed command to
   the session's working directory are allowed even when the session started above
   the git root, and Claude Code leaves paths outside the user directories (`/Users`,
@@ -160,6 +165,12 @@ something OpenMoat claims to stop.
     the agent's memory, and debuggers do not work. Names resolve only through the
     proxy: a tool that ignores `HTTP(S)_PROXY` cannot resolve them. `socketpair()`
     stays allowed; its sockets reach only each other.
+  - The agent shares the user's terminal. Typing into it is refused: `TIOCSTI` on
+    macOS (Seatbelt), `TIOCSTI` and `TIOCLINUX` on Linux (the seccomp filter, also
+    inside `--isolate`), whatever the kernel's `dev.tty.legacy_tiocsti` says.
+    Otherwise a script could leave a command in the terminal's input that the
+    user's shell runs after the session, outside the sandbox (CVE-2017-5226). Output
+    is not filtered: escape sequences a command prints reach the terminal emulator.
 
   `moat run` prints each allowance before the agent starts. What it stops in an allowed
   project script, per operating system, and the gaps above, are executed in CI and

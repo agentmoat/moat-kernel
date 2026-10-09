@@ -74,6 +74,14 @@ const KEYCHAIN: &str = "\
   (global-name \"com.apple.securityd\"))
 ";
 
+/// `TIOCSTI`, denied whatever the policy says: it pushes characters into the
+/// input of the terminal the agent shares with the user, whose shell reads and
+/// runs them once the agent exits, outside the sandbox (CVE-2017-5226).
+const TERMINAL_INPUT: &str = "\
+; never typing into the user's terminal: its shell would run it after the session
+(deny file-ioctl (ioctl-command TIOCSTI))
+";
+
 /// A generated profile.
 #[derive(Debug, Clone)]
 pub struct Generated {
@@ -162,6 +170,7 @@ pub fn generate(ir: &Enforcement, grants: &Grants) -> Generated {
     );
     rules(&mut p.profile, &ir.fs.write.deny, "deny file-write*");
     p.profile.push_str(KEYCHAIN);
+    p.profile.push_str(TERMINAL_INPUT);
     network(&mut p, &ir.egress.net, grants.proxy_port);
     if ir.fs.case_insensitive {
         let message = "Seatbelt compares paths in their on-disk spelling, so a pattern spelled in \

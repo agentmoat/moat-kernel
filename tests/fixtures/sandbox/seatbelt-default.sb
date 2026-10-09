@@ -174,6 +174,8 @@
 (deny mach-lookup
   (global-name "com.apple.SecurityServer")
   (global-name "com.apple.securityd"))
+; never typing into the user's terminal: its shell would run it after the session
+(deny file-ioctl (ioctl-command TIOCSTI))
 ; network: only OpenMoat's egress proxy, which decides each host by the policy
 (allow network-outbound (remote ip "localhost:18080"))
 ; stricter: net `registries`: these hosts are reachable only through OpenMoat's proxy: a program that ignores HTTP(S)_PROXY cannot reach them

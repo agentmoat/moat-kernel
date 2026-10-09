@@ -329,3 +329,17 @@ fn make_executable(path: &Path) {
 
 #[cfg(not(unix))]
 fn make_executable(_path: &Path) {}
+
+/// A command that starts `program`, on a pseudo-terminal of its own when
+/// `terminal` (a script's `terminal: true`); the caller adds its arguments.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn start(program: impl AsRef<std::ffi::OsStr>, terminal: bool) -> std::process::Command {
+    if !terminal {
+        return std::process::Command::new(program);
+    }
+    let mut cmd = std::process::Command::new("/usr/bin/python3");
+    let script = "../../tests/differential/on_terminal.py";
+    cmd.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join(script))
+        .arg(program);
+    cmd
+}

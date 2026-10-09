@@ -64,7 +64,11 @@ impl Sandbox {
 
     /// [`Sandbox::command`] running the binary at `program` (a copy or a link).
     pub fn command_at(&self, program: &Path) -> Command {
-        let mut cmd = Command::new(program);
+        self.configure(Command::new(program))
+    }
+
+    /// `cmd` with [`Sandbox::command`]'s environment.
+    pub fn configure(&self, mut cmd: Command) -> Command {
         cmd.env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("HOME", &self.home)

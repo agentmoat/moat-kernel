@@ -166,6 +166,12 @@ moat run --write ~/.claude --write ~/.claude.json -- claude
   macOS 15 runners (`macos-15-intel`) did not show it.
 - **Linux 6.7 or later:** Landlock rules, plus a seccomp filter that allows only TCP
   sockets (no UDP, Unix sockets or `ptrace`). Windows refuses.
+- **The terminal.** The agent runs in the terminal it was started in. Neither it nor
+  a command it starts may type into that terminal: Seatbelt denies `ioctl(TIOCSTI)`,
+  and the seccomp filter (also inside `--isolate`) denies `TIOCSTI` and `TIOCLINUX`,
+  both with `Operation not permitted`. Typed characters would wait in the terminal's
+  input, and the user's shell would run them after the session, outside the sandbox.
+  What they write to the terminal (escape sequences included) still reaches it.
 - The agent and every command it starts may read the project, `sandbox.read_roots`,
   the temp directory and the agent's own executable; never the keychain. They may
   write the project, the temp directory and each `--write` path (the agent's state).
