@@ -360,18 +360,23 @@ fn tilde_user_words_name_home_directories() {
         &parsed("cat ~me/.ssh/id_rsa"),
         "/Users/me/.ssh/id_rsa"
     ));
-    assert!(has_read(
-        &parsed("head ~alice/.aws/credentials"),
-        "/Users/alice/.aws/credentials"
-    ));
     assert!(has_write(
         &parsed("echo x > ~me/.zshrc"),
         "/Users/me/.zshrc"
     ));
     assert!(has_read(&parsed("cat ~+/.env"), "/p/.env"));
-    for input in ["cat ~-/.ssh/id_rsa", "echo x > ~-/f"] {
+    // `~<otheruser>` cannot be placed from the pure core (#400): the
+    // parent-of-home heuristic guessed one home layout and judged a path the OS
+    // may not read. The shell token is unparseable, as `~-` already was; the
+    // engine turns it into `ask` (rule `unparseable`).
+    for input in [
+        "cat ~-/.ssh/id_rsa",
+        "echo x > ~-/f",
+        "head ~alice/.aws/credentials",
+        "cat ~alice",
+    ] {
         match classify(input, &ctx()) {
-            ParseOutcome::Unparseable { reason, .. } => assert!(reason.contains("~-"), "{reason}"),
+            ParseOutcome::Unparseable { .. } => {}
             ParseOutcome::Parsed(a) => panic!("`{input}` must not resolve: {a:?}"),
         }
     }

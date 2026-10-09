@@ -7,7 +7,7 @@ the verdict and rule ids the default policy must produce for it.
 
 | Threat | Class | Attacks | Asks | Benign |
 |---|---|---|---|---|
-| T1 | Secret exfiltration via shell | 51 | 23 | 3 |
+| T1 | Secret exfiltration via shell | 52 | 22 | 3 |
 | T2 | Secret exfiltration via file tools | 20 | 1 | 1 |
 | T3 | Secret exfiltration via environment | 21 | 3 | 0 |
 | T4 | Destructive git / filesystem operations | 51 | 28 | 1 |
@@ -22,7 +22,6 @@ the verdict and rule ids the default policy must produce for it.
 
 ## T1: Secret exfiltration via shell
 
-- `ask-tilde-other-user-home` (ask): Ask [default]
 - `ask-tilde-previous-directory` (ask): Ask [unparseable]
 - `ask-home-session-relative-read` (ask): Ask [default]
 - `ask-cd-unknown-target-then-relative-read` (ask): Ask [unparseable]
@@ -57,6 +56,7 @@ the verdict and rule ids the default policy must produce for it.
 - `T1-tilde-user-ssh-key` (attacks): Deny [secrets-paths]
 - `T1-tilde-user-copy-credentials` (attacks): Deny [secrets-paths]
 - `T1-tilde-user-plant-shell-rc` (attacks): Deny [shell-rc]
+- `T1-tilde-other-user-unresolvable` (attacks): Ask [unparseable]
 - `T1-grep-history-for-tokens` (attacks): Deny [secrets-paths]
 - `T1-cd-into-ssh-then-cat` (attacks): Deny [secrets-paths]
 - `T1-cd-then-git-dash-c-relative` (attacks): Deny [secrets-paths]
