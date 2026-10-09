@@ -28,7 +28,9 @@ use crate::integrity;
 use crate::render::Deferred;
 use crate::secrets;
 
-use super::service::{self, State};
+use super::service;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use super::service::State;
 
 /// Where `moat proxy` listens when neither `--listen` nor `sandbox.proxy_port` says.
 const DEFAULT_PORT: u16 = 18080;
@@ -153,8 +155,13 @@ pub fn status(args: &ProxyStatusArgs) -> Result<Code> {
         state.describe(&path)
     )?;
     out.finish()?;
+    // On Windows `state` is uninhabited and `manager.state()?` above already
+    // errored out; cfg-gating every arm leaves `match state {}`, which is
+    // the empty-enum match the compiler accepts (and infers as `!`).
     let code = match state {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         State::Running | State::NotInstalled => Code::Ok,
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         _ => Code::Usage,
     };
     Ok(code)
@@ -166,12 +173,19 @@ pub fn status(args: &ProxyStatusArgs) -> Result<Code> {
 /// not opted in to a service yet.
 pub fn restart_if_installed(home: &Home) -> Result<Option<String>> {
     let manager = service::manager(home)?;
-    let state = manager.state()?;
+    // Windows has no user-service story (#272): the Err from `state()` becomes
+    // a silent `None` so `moat sandbox sync` reports no service action, as it
+    // did when the stub still returned `Unknown`.
+    let Some(state) = manager.state().ok() else {
+        return Ok(None);
+    };
     match state {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         State::Running | State::Stopped => {
             manager.restart()?;
             Ok(Some(format!("{} restarted", service::display_name())))
         }
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         _ => Ok(None),
     }
 }
@@ -189,8 +203,11 @@ pub fn service_line(home: &Home) -> Option<(bool, String)> {
     let state = manager.state().ok()?;
     let path = manager.file_path().ok()?;
     match state {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         State::NotInstalled => None,
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         State::Running => Some((true, format!("service          {}", state.describe(&path)))),
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         _ => Some((false, format!("service          {}", state.describe(&path)))),
     }
 }

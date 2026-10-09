@@ -14,8 +14,9 @@ pub const DISPLAY: &str = "user service";
 
 pub fn manager(_home: &Home) -> Result<Box<dyn Manager>> {
     // Resolve the user's home so the Windows branch mirrors the macOS/Linux
-    // ones: no home means no story, surfaced as the error there instead of
-    // later from inside a `Manager` call.
+    // ones: no home means no story, surfaced as the error here instead of
+    // from inside a `Manager` call later (and keeps `manager()` fallible, so
+    // clippy's `unnecessary_wraps` stays silent without a lint allow).
     let _ = user_home()?;
     Ok(Box::new(Unsupported))
 }
@@ -40,15 +41,9 @@ impl Manager for Unsupported {
     }
 
     fn state(&self) -> Result<State> {
-        Ok(State::Unknown {
-            details: format!(
-                "no user-service story on {} yet (#272)",
-                std::env::consts::OS
-            ),
-        })
-    }
-
-    fn restart(&self) -> Result<()> {
-        Ok(())
+        bail!(
+            "no user-service story on {} yet (#272); run `moat proxy` yourself to keep the proxy up",
+            std::env::consts::OS
+        )
     }
 }

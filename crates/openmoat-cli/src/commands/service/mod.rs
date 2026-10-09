@@ -60,12 +60,13 @@ pub(crate) fn skip_exec() -> bool {
 
 /// What a service manager reports about `moat proxy`.
 ///
-/// Non-`Unknown` variants are only constructed in `macos.rs` / `linux.rs`;
-/// the Windows stub returns `Unknown`. The compiler sees the other variants
-/// as dead when building the Windows binary, but they are not dead in
-/// aggregate across the three platforms — this `allow` reflects a
-/// cross-compilation artifact, not an actual unused variant.
-#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+/// The variants model what `launchctl` / `systemctl --user` report, so the
+/// type is only inhabited where one of those runs: macOS and Linux. The
+/// Windows stub's `Manager::state` returns an error instead of a value of this
+/// type (there is no user-service story there, #272), and the enum is
+/// uninhabited on Windows so the match on `State` in callers is complete by
+/// construction rather than by an unreachable-arm pattern.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum State {
@@ -87,6 +88,14 @@ pub enum State {
     Unknown { details: String },
 }
 
+/// Windows (and any other platform without a user-service story): uninhabited,
+/// since `Manager::state` cannot return one. Having the same name at the type
+/// level keeps the trait signature identical across platforms.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum State {}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 impl State {
     /// A short line for `moat status` / `moat doctor`.
     pub fn describe(&self, path: &std::path::Path) -> String {
@@ -111,6 +120,16 @@ impl State {
     }
 }
 
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+impl State {
+    /// Unreachable on platforms where `State` is uninhabited; kept so the
+    /// signature matches macOS and Linux for callers that only compile the
+    /// method call conditionally.
+    pub fn describe(&self, _path: &std::path::Path) -> String {
+        match *self {}
+    }
+}
+
 /// What the service wrapper does. The real implementations are
 /// platform-selected ([`platform::manager`]); in-process tests set
 /// `MOAT_SERVICE_SKIP_EXEC=1` to write the file without touching
@@ -127,6 +146,9 @@ pub trait Manager {
     /// What state the service is in now.
     fn state(&self) -> Result<State>;
     /// Reload: pick up a changed policy (`moat sandbox sync`), by restarting.
+    /// Only platforms with a service story expose this; the Windows stub has
+    /// no state to reload, and `restart_if_installed` cfg-gates the call site.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn restart(&self) -> Result<()>;
 }
 
@@ -143,7 +165,7 @@ pub fn display_name() -> &'static str {
     platform::DISPLAY
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
 mod tests {
     use super::*;
 
