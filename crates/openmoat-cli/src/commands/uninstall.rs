@@ -78,6 +78,17 @@ pub fn run(args: &UninstallArgs) -> Result<Code> {
         rewritten.push(home.hosts_path());
     }
     integrity::unpin(&home, &undone, &rewritten)?;
+    // If the proxy service was installed, stop and remove it alongside the
+    // hooks: leaving it behind would keep listening with a stale binary
+    // reference once hooks are gone.
+    match super::service::manager(&home).and_then(|m| m.uninstall()) {
+        Ok(Some(path)) => writeln!(out, "✔ proxy service    removed: {}", path.display())?,
+        Ok(None) => {}
+        Err(e) => writeln!(
+            out,
+            "! proxy service    {e:#}; `moat proxy uninstall` removes it by hand"
+        )?,
+    }
     if args.purge {
         purge(&home)?;
         writeln!(out, "✔ state directory  {} deleted", home.root().display())?;

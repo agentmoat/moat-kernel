@@ -32,6 +32,7 @@ enum Area {
     Hook,
     Sandbox,
     Audit,
+    Service,
 }
 
 /// The Standard tier: each present host's sandbox settings against the policy,
@@ -104,6 +105,19 @@ fn sandboxes(
             "{} moat proxy       {text}",
             if ok { "✔" } else { "!" }
         );
+    }
+}
+
+/// The `moat doctor` line for the proxy user service (`moat proxy install`,
+/// #272). A missing service is silent (opt-in); a drift-blocked or
+/// crash-looping service is a problem; a running one is a check.
+fn service(report: &mut Report, home: &Home) {
+    if let Some((ok, text)) = super::proxy::service_line(home) {
+        if ok {
+            report.line(Area::Service, true, text);
+        } else {
+            report.line(Area::Service, false, text);
+        }
     }
 }
 
@@ -254,6 +268,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         let recorded = Recorded::load(&home).unwrap_or_default();
         sandboxes(&mut report, policy, lock.as_ref(), &recorded, args.verbose);
     }
+    service(&mut report, &home);
     for agent in protection::report(&home, &binary)? {
         if let Some(summary) = agent.summary() {
             report.note(&format!("{:<16} protection: {summary}", agent.name));

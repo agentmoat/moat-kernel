@@ -253,5 +253,14 @@ fn sandboxes(
             if ok { "✔" } else { "!" }
         )?;
     }
+    let home = Home::locate()?;
+    if let Some((ok, text)) = super::proxy::service_line(&home) {
+        writeln!(
+            out,
+            "moat proxy       {} {text}",
+            if ok { "✔" } else { "!" }
+        )?;
+        healthy &= ok;
+    }
     Ok(healthy)
 }

@@ -14,6 +14,7 @@ mod replay;
 mod report;
 mod run;
 mod sandbox;
+mod service;
 mod show;
 mod status;
 mod team;
@@ -22,7 +23,7 @@ mod uninstall;
 
 use anyhow::Result;
 
-use crate::cli::{AuditCommand, Cli, Command, PolicyCommand, SandboxCommand};
+use crate::cli::{AuditCommand, Cli, Command, PolicyCommand, ProxyCommand, SandboxCommand};
 use crate::exit::Code;
 
 pub fn run(cli: Cli) -> Result<Code> {
@@ -41,7 +42,12 @@ pub fn run(cli: Cli) -> Result<Code> {
         Command::Trust(args) => trust::run(&args),
         Command::Replay(args) => replay::run(&args),
         Command::Report(args) => report::run(&args),
-        Command::Proxy(args) => proxy::run(&args),
+        Command::Proxy(args) => match args.command {
+            None => proxy::run(&args),
+            Some(ProxyCommand::Install) => proxy::install(),
+            Some(ProxyCommand::Uninstall) => proxy::uninstall(),
+            Some(ProxyCommand::Status(status_args)) => proxy::status(&status_args),
+        },
         Command::Audit { command } => match command {
             AuditCommand::Export(args) => audit::export(&args),
             AuditCommand::Verify(args) => audit::verify(&args),

@@ -6,6 +6,10 @@
 //! read once; restart the proxy after changing it. Every brokered secret
 //! (`secrets:`) is read at start-up; one that cannot be read stops it. `moat run`
 //! serves the same proxy, secrets included, from a thread of its own.
+//!
+//! `moat proxy install` / `uninstall` / `status` manage the per-user service
+//! (launchd on macOS, systemd user unit on Linux; refused on Windows) that
+//! keeps the proxy running without the user starting it themselves (#272).
 
 use std::io::Write as _;
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
@@ -16,12 +20,15 @@ use openmoat_audit::{NewEvent, Store};
 use openmoat_core::{Action, CompiledPolicy, EvalContext, Policy, Secret};
 use openmoat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, SystemResolver};
 
-use crate::cli::ProxyArgs;
+use crate::cli::{Format, ProxyArgs, ProxyStatusArgs};
 use crate::context;
 use crate::exit::Code;
 use crate::home::Home;
 use crate::integrity;
+use crate::render::Deferred;
 use crate::secrets;
+
+use super::service::{self, State};
 
 /// Where `moat proxy` listens when neither `--listen` nor `sandbox.proxy_port` says.
 const DEFAULT_PORT: u16 = 18080;
@@ -68,6 +75,124 @@ pub fn run(args: &ProxyArgs) -> Result<Code> {
     drop(stdout);
     exit.serve(&listener)?;
     Ok(Code::Ok)
+}
+
+/// `moat proxy install`: write and start the per-user service.
+pub fn install() -> Result<Code> {
+    if !crate::terminal::interactive() {
+        bail!(
+            "`moat proxy install` must be run by a person in a terminal, not from a hook \
+             or script: starting a user service touches the host OS"
+        );
+    }
+    let home = installed()?;
+    let binary = crate::install::hook_binary()?;
+    let manager = service::manager(&home)?;
+    let path = manager.install(&binary, home.root())?;
+    let mut out = Deferred::default();
+    writeln!(
+        out,
+        "✔ {} installed and started: {}",
+        service::display_name(),
+        path.display()
+    )?;
+    writeln!(
+        out,
+        "  the proxy restarts on failure; a policy-lock exit does not loop-restart.",
+    )?;
+    writeln!(
+        out,
+        "  `moat proxy status` reports its state; `moat proxy uninstall` removes it.",
+    )?;
+    out.finish()?;
+    Ok(Code::Ok)
+}
+
+/// `moat proxy uninstall`: stop and remove the per-user service.
+pub fn uninstall() -> Result<Code> {
+    if !crate::terminal::interactive() {
+        bail!(
+            "`moat proxy uninstall` must be run by a person in a terminal, not from a hook or script"
+        );
+    }
+    let home = Home::locate()?;
+    let manager = service::manager(&home)?;
+    let mut out = Deferred::default();
+    match manager.uninstall()? {
+        Some(path) => writeln!(
+            out,
+            "✔ {} removed: {}",
+            service::display_name(),
+            path.display()
+        )?,
+        None => writeln!(out, "· {} was not installed", service::display_name())?,
+    }
+    out.finish()?;
+    Ok(Code::Ok)
+}
+
+/// `moat proxy status`: report the service's state.
+pub fn status(args: &ProxyStatusArgs) -> Result<Code> {
+    let home = Home::locate()?;
+    let manager = service::manager(&home)?;
+    let state = manager.state()?;
+    let path = manager.file_path()?;
+    if args.format == Format::Json {
+        crate::render::json(&serde_json::json!({
+            "service": service::display_name(),
+            "path": path,
+            "state": state,
+        }))?;
+        return Ok(Code::Ok);
+    }
+    let mut out = Deferred::default();
+    writeln!(
+        out,
+        "{}  {}",
+        service::display_name(),
+        state.describe(&path)
+    )?;
+    out.finish()?;
+    let code = match state {
+        State::Running | State::NotInstalled => Code::Ok,
+        _ => Code::Usage,
+    };
+    Ok(code)
+}
+
+/// Restart the service when it is installed and running. `moat sandbox sync`
+/// calls this after re-pinning the lock so the proxy picks up the new policy
+/// (which it reads once at start-up). A missing service is fine: the user has
+/// not opted in to a service yet.
+pub fn restart_if_installed(home: &Home) -> Result<Option<String>> {
+    let manager = service::manager(home)?;
+    let state = manager.state()?;
+    match state {
+        State::Running | State::Stopped => {
+            manager.restart()?;
+            Ok(Some(format!("{} restarted", service::display_name())))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// `moat doctor` and `moat status` lines for the user service: not installed
+/// is silent (opt-in), installed is a line, drift / crashloop is a problem.
+/// Returns `(ok, text)` so the caller renders the icon. Silent on platforms
+/// without a service story (Windows): `moat proxy install` refuses there, so
+/// there is nothing to report under `moat doctor`.
+pub fn service_line(home: &Home) -> Option<(bool, String)> {
+    if !cfg!(any(target_os = "macos", target_os = "linux")) {
+        return None;
+    }
+    let manager = service::manager(home).ok()?;
+    let state = manager.state().ok()?;
+    let path = manager.file_path().ok()?;
+    match state {
+        State::NotInstalled => None,
+        State::Running => Some((true, format!("service          {}", state.describe(&path)))),
+        _ => Some((false, format!("service          {}", state.describe(&path)))),
+    }
 }
 
 /// The `moat doctor` and `moat status` line for the proxy the host sandboxes
