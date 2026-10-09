@@ -6,6 +6,7 @@ use std::path::Path;
 use anyhow::{Result, bail};
 use serde_json::{Map, Value, json};
 
+use super::owned::{OWNED, strip_stale};
 use super::{BLOCK_READS, Generated};
 
 /// Merge `generated` into the settings document `root`, keeping every key
@@ -48,34 +49,6 @@ pub fn apply(root: &mut Value, generated: &Generated) -> Result<bool> {
     Ok(*top != before)
 }
 
-/// Remove OpenMoat-owned sub-keys that aren't in `generated`, so a secret
-/// dropped from the policy (or opting out of `moat proxy`) does not leave
-/// stale `credentials` entries, `tlsTerminate`, or `httpProxyPort` behind.
-/// Scalar owned keys ([`OWNED`] with empty subs) are overwritten by [`apply`],
-/// so only objects with sub-keys need pruning here. An object that empties out
-/// is removed; `remove()` is the inverse that also strips keys OpenMoat
-/// wrote when there is no policy at all.
-fn strip_stale(sandbox: &mut Map<String, Value>, generated: &Generated) {
-    for (key, subs) in OWNED {
-        if subs.is_empty() {
-            continue;
-        }
-        let keep: Vec<&str> = generated
-            .sandbox
-            .get(*key)
-            .and_then(Value::as_object)
-            .into_iter()
-            .flat_map(|m| m.keys().map(String::as_str))
-            .collect();
-        if let Some(Value::Object(nested)) = sandbox.get_mut(*key) {
-            nested.retain(|sub, _| !subs.contains(&sub.as_str()) || keep.contains(&sub.as_str()));
-            if nested.is_empty() {
-                sandbox.remove(*key);
-            }
-        }
-    }
-}
-
 /// Whether `rule` is spelled the way OpenMoat writes its `permissions.deny`
 /// rules: `Read(./**/…)`, or `Edit(./<name>)` naming one working-directory entry.
 fn is_owned_rule(rule: &Value) -> bool {
@@ -112,32 +85,6 @@ fn deny_rules(root: &Value) -> Vec<&str> {
         .filter_map(Value::as_str)
         .collect()
 }
-
-/// Every key of the `sandbox` object [`apply`] may write, with the sub-keys it
-/// owns in `filesystem`, `network` and `credentials` (the proxy ports only
-/// with `proxy_port`; `tlsTerminate` and `credentials` only with `secrets`).
-const OWNED: &[(&str, &[&str])] = &[
-    ("enabled", &[]),
-    ("failIfUnavailable", &[]),
-    ("allowUnsandboxedCommands", &[]),
-    ("excludedCommands", &[]),
-    (
-        "filesystem",
-        &["denyRead", "allowRead", "denyWrite", "allowWrite"],
-    ),
-    (
-        "network",
-        &[
-            "allowedDomains",
-            "deniedDomains",
-            "strictAllowlist",
-            "httpProxyPort",
-            "socksProxyPort",
-            "tlsTerminate",
-        ],
-    ),
-    ("credentials", &["envVars", "files", "allowPlaintextInject"]),
-];
 
 /// The inverse of [`apply`]: remove every key OpenMoat writes, then the objects
 /// that leaves empty. Works without a policy, so `moat uninstall` never needs

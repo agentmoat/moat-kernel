@@ -36,6 +36,8 @@
 //! directory gets a rule: `Edit(./bin/moat)` would make a missing `bin` read-only.
 
 mod credentials;
+mod git_internals;
+mod owned;
 mod settings;
 
 use anyhow::Result;
@@ -51,26 +53,6 @@ use super::patterns::{Spot, domain, has_glob, is_below, literal_tree, push_uniqu
 
 /// The permissions key that closes reads outside the working directories.
 pub const BLOCK_READS: &str = "blockReadsOutsideWorkingDirectories";
-
-/// Paths in `.git` that make git run code or read another repository's
-/// (`core.hooksPath`, `core.fsmonitor`, filters and aliases live in config),
-/// denied although the rest of `.git` is writable. A directory in `denyWrite`
-/// covers its subtree, which is what `hooks` needs.
-const GIT_EXEC_VECTORS: &[&str] = &[
-    "/**/.git/hooks",
-    "/**/.git/hooks/**",
-    "/**/.git/config",
-    "/**/.git/config.worktree",
-    "/**/.git/info/attributes",
-    "/**/.git/worktrees/*/config.worktree",
-    "/**/.git/worktrees/*/commondir",
-    "/**/.git/modules/**/hooks",
-    "/**/.git/modules/**/hooks/**",
-    "/**/.git/modules/**/config",
-    "/**/.git/modules/**/config.worktree",
-    "/**/.git/modules/**/info/attributes",
-    "/**/.git/modules/**/commondir",
-];
 
 /// What OpenMoat writes into the user settings.
 #[derive(Debug, Clone, PartialEq)]
@@ -290,26 +272,6 @@ impl Filesystem {
                 }
             }
         }
-    }
-
-    /// The policy keeps the project's `.git` from writes, but user settings
-    /// cannot name the project, and denying `.git` everywhere breaks `git commit`.
-    /// Only what makes git run code or follow another repository is denied
-    /// (ADR-021, amendment of 2026-10-06); the rest of `.git` is an allowance.
-    fn git_internals(&mut self, report: &mut Report) {
-        for vector in GIT_EXEC_VECTORS {
-            push_unique(&mut self.deny_write, (*vector).to_owned());
-        }
-        report.allowance(
-            Kind::FsWrite,
-            "claude-code.git-internals",
-            vec!["/**/.git/**".to_owned()],
-            "user settings cannot name the project, so sandboxed commands may write `.git` \
-             (objects, refs, index: `git commit` works) in every directory, except what makes git \
-             run code or follow another repository (hooks, config, config.worktree, \
-             info/attributes, a linked worktree's commondir, the same in submodules); a script \
-             can still rewrite history, and the hook still asks for file-tool writes to `.git`",
-        );
     }
 
     /// A directory node in `denyWrite` (no rename or delete of `.claude`) would
