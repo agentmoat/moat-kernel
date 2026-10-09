@@ -101,6 +101,11 @@ impl Sandbox {
         self.moat_stdin(&["guard", "--host", host], payload)
     }
 
+    /// The verdict and reason the Claude Code hook gives one Bash `command` in `cwd`.
+    pub fn guard_bash(&self, session: &str, cwd: &Path, command: &str) -> (String, String) {
+        verdict_and_reason(&self.guard("claude-code", &bash_payload(session, cwd, command)))
+    }
+
     /// Opt the host sandboxes into `moat proxy` on a free loopback port
     /// (`sandbox.proxy_port`), so no test meets a proxy the developer runs;
     /// re-pinned and the host sandboxes synced as a person would. Returns the port.
@@ -223,6 +228,22 @@ pub fn json(out: &Output) -> Value {
 /// `hookSpecificOutput` of a Claude Code or Codex hook response.
 pub fn hook_output(out: &Output) -> Value {
     json(out)["hookSpecificOutput"].clone()
+}
+
+/// `permissionDecision` of a Claude Code or Codex hook response; empty if there is none.
+pub fn verdict(out: &Output) -> String {
+    hook_output(out)["permissionDecision"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// [`verdict`] and `permissionDecisionReason` (as JSON text) of a hook response.
+pub fn verdict_and_reason(out: &Output) -> (String, String) {
+    (
+        verdict(out),
+        hook_output(out)["permissionDecisionReason"].to_string(),
+    )
 }
 
 /// A Claude Code `PreToolUse` payload for one Bash command.

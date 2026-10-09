@@ -4,21 +4,11 @@
 //! (see `terminal.rs`), which these tests set only for the commands a person
 //! would type; `guard` runs without it, exactly as a hook does.
 
-use crate::common::{Sandbox, bash_payload, hook_output, text};
+use crate::common::{Sandbox, text};
 
 /// The hook's verdict and reason for one Bash call in the sandbox's project.
 fn guard(sb: &Sandbox, session: &str, command: &str) -> (String, String) {
-    let d = hook_output(&sb.guard(
-        "claude-code",
-        &bash_payload(session, &sb.project(), command),
-    ));
-    (
-        d["permissionDecision"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned(),
-        d["permissionDecisionReason"].to_string(),
-    )
+    sb.guard_bash(session, &sb.project(), command)
 }
 
 const INSTALL: &str = "npm install left-pad";

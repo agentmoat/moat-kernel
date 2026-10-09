@@ -14,10 +14,7 @@ fn home_as_person(sb: &Sandbox, answers: &str) -> String {
 
 fn verdict(sb: &Sandbox, session: &str) -> String {
     let payload = bash_payload(session, &sb.project(), INSTALL);
-    hook_output(&sb.guard("claude-code", &payload))["permissionDecision"]
-        .as_str()
-        .unwrap_or_default()
-        .to_owned()
+    crate::common::verdict(&sb.guard("claude-code", &payload))
 }
 
 fn edit_policy(sb: &Sandbox) {

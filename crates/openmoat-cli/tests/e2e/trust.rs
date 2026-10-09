@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::common::{Sandbox, bash_payload, hook_output, output, stdout, text};
+use crate::common::{Sandbox, output, stdout, text};
 
 const DEPLOY: &str = "version: 1\nallow:\n  - id: deploy\n    shell: ['make deploy']\n";
 
@@ -22,14 +22,7 @@ fn write_policy(project: &Path, yaml: &str) {
 
 /// The hook's verdict and reason for `make deploy` in `project`.
 fn deploy(sb: &Sandbox, project: &Path) -> (String, String) {
-    let d = hook_output(&sb.guard("claude-code", &bash_payload("s1", project, "make deploy")));
-    (
-        d["permissionDecision"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned(),
-        d["permissionDecisionReason"].to_string(),
-    )
+    sb.guard_bash("s1", project, "make deploy")
 }
 
 fn trust(sb: &Sandbox, args: &[&str]) -> std::process::Output {
