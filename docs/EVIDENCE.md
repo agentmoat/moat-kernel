@@ -35,7 +35,7 @@ listeners the test owns.
 | `script-edits-policy` | T9 | `echo "# widened" >> "$HOME/.moat/policy.yaml"` | EPERM | EACCES | ENOENT | EPERM | ENOENT | EPERM | EACCES |
 | `script-edits-hook-file` | T9 | `echo "{}" > "$HOME/.claude/settings.json"` | EPERM | EACCES | ENOENT | EPERM | ENOENT | EPERM | EROFS |
 | `script-proxy-unlisted-host` | T12 | `curl -fsS -o /dev/null -m 30 http://evil.example/` | proxy 403 | proxy 403 | proxy 403 | proxy 403 | proxy 403 | proxy 403 | proxy 403 |
-| `script-injects-terminal-input` | T6 | `perl -e 'open(T, "+<", "/dev/tty") or (-t STDIN and open(T, "+<&STDIN")) or die "no terminal: $!\n"; ioctl(T, $^O eq "darwin" ? 0x80017472 : 0x5412, my $c = "#") or die "TIOCSTI: $!\n"'`, on a terminal | EPERM | EPERM | EPERM | no terminal | no terminal | EPERM | EPERM |
+| `script-injects-terminal-input` | T6 | `perl -e 'open(T, "+<", "/dev/tty") or (-t STDIN and open(T, "+<&STDIN")) or die "no terminal: $!\n"; ioctl(T, $^O eq "darwin" ? 0x80017472 : 0x5412, my $c = "#") or die "TIOCSTI: $!\n"'`, on a terminal | EPERM | EPERM | EPERM | no terminal | no terminal | EPERM | EIO |
 
 EPERM, EACCES and EROFS: the system call failed with that error (EROFS: the sandbox
 mounted the path read-only). ENOENT: the path does not exist
@@ -46,8 +46,8 @@ the request (OpenMoat's under `moat run`, the agent's own, which allows only the
 hosts, under the Standard tier). contained: the payload completed inside the sandbox, but
 what it wrote or sent stayed there (an empty in-memory directory, its own network namespace)
 and nothing reached the host. sandbox error: the sandbox failed to start the command, so
-nothing of the payload ran. no terminal: the host gave the command no terminal.
-ran: the payload completed. A row on a terminal runs each layer on a pseudo-terminal of the test's own.
+nothing of the payload ran. no terminal: the host gave the command no terminal. EIO: the kernel refused the call
+itself, not the sandbox (the CI runner's kernel has `dev.tty.legacy_tiocsti` at 0; where it is 1 the call goes through). ran: the payload completed. A row on a terminal runs each layer on a pseudo-terminal of the test's own.
 
 ## Known gaps
 

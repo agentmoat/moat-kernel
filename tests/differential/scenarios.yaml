@@ -444,4 +444,4 @@ scripts:
     claude-macos: no-terminal
     claude-linux: no-terminal
     codex-macos: eperm
-    codex-linux: eperm
+    codex-linux: eio

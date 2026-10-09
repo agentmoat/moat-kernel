@@ -86,7 +86,8 @@ impl Fixtures {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn hostile_scripts_meet_the_codex_profile() {
-    use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet, start};
+    use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet};
+    use super::start;
 
     let Some(codex) = binary() else {
         eprintln!("skipped: hostile scripts under codex (set MOAT_CODEX_BIN)");

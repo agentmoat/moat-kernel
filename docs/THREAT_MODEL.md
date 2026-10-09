@@ -102,7 +102,12 @@ something OpenMoat claims to stop.
   project, and on Linux a `.env` created after the command started. It can also
   create a missing match there, except `.env` and `.envrc` directly in a workspace
   root, which the profile denies by name (#377): `.env.local`, a `.envrc` in a
-  subdirectory and a project's `bin/moat` stay creatable. Claude Code's file tools, `WebFetch`, MCP servers and hooks run
+  subdirectory and a project's `bin/moat` stay creatable. OpenMoat does not configure
+  terminal input (`TIOCSTI`) in the host sandboxes; what EVIDENCE.md shows is the hosts'
+  own behaviour: Claude Code starts its commands without a terminal, Codex's macOS
+  profile refuses `TIOCSTI`, and Codex's Linux sandbox does not, so only a kernel with
+  `dev.tty.legacy_tiocsti` at 0 (`EIO`, as on CI's runner) stops a sandboxed script
+  there from typing a command into the terminal for the user's shell. Claude Code's file tools, `WebFetch`, MCP servers and hooks run
   outside its sandbox; only the hook governs them. Writes by a sandboxed command to
   the session's working directory are allowed even when the session started above
   the git root, and Claude Code leaves paths outside the user directories (`/Users`,

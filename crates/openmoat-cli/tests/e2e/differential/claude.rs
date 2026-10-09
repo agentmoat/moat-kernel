@@ -255,7 +255,8 @@ fn claude_layer_blocks_every_attack() {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn hostile_scripts_meet_the_claude_code_sandbox() {
-    use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet, start};
+    use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet};
+    use super::start;
 
     let (Some(claude), Some(python)) = (claude_binary(), python()) else {
         eprintln!("skipped: hostile scripts under claude (set MOAT_CLAUDE_BIN and MOAT_FAKE_API)");

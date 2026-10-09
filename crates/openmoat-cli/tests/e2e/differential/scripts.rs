@@ -33,6 +33,9 @@ pub enum Outcome {
     /// A call failed with `EEXIST`: the sandbox mounted a file where the
     /// payload creates a directory.
     Eexist,
+    /// A call failed with `EIO`: the kernel refused it, not the sandbox (Linux
+    /// refuses `TIOCSTI` this way where `dev.tty.legacy_tiocsti` is 0).
+    Eio,
     /// The connection was refused: the sandbox has its own network namespace,
     /// where nothing listens.
     Refused,
@@ -61,6 +64,7 @@ impl Outcome {
             Self::Erofs => "EROFS",
             Self::Enoent => "ENOENT",
             Self::Eexist => "EEXIST",
+            Self::Eio => "EIO",
             Self::Refused => "refused",
             Self::Proxy403 => "proxy 403",
             Self::Contained => "contained",
@@ -231,7 +235,9 @@ fn evidence_table_is_current() {
          completed inside the sandbox, but\nwhat it wrote or sent stayed there (an empty \
          in-memory directory, its own network namespace)\nand nothing reached the host. sandbox \
          error: the sandbox failed to start the command, so\nnothing of the payload ran. no \
-         terminal: the host gave the command no terminal.\nran: the payload completed. A row \
+         terminal: the host gave the command no terminal. EIO: the kernel refused the call\nitself, \
+         not the sandbox (the CI runner's kernel has `dev.tty.legacy_tiocsti` at 0; where it \
+         is 1 the call goes through). ran: the payload completed. A row \
          on a terminal runs each layer on a pseudo-terminal of the test's own.\n\n## Known gaps\n\n",
     );
     doc.push_str(&gaps);
@@ -273,9 +279,8 @@ pub mod executing {
     use std::io::ErrorKind;
     use std::net::{TcpListener, UdpSocket};
     use std::path::{Path, PathBuf};
-    use std::process::Command;
 
-    use super::super::{Fixtures, Project, Verdict};
+    use super::super::{Fixtures, Project, Verdict, start};
     use super::{Outcome, scripts};
     use crate::common::{output, text};
     use crate::run::confined::{isolated, ran, retried};
@@ -288,19 +293,6 @@ pub mod executing {
 
     /// What the agent runs; the project's `bin/npm` shim starts its test script.
     pub const NPM_TEST: &str = "npm test --silent";
-
-    /// A command that starts `program`, on a pseudo-terminal of its own when
-    /// `terminal` ([`super::Script::terminal`]); the caller adds its arguments.
-    pub fn start(program: impl AsRef<std::ffi::OsStr>, terminal: bool) -> Command {
-        if !terminal {
-            return Command::new(program);
-        }
-        let mut cmd = Command::new("/usr/bin/python3");
-        let script = "../../tests/differential/on_terminal.py";
-        cmd.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join(script))
-            .arg(program);
-        cmd
-    }
 
     /// The fake secrets' contents: printed only where a read went through.
     const SECRETS: [&str; 3] = ["FAKE-PRIVATE-KEY", "key=FAKE", "TOKEN=secret"];
@@ -431,6 +423,8 @@ pub mod executing {
             Some(Outcome::Enoent)
         } else if shows("File exists") {
             Some(Outcome::Eexist)
+        } else if shows("Input/output error") {
+            Some(Outcome::Eio)
         } else if shows("Connection refused") {
             Some(Outcome::Refused)
         } else {
