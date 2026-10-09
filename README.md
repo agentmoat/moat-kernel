@@ -141,7 +141,7 @@ OpenMoat does not replace the agent's prompt or sandbox. It fills the gaps betwe
 | Continue CLI (`cn`) | partial: the released `cn` does not run hooks yet; use `moat run` |
 
 What each hook covers: [docs/INSTALL.md](docs/INSTALL.md). The OS sandboxes
-(Standard and Lightweight tiers): [docs/SANDBOX.md](docs/SANDBOX.md).
+(Standard, Lightweight and Isolated tiers): [docs/SANDBOX.md](docs/SANDBOX.md).
 
 ## Documentation
 
@@ -179,8 +179,8 @@ you export it.
 - Allowed scripts (`npm test`, `make test`) run whatever they contain; the sandbox
   bounds them, OpenMoat does not inspect them. What `moat run` and the agents' own
   sandboxes stop in such a script, and what they do not (on Linux, `moat run` leaves
-  `.env` in the project readable), is tested on every pull request:
-  [docs/EVIDENCE.md](docs/EVIDENCE.md).
+  `.env` in the project readable; `moat run --isolate` hides it, with bubblewrap,
+  Linux only), is tested on every pull request: [docs/EVIDENCE.md](docs/EVIDENCE.md).
 - Hosts the policy allows (`api.github.com`, the registries) can receive data from an
   allowed or approved command.
 - Tools no hook exposes are not seen (Claude Code `WebSearch`, Codex web search).

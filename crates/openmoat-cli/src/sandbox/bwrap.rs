@@ -121,23 +121,28 @@ pub fn generate(ir: &Enforcement, grants: &Grants, project: &[String]) -> Result
         }
     }
     for (path, kind, subtree) in denied_literals(ir) {
-        let mounted = trees.iter().any(|m| {
+        let in_project = real.is_some_and(|p| path == p || is_below(&path, p));
+        // The innermost tree holding it decides what is visible there.
+        let holder = trees.iter().rev().find(|m| {
             let tree = path_of(m);
             path == tree || is_below(&path, tree)
         });
-        let in_project = real.is_some_and(|p| path == p || is_below(&path, p));
         let Ok(meta) = std::fs::symlink_metadata(&path) else {
             continue;
         };
-        if mounted && !in_project {
-            // A deny rule names it, though a grant (`--write`) may cover it.
-            let dir = meta.is_dir();
-            masks.mounts.push(match kind {
-                Kind::FsRead => Mount::Hide { path, dir },
-                _ if dir && !subtree => Mount::ReadWrite(path),
-                _ => Mount::ReadOnly(path),
-            });
-        }
+        let dir = meta.is_dir();
+        // A deny rule names it, though a grant (`--write`) may cover it.
+        let mask = match (holder, kind) {
+            _ if in_project => None,
+            (Some(Mount::ReadOnly(_) | Mount::ReadWrite(_)), Kind::FsRead) => {
+                Some(Mount::Hide { path, dir })
+            }
+            (Some(Mount::ReadWrite(_)), _) if dir && !subtree => Some(Mount::ReadWrite(path)),
+            (Some(Mount::ReadWrite(_)), _) => Some(Mount::ReadOnly(path)),
+            // Not visible (a `tmpfs`, nothing), or read-only already.
+            _ => None,
+        };
+        masks.mounts.extend(mask);
     }
     let mut mounts = trees;
     mounts.extend(respelled(&masks.mounts, project));

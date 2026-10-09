@@ -18,12 +18,15 @@ fn generated(home: &Path) -> Generated {
     };
     let grants = Grants {
         proxy_port: Some(18080),
-        tmpdir: Some("/tmp".into()),
+        // The home is in the temp directory, which the session gets empty.
+        tmpdir: Path::new(&home)
+            .parent()
+            .map(|t| t.to_string_lossy().into_owned()),
         program: Some("/usr/bin/agent".into()),
         writes: vec![format!("{home}/.claude"), format!("{home}/.cargo")],
     };
     let mut policy = Policy::parse(DEFAULT_POLICY).expect("default policy");
-    // The test's home is in the temp directory, a read root.
+    // No read roots: the temp directory holding the test home is one.
     policy.sandbox = None;
     let ir = openmoat_core::ir::lower(&policy, &ctx).expect("lowers");
     generate(&ir, &grants, &[project]).expect("generates")
@@ -113,8 +116,13 @@ fn denied_paths_in_the_project_and_the_grants_are_masked() {
         out.mounts
     );
     assert!(out.rules.write.contains(&p("proj")), "{:?}", out.rules);
-    assert!(out.mounts.contains(&Mount::Tmpfs("/tmp".into())));
-    assert!(!out.mounts.contains(&Mount::ReadOnly("/tmp".into())));
+    let tmp = home.parent().unwrap().to_string_lossy().into_owned();
+    assert!(
+        out.mounts.contains(&Mount::Tmpfs(tmp.clone())),
+        "{:#?}",
+        out.mounts
+    );
+    assert!(!out.mounts.contains(&Mount::ReadOnly(tmp)));
     let home_path = home.to_string_lossy().into_owned();
     assert!(!out.mounts.iter().any(|m| path_of(m) == home_path));
     let rules = out

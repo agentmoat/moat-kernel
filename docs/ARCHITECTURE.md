@@ -724,6 +724,19 @@ moat run ─► moat proxy (thread, 127.0.0.1:<ephemeral>) ◄── HTTP(S)_PRO
   so only the proxy resolves names, as on macOS: a tool that ignores `HTTP(S)_PROXY`
   cannot resolve them. Programs that list network interfaces (`getifaddrs`, netlink)
   get an error.
+- **`--isolate` (Isolated tier, Linux).** `run/isolate.rs` starts the agent under
+  `bwrap --unshare-all --unshare-user --die-with-parent` with the mounts
+  `sandbox/bwrap.rs` generates from the same Landlock rules: each read path read-only,
+  each write path read-write, the temp directory as `tmpfs`, then the masks. The project
+  is walked (symlinks not followed) and each entry checked with `Checker::check_os`: a
+  denied read is covered by a mode-`000` placeholder, a denied write bound read-only, a
+  directory whose node alone is denied bound onto itself so it cannot be renamed. The
+  literal paths deny rules name elsewhere are masked the same way, under every spelling
+  of the project. Inside, `moat isolated` (hidden) binds the proxy's port on the
+  namespace's loopback, relays each connection to a Unix socket bound in from a private
+  `0700` directory (`moat run` relays it on to the proxy), then applies the Landlock
+  rules and seccomp filter to the thread that starts the agent. Missing or unusable
+  `bwrap` (a probe runs first) refuses with exit 64; macOS refuses (#175).
 - **Windows** refuses with exit 64; the Standard tier is the answer there.
 - `moat sandbox show` prints both lightweight outputs for the current directory, before
   the session's grants are added. The executing tests in `tests/e2e/run.rs` run
