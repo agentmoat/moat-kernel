@@ -154,7 +154,7 @@ What each hook covers: [docs/INSTALL.md](docs/INSTALL.md). The OS sandboxes
 | Every command and exit code | [docs/USAGE.md](docs/USAGE.md#commands) |
 | Write rules | [docs/POLICY.md](docs/POLICY.md) |
 | Know what is defended and what is not | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) |
-| See the attack scenarios and the scorecard | [docs/MOATBENCH.md](docs/MOATBENCH.md), [docs/COVERAGE.md](docs/COVERAGE.md) |
+| See the attack scenarios and the scorecard, or score any hook with `moat bench` | [docs/MOATBENCH.md](docs/MOATBENCH.md), [docs/COVERAGE.md](docs/COVERAGE.md) |
 | Run the demo | [docs/DEMO.md](docs/DEMO.md) |
 | Understand the code | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/adr/](docs/adr/README.md) |
 
@@ -165,7 +165,7 @@ fails, it blocks. Everything runs locally; the audit log is a SQLite file in `~/
 credentials are redacted before they are stored, and nothing leaves your machine unless
 you export it.
 
-**Status: beta.** The latest release is `0.1.0`; the policy format and commands may still change before 1.0.
+**Status: beta.** The latest release is `0.1.1`; the policy format and commands may still change before 1.0.
 [Roadmap](docs/ROADMAP.md).
 
 ## Limits
