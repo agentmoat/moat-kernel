@@ -15,7 +15,8 @@
 //! leaves open. The Isolated tier's bubblewrap mounts (`bwrap`, Linux) are built on
 //! the same Landlock rules.
 
-#[cfg(any(target_os = "linux", test))]
+// Its tests walk real Unix paths, so they run on macOS too, not on Windows.
+#[cfg(any(target_os = "linux", all(test, unix)))]
 pub mod bwrap;
 pub mod claude;
 pub mod codex;

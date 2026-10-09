@@ -70,7 +70,9 @@ pub fn isolate(
             &path_string(&session.dir.join("file")),
             &path_string(&session.dir.join("dir")),
         ))
-        .args(["--ro-bind", &moat, &moat, "--bind", &dir, &dir])
+        // Read-only: connecting to the socket needs no write access to the
+        // mount, and the placeholders stay as they are.
+        .args(["--ro-bind", &moat, &moat, "--ro-bind", &dir, &dir])
         .args(["--chdir", &ctx.cwd, "--", &moat, "isolated", "--socket"])
         .arg(&session.socket)
         .args(["--port", &port.to_string(), "--rules"])
