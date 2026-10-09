@@ -31,8 +31,9 @@ pub struct Enforcement {
     pub fs: Filesystem,
     /// Outbound network.
     pub egress: Egress,
-    /// Secrets the egress proxy injects for the agent (ADR-020). Always empty:
-    /// the policy schema has no `secrets:` key yet (#172).
+    /// Secrets the egress proxy and Claude Code's own broker inject for the
+    /// agent (ADR-020). One entry per policy `secrets:` item; OS backends
+    /// consume these without reading the policy again.
     pub secrets: Vec<BrokeredSecret>,
     /// Limits on the agent's processes. Always empty: no policy key sets one yet.
     pub limits: Vec<ProcessLimit>,
@@ -153,10 +154,22 @@ impl fmt::Display for Allowance {
     }
 }
 
-/// A secret the egress proxy would inject (ADR-020). No value exists until the
-/// policy schema defines `secrets:` (#172).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum BrokeredSecret {}
+/// A secret the egress proxy or Claude Code's own broker injects (ADR-020).
+/// A copy of [`crate::Secret`]: the IR carries only the fields OS backends
+/// need, so a backend can read `ir.secrets` without the policy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BrokeredSecret {
+    /// Stable identifier (lowercase letters, digits and `-`).
+    pub id: String,
+    /// The one host whose requests receive the secret, lowercase DNS or IPv4.
+    pub host: String,
+    /// The request header the secret goes in (`Authorization`, `X-Api-Key`).
+    pub header: String,
+    /// Where OpenMoat reads the value.
+    pub source: crate::SecretSource,
+    /// Also inject into plain-HTTP requests; off unless the policy sets it.
+    pub plain_http: bool,
+}
 
 /// A process limit. No value exists until the policy schema defines one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

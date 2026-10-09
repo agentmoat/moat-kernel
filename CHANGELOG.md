@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The policy compiler now carries brokered secrets in the enforcement IR (#167, ADR-019). `openmoat-core::ir::BrokeredSecret` is a populated struct (id, host, header, source, plain_http) and `lower()` fills `Enforcement.secrets` from the policy's `secrets:` list, so OS backends read one source of truth. Claude Code's `sandbox.credentials` generator (#363) now consumes `ir.secrets` directly; no behaviour change on the generated settings. The existing `ir_consistency` test, "the IR allows nothing the hook allows and asks is deny" over every lowerable conformance fixture, continues to prove ADR-019's lowering-never-widens invariant.
+
 ### Added
 - `moat init` and `moat sandbox sync` compile the policy's `secrets:` entries into Claude Code's native `sandbox.credentials` block (#363). Each `env` and `file` source becomes a `mask` entry with the policy's host in `injectHosts`, and `network.tlsTerminate` turns on because Claude Code's broker needs it; `credentials.allowPlaintextInject` turns on when any mask entry sets `plain_http: true`, listed as an allowance. Claude Code's own proxy then substitutes the sentinel inside HTTPS requests for sandboxed `Bash`, `PowerShell` and `Monitor` commands, so the broker works for Claude Code without the TLS termination `moat proxy` still lacks (#247). A secret whose host is not in the policy's `net` allow is skipped with a loss, and a `keychain` source Claude Code's broker cannot read is skipped the same way; both still work through `moat proxy`. On macOS a `file` source falls back to a read deny, so a tool that reads the file does not authenticate; `moat sandbox show` lists both. Removing a secret from the policy strips the stale `credentials` entry and `tlsTerminate` on the next `sync`, and `moat uninstall` removes them whole.
 

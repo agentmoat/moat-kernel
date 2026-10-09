@@ -27,9 +27,9 @@ pub struct Secret {
     /// What brought it in, for reasons (`read /Users/me/.ssh/id_rsa`).
     pub source: String,
     /// The one host the secret belongs to and may still go to. `None` for a
-    /// file read: it belongs to no host, so every host asks. This is the
-    /// extension point for the secrets broker (#172): a brokered secret that
-    /// was used is a `Secret` with its own host.
+    /// file read: it belongs to no host, so every host asks. The secrets
+    /// broker (ADR-020) raises a `Secret` with its own host when a brokered
+    /// value is used, so later requests to other hosts ask.
     pub host: Option<String>,
 }
 
