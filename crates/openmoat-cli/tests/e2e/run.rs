@@ -51,6 +51,44 @@ fn refuses_to_start_over_a_drifted_lock() {
     assert!(!text(&out).contains("ran\n"));
 }
 
+/// `moat run --isolate -- /bin/sh -c 'echo ran'` with `PATH` set to `path`.
+#[cfg(unix)]
+fn run_isolated(path: &str) -> Output {
+    let (sb, project) = installed_with_secret();
+    output(
+        sb.command().current_dir(&project).env("PATH", path).args([
+            "run",
+            "--isolate",
+            "--",
+            "/bin/sh",
+            "-c",
+            "echo ran",
+        ]),
+        None,
+    )
+}
+
+/// The Isolated tier needs a virtual machine on macOS (#175): refused, never
+/// the Lightweight tier instead.
+#[cfg(target_os = "macos")]
+#[test]
+fn isolate_is_refused_on_macos() {
+    let out = run_isolated("/usr/bin:/bin");
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert!(stderr(&out).contains("#175"), "{}", text(&out));
+    assert!(!text(&out).contains("ran\n"), "{}", text(&out));
+}
+
+/// Without bubblewrap the agent does not start, not even in the Lightweight tier.
+#[cfg(target_os = "linux")]
+#[test]
+fn isolate_without_bubblewrap_is_refused() {
+    let out = run_isolated("/nonexistent");
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert!(stderr(&out).contains("needs bubblewrap"), "{}", text(&out));
+    assert!(!text(&out).contains("ran\n"), "{}", text(&out));
+}
+
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 #[test]
 fn refuses_where_no_sandbox_can_be_generated() {
@@ -99,6 +137,23 @@ pub mod confined {
             eprintln!("skipped: this kernel has no Landlock ABI 4");
         }
         !unsupported
+    }
+
+    /// False, saying so, where `moat run --isolate` refused because bubblewrap
+    /// is missing or cannot create its namespaces. CI's Linux job installs it,
+    /// so there the tests must run.
+    pub fn isolated(out: &Output) -> bool {
+        let shown = stderr(out);
+        let unavailable = shown.contains("needs bubblewrap") || shown.contains("bubblewrap cannot");
+        assert!(
+            !(unavailable && std::env::var_os("CI").is_some()),
+            "CI must run the Isolated tier: {}",
+            text(out)
+        );
+        if unavailable {
+            eprintln!("skipped: bubblewrap cannot run here: {shown}");
+        }
+        !unavailable
     }
 
     /// `run` again, at most twice more, while curl could not even open a

@@ -4,9 +4,11 @@
 use std::path::Path;
 use std::process::{Command, ExitStatus};
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use openmoat_core::{EvalContext, Policy};
 
+use crate::cli::IsolatedArgs;
+use crate::exit::Code;
 use crate::sandbox::{Grants, Report, seatbelt_profile};
 
 /// Part of the base system; never one found on `PATH`. Apple has deprecated
@@ -32,6 +34,18 @@ pub fn confine(
         command,
         report: generated.report,
     })
+}
+
+/// The Isolated tier needs a Linux guest here: a virtual machine (#175).
+pub fn isolate(_: &Policy, _: &EvalContext, _: Grants, _: &Path) -> Result<Confined> {
+    bail!(
+        "`moat run --isolate` runs on Linux only for now; on macOS the Isolated tier needs a \
+         virtual machine (#175). `moat run` without --isolate is the Lightweight tier"
+    )
+}
+
+pub fn inside(_: &IsolatedArgs) -> Result<Code> {
+    bail!("only `moat run --isolate` on Linux starts this")
 }
 
 impl Confined {

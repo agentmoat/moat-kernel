@@ -1,4 +1,5 @@
-//! `moat run [--write PATH]… -- <agent> [args]`: the Lightweight tier (ADR-018).
+//! `moat run [--isolate] [--write PATH]… -- <agent> [args]`: the Lightweight
+//! tier, and with `--isolate` the Isolated tier on Linux (ADR-018).
 //!
 //! The agent and every command it starts share one sandbox generated from the
 //! policy for the project in the current directory. Their only network is a
@@ -6,9 +7,11 @@
 //! port alone, and the proxy refuses loopback destinations, so no other local
 //! service is reachable through it either.
 
-/// `confine(policy, ctx, grants, program) -> Confined`, whose `command()`
-/// takes the agent's arguments and environment, `report()` lists the losses
-/// and allowances, and `status()` runs the agent in its sandbox.
+/// `confine(policy, ctx, grants, program) -> Confined` (Lightweight) and
+/// `isolate(…)` (Isolated), whose `command()` takes the agent's arguments and
+/// environment, `report()` lists the losses and allowances, and `status()`
+/// runs the agent in its sandbox; `inside(args)` is what `isolate` starts in
+/// its sandbox.
 #[cfg_attr(target_os = "macos", path = "run/macos.rs")]
 #[cfg_attr(target_os = "linux", path = "run/linux.rs")]
 #[cfg_attr(
@@ -28,7 +31,7 @@ use anyhow::{Context as _, Result, bail};
 
 use super::proxy::{self, Exit};
 use super::sandbox::write_report;
-use crate::cli::RunArgs;
+use crate::cli::{IsolatedArgs, RunArgs};
 use crate::context::{self, path_string};
 use crate::environment::find_in;
 use crate::exit::Code;
@@ -67,10 +70,14 @@ pub fn run(args: &RunArgs) -> Result<Code> {
         writes: args.writes.iter().map(|w| resolved(w)).collect(),
     };
     let policy = home.load_policy()?;
-    let mut agent = platform::confine(&policy, &ctx, grants, &program)?;
+    let mut agent = if args.isolate {
+        platform::isolate(&policy, &ctx, grants, &program)?
+    } else {
+        platform::confine(&policy, &ctx, grants, &program)?
+    };
     agent.command().args(rest);
     let exit = Exit::open(&home, policy, ctx)?;
-    notice(&program, port, exit.session(), agent.report(), args.verbose)?;
+    notice(&program, port, exit.session(), agent.report(), args)?;
     std::thread::spawn(move || {
         if let Err(error) = exit.serve(&listener) {
             eprintln!("moat run: the proxy stopped, so the agent has no network: {error:#}");
@@ -101,6 +108,12 @@ pub fn run(args: &RunArgs) -> Result<Code> {
     })
 }
 
+/// Inside `moat run --isolate`'s sandbox: serve the proxy on loopback, apply
+/// the Landlock rules and seccomp filter, and start the agent.
+pub fn inside(args: &IsolatedArgs) -> Result<Code> {
+    platform::inside(args)
+}
+
 /// The executable `name` starts, symlinks resolved.
 fn resolve(name: &OsStr) -> Result<PathBuf> {
     let path = Path::new(name);
@@ -123,11 +136,16 @@ fn resolved(path: &Path) -> String {
 }
 
 /// What the user must know before the agent starts, on standard error.
-fn notice(program: &Path, port: u16, session: &str, report: &Report, verbose: bool) -> Result<()> {
+fn notice(program: &Path, port: u16, session: &str, report: &Report, args: &RunArgs) -> Result<()> {
     let mut err = std::io::stderr().lock();
+    let tier = if args.isolate {
+        "Isolated tier, ADR-018: it sees only the project, the read roots and --write paths"
+    } else {
+        "Lightweight tier, ADR-018"
+    };
     writeln!(
         err,
-        "moat run: {} in a sandbox generated from the policy (Lightweight tier, ADR-018)\n  \
+        "moat run: {} in a sandbox generated from the policy ({tier})\n  \
          network: only through OpenMoat's proxy on 127.0.0.1:{port} (audit session {session})\n  \
          turn the agent's own sandbox off: sandboxes do not nest, so Claude Code's or Codex's \
          cannot start in here\n  \
@@ -135,7 +153,7 @@ fn notice(program: &Path, port: u16, session: &str, report: &Report, verbose: bo
          it starts as one, so it is weaker per command than the Standard tier.",
         program.display()
     )?;
-    if verbose {
+    if args.verbose {
         write_report(&mut err, report)?;
     } else {
         writeln!(

@@ -36,6 +36,14 @@ jobs:
           toolchain: "1.95"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: bubblewrap for the isolated tier
+        if: runner.os == 'Linux'
+        # `moat run --isolate` (#174). Ubuntu 24.04's AppArmor blocks the
+        # unprivileged user namespaces bwrap needs.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: quality gate
         run: scripts/ci/quality-gate.sh
         shell: bash

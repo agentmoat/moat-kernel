@@ -151,7 +151,7 @@ something OpenMoat claims to stop.
   - On Linux, Landlock only grants. Secrets inside a granted tree stay readable and
     writable for the agent's commands: `.env` in the project, `~/.cargo/credentials.toml`
     in a read root, the project's `.git`. The hook still denies them for the agent's
-    tool calls.
+    tool calls. `moat run --isolate` closes this where bubblewrap runs (below).
   - Also on Linux, the proxy's port is reachable on any host.
   - On Linux a seccomp filter allows only IPv4 and IPv6 TCP sockets, so the user's
     D-Bus session bus, other Unix sockets, UDP, raw, netlink and packet sockets are
@@ -164,6 +164,18 @@ something OpenMoat claims to stop.
   `moat run` prints each allowance before the agent starts. What it stops in an allowed
   project script, per operating system, and the gaps above, are executed in CI and
   listed in [EVIDENCE.md](EVIDENCE.md).
+- **The Isolated tier (`moat run --isolate`) is Linux only so far.** bubblewrap gives
+  the agent a root with only the project, the read roots, the `--write` paths and an
+  empty temp directory, and a network namespace whose only exit is OpenMoat's proxy,
+  with the Lightweight tier's Landlock rules and seccomp filter inside
+  ([SANDBOX.md](SANDBOX.md#moat-run---isolate-isolated-tier-linux)). It hides what the
+  policy denies inside those trees only where it exists when the session starts (and
+  `.env`, `.envrc` and `.moat` directly in the project even when missing): a match a
+  command creates later stays open to the agent's commands. The agent and its scripts
+  still share one sandbox, so everything the agent needs (its state, its API host,
+  the credentials in its environment) its scripts get too. It depends on bubblewrap and
+  on the kernel's user namespaces, which have their own CVE history. On macOS it
+  refuses until it has a virtual machine (#175).
 - **Project scripts run arbitrary code.** `npm test`, `npm run *`, `cargo test`,
   `cargo run`, `make`, `make test`, `pytest`, `python -m venv` and similar are allowed
   by `dev-shell`. They run whatever the project's scripts, build files and test files

@@ -228,7 +228,8 @@ benign:
 #   sandbox-error  the sandbox failed to start the command
 #   ran        the payload completed: for an attack, always a recorded `gap`
 # Layers: `seatbelt` is `moat run` on macOS, `landlock` is `moat run` on Linux
-# (Landlock and seccomp); `claude-<os>` is Claude Code's sandbox and
+# (Landlock and seccomp), `isolate-linux` is `moat run --isolate` (bubblewrap,
+# with the same Landlock rules and seccomp filter inside); `claude-<os>` is Claude Code's sandbox and
 # `codex-<os>` is `codex sandbox -P moat`, both as `moat init` configures them.
 # `{tcp}` and `{udp}` are loopback listeners the test owns; nothing leaves the
 # machine. docs/EVIDENCE.md is generated from this list.
@@ -238,6 +239,7 @@ scripts:
     payload: "cat package.json > /dev/null && echo ok > out.txt && ln -sf src s && cat s/main.rs && /bin/bash -c true && curl --version > /dev/null"
     seatbelt: ran
     landlock: ran
+    isolate-linux: ran
     claude-macos: ran
     claude-linux: ran
     codex-macos: ran
@@ -249,6 +251,7 @@ scripts:
     payload: 'cat "$HOME/.ssh/id_rsa"'
     seatbelt: eperm
     landlock: eacces
+    isolate-linux: enoent
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
@@ -260,6 +263,7 @@ scripts:
     payload: 'cat "$HOME/.aws/credentials"'
     seatbelt: eperm
     landlock: eacces
+    isolate-linux: enoent
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
@@ -271,6 +275,7 @@ scripts:
     payload: "cat .env"
     seatbelt: eperm
     landlock: ran
+    isolate-linux: eacces
     claude-macos: eperm
     claude-linux: eacces
     codex-macos: eperm
@@ -286,6 +291,7 @@ scripts:
     payload: "echo TOKEN=PLANTED >> .env"
     seatbelt: eperm
     landlock: ran
+    isolate-linux: eacces
     claude-macos: eperm
     claude-linux: eacces
     codex-macos: eperm
@@ -301,6 +307,7 @@ scripts:
     payload: "echo 'export LD_PRELOAD=PLANTED' > .envrc"
     seatbelt: eperm
     landlock: ran
+    isolate-linux: erofs
     claude-macos: eperm
     claude-linux: eacces
     codex-macos: eperm
@@ -316,6 +323,7 @@ scripts:
     payload: "mkdir -p .moat && echo '# PLANTED' > .moat/policy.yaml"
     seatbelt: eperm
     landlock: ran
+    isolate-linux: eexist
     claude-macos: eperm
     claude-linux: eexist
     codex-macos: eperm
@@ -331,6 +339,7 @@ scripts:
     payload: "echo '# PLANTED' > .git/hooks/pre-commit"
     seatbelt: eperm
     landlock: ran
+    isolate-linux: erofs
     claude-macos: eperm
     claude-linux: erofs
     codex-macos: eperm
@@ -346,6 +355,7 @@ scripts:
     payload: 'echo x > "$HOME/outside.txt"'
     seatbelt: eperm
     landlock: eacces
+    isolate-linux: eacces
     claude-macos: eperm
     claude-linux: contained
     codex-macos: eperm
@@ -357,6 +367,7 @@ scripts:
     payload: "/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{tcp}'"
     seatbelt: eperm
     landlock: eacces
+    isolate-linux: eacces
     claude-macos: eperm
     claude-linux: refused
     codex-macos: eperm
@@ -368,6 +379,7 @@ scripts:
     payload: "/bin/bash -c 'printf q > /dev/udp/127.0.0.1/{udp}'"
     seatbelt: eperm
     landlock: eperm
+    isolate-linux: eperm
     claude-macos: eperm
     claude-linux: contained
     codex-macos: eperm
@@ -379,6 +391,7 @@ scripts:
     payload: 'ln -s "$HOME/.ssh" keys && cat keys/id_rsa'
     seatbelt: eperm
     landlock: eacces
+    isolate-linux: enoent
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
@@ -390,6 +403,7 @@ scripts:
     payload: 'echo "# widened" >> "$HOME/.moat/policy.yaml"'
     seatbelt: eperm
     landlock: eacces
+    isolate-linux: enoent
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
@@ -401,6 +415,7 @@ scripts:
     payload: 'echo "{}" > "$HOME/.claude/settings.json"'
     seatbelt: eperm
     landlock: eacces
+    isolate-linux: enoent
     claude-macos: eperm
     claude-linux: enoent
     codex-macos: eperm
@@ -412,6 +427,7 @@ scripts:
     payload: "curl -fsS -o /dev/null -m 30 http://evil.example/"
     seatbelt: proxy-403
     landlock: proxy-403
+    isolate-linux: proxy-403
     claude-macos: proxy-403
     claude-linux: proxy-403
     codex-macos: proxy-403

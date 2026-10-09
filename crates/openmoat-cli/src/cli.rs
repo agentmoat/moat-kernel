@@ -64,9 +64,12 @@ pub enum Command {
         command: AuditCommand,
     },
     /// Run an agent in a sandbox generated from the policy, its network only through
-    /// OpenMoat's proxy (Lightweight tier, ADR-018; macOS, Linux).
-    /// The agent's own sandbox must be off.
+    /// OpenMoat's proxy (Lightweight tier, ADR-018; macOS, Linux; `--isolate`: Isolated
+    /// tier, Linux). The agent's own sandbox must be off.
     Run(RunArgs),
+    /// What `moat run --isolate` starts inside its sandbox (not for people).
+    #[command(hide = true)]
+    Isolated(IsolatedArgs),
     /// Inspect and test policy files.
     Policy {
         #[command(subcommand)]
@@ -246,6 +249,28 @@ pub struct RunArgs {
     #[arg(long)]
     pub verbose: bool,
 
+    /// Isolated tier (Linux, bubblewrap): the agent sees only the project without its
+    /// denied paths, the policy's read roots and `--write` paths, and reaches only
+    /// OpenMoat's proxy. Refused where bubblewrap cannot run.
+    #[arg(long)]
+    pub isolate: bool,
+
+    /// The agent and its arguments, after `--`.
+    #[arg(required = true, last = true, value_name = "AGENT")]
+    pub command: Vec<std::ffi::OsString>,
+}
+
+#[derive(Debug, Args)]
+pub struct IsolatedArgs {
+    /// The Unix socket that reaches OpenMoat's proxy outside.
+    #[arg(long)]
+    pub socket: PathBuf,
+    /// The loopback port to serve the proxy on inside.
+    #[arg(long)]
+    pub port: u16,
+    /// The Landlock rules, as JSON.
+    #[arg(long)]
+    pub rules: String,
     /// The agent and its arguments, after `--`.
     #[arg(required = true, last = true, value_name = "AGENT")]
     pub command: Vec<std::ffi::OsString>,

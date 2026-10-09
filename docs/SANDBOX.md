@@ -1,4 +1,4 @@
-# OS sandboxes: Standard and Lightweight tiers
+# OS sandboxes: Standard, Lightweight and Isolated tiers
 
 OpenMoat decides each tool call in the agent's hook. The sandboxes below make the operating system enforce the same policy on everything those calls start.
 
@@ -180,7 +180,8 @@ moat run --write ~/.claude --write ~/.claude.json -- claude
 - Before the agent starts, `moat run` prints how many places the sandbox is stricter
   or wider than the policy; `moat run --verbose` lists each one (`moat sandbox show`
   prints the same for the current directory). Linux is wider than macOS (secrets inside the project stay
-  readable, and the proxy's port is reachable on any host); see [THREAT_MODEL.md](THREAT_MODEL.md).
+  readable, and the proxy's port is reachable on any host; `--isolate` closes both,
+  below); see [THREAT_MODEL.md](THREAT_MODEL.md).
 
 It is weaker per command than the Standard tier: the agent and its scripts share one
 sandbox, so whatever the agent needs, `npm test` gets too.
@@ -189,6 +190,53 @@ sandbox, so whatever the agent needs, `npm test` gets too.
 macOS and Linux (reading keys and credentials, writing outside the project, direct
 connections, DNS, symlinks out of the project, editing the policy), as CI asserts it on
 every pull request, with the Linux gaps marked.
+
+## `moat run --isolate` (Isolated tier, Linux)
+
+On Linux, `--isolate` runs the agent in its own view of the machine, built with
+[bubblewrap](https://github.com/containers/bubblewrap) (ADR-018):
+
+```bash
+moat run --isolate --write ~/.claude --write ~/.claude.json -- claude
+```
+
+- **What it sees.** Only the project, `sandbox.read_roots`, the agent's executable,
+  the `--write` paths and an empty temp directory, each at its usual path. The rest
+  of the home directory (`~/.ssh`, `~/.aws`, other projects) does not exist in there.
+- **What it hides inside them.** Every path the policy denies that exists when the
+  session starts: a denied read (the project's `.env` files, `~/.cargo/credentials.toml`)
+  is covered by an empty placeholder no one may open (`EACCES`), and a denied write
+  (`.git`, `.claude/settings.json`) by the path itself, read-only. `.env`, `.envrc`
+  and `.moat` directly in the project are covered even when they are missing: OpenMoat
+  creates an empty placeholder file there for the session and removes it afterwards.
+- **Writes** go only to the project, the temp directory (in memory, gone when the
+  session ends) and the `--write` paths.
+- **Network** goes only to OpenMoat's proxy: the agent has its own network namespace
+  with nothing but loopback, where OpenMoat serves the proxy's port and relays each
+  connection over a Unix socket to the proxy outside. A tool that ignores
+  `HTTP(S)_PROXY` has no network; there is no DNS.
+- Inside, the Lightweight tier's Landlock rules and seccomp filter apply too, so
+  Linux 6.7 or later is needed. The agent's own sandbox must be off, as under
+  `moat run`.
+
+It needs `bwrap` on `PATH` (`apt install bubblewrap`, `dnf install bubblewrap`) and
+unprivileged user namespaces; on Ubuntu 24.04 AppArmor restricts them unless
+`kernel.apparmor_restrict_unprivileged_userns` is 0 or an AppArmor profile allows
+`bwrap`. Where bubblewrap is missing or cannot create its namespaces, `moat run
+--isolate` refuses (exit 64) and never falls back to the Lightweight tier. On macOS it
+refuses too: the Isolated tier there needs a virtual machine
+([#175](https://github.com/crocodile-labs/openmoat/issues/175)).
+
+Limits:
+
+- A match of a deny rule created after the session starts (`.env.local` written by a
+  command, a `.env` in a new subdirectory) is not hidden; the hook still decides the
+  agent's own tool calls on it.
+- The agent and its commands still share one sandbox, as under `moat run`.
+- Ctrl-C ends the whole session unless the agent reads the terminal itself (Claude
+  Code's and Codex's interfaces do).
+- A project with more than a million files and directories is refused: each is looked
+  at to find what to hide.
 
 ### Cursor CLI under `moat run`
 

@@ -48,6 +48,7 @@ pub fn run(cli: Cli) -> Result<Code> {
             AuditCommand::Report(args) => team::run(&args),
         },
         Command::Run(args) => run::run(&args),
+        Command::Isolated(args) => run::inside(&args),
         Command::Policy { command } => match command {
             PolicyCommand::Lint(args) => policy::lint(&args),
             PolicyCommand::Check(args) => policy::check(&args),
