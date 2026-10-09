@@ -114,6 +114,20 @@ fn ambiguous_or_unsupported_http_is_refused() {
         // smuggling-shaped framing
         "POST http://a.com/ HTTP/1.1\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n",
         "POST http://a.com/ HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\n",
+        // more than one Transfer-Encoding header on separate lines (TE.TE)
+        "POST http://a.com/ HTTP/1.1\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n",
+        // single Transfer-Encoding whose only token is not chunked
+        "POST http://a.com/ HTTP/1.1\r\nTransfer-Encoding: identity\r\n\r\n",
+        // comma-folded Transfer-Encoding whose token list is not exactly ["chunked"]
+        "POST http://a.com/ HTTP/1.1\r\nTransfer-Encoding: chunked, identity\r\n\r\n",
+        "POST http://a.com/ HTTP/1.1\r\nTransfer-Encoding: gzip, chunked\r\n\r\n",
+        "POST http://a.com/ HTTP/1.1\r\nTransfer-Encoding: chunked, gzip\r\n\r\n",
+        // comma-folded Content-Length (CL smuggling): single header, list value
+        "POST http://a.com/ HTTP/1.1\r\nContent-Length: 10, 10\r\n\r\n",
+        // signed, space-separated, hex Content-Length — none are a plain u64
+        "POST http://a.com/ HTTP/1.1\r\nContent-Length: +10\r\n\r\n",
+        "POST http://a.com/ HTTP/1.1\r\nContent-Length: 10 10\r\n\r\n",
+        "POST http://a.com/ HTTP/1.1\r\nContent-Length: 0x0a\r\n\r\n",
         // credentials in the authority
         "GET http://u:p@a.com/ HTTP/1.1\r\n\r\n",
         // not HTTP/1.x
@@ -121,6 +135,15 @@ fn ambiguous_or_unsupported_http_is_refused() {
     ] {
         assert!(parse(raw.as_bytes()).is_err(), "{raw:?}");
     }
+}
+
+#[test]
+fn well_formed_content_length_with_surrounding_whitespace_is_accepted() {
+    // RFC 9112 §5.5 lets a receiver trim OWS around a header value; a plain
+    // decimal integer is still a legitimate single length.
+    let raw = "POST http://a.com/ HTTP/1.1\r\nContent-Length:  10 \r\n\r\n";
+    let req = ok(raw);
+    assert_eq!((req.host(), req.port()), ("a.com", 80));
 }
 
 #[test]

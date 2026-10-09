@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- `moat proxy` now refuses three HTTP smuggling shapes its ambiguous-framing gate used to pass through (#396, #397). `check_framing` in `openmoat-proxy::request` already rejected a `Content-Length` next to a `Transfer-Encoding` and a repeated `Content-Length`; it now also rejects more than one `Transfer-Encoding` header on a request head (TE.TE smuggling), a `Transfer-Encoding` whose comma-separated, lowercased tokens are anything but exactly `["chunked"]` (so `identity`, `gzip`, `chunked, identity`, `gzip, chunked` and `chunked, gzip` are refused), and a `Content-Length` whose single value is not one plain decimal `u64` (so the list form `10, 10`, the signed form `+10`, embedded whitespace `10 10` and hex `0x0a` are refused). A value with only surrounding whitespace (`  10 `) still parses as a legitimate single length. The existing `request/tests.rs::ambiguous_or_unsupported_http_is_refused` gained one fixture per shape and a sibling test asserts the whitespace-only accept path.
+
 ### Changed
 - The policy compiler now carries brokered secrets in the enforcement IR (#167, ADR-019). `openmoat-core::ir::BrokeredSecret` is a populated struct (id, host, header, source, plain_http) and `lower()` fills `Enforcement.secrets` from the policy's `secrets:` list, so OS backends read one source of truth. Claude Code's `sandbox.credentials` generator (#363) now consumes `ir.secrets` directly; no behaviour change on the generated settings. The existing `ir_consistency` test, "the IR allows nothing the hook allows and asks is deny" over every lowerable conformance fixture, continues to prove ADR-019's lowering-never-widens invariant.
 
