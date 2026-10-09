@@ -46,6 +46,9 @@ pub enum Outcome {
     /// The sandbox failed to start the command; nothing of the payload ran.
     #[serde(rename = "sandbox-error")]
     SandboxError,
+    /// The host started the command without a terminal it could act on.
+    #[serde(rename = "no-terminal")]
+    NoTerminal,
     /// The payload completed.
     Ran,
 }
@@ -62,6 +65,7 @@ impl Outcome {
             Self::Proxy403 => "proxy 403",
             Self::Contained => "contained",
             Self::SandboxError => "sandbox error",
+            Self::NoTerminal => "no terminal",
             Self::Ran => "ran",
         }
     }
@@ -78,6 +82,9 @@ pub struct Script {
     pub why: String,
     /// The script body; `{tcp}` and `{udp}` name the test's loopback listeners.
     pub payload: String,
+    /// Each layer runs on a pseudo-terminal of the test's own (`on_terminal.py`).
+    #[serde(default)]
+    pub terminal: bool,
     /// The outcome under `moat run` on macOS.
     pub seatbelt: Outcome,
     /// The outcome under `moat run` on Linux.
@@ -194,7 +201,8 @@ fn evidence_table_is_current() {
     for s in scripts() {
         let threat = s.threat.as_deref().unwrap_or("control");
         let payload = s.payload.replace('|', "\\|");
-        let _ = write!(doc, "| `{}` | {threat} | `{payload}` |", s.id);
+        let on = if s.terminal { ", on a terminal" } else { "" };
+        let _ = write!(doc, "| `{}` | {threat} | `{payload}`{on} |", s.id);
         for (layer, heading) in LAYERS {
             let outcome = s.expected(layer).label();
             match s.gap_at(layer) {
@@ -222,8 +230,9 @@ fn evidence_table_is_current() {
          allows only the policy's\nhosts, under the Standard tier). contained: the payload \
          completed inside the sandbox, but\nwhat it wrote or sent stayed there (an empty \
          in-memory directory, its own network namespace)\nand nothing reached the host. sandbox \
-         error: the sandbox failed to start the command, so\nnothing of the payload ran. ran: \
-         the payload completed.\n\n## Known gaps\n\n",
+         error: the sandbox failed to start the command, so\nnothing of the payload ran. no \
+         terminal: the host gave the command no terminal.\nran: the payload completed. A row \
+         on a terminal runs each layer on a pseudo-terminal of the test's own.\n\n## Known gaps\n\n",
     );
     doc.push_str(&gaps);
     doc.push_str(
@@ -264,6 +273,7 @@ pub mod executing {
     use std::io::ErrorKind;
     use std::net::{TcpListener, UdpSocket};
     use std::path::{Path, PathBuf};
+    use std::process::Command;
 
     use super::super::{Fixtures, Project, Verdict};
     use super::{Outcome, scripts};
@@ -278,6 +288,19 @@ pub mod executing {
 
     /// What the agent runs; the project's `bin/npm` shim starts its test script.
     pub const NPM_TEST: &str = "npm test --silent";
+
+    /// A command that starts `program`, on a pseudo-terminal of its own when
+    /// `terminal` ([`super::Script::terminal`]); the caller adds its arguments.
+    pub fn start(program: impl AsRef<std::ffi::OsStr>, terminal: bool) -> Command {
+        if !terminal {
+            return Command::new(program);
+        }
+        let mut cmd = Command::new("/usr/bin/python3");
+        let script = "../../tests/differential/on_terminal.py";
+        cmd.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join(script))
+            .arg(program);
+        cmd
+    }
 
     /// The fake secrets' contents: printed only where a read went through.
     const SECRETS: [&str; 3] = ["FAKE-PRIVATE-KEY", "key=FAKE", "TOKEN=secret"];
@@ -301,8 +324,8 @@ pub mod executing {
     /// Run every script as the evil project's test script with `run`, under
     /// the layer `layer`, and compare what the operating system did with
     /// `scenarios.yaml`; then check that no refused call had its effect. `run`
-    /// returns `None` when the layer cannot run on this machine (it says why).
-    pub fn meet(layer: &str, fx: &Fixtures, mut run: impl FnMut() -> Option<Run>) {
+    /// gets whether to [`start`] on a terminal; `None` means the layer cannot run.
+    pub fn meet(layer: &str, fx: &Fixtures, mut run: impl FnMut(bool) -> Option<Run>) {
         let hook = fx.hook_decision("scripts", Project::Evil, NPM_TEST);
         assert_eq!(hook, Verdict::Allow, "the hook allows `npm test`");
         let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -323,7 +346,7 @@ pub mod executing {
                 .replace("{udp}", &udp.local_addr().unwrap().port().to_string());
             let build = fx.tree(Project::Evil).join(".build.sh");
             std::fs::write(build, format!("{payload}\n")).unwrap();
-            let Some(out) = run() else { return };
+            let Some(out) = run(s.terminal) else { return };
             let expected = s.expected(layer);
             // A contained payload completes; the checks below the loop prove
             // that its write or datagram did not reach the host.
@@ -394,6 +417,8 @@ pub mod executing {
         } else if shows("error building bubblewrap command") {
             // Codex on Linux could not build its sandbox; nothing of the payload ran.
             Some(Outcome::SandboxError)
+        } else if shows("no terminal: ") {
+            Some(Outcome::NoTerminal)
         } else if shows("returned error: 403") {
             Some(Outcome::Proxy403)
         } else if shows("Operation not permitted") {
@@ -438,13 +463,13 @@ pub mod executing {
         // temp-directory write.
         let tmp = fx.sb.home.with_file_name("tmp");
         std::fs::create_dir_all(&tmp).unwrap();
-        meet(layer, &fx, || {
+        meet(layer, &fx, |terminal| {
             // Seatbelt on macos-14 sometimes refuses the connection to the
             // proxy (#280); `retried` recognises it by `moat run`'s notice.
             let out = retried(|| {
                 output(
                     fx.sb
-                        .command()
+                        .configure(start(env!("CARGO_BIN_EXE_moat"), terminal))
                         .current_dir(project)
                         .env("PATH", format!("{}/bin:/usr/bin:/bin", project.display()))
                         .env("TMPDIR", &tmp)

@@ -28,6 +28,9 @@ use crate::common::{json, text};
 
 use super::{Fixtures, Verdict, scenarios};
 
+/// What bounds each `claude` run (`claude_output`).
+const PERL: &str = "/usr/bin/perl";
+
 /// The issue tracking the headless benign-verification limitation.
 const BENIGN_GAP: u32 = 238;
 
@@ -122,7 +125,8 @@ impl Fixtures {
         id: &str,
         command: &str,
     ) -> Verdict {
-        let reported = text(&self.claude_output(claude, python, script, id, command));
+        let perl = Command::new(PERL);
+        let reported = text(&self.claude_output(perl, claude, python, script, id, command));
         if BLOCKED.iter().any(|m| reported.contains(m)) {
             Verdict::Deny
         } else {
@@ -132,8 +136,10 @@ impl Fixtures {
 
     /// Run `command` in the evil project as the one Bash call of a `claude -p`
     /// session under Claude Code's sandbox; the output quotes the tool result.
+    /// `perl` starts [`PERL`], which bounds the run and execs claude.
     fn claude_output(
         &self,
+        mut perl: Command,
         claude: &Path,
         python: &Path,
         script: &Path,
@@ -147,8 +153,7 @@ impl Fixtures {
         let api = FakeApi::start(python, script, &wrapped);
 
         // perl's alarm bounds a hung run; claude execs in its place.
-        Command::new("/usr/bin/perl")
-            .args(["-e", "alarm 90; exec @ARGV"])
+        perl.args(["-e", "alarm 90; exec @ARGV"])
             .arg(claude)
             .args([
                 "--bare",
@@ -250,7 +255,7 @@ fn claude_layer_blocks_every_attack() {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn hostile_scripts_meet_the_claude_code_sandbox() {
-    use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet};
+    use super::scripts::executing::{NPM_TEST, OS, Run, fixtures, meet, start};
 
     let (Some(claude), Some(python)) = (claude_binary(), python()) else {
         eprintln!("skipped: hostile scripts under claude (set MOAT_CLAUDE_BIN and MOAT_FAKE_API)");
@@ -258,8 +263,9 @@ fn hostile_scripts_meet_the_claude_code_sandbox() {
     };
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/differential/fake_api.py");
     let fx = fixtures();
-    meet(&format!("claude-{OS}"), &fx, || {
-        let out = fx.claude_output(&claude, &python, &script, "scripts", NPM_TEST);
+    meet(&format!("claude-{OS}"), &fx, |terminal| {
+        let perl = start(PERL, terminal);
+        let out = fx.claude_output(perl, &claude, &python, &script, "scripts", NPM_TEST);
         let shown = text(&out);
         // Claude Code's Bash tool reports a non-zero exit as "Exit code N".
         let completed = out.status.success() && !shown.contains("Exit code ");
