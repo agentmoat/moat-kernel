@@ -152,6 +152,9 @@ touch the manifests or the workflow run `dist plan` only. Running the workflow b
    `crates/openmoat-cli/README.md` and `docs/ROADMAP.md` "Where it is today". The
    release fails without that CHANGELOG section; its text becomes the release notes,
    after a line saying what the operating system does and does not enforce (ADR-013).
+   `python3 scripts/ci/check-versions.py` (in the quality gate and the `crates package`
+   CI job) fails until the manifests, both lockfiles, the README and ROADMAP "The latest
+   release is" lines and the CHANGELOG headings agree.
 3. After the merge, tag the merge commit: `git tag -s vX.Y.Z-pre.N -m vX.Y.Z-pre.N`
    and `git push origin vX.Y.Z-pre.N`.
 4. Check the GitHub release and the tap commit, then approve the `release` environment in

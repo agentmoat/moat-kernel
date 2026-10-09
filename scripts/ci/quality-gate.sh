@@ -18,4 +18,9 @@ if rustup target list --installed 2>/dev/null | grep -q wasm32-unknown-unknown; 
 else
     echo "▷ wasm32-unknown-unknown target not installed; purity build skipped (CI runs it)"
 fi
+if command -v python3 >/dev/null; then
+    run python3 scripts/ci/check-versions.py
+else
+    echo "▷ python3 not installed; release version check skipped (CI runs it)"
+fi
 echo "✔ quality gate passed"
