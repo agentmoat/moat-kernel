@@ -143,6 +143,234 @@ fn a_secret_that_cannot_be_read_stops_the_proxy() {
     );
 }
 
+/// Where the user service file lives on each platform. Linux and macOS only;
+/// Windows refuses `moat proxy install` with a clear hint.
+#[cfg(target_os = "macos")]
+fn service_file(sb: &Sandbox) -> std::path::PathBuf {
+    sb.home
+        .join("Library/LaunchAgents/dev.openmoat.proxy.plist")
+}
+#[cfg(target_os = "linux")]
+fn service_file(sb: &Sandbox) -> std::path::PathBuf {
+    sb.home.join(".config/systemd/user/moat-proxy.service")
+}
+
+/// Install + status + uninstall round-trip, without touching the real
+/// `launchctl`/`systemctl`: `MOAT_SERVICE_SKIP_EXEC=1` is a debug-build-only
+/// knob the integration tests use, like `MOAT_ASSUME_TTY` for the terminal check.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn install_writes_the_service_file_and_uninstall_removes_it() {
+    let sb = Sandbox::installed(&[]);
+    let path = service_file(&sb);
+    assert!(!path.exists(), "service file should not be there yet");
+
+    let out = sb
+        .command()
+        .args(["proxy", "install"])
+        .env("MOAT_ASSUME_TTY", "1")
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(path.exists(), "{} should be written", path.display());
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("MOAT_HOME"), "{text}");
+    assert!(text.contains(sb.home.join(".moat").to_string_lossy().as_ref()));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "owner-only: no secret in the file, principle only"
+        );
+    }
+
+    let status = sb
+        .command()
+        .args(["proxy", "status"])
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&status.stdout);
+    assert!(
+        text.contains("stopped") || text.contains("installed"),
+        "{text}"
+    );
+
+    let out = sb
+        .command()
+        .args(["proxy", "uninstall"])
+        .env("MOAT_ASSUME_TTY", "1")
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!path.exists(), "uninstall leaves the file behind");
+
+    let status = sb
+        .command()
+        .args(["proxy", "status"])
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&status.stdout);
+    assert!(text.contains("not installed"), "{text}");
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn install_refuses_without_a_terminal() {
+    let sb = Sandbox::installed(&[]);
+    let out = sb
+        .command()
+        .args(["proxy", "install"])
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(64));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("terminal"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!service_file(&sb).exists());
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn install_refuses_on_windows_with_a_clear_hint() {
+    let sb = Sandbox::installed(&[]);
+    let out = sb
+        .command()
+        .args(["proxy", "install"])
+        .env("MOAT_ASSUME_TTY", "1")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(64));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("not supported"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// `moat sandbox sync` restarts the service when it is installed, so a changed
+/// policy reaches the proxy (which reads it once at start-up). The restart is
+/// a best-effort note, not a hard dependency: a stopped service also counts.
+/// `moat doctor` reports the service state once installed. A missing service is
+/// silent because the service is opt-in (#272); an installed-and-stopped one
+/// counts as a problem the user may need to see.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn doctor_reports_the_service_state_once_installed() {
+    let sb = Sandbox::installed(&[]);
+    // Not installed yet: no "service" line among the doctor rows.
+    let out = sb.moat(&["doctor"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !text.lines().any(|l| l.contains("service          ")),
+        "{text}"
+    );
+
+    let out = sb
+        .command()
+        .args(["proxy", "install"])
+        .env("MOAT_ASSUME_TTY", "1")
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+
+    let out = sb
+        .command()
+        .args(["doctor"])
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("service"),
+        "`doctor` should name the service now; got {text}"
+    );
+}
+
+/// `moat uninstall` also stops the proxy service: leaving it listening with
+/// a stale binary reference once the hooks are gone would be a nasty gotcha.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn moat_uninstall_also_removes_the_proxy_service() {
+    let sb = Sandbox::installed(&[]);
+    let out = sb
+        .command()
+        .args(["proxy", "install"])
+        .env("MOAT_ASSUME_TTY", "1")
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let path = service_file(&sb);
+    assert!(path.exists());
+
+    let out = sb
+        .command()
+        .args(["uninstall"])
+        .env("MOAT_ASSUME_TTY", "1")
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!path.exists(), "{} should be removed", path.display());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("proxy service"), "{text}");
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn sandbox_sync_notes_the_service_restart_when_installed() {
+    let sb = Sandbox::installed(&[".claude", ".codex"]);
+    let out = sb
+        .command()
+        .args(["proxy", "install"])
+        .env("MOAT_ASSUME_TTY", "1")
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+
+    let out = sb
+        .command()
+        .args(["sandbox", "sync"])
+        .env("MOAT_ASSUME_TTY", "1")
+        .env("MOAT_SERVICE_SKIP_EXEC", "1")
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("service"), "{text}");
+}
+
 #[test]
 fn brokered_secrets_never_reach_the_agent_or_the_audit_log() {
     let sb = brokered();

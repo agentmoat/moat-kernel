@@ -98,6 +98,50 @@ sandbox for macOS and Linux only.
 | Cursor | `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `preToolUse` (`Read`, `Write`, `Edit`, `MultiEdit`, `StrReplace`, `Delete`, `Grep`, `Glob`, and any other tool that names a path); installed with `failClosed`. Cursor prompts on `ask` only for shell and MCP calls, so an `ask` on `preToolUse` or `beforeReadFile` is sent as a deny until you run `moat` or `moat allow --last`. `moat init` also writes Cursor's own sandbox settings (`sandbox.json`) on macOS and Linux; Cursor still runs a command outside that sandbox when its Auto-review classifier approves it, in Run Everything mode, and in the CLI without `--sandbox enabled` ([SANDBOX.md](SANDBOX.md#cursors-sandbox)) | `~/.cursor/hooks.json`, `~/.cursor/sandbox.json` |
 | Continue CLI (`cn`) | Runs the Claude Code hook, recorded as host `continue`. `cn` ignores an `ask`, so an `ask` blocks the call until you run `moat allow --last`. The released `cn` does not run hooks, so nothing is checked until it does; use `moat run` (`moat doctor` warns) | Claude Code's |
 
+## Keep `moat proxy` running as a user service
+
+The egress proxy records every connection and injects brokered secrets. The
+host sandboxes `moat init` configures send their commands' traffic through
+it when the policy sets `sandbox.proxy_port`, so a stopped proxy leaves
+sandboxed `npm install`, `cargo build` and `git fetch` without network. To
+keep it up without opening a terminal every time, install it as a per-user
+service (#272):
+
+```bash
+moat proxy install     # macOS: launchd user agent at ~/Library/LaunchAgents/dev.openmoat.proxy.plist
+                       # Linux: systemd user unit at ~/.config/systemd/user/moat-proxy.service
+moat proxy status      # not installed | stopped | running | drift-blocked | crashlooping
+moat proxy uninstall   # stop and remove the service
+```
+
+The service restarts on failure (`KeepAlive = {SuccessfulExit=false}` on
+macOS; `Restart=on-failure` on Linux). A policy-lock drift is a clean exit
+(code 64), not a crash, so the service deliberately stops instead of
+loop-restarting into the same error; `moat doctor` names the problem and
+the fix. `moat sandbox sync` restarts the service after re-pinning the
+lock so the proxy picks up the new policy (which it reads once at
+start-up). `moat uninstall` removes the service alongside the hooks, so
+a stale service never keeps listening with a reference to a gone binary.
+
+The plist/unit holds only `MOAT_HOME` (a path, never a secret) and the
+pinned `moat` binary. On Linux the file is written owner-only (`0o600`);
+on macOS the `LaunchAgents` directory already restricts access to the
+user. Token values the policy brokers are read from the user's
+environment at run time by the proxy itself; they never touch the service
+file.
+
+On Windows `moat proxy install` is refused for now: Standard-tier proxy
+routing is not planned for the first release (#272). Run `moat proxy` in
+a terminal to keep the proxy up by hand.
+
+### Upgrade note
+
+The service names the pinned `moat` by its stable path (ADR-016), so an
+upgrade through Homebrew or a cargo-install swap keeps working as long as
+the stable path still resolves to the new binary. After a reinstall at a
+different path (a Cargo change of `--root`, say), run `moat proxy install`
+again so the service file names the new path.
+
 ## Undo with `moat uninstall`
 
 ```bash

@@ -56,7 +56,9 @@ pub enum Command {
     Replay(ReplayArgs),
     /// Summarise decisions over a window: verdicts, hosts, top rules, asks per hour.
     Report(ReportArgs),
-    /// Run the default-deny egress proxy: only hosts the policy allows, every connection recorded.
+    /// Run the default-deny egress proxy, or install/uninstall it as a user service
+    /// so it stays up without a person running it (macOS launchd, Linux systemd user unit).
+    /// `moat proxy` alone runs the proxy; `install`, `uninstall` and `status` manage the service.
     Proxy(ProxyArgs),
     /// Export the audit log for review elsewhere, and verify an export.
     Audit {
@@ -231,11 +233,37 @@ pub struct DoctorArgs {
 
 #[derive(Debug, Args)]
 pub struct ProxyArgs {
+    /// `install` / `uninstall` / `status` manage the user service that keeps the proxy
+    /// running; without a subcommand the proxy runs in this terminal (ADR-020).
+    #[command(subcommand)]
+    pub command: Option<ProxyCommand>,
+
     /// Address to listen on. Must be a loopback address: the proxy serves this machine only.
     /// Default: 127.0.0.1 and the policy's `sandbox.proxy_port`, where the host sandboxes
     /// then send their commands' traffic; 127.0.0.1:18080 when it is not set.
+    /// Ignored when a subcommand is given (`install`, `uninstall`, `status`).
     #[arg(long)]
     pub listen: Option<std::net::SocketAddr>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProxyCommand {
+    /// Install `moat proxy` as a user service that starts at login and restarts on failure
+    /// (macOS launchd user agent, Linux systemd user unit; refused on Windows for now, #272).
+    /// Refused unless run from an interactive terminal.
+    Install,
+    /// Stop and remove the user service. Refused unless run from an interactive terminal.
+    Uninstall,
+    /// Report the user service's state: not installed / stopped / running / drift-blocked /
+    /// crashlooping. Exits 64 for any state other than running or not installed.
+    Status(ProxyStatusArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ProxyStatusArgs {
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    pub format: Format,
 }
 
 #[derive(Debug, Args)]

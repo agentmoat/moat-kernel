@@ -170,6 +170,17 @@ pub fn sync() -> Result<Code> {
         lock.entries.len(),
         lock.codex_profiles.len()
     )?;
+    // The proxy reads the policy once at start-up, so a policy change needs a
+    // reload. An installed service is restarted; a missing one is fine
+    // (service routing is opt-in, #272).
+    match super::proxy::restart_if_installed(&home) {
+        Ok(Some(message)) => writeln!(out, "✔ service          {message}")?,
+        Ok(None) => {}
+        Err(e) => writeln!(
+            out,
+            "! service          restart failed: {e:#}; `moat proxy install` restarts it by hand"
+        )?,
+    }
     out.finish()?;
     Ok(Code::Ok)
 }
