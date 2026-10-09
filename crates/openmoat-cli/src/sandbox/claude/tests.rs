@@ -378,3 +378,103 @@ fn no_secrets_means_no_credentials_or_tls_terminate() {
     assert!(out.sandbox.get("credentials").is_none());
     assert!(out.sandbox["network"].get("tlsTerminate").is_none());
 }
+
+/// #401: Claude Code's `allowPlaintextInject` is block-scoped, so lifting TLS
+/// for a `plain_http: true` entry alongside an HTTPS-only entry would widen
+/// the latter (ADR-019 lowering-widens). Mixed blocks drop the `plain_http`
+/// entries from Claude Code's mask list, keep `allowPlaintextInject` out, and
+/// name each dropped secret in a loss; `moat proxy` still handles them.
+#[test]
+fn mixed_plain_http_does_not_widen() {
+    let out = generated(
+        "version: 1\n\
+         allow:\n  - id: a\n    net: ['api.github.com', 'localhost']\n\
+         secrets:\n  \
+         - id: gh\n    host: api.github.com\n    header: Authorization\n    source: { env: GITHUB_TOKEN }\n  \
+         - id: local\n    host: localhost\n    header: Authorization\n    source: { env: LOCAL_TOKEN }\n    plain_http: true\n",
+    );
+    let env_vars = out.sandbox["credentials"]["envVars"].as_array().unwrap();
+    assert_eq!(
+        env_vars.len(),
+        1,
+        "only the HTTPS secret survives: {env_vars:?}"
+    );
+    assert_eq!(env_vars[0]["name"], json!("GITHUB_TOKEN"));
+    assert!(
+        out.sandbox["credentials"]
+            .get("allowPlaintextInject")
+            .is_none(),
+        "no block-scoped TLS lift in a mixed block"
+    );
+    let dropped = out.report.losses.iter().find(|l| l.rule == "secrets.local");
+    assert!(
+        dropped.is_some_and(
+            |l| l.message.contains("block-scoped `allowPlaintextInject`")
+                && l.message.contains("`moat proxy`")
+        ),
+        "{:?}",
+        out.report.losses
+    );
+    assert!(
+        !out.report
+            .allowances
+            .iter()
+            .any(|a| a.rule == "claude-code.plain-http-inject"),
+        "{:?}",
+        out.report.allowances
+    );
+    let masked = out
+        .report
+        .allowances
+        .iter()
+        .find(|a| a.rule == "claude-code.mask-credentials");
+    assert!(masked.is_some_and(|a| a.patterns == vec!["gh".to_owned()]));
+}
+
+/// A policy where every secret is `plain_http: true` still gets
+/// `allowPlaintextInject: true`: the happy path from #363 keeps working.
+#[test]
+fn all_plain_http_still_lifts_tls() {
+    let out = generated(
+        "version: 1\n\
+         allow:\n  - id: a\n    net: ['localhost', 'dev.internal']\n\
+         secrets:\n  \
+         - id: a\n    host: localhost\n    header: Authorization\n    source: { env: A_TOKEN }\n    plain_http: true\n  \
+         - id: b\n    host: dev.internal\n    header: Authorization\n    source: { env: B_TOKEN }\n    plain_http: true\n",
+    );
+    assert_eq!(
+        out.sandbox["credentials"]["allowPlaintextInject"],
+        json!(true)
+    );
+    let env_vars = out.sandbox["credentials"]["envVars"].as_array().unwrap();
+    assert_eq!(env_vars.len(), 2);
+    assert!(
+        out.report
+            .allowances
+            .iter()
+            .any(|a| a.rule == "claude-code.plain-http-inject"
+                && a.patterns == vec!["a".to_owned(), "b".to_owned()])
+    );
+}
+
+/// The settings and report for a mixed policy, paired with the golden fixture
+/// a reviewer eyeballs: `allowPlaintextInject` is absent, the `plain_http`
+/// secret is dropped, and the loss names it.
+#[test]
+fn mixed_plain_http_policy_matches_the_golden_settings() {
+    let out = generated(
+        "version: 1\n\
+         allow:\n  - id: a\n    net: ['api.github.com', 'localhost']\n\
+         secrets:\n  \
+         - id: gh\n    host: api.github.com\n    header: Authorization\n    source: { env: GITHUB_TOKEN }\n  \
+         - id: local\n    host: localhost\n    header: Authorization\n    source: { env: LOCAL_TOKEN }\n    plain_http: true\n",
+    );
+    let actual = serde_json::to_string_pretty(&json!({
+        "sandbox": out.sandbox,
+        "permissions": { BLOCK_READS: out.block_reads },
+        "losses": out.report.losses.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        "allowances": out.report.allowances.iter().map(ToString::to_string).collect::<Vec<_>>(),
+    }))
+    .unwrap();
+    assert_golden("claude-mixed-plain-http.json", &(actual + "\n"));
+}

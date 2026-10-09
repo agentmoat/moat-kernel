@@ -29,10 +29,16 @@ pub(super) fn credentials(
         .filter_map(Value::as_str)
         .map(ToOwned::to_owned)
         .collect();
-    let mut env_vars = Vec::new();
-    let mut files = Vec::new();
-    let mut plain_http = false;
-    let mut masked = Vec::new();
+    // Claude Code's `allowPlaintextInject` is block-scoped: setting it `true`
+    // lifts the HTTPS requirement for *every* `envVars`/`files` entry in the
+    // `credentials` block. If the policy mixes `plain_http: true` and `false`
+    // entries, lifting TLS for the plain-HTTP ones would widen the HTTPS-only
+    // ones through the same flag, which ADR-019 forbids (lowering never
+    // widens). Only lift TLS when every emitted entry is `plain_http: true`;
+    // in a mixed block drop the `plain_http: true` entries from Claude Code's
+    // mask list and route them through `moat proxy` instead, which honours
+    // `plain_http` per secret (`openmoat-proxy/src/broker.rs`).
+    let mut entries: Vec<Entry> = Vec::new();
     for secret in secrets {
         if !allowed.iter().any(|h| h == &secret.host) {
             report.loss(
@@ -46,17 +52,23 @@ pub(super) fn credentials(
             );
             continue;
         }
-        match &secret.source {
-            SecretSource::Env(name) => env_vars.push(json!({
-                "name": name,
-                "mode": "mask",
-                "injectHosts": [&secret.host],
-            })),
-            SecretSource::File(path) => files.push(json!({
-                "path": path,
-                "mode": "mask",
-                "injectHosts": [&secret.host],
-            })),
+        let (kind, value) = match &secret.source {
+            SecretSource::Env(name) => (
+                EntryKind::EnvVar,
+                json!({
+                    "name": name,
+                    "mode": "mask",
+                    "injectHosts": [&secret.host],
+                }),
+            ),
+            SecretSource::File(path) => (
+                EntryKind::File,
+                json!({
+                    "path": path,
+                    "mode": "mask",
+                    "injectHosts": [&secret.host],
+                }),
+            ),
             SecretSource::Keychain { .. } => {
                 report.loss(
                     Kind::Net,
@@ -67,14 +79,49 @@ pub(super) fn credentials(
                 );
                 continue;
             }
-        }
-        plain_http |= secret.plain_http;
-        masked.push(secret.id.clone());
+        };
+        entries.push(Entry {
+            id: secret.id.clone(),
+            plain_http: secret.plain_http,
+            kind,
+            value,
+        });
     }
-    if masked.is_empty() {
+    if entries.is_empty() {
+        return None;
+    }
+    let can_lift_tls = entries.iter().all(|e| e.plain_http);
+    if !can_lift_tls {
+        entries.retain(|e| {
+            if e.plain_http {
+                report.loss(
+                    Kind::Net,
+                    &format!("secrets.{}", e.id),
+                    "mixing `plain_http: true` with `plain_http: false` secrets would widen the \
+                     others through Claude Code's block-scoped `allowPlaintextInject`; this secret \
+                     is routed through `moat proxy` instead"
+                        .into(),
+                );
+                false
+            } else {
+                true
+            }
+        });
+    }
+    if entries.is_empty() {
         return None;
     }
     network["tlsTerminate"] = json!({});
+    let mut env_vars = Vec::new();
+    let mut files = Vec::new();
+    let mut masked = Vec::new();
+    for entry in entries {
+        match entry.kind {
+            EntryKind::EnvVar => env_vars.push(entry.value),
+            EntryKind::File => files.push(entry.value),
+        }
+        masked.push(entry.id);
+    }
     let mut credentials = Map::new();
     if !env_vars.is_empty() {
         credentials.insert("envVars".into(), Value::Array(env_vars));
@@ -82,7 +129,7 @@ pub(super) fn credentials(
     if !files.is_empty() {
         credentials.insert("files".into(), Value::Array(files));
     }
-    if plain_http {
+    if can_lift_tls {
         credentials.insert("allowPlaintextInject".into(), json!(true));
         report.allowance(
             Kind::Net,
@@ -101,4 +148,18 @@ pub(super) fn credentials(
          instead of masked, so the tool that reads it does not authenticate",
     );
     Some(Value::Object(credentials))
+}
+
+/// One mask entry prepared from a brokered secret, pending the mixed-block
+/// decision above.
+struct Entry {
+    id: String,
+    plain_http: bool,
+    kind: EntryKind,
+    value: Value,
+}
+
+enum EntryKind {
+    EnvVar,
+    File,
 }
