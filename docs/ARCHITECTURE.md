@@ -432,11 +432,11 @@ crates/openmoat-core/          decision core; policies/default-v1.yaml is the sh
 crates/openmoat-hosts/         host adapters
 crates/openmoat-audit/         audit store
 crates/openmoat-proxy/         egress proxy; tests/proxy/ runs it on loopback
-crates/openmoat-cli/           the moat binary; tests/e2e/ runs it in isolated homes
+crates/openmoat-cli/           the moat binary; tests/e2e/ runs it in isolated homes;
+                               moatbench/ holds the MoatBench scenarios `moat bench` bundles
 tests/conformance/             attacks.yaml, ask.yaml, benign.yaml: one tool call each,
                                with the verdict the default policy must give
 tests/fixtures/hosts/          real host payloads (claude-code, codex, cursor)
-tests/moatbench/               MoatBench mini scenarios, one file per category
 tests/differential/            differential scenarios and hostile scripts (EVIDENCE.md)
 fuzz/                          cargo-fuzz targets: decide_shell, policy_parse,
                                host_payload, literal_pattern, proxy_parse

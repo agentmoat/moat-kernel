@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `moat bench` reproduces how a hook decides (#364). With no arguments it sends the bundled MoatBench scenarios (attacks, benign work and developer workflows) to this `moat` as Claude Code, Codex and Cursor hook payloads in a throwaway home and prints the scorecard. `moat bench --hook <command> --host claude-code|codex|cursor` sends the same payloads on stdin to any hook command, reads each reply by that host's hook protocol (allow, ask, deny, passthrough, or error when the hook crashes, times out after 10 s or answers outside the protocol) and lists each step whose answer differs from the scenario, followed by what that host does when its hook is missing, crashes or times out, as documented in docs/THREAT_MODEL.md §5. The scenarios' commands never run; the hook runs in the throwaway home with an environment of only `PATH`, `HOME` and `USERPROFILE`. `--verbose` prints that environment and every payload; `--format json` is for scripts; it exits 0 whatever the scores. The scenarios moved from `tests/moatbench/` to `crates/openmoat-cli/moatbench/`, and the MoatBench test now runs `moat bench`.
+
 ## [0.1.0] - 2026-10-08
 
 First beta and first release that is not a GitHub pre-release.

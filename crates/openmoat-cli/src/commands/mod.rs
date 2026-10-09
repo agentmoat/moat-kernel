@@ -2,6 +2,7 @@
 
 mod allow;
 mod audit;
+mod bench;
 mod doctor;
 mod edit;
 mod guard;
@@ -52,6 +53,7 @@ pub fn run(cli: Cli) -> Result<Code> {
             PolicyCommand::Check(args) => policy::check(&args),
             PolicyCommand::Compile(args) => policy::compile(&args),
         },
+        Command::Bench(args) => bench::run(&args),
         Command::Sandbox { command } => match command {
             SandboxCommand::Show(args) => sandbox::show(&args),
             SandboxCommand::Sync => sandbox::sync(),

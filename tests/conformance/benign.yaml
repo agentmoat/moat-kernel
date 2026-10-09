@@ -491,7 +491,7 @@
   action: { shell: "cargo test" }
   repo: { policy: "version: 1\ndeny:\n  - id: no-publish\n    shell: ['cargo publish']\n" }
   expect: { verdict: allow, rules: [dev-shell] }
-# Developer workflows (tests/moatbench/workflows.yaml): single steps not covered above
+# Developer workflows (crates/openmoat-cli/moatbench/workflows.yaml): single steps not covered above
 - id: benign-read-cargo-build-output
   action: { fs_read: "/p/target/debug/build/app-1f2e3d/output" }
   expect: { verdict: allow, rules: [project-fs] }
