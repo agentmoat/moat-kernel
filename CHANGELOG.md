@@ -12,6 +12,9 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - `moat init` and `moat sandbox sync` compile the policy's `secrets:` entries into Claude Code's native `sandbox.credentials` block (#363). Each `env` and `file` source becomes a `mask` entry with the policy's host in `injectHosts`, and `network.tlsTerminate` turns on because Claude Code's broker needs it; `credentials.allowPlaintextInject` turns on when any mask entry sets `plain_http: true`, listed as an allowance. Claude Code's own proxy then substitutes the sentinel inside HTTPS requests for sandboxed `Bash`, `PowerShell` and `Monitor` commands, so the broker works for Claude Code without the TLS termination `moat proxy` still lacks (#247). A secret whose host is not in the policy's `net` allow is skipped with a loss, and a `keychain` source Claude Code's broker cannot read is skipped the same way; both still work through `moat proxy`. On macOS a `file` source falls back to a read deny, so a tool that reads the file does not authenticate; `moat sandbox show` lists both. Removing a secret from the policy strips the stale `credentials` entry and `tlsTerminate` on the next `sync`, and `moat uninstall` removes them whole.
 
+### Changed
+- docs/INSTALL.md and docs/THREAT_MODEL.md state the macOS 14 floor for `moat run` (#389). Its Seatbelt profile emits `(ioctl-command TIOCSTI)` from #386, an identifier `sandbox-exec` only recognises from macOS 13 onwards; on macOS 12 and earlier `sandbox-exec` refuses to parse the profile and `moat run` exits without starting the agent (fail closed). GitHub Actions no longer offers a `macos-13` runner, so CI covers `macos-14` and `macos-15-intel` only, and macOS 13 is unsupported in practice. The hook, `moat init` and `moat status` keep working on earlier macOS.
+
 ## [0.1.1] - 2026-10-09
 
 ### Added

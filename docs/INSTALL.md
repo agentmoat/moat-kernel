@@ -6,6 +6,15 @@ Release builds cover macOS (arm64, x64), Linux (x64, arm64; glibc and static mus
 and Windows (x64). The installer URLs below always fetch the latest release; every
 release is listed on [Releases](https://github.com/crocodile-labs/openmoat/releases).
 
+`moat run` needs macOS 14 or later: its Seatbelt profile names
+`(ioctl-command TIOCSTI)` (CVE-2017-5226 class), an identifier `sandbox-exec`
+only recognises from macOS 13 onwards. On macOS 12 and earlier, `sandbox-exec`
+refuses to parse the profile and `moat run` exits without starting the agent
+(fail closed). The hook, `moat init` and `moat status` work on earlier macOS;
+only `moat run` has this floor. CI covers `macos-14` and `macos-15-intel`;
+GitHub Actions no longer offers a `macos-13` runner, so macOS 13 is not
+exercised in CI and is unsupported in practice.
+
 ```bash
 # macOS and Linux: installs moat into ~/.cargo/bin
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/crocodile-labs/openmoat/releases/latest/download/openmoat-installer.sh | sh
