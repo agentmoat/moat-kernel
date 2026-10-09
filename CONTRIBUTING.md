@@ -117,6 +117,18 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
   pass expressions to `run:` blocks through `env:`, and give tokens only the permissions
   they use. CI runs `actionlint` and `zizmor` on `.github/workflows/`.
 
+## Checks beyond the Rust gate
+
+CI runs these on every pull request. `scripts/ci/quality-gate.sh` runs each one whose
+tool is installed and prints a skip line for the others, so nothing extra is required
+locally.
+
+- **Shell scripts:** `shellcheck` 0.11.0 on every `*.sh` file and `.githooks/pre-push`.
+  Fix the finding; a `# shellcheck disable=SCxxxx` comment needs the reason on the same
+  line.
+- **Markdown links:** `python3 scripts/ci/check-links.py` fails on a relative link to a
+  missing file or heading. It is offline: links to websites are not fetched.
+
 ## Fuzzing
 
 `fuzz/` holds `cargo fuzz` targets for every surface that takes untrusted input:
