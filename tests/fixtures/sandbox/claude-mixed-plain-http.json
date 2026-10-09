@@ -1,0 +1,49 @@
+{
+  "allowances": [
+    "net `claude-code.mask-credentials`: Claude Code's own broker substitutes these inside HTTPS for sandboxed commands (`sandbox.credentials` with `tlsTerminate`); on macOS a `file` source is denied instead of masked, so the tool that reads it does not authenticate",
+    "fs.read `claude-code.system-paths`: Claude Code closes reads only under the user directories (/Users, /home, /Volumes, /media, /root); other paths that are not read roots stay readable for sandboxed commands",
+    "fs.write `claude-code.working-directories`: sandboxed commands may write the session's working directories and temp directory; OpenMoat's project is the git root and never the home directory, so a session started above a project writes more than the hook allows"
+  ],
+  "losses": [
+    "net `secrets.local`: mixing `plain_http: true` with `plain_http: false` secrets would widen the others through Claude Code's block-scoped `allowPlaintextInject`; this secret is routed through `moat proxy` instead",
+    "fs.read `default`: Claude Code's file tools refuse reads outside the working directories (permissions.blockReadsOutsideWorkingDirectories) where the hook would ask; `/add-dir` adds a directory"
+  ],
+  "permissions": {
+    "blockReadsOutsideWorkingDirectories": true
+  },
+  "sandbox": {
+    "allowUnsandboxedCommands": false,
+    "credentials": {
+      "envVars": [
+        {
+          "injectHosts": [
+            "api.github.com"
+          ],
+          "mode": "mask",
+          "name": "GITHUB_TOKEN"
+        }
+      ]
+    },
+    "enabled": true,
+    "excludedCommands": [],
+    "failIfUnavailable": true,
+    "filesystem": {
+      "allowRead": [],
+      "allowWrite": [],
+      "denyRead": [],
+      "denyWrite": []
+    },
+    "network": {
+      "allowedDomains": [
+        "api.github.com",
+        "localhost"
+      ],
+      "deniedDomains": [
+        "metadata.google.internal",
+        "metadata.goog"
+      ],
+      "strictAllowlist": true,
+      "tlsTerminate": {}
+    }
+  }
+}

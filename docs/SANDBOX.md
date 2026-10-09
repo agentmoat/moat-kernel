@@ -97,7 +97,13 @@ broker and `moat proxy`. A secret whose host is not in `net` allow is skipped wi
 loss, as is a `keychain` source (Claude Code's broker reads env and file sources only);
 both still work through `moat proxy`. On macOS, Claude Code denies a `file` source
 instead of masking it, so the tool that reads the file does not authenticate inside
-the sandbox; `moat sandbox show` lists this and the HTTPS allowance.
+the sandbox; `moat sandbox show` lists this and the HTTPS allowance. Claude Code's
+`allowPlaintextInject` is block-scoped: setting it `true` lifts the HTTPS requirement
+for every mask entry in the `credentials` block. When a policy mixes `plain_http: true`
+and `plain_http: false` secrets, OpenMoat therefore drops the `plain_http: true` entries
+from Claude Code's mask block (lifting TLS for them would widen the others, which
+ADR-019 forbids); they still work through `moat proxy`, whose broker is per-secret,
+and `moat sandbox show` names each dropped id (#401).
 
 Other settings and comments are kept, and each file is copied to
 `<file>.moat-sandbox-backup` before moat changes it. `moat sandbox show` prints what
