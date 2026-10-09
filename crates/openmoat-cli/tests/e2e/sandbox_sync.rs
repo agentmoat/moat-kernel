@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, fixture, hook_output, stdout, text};
+use crate::common::{Sandbox, fixture, stdout, text, verdict};
 
 fn claude_settings(sb: &Sandbox) -> PathBuf {
     sb.home.join(".claude/settings.json")
@@ -40,13 +40,6 @@ fn codex_shell(command: &str) -> String {
         "tool_name": "Bash", "tool_use_id": "c", "tool_input": { "command": command },
     })
     .to_string()
-}
-
-fn verdict(out: &std::process::Output) -> String {
-    hook_output(out)["permissionDecision"]
-        .as_str()
-        .unwrap_or_default()
-        .to_owned()
 }
 
 #[cfg(not(windows))] // #327: no Claude Code sandbox on native Windows
