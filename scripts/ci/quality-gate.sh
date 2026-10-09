@@ -32,4 +32,9 @@ if command -v python3 >/dev/null; then
 else
     echo "▷ python3 not installed; Markdown link check skipped (CI runs it)"
 fi
+if command -v python3 >/dev/null; then
+    run python3 scripts/ci/check-versions.py
+else
+    echo "▷ python3 not installed; release version check skipped (CI runs it)"
+fi
 echo "✔ quality gate passed"

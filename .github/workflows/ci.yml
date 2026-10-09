@@ -128,6 +128,8 @@ jobs:
         run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo package --locked --workspace
+      - name: release version strings agree
+        run: python3 scripts/ci/check-versions.py
 
   deny:
     name: cargo-deny
