@@ -11,11 +11,14 @@ use crate::action::{Action, AtomicAction};
 use crate::pattern::{GlobPattern, any_match};
 use crate::policy::{Policy, PolicyError};
 use crate::realpath::PathResolver;
+use crate::repo::REPO_RULE_PREFIX;
 use crate::verdict::{Decision, Verdict};
 
 /// The rule group whose `fs.read` patterns name secret material, wherever the
 /// policy puts it. In the default policy it denies, so only a policy that asks
-/// for these reads lets one run and taint the session.
+/// for these reads lets one run and taint the session. A repository policy's
+/// group with the same base id (prefixed to `repo:secrets-paths` by
+/// `RepoPolicy::merge`) is also taint-significant.
 const SECRET_RULE: &str = "secrets-paths";
 
 /// The rule id a tightened decision carries.
@@ -152,10 +155,20 @@ impl CompiledPolicy<'_> {
     }
 
     fn names_secret(&self, atom: &AtomicAction) -> bool {
-        [&self.deny, &self.allow, &self.ask]
+        // A repository policy's rules are renamed to `repo:<id>` by `RepoPolicy::merge`,
+        // so match the base id and the prefixed one; `repo_ask` carries the ask rules
+        // merged in (ADR-022), so iterate it too.
+        [&self.deny, &self.repo_ask, &self.allow, &self.ask]
             .into_iter()
             .flatten()
-            .any(|g| g.group.id == SECRET_RULE && g.matches(atom))
+            .any(|g| {
+                let id = g.group.id.as_str();
+                (id == SECRET_RULE
+                    || id
+                        .strip_prefix(REPO_RULE_PREFIX)
+                        .is_some_and(|rest| rest == SECRET_RULE))
+                    && g.matches(atom)
+            })
     }
 }
 

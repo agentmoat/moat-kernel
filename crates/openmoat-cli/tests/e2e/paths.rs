@@ -71,7 +71,8 @@ fn an_explicit_home_project_is_a_usage_error() {
 }
 
 /// `~name` is expanded the way the shell does it; the sandbox user is `home`,
-/// the last component of its home directory.
+/// the last component of its home directory. Another user's home cannot be
+/// placed from the pure core (#400), so `~alice/…` asks through `unparseable`.
 #[test]
 fn tilde_user_paths_are_home_directories() {
     let sb = Sandbox::installed(&[".claude"]);
@@ -83,7 +84,7 @@ fn tilde_user_paths_are_home_directories() {
         "deny",
         "secrets-paths",
     );
-    assert_verdict(&sb, &project, "cat ~alice/notes.txt", "ask", "default");
+    assert_verdict(&sb, &project, "cat ~alice/notes.txt", "ask", "unparseable");
     assert_verdict(&sb, &project, "cat ~-/notes.txt", "ask", "unparseable");
 }
 

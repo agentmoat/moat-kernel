@@ -15,19 +15,27 @@
 /// through [`resolve`] instead, which refuses it.
 #[must_use]
 pub fn normalise(raw: &str, home: &str, project: Option<&str>, cwd: &str) -> String {
+    // `resolve` returns `None` for a shell-only form (`~-`) or a `~<otheruser>`
+    // path OpenMoat cannot place; keep the raw-under-cwd fallback so a direct
+    // host-side `fs.read` of `~alice/.ssh/id_rsa` still has an atom to check (the
+    // guarded suffix is intact; a rule naming `~alice` matches as written, and
+    // a shell token with it asks through `unparseable` via `resolve`).
     resolve(raw, home, project, Some(cwd)).unwrap_or_else(|| collapse(&format!("{cwd}/{raw}")))
 }
 
 /// `normalise` for a word a shell will expand, against a working directory
 /// that may be unknown (`None`). `None` when the result depends on a directory
-/// that is not known: a relative path and an unknown `cwd`, or `~-`.
+/// that is not known: a relative path and an unknown `cwd`, `~-`, or a `~name`
+/// of another user (OpenMoat cannot know where other users' homes live, so a
+/// cross-user path is unresolvable; a shell token with it asks through
+/// `unparseable`).
 #[must_use]
 pub fn resolve(raw: &str, home: &str, project: Option<&str>, cwd: Option<&str>) -> Option<String> {
     let unified = raw.replace('\\', "/");
     let expanded = match dir_stack_tilde(&unified) {
         Some(('+', rest)) => format!("{}{rest}", cwd?),
         Some(_) => return None,
-        None => expand_home(&unified, home),
+        None => expand_home(&unified, home)?,
     };
     let s = expanded
         .replace("${project}", project.unwrap_or_default())
@@ -100,7 +108,11 @@ pub(crate) fn split_root(path: &str) -> (String, &str) {
 #[must_use]
 pub fn expand_pattern(raw: &str, home: &str, project: Option<&str>) -> Option<String> {
     let (negated, body) = crate::pattern::split_negation(raw);
-    let body = expand_home(body, home);
+    // A pattern naming another user's home (`~alice/.ssh/**`) stays literal:
+    // paths are normalised through `resolve`, which refuses `~<otheruser>`
+    // (#400), so such a pattern names no reachable path. Keep the raw text so
+    // the pattern is still a well-formed glob and the lint still sees it.
+    let body = expand_home(body, home).unwrap_or_else(|| body.to_owned());
     let expanded = match project {
         Some(project) => body.replace("${project}", project),
         None if body.contains("${project}") => return None,
@@ -113,22 +125,25 @@ pub fn expand_pattern(raw: &str, home: &str, project: Option<&str>) -> Option<St
     })
 }
 
-/// Expand a leading `~` or `~name`, as a POSIX shell does.
+/// Expand a leading `~` or `~name`, as a POSIX shell does — safely.
 ///
 /// `~` is `home`. `~name` is `home` when `name` is the last component of
-/// `home` (the current user), and otherwise the directory `name` next to it:
-/// homes sit side by side under `/Users`, `/home` or `C:/Users`, so
-/// `~alice/.ssh` is read as `/Users/alice/.ssh`. A name that is not a valid
-/// login name leaves the word alone.
-fn expand_home(raw: &str, home: &str) -> String {
+/// `home` (the current user). Any other `~name` is unresolvable: homes do not
+/// always sit side by side (`/root`, `/srv/<name>`, networked homes), so a
+/// guessed `/<parent-of-home>/<name>` can judge one path while the OS reads
+/// another (#400). Return `None` for that case; the caller maps it to `ask`
+/// through `unparseable`. A leading `~` that is not followed by a valid login
+/// name (`~a$b`) stays literal (`Some(raw)`).
+fn expand_home(raw: &str, home: &str) -> Option<String> {
     let Some((name, tail)) = home_prefix(raw) else {
-        return raw.to_owned();
+        return Some(raw.to_owned());
     };
-    let (parent, user) = home.rsplit_once('/').unwrap_or(("", home));
+    let (_parent, user) = home.rsplit_once('/').unwrap_or(("", home));
     if name.is_empty() || name == user {
-        format!("{home}{tail}")
+        Some(format!("{home}{tail}"))
     } else {
-        format!("{parent}/{name}{tail}")
+        // Another user's home — unresolvable from inside the pure core.
+        None
     }
 }
 
@@ -232,14 +247,19 @@ mod tests {
         let n = |raw: &str| normalise(raw, "/Users/me", Some("/p"), "/p/app");
         assert_eq!(n("~me/.ssh/id_rsa"), "/Users/me/.ssh/id_rsa");
         assert_eq!(n("~me"), "/Users/me");
-        assert_eq!(n("~alice/.ssh/id_rsa"), "/Users/alice/.ssh/id_rsa");
+        // `~<otheruser>` is unresolvable from the pure core (#400): the parent-of-
+        // home heuristic assumed every home sits next to the current user's, which
+        // is false on common layouts. `normalise` falls back to the literal word
+        // under `cwd`; the shell path (`resolve`) returns `None` and the shell
+        // token asks through `unparseable`.
+        assert_eq!(n("~alice/.ssh/id_rsa"), "/p/app/~alice/.ssh/id_rsa");
         assert_eq!(n("~+/x"), "/p/app/x");
         assert_eq!(n("~+"), "/p/app");
         assert_eq!(n("a/~me"), "/p/app/a/~me", "only a leading tilde expands");
         assert_eq!(n("~a$b/x"), "/p/app/~a$b/x", "not a login name");
         assert_eq!(
             normalise("~bob/x", "C:/Users/me", None, "C:/p"),
-            "C:/Users/bob/x"
+            "C:/p/~bob/x"
         );
         let r = |raw: &str| resolve(raw, "/Users/me", Some("/p"), Some("/p/app"));
         assert_eq!(
@@ -249,6 +269,12 @@ mod tests {
         );
         assert_eq!(r("~-"), None);
         assert_eq!(r("~-x/y").as_deref(), Some("/p/app/~-x/y"));
+        assert_eq!(
+            r("~alice/.ssh/id_rsa"),
+            None,
+            "another user's home is unresolvable (#400)"
+        );
+        assert_eq!(r("~alice"), None);
         assert_eq!(resolve("src", "/h", None, None), None);
         assert_eq!(
             resolve("/etc/hosts", "/h", None, None).as_deref(),

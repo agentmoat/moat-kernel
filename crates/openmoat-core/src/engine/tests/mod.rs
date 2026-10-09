@@ -1,5 +1,6 @@
 mod fetch;
 mod glob;
+mod moved_dirs;
 mod taint;
 
 use super::*;

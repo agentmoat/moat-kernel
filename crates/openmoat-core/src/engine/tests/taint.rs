@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::realpath::MapPathResolver;
+use crate::repo::RepoPolicy;
 
 const POLICY: &str = "version: 1\ndefaults: { '*': ask, net: deny }\n\
      deny:\n  - id: metadata\n    net: ['169.254.*']\n\
@@ -208,6 +209,38 @@ fn exposure_follows_a_link_into_secret_material() {
     };
     let taint = c.exposure(&read("/p/key"), "/p", &links);
     assert_eq!(taint.secrets.len(), 1);
+}
+
+/// A repository policy's `secrets-paths` group taints the session: its id is
+/// renamed to `repo:secrets-paths` on merge (ADR-022), but [`names_secret`]
+/// matches the base id with or without the `repo:` prefix (#398).
+#[test]
+fn a_repo_policy_secrets_paths_rule_taints_the_session() {
+    let user = policy(
+        "version: 1\ndefaults: { '*': ask, net: deny }\n\
+         ask:\n  - id: project-reads\n    fs.read: ['${project}/**']\n\
+         allow:\n  - id: registries\n    net: ['api.github.com']\n",
+    );
+    let repo = RepoPolicy::parse(
+        "version: 1\nask:\n  - id: secrets-paths\n    fs.read: ['/p/secrets/**']\n",
+    )
+    .unwrap();
+    let merged = repo.merge(&user, false).unwrap();
+    let c = CompiledPolicy::compile(&merged, &ctx()).unwrap();
+    let taint = c.exposure(&read("/p/secrets/token"), "/p", &NoResolver);
+    assert!(
+        !taint.secrets.is_empty(),
+        "repo:secrets-paths must taint, got {taint:?}"
+    );
+    assert_eq!(taint.secrets[0].source, "read /p/secrets/token");
+    let after = c.with_taint(
+        c.decide(&net("https://api.github.com/gists")),
+        &net("https://api.github.com/gists"),
+        &NoResolver,
+        &taint,
+    );
+    assert_eq!(after.verdict, Verdict::Ask);
+    assert_eq!(after.rules, ["session-taint"]);
 }
 
 #[test]
