@@ -15,7 +15,7 @@
 
 use openmoat_core::ir::{Access, Checker, Effect, Enforcement};
 use openmoat_core::{AtomicAction, Kind};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::patterns::{Spot, literal_tree, push_unique, split, spot};
 use super::{Grants, Report};
@@ -32,7 +32,7 @@ const PLATFORM_READ: [&str; 6] = [
 const PLATFORM_WRITE: [&str; 4] = ["/dev/null", "/dev/zero", "/dev/tty", "/dev/pts"];
 
 /// The paths and port the agent's processes may use; everything else is denied.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rules {
     /// Read and execute below these.
     pub read: Vec<String>,

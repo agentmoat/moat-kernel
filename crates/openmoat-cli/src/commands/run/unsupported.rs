@@ -7,6 +7,8 @@ use std::process::{Command, ExitStatus};
 use anyhow::{Result, bail};
 use openmoat_core::{EvalContext, Policy};
 
+use crate::cli::IsolatedArgs;
+use crate::exit::Code;
 use crate::sandbox::{Grants, Report};
 
 /// Never constructed.
@@ -19,6 +21,17 @@ pub fn confine(_: &Policy, _: &EvalContext, _: Grants, _: &Path) -> Result<Confi
          configures the agent's own sandbox",
         std::env::consts::OS
     )
+}
+
+pub fn isolate(_: &Policy, _: &EvalContext, _: Grants, _: &Path) -> Result<Confined> {
+    bail!(
+        "`moat run --isolate` runs on Linux only (bubblewrap); there is no Isolated tier on {}",
+        std::env::consts::OS
+    )
+}
+
+pub fn inside(_: &IsolatedArgs) -> Result<Code> {
+    bail!("only `moat run --isolate` on Linux starts this")
 }
 
 impl Confined {

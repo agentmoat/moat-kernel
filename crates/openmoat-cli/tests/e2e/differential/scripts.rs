@@ -82,6 +82,9 @@ pub struct Script {
     pub seatbelt: Outcome,
     /// The outcome under `moat run` on Linux.
     pub landlock: Outcome,
+    /// The outcome under `moat run --isolate` on Linux.
+    #[serde(rename = "isolate-linux")]
+    pub isolate_linux: Outcome,
     /// The outcome under Claude Code's sandbox on macOS.
     #[serde(rename = "claude-macos")]
     pub claude_macos: Outcome,
@@ -100,9 +103,10 @@ pub struct Script {
 }
 
 /// The executing layers: id (as `gap.layer` names it) and the column heading.
-const LAYERS: [(&str, &str); 6] = [
+const LAYERS: [(&str, &str); 7] = [
     ("seatbelt", "`moat run`, macOS (Seatbelt)"),
     ("landlock", "`moat run`, Linux (Landlock + seccomp)"),
+    ("isolate-linux", "`moat run --isolate`, Linux (bubblewrap)"),
     ("claude-macos", "Claude Code sandbox, macOS"),
     ("claude-linux", "Claude Code sandbox, Linux"),
     ("codex-macos", "Codex `moat` profile, macOS"),
@@ -114,6 +118,7 @@ impl Script {
         match layer {
             "seatbelt" => self.seatbelt,
             "landlock" => self.landlock,
+            "isolate-linux" => self.isolate_linux,
             "claude-macos" => self.claude_macos,
             "claude-linux" => self.claude_linux,
             "codex-macos" => self.codex_macos,
@@ -167,7 +172,8 @@ fn evidence_table_is_current() {
          The hook allows project scripts (`npm test`, `make test`) and cannot see what they\n\
          do ([THREAT_MODEL.md](THREAT_MODEL.md) §5). Each row is such a script: the payload is\n\
          the project's test script, started as `npm test` in a throwaway home with fake secrets,\n\
-         under `moat run` (Lightweight tier) and under each agent's own sandbox as `moat init`\n\
+         under `moat run` (Lightweight tier), under `moat run --isolate` (Isolated tier, Linux)\n\
+         and under each agent's own sandbox as `moat init`\n\
          configures it (Standard tier, [SANDBOX.md](SANDBOX.md)): Claude Code 2.1.290 runs\n\
          `claude -p --bare` against a local fake Anthropic API that asks for that one Bash call,\n\
          with only the generated settings (no hook, so the sandbox alone is measured), and\n\
@@ -209,7 +215,7 @@ fn evidence_table_is_current() {
     }
     doc.push_str(
         "\nEPERM, EACCES and EROFS: the system call failed with that error (EROFS: the \
-         sandbox\nmounted the path read-only). ENOENT: the path does not exist\ninside the sandbox (bubblewrap mounted an empty directory over it). EEXIST: the sandbox \
+         sandbox\nmounted the path read-only). ENOENT: the path does not exist\ninside the sandbox (bubblewrap mounted an empty directory over it, or did not mount it). EEXIST: the sandbox \
          mounted a\nfile where the payload creates a directory. refused: the \
          connection\nwas refused inside the sandbox's own network namespace. proxy 403: the \
          layer's proxy refused\nthe request (OpenMoat's under `moat run`, the agent's own, which \
@@ -224,6 +230,8 @@ fn evidence_table_is_current() {
         "\n## Layers\n\n| Layer | Status |\n|---|---|\n\
          | `moat run`, macOS (Seatbelt) | verified by the `macos-14` and `macos-15-intel` CI jobs |\n\
          | `moat run`, Linux (Landlock + seccomp) | verified by the `ubuntu-latest` CI job (Linux 6.7 or later) |\n\
+         | `moat run --isolate`, Linux (bubblewrap) | verified by the `ubuntu-latest` CI job (bubblewrap installed) |\n\
+         | `moat run --isolate`, macOS | not run: refused until the Isolated tier has a virtual machine there (#175) |\n\
          | Claude Code sandbox and Codex profile, macOS | verified by the `standard tier (macos-14)` CI job |\n\
          | Claude Code sandbox and Codex profile, Linux | verified by the `standard tier (ubuntu-latest)` CI job (bubblewrap and socat installed) |\n\
          | `moat run`, Windows | not run: `moat run` refuses on Windows, where OpenMoat generates no OS sandbox (#135) |\n\
@@ -260,7 +268,7 @@ pub mod executing {
     use super::super::{Fixtures, Project, Verdict};
     use super::{Outcome, scripts};
     use crate::common::{output, text};
-    use crate::run::confined::{ran, retried};
+    use crate::run::confined::{isolated, ran, retried};
 
     /// This system, as the layer ids name it (`claude-macos`, `codex-linux`).
     #[cfg(target_os = "macos")]
@@ -407,17 +415,29 @@ pub mod executing {
 
     #[test]
     fn hostile_scripts_meet_the_os_layer() {
+        let layer = if OS == "macos" {
+            "seatbelt"
+        } else {
+            "landlock"
+        };
+        under_moat_run(layer, &[]);
+    }
+
+    /// The Isolated tier, where bubblewrap can run (CI's Linux job installs it).
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn hostile_scripts_meet_the_isolated_tier() {
+        under_moat_run("isolate-linux", &["--isolate"]);
+    }
+
+    /// Every script under `moat run <flags>`, as the layer `layer`.
+    fn under_moat_run(layer: &str, flags: &[&str]) {
         let fx = fixtures();
         let project = fx.tree(Project::Evil);
         // The temp directory is outside the home, so a home write is not a
         // temp-directory write.
         let tmp = fx.sb.home.with_file_name("tmp");
         std::fs::create_dir_all(&tmp).unwrap();
-        let layer = if OS == "macos" {
-            "seatbelt"
-        } else {
-            "landlock"
-        };
         meet(layer, &fx, || {
             // Seatbelt on macos-14 sometimes refuses the connection to the
             // proxy (#280); `retried` recognises it by `moat run`'s notice.
@@ -428,11 +448,13 @@ pub mod executing {
                         .current_dir(project)
                         .env("PATH", format!("{}/bin:/usr/bin:/bin", project.display()))
                         .env("TMPDIR", &tmp)
-                        .args(["run", "--", "/bin/sh", "-c", NPM_TEST]),
+                        .arg("run")
+                        .args(flags)
+                        .args(["--", "/bin/sh", "-c", NPM_TEST]),
                     None,
                 )
             });
-            ran(&out).then(|| Run {
+            (ran(&out) && isolated(&out)).then(|| Run {
                 completed: out.status.success(),
                 shown: text(&out),
             })

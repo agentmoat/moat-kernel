@@ -12,8 +12,11 @@
 //! The Lightweight tier's Seatbelt profile ([`seatbelt`]) and Landlock rules
 //! ([`landlock`]) are lowered per session instead, for the project `moat run`
 //! starts in; on Linux a seccomp filter (`seccomp`) closes the sockets Landlock
-//! leaves open.
+//! leaves open. The Isolated tier's bubblewrap mounts (`bwrap`, Linux) are built on
+//! the same Landlock rules.
 
+#[cfg(any(target_os = "linux", test))]
+pub mod bwrap;
 pub mod claude;
 pub mod codex;
 pub mod cursor;
@@ -143,6 +146,24 @@ pub fn landlock_rules(
 ) -> anyhow::Result<landlock::Generated> {
     let (ir, grants) = lower_for_session(policy, ctx, grants)?;
     landlock::generate(&ir, &grants)
+}
+
+/// The bubblewrap mounts and Landlock rules `moat run --isolate` applies on
+/// Linux, for the project's spellings in `ctx` (the resolved one first).
+#[cfg(target_os = "linux")]
+pub fn bwrap_mounts(
+    policy: &Policy,
+    ctx: &EvalContext,
+    grants: Grants,
+) -> anyhow::Result<bwrap::Generated> {
+    let (ir, grants) = lower_for_session(policy, ctx, grants)?;
+    let project = ctx
+        .real_project
+        .iter()
+        .chain(&ctx.project)
+        .cloned()
+        .collect::<Vec<_>>();
+    bwrap::generate(&ir, &grants, &project)
 }
 
 /// Codex's `config.toml`, next to the hook file (`$CODEX_HOME` or `~/.codex`).

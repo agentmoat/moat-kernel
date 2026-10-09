@@ -1,0 +1,171 @@
+use std::path::Path;
+
+use openmoat_core::{DEFAULT_POLICY, EvalContext, Policy};
+
+use super::*;
+
+fn generated(home: &Path) -> Generated {
+    let home = home.to_string_lossy().into_owned();
+    let project = format!("{home}/proj");
+    let ctx = EvalContext {
+        home: home.clone(),
+        project: Some(project.clone()),
+        real_home: None,
+        real_project: None,
+        moved_dirs: Vec::new(),
+        cwd: project.clone(),
+        case_insensitive_paths: false,
+    };
+    let grants = Grants {
+        proxy_port: Some(18080),
+        tmpdir: Some("/tmp".into()),
+        program: Some("/usr/bin/agent".into()),
+        writes: vec![format!("{home}/.claude"), format!("{home}/.cargo")],
+    };
+    let mut policy = Policy::parse(DEFAULT_POLICY).expect("default policy");
+    // The test's home is in the temp directory, a read root.
+    policy.sandbox = None;
+    let ir = openmoat_core::ir::lower(&policy, &ctx).expect("lowers");
+    generate(&ir, &grants, &[project]).expect("generates")
+}
+
+fn tree(home: &Path) {
+    for dir in [
+        "proj/src",
+        "proj/.env.d",
+        "proj/.git/hooks",
+        "proj/.claude/worktrees",
+        ".claude",
+        ".cargo",
+    ] {
+        std::fs::create_dir_all(home.join(dir)).unwrap();
+    }
+    for file in [
+        "proj/.env",
+        "proj/.env.example",
+        "proj/src/.env.local",
+        "proj/src/main.rs",
+        "proj/.env.d/inner",
+        "proj/.claude/settings.json",
+        ".claude/settings.json",
+        ".cargo/credentials.toml",
+    ] {
+        std::fs::write(home.join(file), "x").unwrap();
+    }
+}
+
+#[test]
+fn denied_paths_in_the_project_and_the_grants_are_masked() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = std::fs::canonicalize(dir.path()).unwrap();
+    tree(&home);
+    let out = generated(&home);
+    let p = |rel: &str| format!("{}/{rel}", home.display());
+    let hide = |rel: &str| Mount::Hide {
+        path: p(rel),
+        dir: false,
+    };
+    for expected in [
+        hide("proj/.env"),
+        hide("proj/src/.env.local"),
+        Mount::Hide {
+            path: p("proj/.env.d"),
+            dir: true,
+        },
+        hide("proj/.envrc"),
+        hide("proj/.moat"),
+        Mount::ReadOnly(p("proj/.git")),
+        Mount::ReadOnly(p("proj/.claude/settings.json")),
+        // The node is pinned; Claude Code may still write its worktrees.
+        Mount::ReadWrite(p("proj/.claude")),
+        Mount::ReadWrite(p(".claude")),
+        Mount::ReadOnly(p(".claude/settings.json")),
+        hide(".cargo/credentials.toml"),
+    ] {
+        assert!(
+            out.mounts.contains(&expected),
+            "{expected:?}: {:#?}",
+            out.mounts
+        );
+    }
+    assert!(!out.mounts.contains(&hide("proj/.env.example")));
+    assert!(
+        !out.mounts.contains(&hide("proj/.env.d/inner")),
+        "a hidden directory is not entered"
+    );
+    assert!(
+        !out.mounts
+            .contains(&Mount::ReadOnly(p("proj/.claude/worktrees")))
+    );
+    assert_eq!(out.placeholders, vec![p("proj/.envrc"), p("proj/.moat")]);
+    // Trees first, outermost first; the home itself is never mounted.
+    let first_mask = out
+        .mounts
+        .iter()
+        .position(|m| matches!(m, Mount::Hide { .. }));
+    let project = out
+        .mounts
+        .iter()
+        .position(|m| m == &Mount::ReadWrite(p("proj")));
+    assert!(
+        project.is_some() && project < first_mask,
+        "{:#?}",
+        out.mounts
+    );
+    assert!(out.rules.write.contains(&p("proj")), "{:?}", out.rules);
+    assert!(out.mounts.contains(&Mount::Tmpfs("/tmp".into())));
+    assert!(!out.mounts.contains(&Mount::ReadOnly("/tmp".into())));
+    let home_path = home.to_string_lossy().into_owned();
+    assert!(!out.mounts.iter().any(|m| path_of(m) == home_path));
+    let rules = out
+        .report
+        .allowances
+        .iter()
+        .map(|a| a.rule.as_str())
+        .collect::<Vec<_>>();
+    assert!(rules.contains(&"bwrap.created-later"), "{rules:?}");
+    assert!(!rules.contains(&"landlock.inside-grants") && !rules.contains(&"landlock.tcp-port"));
+}
+
+#[test]
+fn masks_repeat_under_every_spelling_of_the_project() {
+    let mut masks = vec![
+        Mount::Hide {
+            path: "/real/p/.env".into(),
+            dir: false,
+        },
+        Mount::ReadOnly("/real/p/.git/hooks".into()),
+    ];
+    let all = respelled(&masks, &["/real/p".into(), "/link/p".into()]);
+    masks.extend([
+        Mount::Hide {
+            path: "/link/p/.env".into(),
+            dir: false,
+        },
+        Mount::ReadOnly("/link/p/.git/hooks".into()),
+    ]);
+    assert_eq!(all, masks);
+}
+
+#[test]
+fn args_bind_the_placeholders_over_hidden_paths() {
+    let mounts = [
+        Mount::ReadOnly("/usr".into()),
+        Mount::ReadWrite("/p".into()),
+        Mount::Tmpfs("/tmp".into()),
+        Mount::Hide {
+            path: "/p/.env".into(),
+            dir: false,
+        },
+        Mount::Hide {
+            path: "/p/secrets".into(),
+            dir: true,
+        },
+    ];
+    let args = args(&mounts, "/b/file", "/b/dir").join(" ");
+    assert_eq!(
+        args,
+        "--ro-bind-try /usr /usr --bind-try /p /p --tmpfs /tmp --ro-bind /b/file /p/.env \
+         --ro-bind /b/dir /p/secrets"
+    );
+}

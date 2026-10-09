@@ -2,7 +2,9 @@
 //! (`crate::sandbox::landlock`) and a seccomp filter (`crate::sandbox::seccomp`),
 //! applied to a thread of its own that starts the agent. Both restrict the
 //! calling thread and what it starts, so OpenMoat's proxy thread stays
-//! unrestricted and keeps its audit log and its network.
+//! unrestricted and keeps its audit log and its network. With `--isolate`
+//! (`isolate.rs`) the agent starts in bubblewrap, and `moat` inside it
+//! applies the same rules and filter.
 
 use std::path::Path;
 use std::process::{Command, ExitStatus};
@@ -18,8 +20,13 @@ use seccompiler::{
     SeccompRule,
 };
 
+use crate::sandbox::landlock::Rules;
 use crate::sandbox::seccomp::SOCKET_ARGS;
 use crate::sandbox::{Grants, Report, landlock_rules};
+
+/// `moat run --isolate`: bubblewrap around the same rules.
+#[path = "isolate.rs"]
+mod isolate;
 
 /// The first ABI that restricts TCP connections (Linux 6.7). An older kernel
 /// is refused rather than run with the network open.
@@ -53,8 +60,11 @@ const X32: i64 = 0x4000_0000;
 pub struct Confined {
     command: Command,
     report: Report,
-    ruleset: RulesetCreated,
-    filter: BpfProgram,
+    /// The Landlock rules and seccomp filter of the thread that starts the
+    /// agent; `None` under `--isolate`, where `inside` applies them.
+    restrict: Option<(RulesetCreated, BpfProgram)>,
+    /// What `--isolate` created for the session, removed when it ends.
+    _session: Option<isolate::Session>,
 }
 
 pub fn confine(
@@ -64,7 +74,13 @@ pub fn confine(
     program: &Path,
 ) -> Result<Confined> {
     let generated = landlock_rules(policy, ctx, grants)?;
-    let rules = &generated.rules;
+    restricted(&generated.rules, generated.report, Command::new(program))
+}
+
+pub use isolate::{inside, isolate};
+
+/// `command`, to start with `rules` and the seccomp filter applied.
+fn restricted(rules: &Rules, report: Report, command: Command) -> Result<Confined> {
     let ports = rules
         .connect_port
         .map(|port| Ok(NetPort::new(port, AccessNet::ConnectTcp)));
@@ -89,11 +105,12 @@ pub fn confine(
             .add_rules(ports)
     };
     let ruleset = build().context("`moat run` needs Landlock ABI 4 (Linux 6.7 or later)")?;
+    let filter = seccomp_filter().context("generating the seccomp filter")?;
     Ok(Confined {
-        command: Command::new(program),
-        report: generated.report,
-        ruleset,
-        filter: seccomp_filter().context("generating the seccomp filter")?,
+        command,
+        report,
+        restrict: Some((ruleset, filter)),
+        _session: None,
     })
 }
 
@@ -132,10 +149,13 @@ impl Confined {
     pub fn status(self) -> Result<ExitStatus> {
         let Self {
             mut command,
-            ruleset,
-            filter,
+            restrict,
+            _session,
             ..
         } = self;
+        let Some((ruleset, filter)) = restrict else {
+            return command.status().context("starting bubblewrap");
+        };
         std::thread::spawn(move || {
             ruleset
                 .restrict_self()
