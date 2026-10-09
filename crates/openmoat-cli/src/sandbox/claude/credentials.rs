@@ -1,22 +1,23 @@
 //! `sandbox.credentials` for Claude Code's native broker (ADR-020, #363).
 
-use openmoat_core::{Kind, Secret, SecretSource};
+use openmoat_core::ir::BrokeredSecret;
+use openmoat_core::{Kind, SecretSource};
 use serde_json::{Map, Value, json};
 
 use crate::sandbox::Report;
 
-/// One `mask` entry per policy `Secret` whose host appears in `network`'s
+/// One `mask` entry per IR [`BrokeredSecret`] whose host appears in `network`'s
 /// `allowedDomains` and whose source Claude Code can read (`env` or `file`;
 /// `keychain` is skipped with a loss). Returns `None` when no entry is
 /// produced, so no `credentials` block is written at all. When at least one
 /// entry is produced `network.tlsTerminate` is turned on in `network`, which
 /// Claude Code requires for `mask`.
 ///
-/// Policy's `header` field is unused here: Claude Code's proxy substitutes the
+/// The IR's `header` field is unused here: Claude Code's proxy substitutes the
 /// sentinel wherever it appears in a sandboxed command's outbound request
 /// (headers and body), which `moat proxy` cannot do without TLS termination.
 pub(super) fn credentials(
-    secrets: &[Secret],
+    secrets: &[BrokeredSecret],
     network: &mut Value,
     report: &mut Report,
 ) -> Option<Value> {

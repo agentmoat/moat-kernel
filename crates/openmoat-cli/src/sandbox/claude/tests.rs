@@ -11,13 +11,7 @@ pub(super) fn generated(yaml: &str) -> Generated {
 pub(super) fn generated_for(yaml: &str, linux: bool) -> Generated {
     let policy = Policy::parse(yaml).expect("test policy lints");
     let ir = lower_for_hosts(&policy, "/Users/me", None, Vec::new(), false).expect("lowers");
-    generate(
-        &ir,
-        &policy.secrets,
-        crate::sandbox::proxy_port(&policy),
-        linux,
-    )
-    .expect("generates")
+    generate(&ir, crate::sandbox::proxy_port(&policy), linux).expect("generates")
 }
 
 fn list(generated: &Generated, pointer: &str) -> Vec<String> {

@@ -259,3 +259,35 @@ fn a_policy_without_read_roots_has_no_allowance() {
     assert!(lowered("version: 1\nsandbox: {}\n").allowances.is_empty());
     assert!(lowered("version: 1\n").allowances.is_empty());
 }
+
+/// #167: the policy's `secrets:` list lowers into `ir.secrets` field-for-field,
+/// so OS backends (Claude Code's broker, `moat proxy`) read one source of truth.
+#[test]
+fn policy_secrets_lower_into_ir_secrets() {
+    let ir = lowered(
+        "version: 1\n\
+         allow:\n  - id: a\n    net: ['api.github.com', 'registry.npmjs.org']\n\
+         secrets:\n  \
+         - id: gh\n    host: api.github.com\n    header: Authorization\n    source: { env: GITHUB_TOKEN }\n  \
+         - id: npm\n    host: registry.npmjs.org\n    header: Authorization\n    source: { file: ~/.config/moat/npm }\n    plain_http: true\n",
+    );
+    assert_eq!(ir.secrets.len(), 2);
+    assert_eq!(ir.secrets[0].id, "gh");
+    assert_eq!(ir.secrets[0].host, "api.github.com");
+    assert_eq!(ir.secrets[0].header, "Authorization");
+    assert!(matches!(
+        &ir.secrets[0].source,
+        crate::SecretSource::Env(name) if name == "GITHUB_TOKEN"
+    ));
+    assert!(!ir.secrets[0].plain_http);
+    assert_eq!(ir.secrets[1].id, "npm");
+    assert!(matches!(
+        &ir.secrets[1].source,
+        crate::SecretSource::File(path) if path == "~/.config/moat/npm"
+    ));
+    assert!(ir.secrets[1].plain_http);
+    assert!(
+        lowered("version: 1\n").secrets.is_empty(),
+        "no `secrets:` key means no entries"
+    );
+}

@@ -40,7 +40,7 @@ mod settings;
 
 use anyhow::Result;
 use openmoat_core::ir::{Access, Effect, Enforcement, Rule};
-use openmoat_core::{AtomicAction, Kind, Secret};
+use openmoat_core::{AtomicAction, Kind};
 use serde_json::{Map, Value, json};
 
 use credentials::credentials;
@@ -88,15 +88,10 @@ pub struct Generated {
     pub report: Report,
 }
 
-/// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`], and
-/// the policy's `secrets:` list. With `proxy_port`, sandboxed commands' traffic
-/// goes to `moat proxy` there; with `linux`, for bubblewrap.
-pub fn generate(
-    ir: &Enforcement,
-    secrets: &[Secret],
-    proxy_port: Option<u16>,
-    linux: bool,
-) -> Result<Generated> {
+/// Generate the settings for `ir`, lowered by [`super::lower_for_hosts`]
+/// (`ir.secrets` drives Claude Code's own broker). With `proxy_port`, sandboxed
+/// commands' traffic goes to `moat proxy` there; with `linux`, for bubblewrap.
+pub fn generate(ir: &Enforcement, proxy_port: Option<u16>, linux: bool) -> Result<Generated> {
     let mut report = Report::default();
     let filesystem = Filesystem::build(ir, &mut report)?;
     let deny_rules = if linux {
@@ -110,7 +105,7 @@ pub fn generate(
         None => network(&ir.egress.net, &mut report),
         Some(port) => through_moat_proxy(&ir.egress.net, port, &mut report),
     };
-    let credentials = credentials(secrets, &mut network, &mut report);
+    let credentials = credentials(&ir.secrets, &mut network, &mut report);
     let mut sandbox = Map::new();
     sandbox.insert("enabled".into(), json!(true));
     sandbox.insert("failIfUnavailable".into(), json!(true));

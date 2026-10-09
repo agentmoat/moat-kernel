@@ -1,9 +1,13 @@
 //! Lowering `policy.yaml` to the [`Enforcement`] IR.
 
-use super::{Access, Allowance, DecideOnly, Effect, Egress, Enforcement, Filesystem, Loss, Rule};
+use super::{
+    Access, Allowance, BrokeredSecret, DecideOnly, Effect, Egress, Enforcement, Filesystem, Loss,
+    Rule,
+};
 use crate::engine::{CompiledPolicy, EvalContext};
 use crate::kind::Kind;
 use crate::policy::{Policy, PolicyError, RuleGroup};
+use crate::secret::Secret;
 use crate::verdict::Verdict;
 
 /// Id of the allowance `sandbox.read_roots` lowers to.
@@ -55,12 +59,23 @@ pub fn lower(policy: &Policy, ctx: &EvalContext) -> Result<Enforcement, PolicyEr
     Ok(Enforcement {
         fs,
         egress,
-        secrets: Vec::new(),
+        secrets: policy.secrets.iter().map(lower_secret).collect(),
         limits: Vec::new(),
         decide_only: decide_only(policy),
         losses,
         allowances: read_roots(policy, ctx),
     })
+}
+
+/// Copy a policy [`Secret`] into the IR without the policy types.
+fn lower_secret(secret: &Secret) -> BrokeredSecret {
+    BrokeredSecret {
+        id: secret.id.clone(),
+        host: secret.host.clone(),
+        header: secret.header.clone(),
+        source: secret.source.clone(),
+        plain_http: secret.plain_http,
+    }
 }
 
 /// `sandbox.read_roots` as one allowance: each root and everything below it,

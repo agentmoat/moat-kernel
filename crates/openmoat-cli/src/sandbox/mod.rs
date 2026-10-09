@@ -189,8 +189,7 @@ impl Plan {
             crate::context::CASE_INSENSITIVE_PATHS,
         )?;
         let proxy_port = proxy_port(&policy);
-        let mut claude =
-            claude::generate(&ir, &policy.secrets, proxy_port, cfg!(target_os = "linux"))?;
+        let mut claude = claude::generate(&ir, proxy_port, cfg!(target_os = "linux"))?;
         let claude_settings = install::settings_path(openmoat_hosts::Host::ClaudeCode)?;
         claude::protect(&mut claude, &claude_settings);
         let mut codex = codex::generate(&ir, &homes, proxy_port)?;
