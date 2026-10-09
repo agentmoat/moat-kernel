@@ -21,4 +21,15 @@ if rustup target list --installed 2>/dev/null | grep -q wasm32-unknown-unknown; 
 else
     echo "▷ wasm32-unknown-unknown target not installed; purity build skipped (CI runs it)"
 fi
+if command -v shellcheck >/dev/null; then
+    echo "▶ shellcheck"
+    git ls-files -z '*.sh' .githooks/pre-push | xargs -0 shellcheck
+else
+    echo "▷ shellcheck not installed; shell script lint skipped (CI runs it)"
+fi
+if command -v python3 >/dev/null; then
+    run python3 scripts/ci/check-links.py
+else
+    echo "▷ python3 not installed; Markdown link check skipped (CI runs it)"
+fi
 echo "✔ quality gate passed"
