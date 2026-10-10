@@ -1,0 +1,42 @@
+# Spell check (https://github.com/crate-ci/typos), run by CI and the quality gate.
+# The project writes British English; the words below are American spellings or
+# fragments that belong to someone else's name and must stay as they are.
+
+[files]
+extend-exclude = [
+    "LICENSE-*",               # licence texts are quoted verbatim
+    "spikes/sandbox/evidence/", # captured tool output
+]
+
+[default]
+locale = "en-gb"
+extend-ignore-re = [
+    "\\[o\\]nce",  # the `Allow? [o]nce` prompt
+    "\\$!ba;",     # a sed branch to label `a`
+]
+
+[default.extend-identifiers]
+TransactionBehavior = "TransactionBehavior" # rusqlite
+AppArmor = "AppArmor"
+
+[default.extend-words]
+# OpenMoat's own rule id and verdict reason.
+unparseable = "unparseable"
+# serde (`Serialize`, `skip_serializing_if`).
+serialize = "serialize"
+serializing = "serializing"
+# The HTTP `Authorization` header and OAuth wording around it.
+authorization = "authorization"
+authorized = "authorized"
+# Apple's `containerization` toolchain (ADR-023).
+containerization = "containerization"
+# `--color`, git's `color.*` keys.
+color = "color"
+# The MCP `initialize` request.
+initialize = "initialize"
+# LLVM sanitizers, which cargo fuzz builds with.
+sanitizers = "sanitizers"
+# macOS `com.apple.system.notification_center`.
+center = "center"
+# A deliberate typosquat in a MoatBench scenario (`pip install reqeusts`).
+reqeusts = "reqeusts"

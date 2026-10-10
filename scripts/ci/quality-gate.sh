@@ -38,4 +38,9 @@ if python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; th
 else
     echo "▷ python3 ≥ 3.11 needed; release version check skipped (CI runs it)"
 fi
+if command -v typos >/dev/null; then
+    run typos
+else
+    echo "▷ typos not installed; spell check skipped (CI runs it)"
+fi
 echo "✔ quality gate passed"
