@@ -1,7 +1,7 @@
 //! The Claude Code host-sandbox layer of the differential suite (#170): each
 //! attack runs under Claude Code's own sandbox, configured from the settings
 //! `moat sandbox show` generates. The real `claude` binary runs fully isolated,
-//! the way `spikes/sandbox/q4-claude.sh` does it: a temp `CLAUDE_CONFIG_DIR`
+//! the way the #119 sandbox spike ran it: a temp `CLAUDE_CONFIG_DIR`
 //! holding only the generated sandbox settings (no OpenMoat hook, so this measures
 //! the host sandbox, not the hook), a fake `HOME`, `--bare`, a fake API key and
 //! a local fake Anthropic API (`tests/differential/fake_api.py`) that drives one

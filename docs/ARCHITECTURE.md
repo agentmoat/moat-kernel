@@ -475,10 +475,11 @@ CI runs `scripts/ci/quality-gate.sh` on macOS (arm64, x64), Linux and Windows, p
 Without `--listen` it binds `127.0.0.1` and the policy's `sandbox.proxy_port` when that
 is set, the port the host sandboxes then send their commands' traffic to (§13; run it as
 a user service), and `127.0.0.1:18080` otherwise. `moat run` serves the same proxy, brokered secrets included, from a thread
-on an ephemeral loopback port and makes it the agent's only way out (§14). Why it is our
-own code on `std::net` and
-`httparse`, rather than `codex-network-proxy` or `sandbox-runtime`, is in
-[notes/proxy-evaluation.md](notes/proxy-evaluation.md).
+on an ephemeral loopback port and makes it the agent's only way out (§14). It is our own code on
+`std::net` and `httparse` rather than `codex-network-proxy` or `sandbox-runtime` (#171):
+the first is not on crates.io and would add over a hundred crates, the second would put
+Node.js in the trusted base, and neither checks the ClientHello's SNI against the CONNECT
+host outside TLS termination.
 
 - **Start-up.** It refuses a non-loopback listen address, a missing installation and a
   drifted policy lock (exit 64). It compiles the policy once, so restart it after a policy

@@ -5,8 +5,8 @@ the machine. A request that offers the Bash tool first gets a tool_use running
 the command passed in --bash; the next reply quotes the tool result and stops.
 
 Used by the differential suite's Claude Code layer (crates/openmoat-cli/tests/e2e/
-differential/claude.rs) and scripts/ci/differential.sh. Trimmed from
-spikes/sandbox/fake_api.py.
+differential/claude.rs) and scripts/ci/differential.sh. Trimmed from the
+#119 sandbox spike.
 
   fake_api.py --port 18090 --bash 'cat ~/.ssh/id_rsa'
 """
