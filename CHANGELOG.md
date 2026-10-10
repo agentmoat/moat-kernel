@@ -10,6 +10,7 @@ view at the end of the file.
 
 ### Security
 - `moat guard` now denies calls to tools outside the policy and blocks every Claude Code settings change while a pinned file has drifted; `moat init` keeps the first backup of a host file instead of replacing it with an already edited copy ([#447](https://github.com/crocodile-labs/openmoat/pull/447)).
+- The shell classifier fails closed in five more places (#444, core audit 2026-10-09). A `)` with no matching `(`, or an unclosed `(`, makes the command unparseable instead of keeping the working directory. `printf` or `echo` text piped into a shell that reads stdin asks when it holds an escape other than `\n` or a `printf` format, so `printf '\x63\x61\x74 .env' | sh` no longer passes as harmless text. `sh` reads only the options bash and dash share, so `sh --rcfile rc -c …` asks. `sed -f FILE` is now an `fs.read` of FILE. A remote `scp`/`rsync` destination (`host:/tmp/`) is no longer recorded as a local write.
 
 ## [0.2.0] - 2026-10-10
 
