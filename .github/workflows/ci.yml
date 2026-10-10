@@ -139,9 +139,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: "1.95"
+      - name: rust toolchain
+        # The channel, components and targets come from rust-toolchain.toml.
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       # cargo-machete rather than cargo-shear: shear 1.14 needs rustc 1.98,
       # newer than the pinned toolchain.
@@ -162,9 +162,9 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0 # the base commit is the baseline
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: "1.95"
+      - name: rust toolchain
+        # The channel, components and targets come from rust-toolchain.toml.
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo install cargo-semver-checks --version 0.51.0 --locked
       - name: this pull request against its base
@@ -204,9 +204,9 @@ jobs:
       # Installed from crates.io rather than through cargo-deny-action, whose
       # Docker image pull from Docker Hub hits the unauthenticated rate limit
       # (HTTP 429) and fails the job for reasons unrelated to the change.
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: "1.95"
+      - name: rust toolchain
+        # The channel, components and targets come from rust-toolchain.toml.
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo install cargo-deny --version 0.20.2 --locked
       - run: cargo deny --locked check
