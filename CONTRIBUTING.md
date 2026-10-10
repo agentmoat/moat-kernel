@@ -58,9 +58,9 @@ is pushed to `main` directly.
 | Label group | How it is set | Meaning |
 |---|---|---|
 | `type: *` | from the Conventional Commits title | what kind of change |
-| `area: *` | from changed paths | `core`, `hosts`, `audit`, `cli`, `policy`, `ci`, `docs`, `deps` |
+| `area: *` | from changed paths | `core`, `hosts`, `audit`, `proxy`, `cli`, `policy`, `ci`, `docs`, `deps` |
 | `size: *` | additions + deletions | `XS` ≤ 10 · `S` ≤ 50 · `M` ≤ 200 · `L` ≤ 500 · `XL` fails without `size: override` |
-| `risk: *` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
+| `risk: *` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, proxy and broker, OS sandbox generation, `moat run`, integrity, secrets, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
 | `needs: fixture` | core or policy changed without `tests/conformance/` | add a fixture |
 
 Checks that must pass before merge (enforced by the `main` ruleset; names as shown on the
