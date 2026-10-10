@@ -4,14 +4,15 @@
 //! generates, with `moat proxy` running as Codex's upstream. The binary is
 //! `MOAT_CODEX_BIN` only (scripts/ci/differential.sh sets it from `PATH`), so the
 //! quality gate never picks up whatever `codex` a developer has installed; without
-//! it the layer prints a visible skip and the suite passes on the other layers.
+//! it the layer prints a visible skip and the suite passes on the other layers,
+//! except in CI's `standard tier` job, which fails it (`skip_without_host_binary`).
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::{Fixtures, Project, Scenario, Verdict, scenarios};
-use crate::common::text;
+use crate::common::{skip_without_host_binary, text};
 
 /// The codex binary, or `None` to skip the layer.
 fn binary() -> Option<PathBuf> {
@@ -90,7 +91,7 @@ fn hostile_scripts_meet_the_codex_profile() {
     use super::start;
 
     let Some(codex) = binary() else {
-        eprintln!("skipped: hostile scripts under codex (set MOAT_CODEX_BIN)");
+        skip_without_host_binary("hostile scripts under codex (set MOAT_CODEX_BIN)");
         return;
     };
     let fx = fixtures();
@@ -110,10 +111,7 @@ fn hostile_scripts_meet_the_codex_profile() {
 #[test]
 fn codex_layer_agrees_with_every_scenario() {
     let Some(codex) = binary() else {
-        eprintln!(
-            "skipped: codex layer (set MOAT_CODEX_BIN) — the hook layer still ran; \
-             scripts/ci/differential.sh runs every layer"
-        );
+        skip_without_host_binary("codex layer (set MOAT_CODEX_BIN); the hook layer still ran");
         return;
     };
     let fx = Fixtures::build();

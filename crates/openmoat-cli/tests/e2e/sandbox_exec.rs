@@ -1,13 +1,13 @@
 //! The generated Codex profile, executed by Codex's own sandbox when a `codex`
 //! binary is available (`MOAT_CODEX_BIN`, else `codex` on `PATH`). Without one
-//! the test says so and passes; the differential suite (#170) runs every
-//! fixture against every backend in CI.
+//! the test says so and passes; CI's `standard tier` job sets `MOAT_CODEX_BIN`
+//! to a pinned binary and fails it if the binary is missing.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::common::{Sandbox, text};
+use crate::common::{Sandbox, skip_without_host_binary, text};
 
 fn codex_binary() -> Option<PathBuf> {
     if let Some(explicit) = std::env::var_os("MOAT_CODEX_BIN").filter(|v| !v.is_empty()) {
@@ -38,7 +38,7 @@ fn cat(codex: &Path, sb: &Sandbox, project: &Path, file: &str) -> Option<String>
 #[test]
 fn codex_enforces_the_generated_profile() {
     let Some(codex) = codex_binary() else {
-        eprintln!("skipped: no codex binary (set MOAT_CODEX_BIN) to execute the generated profile");
+        skip_without_host_binary("the generated Codex profile (set MOAT_CODEX_BIN)");
         return;
     };
     let sb = Sandbox::bare(&[".codex"]);

@@ -48,12 +48,17 @@ jobs:
         run: scripts/ci/quality-gate.sh
         shell: bash
 
-  # The hostile project scripts of docs/EVIDENCE.md under Claude Code's sandbox
-  # and Codex's `moat` profile (#346): pinned binaries, no account, no API call.
+  # Every differential scenario, the hostile project scripts of docs/EVIDENCE.md
+  # among them, under Claude Code's sandbox and Codex's `moat` profile (#346),
+  # and the generated Codex profile (`sandbox_exec`): pinned binaries, no
+  # account, no API call. The gate job fetches no host binaries (#366).
   standard-tier:
     name: standard tier (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      # A test whose host binary is missing fails here instead of skipping.
+      MOAT_REQUIRE_HOST_BINARIES: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -76,8 +81,8 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: pinned claude and codex
         run: scripts/ci/host-binaries.sh "$RUNNER_TEMP/hosts" >> "$GITHUB_ENV"
-      - name: hostile scripts under every layer
-        run: scripts/ci/differential.sh hostile_scripts
+      - name: every scenario under every layer
+        run: scripts/ci/differential.sh differential sandbox_exec
 
   core-is-pure:
     name: openmoat-core builds for wasm32 (no I/O)

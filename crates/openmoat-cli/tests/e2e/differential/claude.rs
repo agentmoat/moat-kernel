@@ -9,7 +9,8 @@
 //! leaves the machine.
 //!
 //! The binary is `MOAT_CLAUDE_BIN` only (never `claude` from `PATH`) and the fake API is
-//! `MOAT_FAKE_API` (else `python3`); without either the layer skips visibly.
+//! `MOAT_FAKE_API` (else `python3`); without either the layer skips visibly,
+//! except in CI's `standard tier` job, which fails it (`skip_without_host_binary`).
 //!
 //! Scope: the layer asserts that every attack is **blocked**. Claude Code grants
 //! reads and writes in the session's working directories, which it establishes
@@ -24,7 +25,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
 use std::time::{Duration, Instant};
 
-use crate::common::{json, text};
+use crate::common::{json, skip_without_host_binary, text};
 
 use super::{Fixtures, Verdict, scenarios};
 
@@ -185,9 +186,8 @@ impl Fixtures {
 #[test]
 fn claude_layer_blocks_every_attack() {
     let (Some(claude), Some(python)) = (claude_binary(), python()) else {
-        eprintln!(
-            "skipped: claude layer (set MOAT_CLAUDE_BIN and MOAT_FAKE_API) — other layers ran; \
-             scripts/ci/differential.sh runs every layer"
+        skip_without_host_binary(
+            "claude layer (set MOAT_CLAUDE_BIN and MOAT_FAKE_API); the other layers ran",
         );
         return;
     };
@@ -259,7 +259,9 @@ fn hostile_scripts_meet_the_claude_code_sandbox() {
     use super::start;
 
     let (Some(claude), Some(python)) = (claude_binary(), python()) else {
-        eprintln!("skipped: hostile scripts under claude (set MOAT_CLAUDE_BIN and MOAT_FAKE_API)");
+        skip_without_host_binary(
+            "hostile scripts under claude (set MOAT_CLAUDE_BIN and MOAT_FAKE_API)",
+        );
         return;
     };
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/differential/fake_api.py");

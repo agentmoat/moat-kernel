@@ -8,7 +8,9 @@
 # `standard tier` job fetches pinned binaries with scripts/ci/host-binaries.sh.
 #
 # A layer whose binary is missing prints a visible "skipped" line and the suite
-# still passes on the layers it can run. No step touches the network.
+# still passes on the layers it can run, unless MOAT_REQUIRE_HOST_BINARIES is
+# set (CI's `standard tier` job): then a missing binary fails the test. No step
+# touches the network.
 #
 #   MOAT_CODEX_BIN   codex binary for the `codex sandbox -P moat` layer
 #   MOAT_CLAUDE_BIN  claude binary for the fake-API `claude -p` layer
@@ -26,7 +28,7 @@ echo "▶ differential suite"
 echo "  codex:  ${MOAT_CODEX_BIN:-<none; codex layer skipped>}"
 echo "  claude: ${MOAT_CLAUDE_BIN:-<none; claude layer skipped>}"
 
-# An argument (CI: `hostile_scripts`) narrows the run to the tests whose name
-# contains it.
-cargo test --locked -p openmoat --test e2e "${1:-differential}" -- --nocapture
+# Arguments (CI: `differential sandbox_exec`) choose the tests whose name
+# contains any of them; the default is the differential suite.
+cargo test --locked -p openmoat --test e2e -- --nocapture "${@:-differential}"
 echo "✔ differential suite passed"
