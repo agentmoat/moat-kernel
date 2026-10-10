@@ -13,6 +13,8 @@
 //! policy what an operating-system layer can enforce (ADR-019).
 
 #![warn(missing_docs)]
+// A library reports to its caller; only the `moat` binary prints.
+#![warn(clippy::print_stdout, clippy::print_stderr)]
 
 mod action;
 mod engine;

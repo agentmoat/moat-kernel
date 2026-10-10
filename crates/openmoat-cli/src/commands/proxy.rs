@@ -18,9 +18,13 @@ use std::sync::Mutex;
 use anyhow::{Context as _, Result, bail};
 use openmoat_audit::{NewEvent, Store};
 use openmoat_core::{Action, CompiledPolicy, EvalContext, Policy, Secret};
-use openmoat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, SystemResolver};
+use openmoat_proxy::{
+    Broker, Connection, Limits, Proxy, RULE_AUDIT, RecordError, Recorder, SystemResolver,
+};
 
-use crate::cli::{Format, ProxyArgs, ProxyStatusArgs};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use crate::cli::Format;
+use crate::cli::{ProxyArgs, ProxyStatusArgs};
 use crate::context;
 use crate::exit::Code;
 use crate::home::Home;
@@ -28,7 +32,9 @@ use crate::integrity;
 use crate::render::Deferred;
 use crate::secrets;
 
-use super::service::{self, State};
+use super::service;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use super::service::State;
 
 /// Where `moat proxy` listens when neither `--listen` nor `sandbox.proxy_port` says.
 const DEFAULT_PORT: u16 = 18080;
@@ -132,6 +138,7 @@ pub fn uninstall() -> Result<Code> {
 }
 
 /// `moat proxy status`: report the service's state.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub fn status(args: &ProxyStatusArgs) -> Result<Code> {
     let home = Home::locate()?;
     let manager = service::manager(&home)?;
@@ -164,6 +171,7 @@ pub fn status(args: &ProxyStatusArgs) -> Result<Code> {
 /// calls this after re-pinning the lock so the proxy picks up the new policy
 /// (which it reads once at start-up). A missing service is fine: the user has
 /// not opted in to a service yet.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub fn restart_if_installed(home: &Home) -> Result<Option<String>> {
     let manager = service::manager(home)?;
     let state = manager.state()?;
@@ -181,10 +189,8 @@ pub fn restart_if_installed(home: &Home) -> Result<Option<String>> {
 /// Returns `(ok, text)` so the caller renders the icon. Silent on platforms
 /// without a service story (Windows): `moat proxy install` refuses there, so
 /// there is nothing to report under `moat doctor`.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub fn service_line(home: &Home) -> Option<(bool, String)> {
-    if !cfg!(any(target_os = "macos", target_os = "linux")) {
-        return None;
-    }
     let manager = service::manager(home).ok()?;
     let state = manager.state().ok()?;
     let path = manager.file_path().ok()?;
@@ -193,6 +199,30 @@ pub fn service_line(home: &Home) -> Option<(bool, String)> {
         State::Running => Some((true, format!("service          {}", state.describe(&path)))),
         _ => Some((false, format!("service          {}", state.describe(&path)))),
     }
+}
+
+/// Windows: no user service to report on (#272), so `moat proxy status`
+/// refuses with the way to keep the proxy up instead of a made-up state.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn status(_args: &ProxyStatusArgs) -> Result<Code> {
+    bail!(
+        "no user service on {} yet (#272); run `moat proxy` in a terminal to keep the proxy up",
+        std::env::consts::OS
+    )
+}
+
+/// Windows: nothing is ever installed, so `moat sandbox sync` restarts nothing.
+/// The manager is still resolved, so a missing home fails as it does elsewhere.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn restart_if_installed(home: &Home) -> Result<Option<String>> {
+    service::manager(home)?;
+    Ok(None)
+}
+
+/// Windows: `moat doctor` and `moat status` have no service line.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn service_line(_home: &Home) -> Option<(bool, String)> {
+    None
 }
 
 /// The `moat doctor` and `moat status` line for the proxy the host sandboxes
@@ -325,5 +355,29 @@ impl Recorder for AuditLog {
             .record(&event)
             .map(drop)
             .map_err(|e| RecordError(e.to_string()))
+    }
+
+    fn unrecorded(&self, error: &RecordError) {
+        // The proxy has refused the connection; stderr is the one place left
+        // to say why, since the audit log is what failed.
+        eprintln!("{}", unrecorded_line(error));
+    }
+}
+
+fn unrecorded_line(error: &RecordError) -> String {
+    format!("moat proxy: {RULE_AUDIT}: {error}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_record_is_reported_as_before() {
+        let error = RecordError("disk full".to_owned());
+        assert_eq!(
+            unrecorded_line(&error),
+            "moat proxy: proxy-audit: audit log unavailable: disk full"
+        );
     }
 }

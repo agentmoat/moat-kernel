@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "17 6 * * 1" # weekly: new advisories and toolchain drift against main
+    - cron: "17 6 * * 1" # weekly on main: cargo-deny sees new advisories, fuzz runs 600 s per target
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -31,10 +31,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: "1.95"
-          components: rustfmt, clippy
+      - name: rust toolchain
+        # The channel, components and targets come from rust-toolchain.toml.
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: bubblewrap for the isolated tier
         if: runner.os == 'Linux'
@@ -71,9 +70,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: "1.95"
+      - name: rust toolchain
+        # The channel, components and targets come from rust-toolchain.toml.
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: linux sandbox prerequisites
         if: runner.os == 'Linux'
@@ -101,10 +100,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: "1.95"
-          targets: wasm32-unknown-unknown
+      - name: rust toolchain
+        # The channel, components and targets come from rust-toolchain.toml.
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo build --locked -p openmoat-core --target wasm32-unknown-unknown
 
@@ -122,9 +120,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: "1.95"
+      - name: rust toolchain
+        # The channel, components and targets come from rust-toolchain.toml.
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo build --locked --release -p openmoat
       - run: python3 scripts/ci/guard-latency.py target/release/moat 300
@@ -139,21 +137,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: "1.95"
+      - name: rust toolchain
+        # The channel, components and targets come from rust-toolchain.toml.
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo package --locked --workspace
 
   deny:
     name: cargo-deny
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+      # Installed from crates.io rather than through cargo-deny-action, whose
+      # Docker image pull from Docker Hub hits the unauthenticated rate limit
+      # (HTTP 429) and fails the job for reasons unrelated to the change.
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: "1.95"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo install cargo-deny --version 0.20.2 --locked
+      - run: cargo deny --locked check
 
   fuzz:
     name: fuzz (smoke)
@@ -166,12 +172,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
-        with:
-          toolchain: nightly-2026-10-04
+      - name: rust toolchain
+        # The nightly the fuzz workspace pins in fuzz/rust-toolchain.toml.
+        working-directory: fuzz
+        run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: fuzz
+      - name: clippy on the fuzz targets
+        working-directory: fuzz
+        run: cargo clippy --locked -- -D warnings
       - run: cargo install cargo-fuzz --version 0.13.1 --locked
       - run: python3 fuzz/seed_corpus.py
       - name: run every target

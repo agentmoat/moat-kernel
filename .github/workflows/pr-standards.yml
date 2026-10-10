@@ -44,6 +44,7 @@ jobs:
           has '^crates/openmoat-core/'      && areas+=("area: core")
           has '^crates/openmoat-hosts/'     && areas+=("area: hosts")
           has '^crates/openmoat-audit/'     && areas+=("area: audit")
+          has '^crates/openmoat-proxy/'     && areas+=("area: proxy")
           has '^crates/openmoat-cli/'       && areas+=("area: cli")
           has '^(crates/openmoat-core/policies/|tests/conformance/)' && areas+=("area: policy")
           has '^(\.github/|scripts/)'   && areas+=("area: ci")
@@ -58,7 +59,7 @@ jobs:
 
           risk="risk: low"
           if has '^(crates/openmoat-hosts/|crates/openmoat-cli/src/install/|crates/openmoat-audit/)'; then risk="risk: medium"; fi
-          if has '^(crates/openmoat-core/src/(engine|policy|shell|lexer|pattern|paths)|crates/openmoat-core/policies/|\.github/workflows/|SECURITY\.md|crates/openmoat-cli/src/commands/guard\.rs|crates/openmoat-cli/src/exit\.rs)'; then risk="risk: high"; fi
+          if has '^(crates/openmoat-core/src/(engine|policy|shell|lexer|pattern|paths)|crates/openmoat-core/policies/|\.github/workflows/|SECURITY\.md|crates/openmoat-cli/src/commands/guard\.rs|crates/openmoat-cli/src/exit\.rs|crates/openmoat-proxy/src/|crates/openmoat-cli/src/(sandbox|integrity|secrets)/|crates/openmoat-cli/src/commands/run(\.rs|/))'; then risk="risk: high"; fi
 
           behaviour_change=false
           has '^crates/openmoat-core/(src|policies)/' && behaviour_change=true

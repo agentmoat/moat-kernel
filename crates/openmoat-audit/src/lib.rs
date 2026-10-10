@@ -6,6 +6,8 @@
 //! hash and appends the next event linked to it, so the hash chain never forks.
 
 #![warn(missing_docs)]
+// A library reports to its caller; only the `moat` binary prints.
+#![warn(clippy::print_stdout, clippy::print_stderr)]
 
 mod query;
 mod redact;

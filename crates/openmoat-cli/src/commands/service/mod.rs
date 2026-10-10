@@ -37,6 +37,7 @@ mod platform;
 use std::path::PathBuf;
 
 use anyhow::Result;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use serde::Serialize;
 
 use crate::home::Home;
@@ -58,14 +59,10 @@ pub(crate) fn skip_exec() -> bool {
     false
 }
 
-/// What a service manager reports about `moat proxy`.
-///
-/// Non-`Unknown` variants are only constructed in `macos.rs` / `linux.rs`;
-/// the Windows stub returns `Unknown`. The compiler sees the other variants
-/// as dead when building the Windows binary, but they are not dead in
-/// aggregate across the three platforms — this `allow` reflects a
-/// cross-compilation artifact, not an actual unused variant.
-#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+/// What a service manager reports about `moat proxy`. Only macOS and Linux
+/// have a service manager to ask, so the type exists only there; the Windows
+/// stub has no state to report (#272).
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum State {
@@ -87,6 +84,7 @@ pub enum State {
     Unknown { details: String },
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 impl State {
     /// A short line for `moat status` / `moat doctor`.
     pub fn describe(&self, path: &std::path::Path) -> String {
@@ -114,19 +112,23 @@ impl State {
 /// What the service wrapper does. The real implementations are
 /// platform-selected ([`platform::manager`]); in-process tests set
 /// `MOAT_SERVICE_SKIP_EXEC=1` to write the file without touching
-/// `launchctl`/`systemctl`.
+/// `launchctl`/`systemctl`. Reading the state and restarting exist only where
+/// a service can be installed (macOS, Linux).
 pub trait Manager {
-    /// Where the service file lives on disk.
-    fn file_path(&self) -> Result<PathBuf>;
     /// Write the file (owner-only), load it and start it. Returns the path
     /// written to.
     fn install(&self, binary: &std::path::Path, moat_home: &std::path::Path) -> Result<PathBuf>;
     /// Stop and remove the file. Returns the path removed, or `None` when
     /// nothing was installed.
     fn uninstall(&self) -> Result<Option<PathBuf>>;
+    /// Where the service file lives on disk.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    fn file_path(&self) -> Result<PathBuf>;
     /// What state the service is in now.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn state(&self) -> Result<State>;
     /// Reload: pick up a changed policy (`moat sandbox sync`), by restarting.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn restart(&self) -> Result<()>;
 }
 
@@ -143,7 +145,7 @@ pub fn display_name() -> &'static str {
     platform::DISPLAY
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
 mod tests {
     use super::*;
 

@@ -123,6 +123,9 @@ lock so the proxy picks up the new policy (which it reads once at
 start-up). `moat uninstall` removes the service alongside the hooks, so
 a stale service never keeps listening with a reference to a gone binary.
 
+Windows has no user service yet (#272): `moat proxy install` and `moat proxy
+status` refuse with exit 64 and say to run `moat proxy` in a terminal.
+
 The plist/unit holds only `MOAT_HOME` (a path, never a secret) and the
 pinned `moat` binary. On Linux the file is written owner-only (`0o600`);
 on macOS the `LaunchAgents` directory already restricts access to the

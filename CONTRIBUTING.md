@@ -58,9 +58,9 @@ is pushed to `main` directly.
 | Label group | How it is set | Meaning |
 |---|---|---|
 | `type: *` | from the Conventional Commits title | what kind of change |
-| `area: *` | from changed paths | `core`, `hosts`, `audit`, `cli`, `policy`, `ci`, `docs`, `deps` |
+| `area: *` | from changed paths | `core`, `hosts`, `audit`, `proxy`, `cli`, `policy`, `ci`, `docs`, `deps` |
 | `size: *` | additions + deletions | `XS` ≤ 10 · `S` ≤ 50 · `M` ≤ 200 · `L` ≤ 500 · `XL` fails without `size: override` |
-| `risk: *` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
+| `risk: *` | from changed paths | `high`: engine, lexer/classifier, policy, guard, exit codes, proxy and broker, OS sandbox generation, `moat run`, integrity, secrets, workflows, SECURITY · `medium`: adapters, install, audit · `low`: the rest |
 | `needs: fixture` | core or policy changed without `tests/conformance/` | add a fixture |
 
 Checks that must pass before merge (enforced by the `main` ruleset; names as shown on the
@@ -104,8 +104,9 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
 
 - Commit and PR title types: `feat`, `fix`, `sec`, `policy`, `host(claude-code)`,
   `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, lowercase subject.
-- Library crates (`openmoat-core`, `openmoat-hosts`, `openmoat-audit`) use typed `thiserror`
-  errors and never print. `anyhow` and terminal output live only in `openmoat-cli`.
+- Library crates (`openmoat-core`, `openmoat-hosts`, `openmoat-audit`, `openmoat-proxy`) use
+  typed `thiserror` errors and never print. `anyhow` and terminal output live only in
+  `openmoat-cli`.
 - `openmoat-core` has no I/O, no `unsafe`, and no internal dependencies; CI builds it
   for `wasm32` to prove it.
 - Files stay under 500 lines; functions under 200 (clippy enforces the latter).

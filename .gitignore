@@ -3,3 +3,5 @@
 *.pdb
 .DS_Store
 /dist
+# Claude Code agent worktrees: full checkouts of this repository
+/.claude/worktrees/

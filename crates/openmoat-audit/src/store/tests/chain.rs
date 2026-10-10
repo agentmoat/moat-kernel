@@ -1,8 +1,8 @@
 use openmoat_core::{Action, Decision, Verdict};
 use rusqlite::{Connection, params};
 
-use super::chain::Fields;
 use super::*;
+use crate::store::chain::Fields;
 
 fn fields() -> Fields<'static> {
     Fields {
