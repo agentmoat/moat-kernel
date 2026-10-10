@@ -371,6 +371,16 @@ mod tests {
                 writes: vec!["src/lib.rs".into(), "~/.zshrc".into()]
             })
         );
+        let indented = Host::Codex
+            .parse_request(&fixture("codex", "pretooluse-apply-patch-indented-header"))
+            .unwrap();
+        assert_eq!(
+            indented.action,
+            Some(Action::Patch {
+                writes: vec!["notes.txt".into(), "~/.ssh/id_rsa".into()]
+            }),
+            "Codex trims a header line, so an indented one still deletes"
+        );
         let empty = r#"{"session_id":"s","tool_name":"apply_patch","tool_input":{}}"#;
         assert!(
             Host::Codex.parse_request(empty).is_err(),

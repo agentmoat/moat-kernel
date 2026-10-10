@@ -57,6 +57,13 @@ pub fn reason_line(decision: &Decision) -> String {
     }
 }
 
+/// Words that make a tool name write-shaped (`write_file`, `DeleteDirectory`):
+/// the paths such a tool names are checked as written, not read.
+const WRITE_VERBS: &[&str] = &[
+    "write", "edit", "create", "move", "rename", "delete", "remove", "append", "mkdir", "copy",
+    "save", "patch", "update",
+];
+
 /// A non-empty string field of a tool's input, or the error naming it.
 fn input_str(input: &Value, tool: &str, field: &'static str) -> Result<String, HostError> {
     input
