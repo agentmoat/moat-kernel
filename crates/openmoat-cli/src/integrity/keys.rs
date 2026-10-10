@@ -144,5 +144,12 @@ mod tests {
         let pinned = BTreeMap::new();
         let now = BTreeMap::from([("\u{1b}[2Jx".to_owned(), String::new())]);
         assert_eq!(describe(&pinned, &now).unwrap(), r"added \u{1b}[2Jx");
+        // Invisible and bidirectional characters are escaped too, so a key
+        // cannot show the person reading `moat doctor` something else.
+        let now = BTreeMap::from([("\u{202e}SSH\u{200b}".to_owned(), String::new())]);
+        assert_eq!(
+            describe(&pinned, &now).unwrap(),
+            r"added \u{202e}SSH\u{200b}"
+        );
     }
 }

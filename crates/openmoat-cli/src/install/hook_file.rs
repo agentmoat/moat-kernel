@@ -12,7 +12,7 @@ use std::path::Path;
 use anyhow::{Context as _, Result, bail};
 use serde_json::{Map, Value, json};
 
-use super::{HOOK_BACKUP, HookFormat, HookSpec, HostConfig, backup_path};
+use super::{HOOK_BACKUP, HookFormat, HookSpec, HostConfig};
 use crate::home::write_private;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -43,10 +43,7 @@ pub fn install(config: &HostConfig, binary: &Path, dry_run: bool) -> Result<Outc
     if outcome == Outcome::Unchanged || dry_run {
         return Ok(outcome);
     }
-    if path.exists() {
-        fs::copy(path, backup_path(path, HOOK_BACKUP))
-            .with_context(|| format!("backing up {}", path.display()))?;
-    }
+    super::back_up(path, HOOK_BACKUP)?;
     let text = serde_json::to_string_pretty(&root)? + "\n";
     write_private(path, text.as_bytes())?;
     Ok(outcome)
@@ -351,6 +348,28 @@ mod tests {
                 .with_extension("json.moat-backup")
                 .exists()
         );
+    }
+
+    #[test]
+    fn install_keeps_the_first_backup_and_makes_a_deleted_one_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = config(dir.path());
+        let original = r#"{"theme":"dark"}"#;
+        fs::write(&cfg.settings_path, original).unwrap();
+        let backup = cfg.settings_path.with_extension("json.moat-backup");
+
+        install(&cfg, Path::new("/opt/moat/bin/moat"), false).unwrap();
+        install(&cfg, Path::new("/usr/local/bin/moat"), false).unwrap();
+        assert_eq!(
+            fs::read_to_string(&backup).unwrap(),
+            original,
+            "a later edit keeps the copy from before OpenMoat"
+        );
+
+        fs::remove_file(&backup).unwrap();
+        let edited = fs::read_to_string(&cfg.settings_path).unwrap();
+        install(&cfg, Path::new("/opt/moat/bin/moat"), false).unwrap();
+        assert_eq!(fs::read_to_string(&backup).unwrap(), edited);
     }
 
     #[test]

@@ -206,6 +206,22 @@ fn doctor_and_accept_name_the_keys_that_changed() {
 }
 
 #[test]
+fn ungoverned_tool_is_denied_while_the_lock_shows_drift() {
+    let sb = sandbox();
+    let ungoverned = fixture("claude-code/ungoverned.json");
+    assert_eq!(sb.guard("claude-code", &ungoverned).status.code(), Some(OK));
+
+    let mut policy = std::fs::read_to_string(policy_path(&sb)).unwrap();
+    policy.push_str("\n# tampered by an agent\n");
+    std::fs::write(policy_path(&sb), policy).unwrap();
+
+    let out = sb.guard("claude-code", &ungoverned);
+    assert_eq!(out.status.code(), Some(DENY));
+    let reason = hook_output(&out)["permissionDecisionReason"].to_string();
+    assert!(reason.contains("kernel-integrity"), "{reason}");
+}
+
+#[test]
 fn missing_lock_denies_and_points_to_init() {
     let sb = sandbox();
     std::fs::remove_file(lock_path(&sb)).unwrap();

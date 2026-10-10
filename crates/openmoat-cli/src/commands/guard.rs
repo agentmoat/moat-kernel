@@ -147,14 +147,15 @@ fn evaluate(
             config_change_decision(&Home::locate()?, request.action.as_ref(), source, change)?;
         return Ok((Some(request), decision));
     }
-    let Some(action) = &request.action else {
-        return Ok((Some(request), ungoverned()));
-    };
-
+    // Lock before decide, ungoverned tools included: an `allow` while pinned
+    // files drifted would tell whoever tampered that nothing noticed.
     let home = Home::locate()?;
     if let Some(decision) = integrity::violation(&home)? {
         return Ok((Some(request), decision));
     }
+    let Some(action) = &request.action else {
+        return Ok((Some(request), ungoverned()));
+    };
     let cwd = request
         .cwd
         .as_deref()
@@ -233,9 +234,11 @@ fn read_stdin() -> Result<String> {
     Ok(payload)
 }
 
-/// A settings file changed on disk. If `moat` pinned that file, it may only be
-/// loaded when it still matches the lock; otherwise the session keeps the old
-/// settings and the change is reported. Unpinned files are audited and allowed.
+/// A settings file changed on disk. While any pinned file drifted, no change
+/// is loaded: the session keeps the old settings and the drift is reported.
+/// Otherwise a pinned file loads (it matches the lock), a settings-review copy
+/// of one loads only if it leaves the pinned file as is, and an unpinned file
+/// is audited and allowed.
 fn config_change_decision(
     home: &Home,
     action: Option<&openmoat_core::Action>,
@@ -247,71 +250,57 @@ fn config_change_decision(
         bail!("no policy lock at {}; run `moat init`", lock_path.display());
     }
     let lock = Lock::load(&lock_path)?;
+    // Checked whatever file the change names: settings load together, so an
+    // unpinned file's change would also load a tampered pinned one (every tool
+    // call is denied then anyway).
+    let drift = lock.verify();
+    if !drift.is_empty() {
+        return Ok(drift_blocks_change(&drift));
+    }
+    let mut decision = Decision::new(Verdict::Allow);
+    decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
     let path = match action {
         Some(openmoat_core::Action::FsWrite { path }) => std::path::Path::new(path),
         Some(_) => bail!("config change for something other than a file"),
-        // Claude Code may report a change without naming the file. The veto
-        // exists to keep a tampered pinned file out of the session, and the
-        // change is already on disk, so check every pinned file: block when any
-        // drifted (every tool call is denied then anyway), load otherwise.
-        // Refusing every unnamed change would block the user's own edits while
-        // protecting nothing the lock does not already cover.
-        None => return Ok(unnamed_config_change(&lock, source, change)),
+        // Claude Code may report a change without naming the file. Every pin
+        // matches, and refusing the change would block the user's own edits
+        // while protecting nothing the lock does not already cover.
+        None => {
+            decision.reasons.push(format!(
+                "{source} {change} (no file named); every file pinned by OpenMoat matches the policy lock"
+            ));
+            return Ok(decision);
+        }
     };
     // A settings-review copy holds exactly what its target will become, so the
     // target's pin decides: block unless the copy leaves the pinned file as is.
     // Only a person re-pins, and the hook cannot tell an owner's accept in
     // `/settings-review` from an agent's, so any edit of a pinned file is refused.
-    let mut decision = Decision::new(Verdict::Allow);
     if let Some(target) = path.to_str().and_then(openmoat_hosts::proposal_target)
         && lock.pins(std::path::Path::new(&target))
     {
         if let Some(drift) = lock.verify_proposal(path, std::path::Path::new(&target)) {
-            decision = Decision::new(Verdict::Deny);
-            decision.rules.push(INTEGRITY_RULE.to_owned());
-            decision.reasons.push(format!(
+            let mut deny = Decision::new(Verdict::Deny);
+            deny.rules.push(INTEGRITY_RULE.to_owned());
+            deny.reasons.push(format!(
                 "{drift}; OpenMoat pinned {target}, so the proposal is not applied. Edit the file yourself and run `moat doctor --accept` to change it"
             ));
-        } else {
-            decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
-            decision
-                .reasons
-                .push(format!("{} leaves {target} as pinned", path.display()));
+            return Ok(deny);
         }
+        decision
+            .reasons
+            .push(format!("{} leaves {target} as pinned", path.display()));
         return Ok(decision);
     }
-    if !lock.pins(path) {
-        decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
-        decision.reasons.push(format!(
-            "{} {change}; not pinned by OpenMoat",
-            path.display()
-        ));
-        return Ok(decision);
-    }
-    match lock.verify_one(path) {
-        None => {
-            decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
-            decision.reasons.push(format!(
-                "{} {change}; matches the policy lock",
-                path.display()
-            ));
-        }
-        Some(drift) => decision = drift_blocks_change(&[drift]),
-    }
-    Ok(decision)
-}
-
-fn unnamed_config_change(lock: &Lock, source: &str, change: &str) -> Decision {
-    let drift = lock.verify();
-    if !drift.is_empty() {
-        return drift_blocks_change(&drift);
-    }
-    let mut decision = Decision::new(Verdict::Allow);
-    decision.rules.push(CONFIG_CHANGE_RULE.to_owned());
-    decision.reasons.push(format!(
-        "{source} {change} (no file named); every file pinned by OpenMoat matches the policy lock"
-    ));
+    let pinned = if lock.pins(path) {
+        "matches the policy lock"
+    } else {
+        "not pinned by OpenMoat"
+    };
     decision
+        .reasons
+        .push(format!("{} {change}; {pinned}", path.display()));
+    Ok(decision)
 }
 
 fn drift_blocks_change(drift: &[crate::integrity::Drift]) -> Decision {

@@ -8,6 +8,9 @@ view at the end of the file.
 
 ## [Unreleased]
 
+### Security
+- `moat guard` now denies calls to tools outside the policy and blocks every Claude Code settings change while a pinned file has drifted; `moat init` keeps the first backup of a host file instead of replacing it with an already edited copy ([#447](https://github.com/crocodile-labs/openmoat/pull/447)).
+
 ## [0.2.0] - 2026-10-10
 
 ### Security

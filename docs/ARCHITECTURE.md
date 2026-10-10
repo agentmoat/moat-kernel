@@ -49,14 +49,15 @@ exits. There is no daemon.
    `kernel-error` deny.
 2. **Adapt.** The host adapter parses the payload into a `HookRequest`: host, session
    id, call id, working directory, tool name, and an `Action` (`Shell`,
-   `ForeignShell`, `FsRead`, `FsWrite`, `Net`, `Fetch`, `Patch`, `McpTool`). A tool
-   the adapter does not govern yields no action and is allowed with rule `ungoverned`
-   and recorded. A malformed payload is a `kernel-error` deny.
-3. **ConfigChange.** A Claude Code `ConfigChange` takes its own path: the changed file
-   is compared with `policy.lock`, and a pinned file that drifted is blocked for the
-   session (§6).
+   `ForeignShell`, `FsRead`, `FsWrite`, `Net`, `Fetch`, `Patch`, `McpTool`). A
+   malformed payload is a `kernel-error` deny.
+3. **ConfigChange.** A Claude Code `ConfigChange` takes its own path: every pinned
+   file is compared with `policy.lock`, and while any drifted the change is blocked for
+   the session, whichever file it names (§6).
 4. **Lock.** `integrity::violation` recomputes every digest in `policy.lock`. Any drift
-   denies the call with `kernel-integrity` before the policy is read.
+   denies the call with `kernel-integrity` before the policy is read. Otherwise a tool
+   the adapter does not govern (no action) is allowed with rule `ungoverned` and
+   recorded.
 5. **Context.** `EvalContext` carries the home directory, the project root (git root
    above the call's working directory, never the home directory, an ancestor of it or
    a filesystem root; `project.rs`), their symlink-resolved spellings, the working
@@ -289,8 +290,8 @@ non-zero exit. Cursor is fail-open unless a hook sets `failClosed: true`, so
   before that, or a file that no longer parses, gives the plain `was modified`. Only a person re-pins: `moat init`, or
   `moat doctor --accept`, `moat allow`, `moat edit`, `moat trust` and `moat sandbox sync` from an
   interactive terminal.
-- **ConfigChange veto.** Claude Code reports settings changes; a pinned file that no
-  longer matches the lock is blocked for the session. Codex and Cursor have no such
+- **ConfigChange veto.** Claude Code reports settings changes; while any pinned file
+  no longer matches the lock, every change is blocked for the session. Codex and Cursor have no such
   event, so there the next tool call is denied instead. A `/settings-review` accept
   writes the new contents to `<file>.proposed-<8 hex>`, fires `ConfigChange` for that
   copy and renames it over the file only if no hook blocks; when `<file>` is pinned,
@@ -408,8 +409,8 @@ at that moment. `doctor` counts them as not covered; an event without a hash aft
 ~/.claude/settings.json        Claude Code hooks and sandbox block ($CLAUDE_CONFIG_DIR overrides)
 ~/.codex/hooks.json            Codex hooks ($CODEX_HOME overrides)
 ~/.codex/config.toml           Codex [permissions.moat] profile, default_permissions
-<file>.moat-backup             each hook file before OpenMoat's last hook edit
-<file>.moat-sandbox-backup     each host file before OpenMoat's last sandbox edit
+<file>.moat-backup             each hook file before OpenMoat's first hook edit
+<file>.moat-sandbox-backup     each host file before OpenMoat's first sandbox edit
 ~/.cursor/hooks.json           Cursor hooks ($CURSOR_CONFIG_DIR overrides)
 ~/.cursor/sandbox.json         Cursor sandbox keys, next to hooks.json
 <project>/.moat/policy.yaml    repository policy, committed by the team (ADR-022)

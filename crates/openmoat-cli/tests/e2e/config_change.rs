@@ -95,6 +95,26 @@ fn unpinned_project_settings_load_and_are_audited() {
     assert!(String::from_utf8_lossy(&shown.stdout).contains("allow"));
 }
 
+#[test]
+fn unpinned_settings_are_not_loaded_while_a_pinned_file_drifted() {
+    let sb = sandbox();
+    let policy = sb.home.join(".moat/policy.yaml");
+    let mut text = std::fs::read_to_string(&policy).unwrap();
+    text.push_str("\n# tampered by an agent\n");
+    std::fs::write(&policy, text).unwrap();
+    let project = sb.home.join("proj/.claude");
+    std::fs::create_dir_all(&project).unwrap();
+    let file = project.join("settings.json");
+    std::fs::write(&file, "{}").unwrap();
+
+    let (code, doc) = config_change(&sb, &file, "created");
+    assert_eq!(code, Some(DENY));
+    assert_eq!(doc["decision"], "block");
+    let reason = doc["reason"].as_str().unwrap();
+    assert!(reason.contains("kernel-integrity"), "{reason}");
+    assert!(reason.contains("policy.yaml"), "{reason}");
+}
+
 /// The payload Claude Code 2.1.x sends: no `change_type`, `file_path` optional.
 fn current_payload(sb: &Sandbox, source: &str, path: Option<&Path>) -> (Option<i32>, Value) {
     let mut payload = serde_json::json!({
@@ -174,15 +194,17 @@ fn settings_review_copy_is_judged_as_its_pinned_target() {
     assert!(reason.contains("kernel-integrity"), "{reason}");
     assert!(reason.contains("would change"), "{reason}");
 
-    std::fs::write(&copy, &pinned).unwrap();
-    tamper(&sb);
-    let (code, doc) = current_payload(&sb, "user_settings", Some(&copy));
-    assert_eq!(code, Some(DENY), "the target itself drifted: {doc}");
-
     let local = sb
         .home
         .join(".claude/settings.local.json.proposed-0a1b2c3d");
     std::fs::write(&local, "{}").unwrap();
     let (code, doc) = current_payload(&sb, "local_settings", Some(&local));
     assert_eq!((code, doc), (Some(OK), serde_json::json!({})), "unpinned");
+
+    std::fs::write(&copy, &pinned).unwrap();
+    tamper(&sb);
+    let (code, doc) = current_payload(&sb, "user_settings", Some(&copy));
+    assert_eq!(code, Some(DENY), "the target itself drifted: {doc}");
+    let (code, doc) = current_payload(&sb, "local_settings", Some(&local));
+    assert_eq!(code, Some(DENY), "another pinned file drifted: {doc}");
 }
