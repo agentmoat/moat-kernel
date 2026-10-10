@@ -134,6 +134,10 @@ locally.
   else's name (`Serialize`, the `Authorization` header, `--color`) goes in the
   allow-list with a comment saying whose it is. Never "fix" a deliberate misspelling in
   a fixture; allow-list it.
+- **Unused dependencies:** `cargo machete` (`cargo install cargo-machete --version 0.9.2
+  --locked`) fails on a dependency in a `Cargo.toml` that no source file uses. Remove
+  it; if it is used in a way machete cannot see, list it under
+  `[package.metadata.cargo-machete] ignored` with a comment saying where it is used.
 
 ## Fuzzing
 

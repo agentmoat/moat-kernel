@@ -66,7 +66,8 @@ Each `crates/openmoat-<name>` directory holds the package `openmoat-<name>`; `cr
 scripts/ci/quality-gate.sh        # fmt, clippy -D warnings, doc, tests, policy lint
 ```
 It also runs the checks of CONTRIBUTING "Checks beyond the Rust gate" (shellcheck,
-Markdown links, typos in British English) when their tools are installed.
+Markdown links, typos in British English, unused dependencies) when their tools are
+installed.
 Claim "done" only after it passes locally. CI runs the same script on macOS (arm64, x64), Linux and Windows.
 
 ### Add or change a policy rule
