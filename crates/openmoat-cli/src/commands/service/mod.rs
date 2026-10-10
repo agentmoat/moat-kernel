@@ -64,7 +64,7 @@ pub(crate) fn skip_exec() -> bool {
 /// the Windows stub returns `Unknown`. The compiler sees the other variants
 /// as dead when building the Windows binary, but they are not dead in
 /// aggregate across the three platforms — this `allow` reflects a
-/// cross-compilation artifact, not an actual unused variant.
+/// cross-compilation artefact, not an actual unused variant.
 #[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]

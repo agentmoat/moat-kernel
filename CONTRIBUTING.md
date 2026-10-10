@@ -116,6 +116,19 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
   pass expressions to `run:` blocks through `env:`, and give tokens only the permissions
   they use. CI runs `actionlint` and `zizmor` on `.github/workflows/`.
 
+## Checks beyond the Rust gate
+
+CI runs these on every pull request. `scripts/ci/quality-gate.sh` runs each one whose
+tool is installed and prints a skip line for the others, so nothing extra is required
+locally.
+
+- **Spelling:** [`typos`](https://github.com/crate-ci/typos) 1.51.1
+  (`cargo install typos-cli --version 1.51.1 --locked`) with `_typos.toml`. The project
+  writes British English (`behaviour`, `licence`); an American spelling that is someone
+  else's name (`Serialize`, the `Authorization` header, `--color`) goes in the
+  allow-list with a comment saying whose it is. Never "fix" a deliberate misspelling in
+  a fixture; allow-list it.
+
 ## Fuzzing
 
 `fuzz/` holds `cargo fuzz` targets for every surface that takes untrusted input:

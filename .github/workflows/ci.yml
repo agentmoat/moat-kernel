@@ -181,6 +181,25 @@ jobs:
           name: fuzz-artifacts
           path: fuzz/artifacts
 
+  typos:
+    name: spelling (typos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: typos
+        # British English; the allow-list and its reasons are in _typos.toml.
+        env:
+          VERSION: 1.51.1
+          SHA256: 93c301fd4120ff076e2cc2a6d6a61cab4a4bdb81899287c0938b452e56d1f454
+        run: |
+          curl -fsSLo typos.tgz "https://github.com/crate-ci/typos/releases/download/v${VERSION}/typos-v${VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          echo "${SHA256}  typos.tgz" | sha256sum -c -
+          tar xzf typos.tgz ./typos
+          ./typos
+
   workflows:
     name: workflows (actionlint, zizmor)
     runs-on: ubuntu-latest

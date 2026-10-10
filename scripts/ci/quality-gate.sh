@@ -18,4 +18,9 @@ if rustup target list --installed 2>/dev/null | grep -q wasm32-unknown-unknown; 
 else
     echo "▷ wasm32-unknown-unknown target not installed; purity build skipped (CI runs it)"
 fi
+if command -v typos >/dev/null; then
+    run typos
+else
+    echo "▷ typos not installed; spell check skipped (CI runs it)"
+fi
 echo "✔ quality gate passed"
