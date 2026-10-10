@@ -173,7 +173,7 @@ jobs:
       - name: the workspace against the latest crates.io release
         # Reports what the next release must bump. Blocking only on a release
         # PR (`build: release …`), whose version bump must cover every break.
-        continue-on-error: ${{ !startsWith(github.event.pull_request.title, 'build: release') }}
+        continue-on-error: "${{ !startsWith(github.event.pull_request.title, 'build: release') }}"
         run: cargo semver-checks check-release -p openmoat-core -p openmoat-hosts -p openmoat-audit -p openmoat-proxy
 
   deny:
