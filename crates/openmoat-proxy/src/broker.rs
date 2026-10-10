@@ -154,7 +154,8 @@ impl Broker {
     /// `head` (a plain-HTTP request head the proxy wrote, lines ending in
     /// CRLF) with the secrets of `host` that allow `plain_http` put in: in
     /// each header a secret names, the placeholder becomes the value; a secret
-    /// whose header is absent is added. `None` when there is no such secret.
+    /// whose header is absent, or holds no placeholder, gets its own header
+    /// line. `None` when there is no such secret.
     pub(crate) fn inject(&self, host: &str, head: &[u8]) -> Option<Zeroizing<Vec<u8>>> {
         let owned: Vec<&Held> = self
             .held
@@ -167,27 +168,28 @@ impl Broker {
             return None;
         }
         let mut out = Zeroizing::new(Vec::with_capacity(head.len() + 256));
-        let mut present = vec![false; owned.len()];
+        let mut placed = vec![false; owned.len()];
         // The first line is the request line; the rest are `Name: value`.
-        let mut lines = lines.split(|b| *b == b'\n');
-        out.extend_from_slice(lines.next().unwrap_or_default());
-        for line in lines {
-            out.extend_from_slice(b"\n");
-            let name = line.split(|b| *b == b':').next().unwrap_or_default();
-            match owned
-                .iter()
-                .position(|h| name.eq_ignore_ascii_case(h.secret.header.as_bytes()))
-            {
-                Some(i) => {
-                    present[i] = true;
+        for (n, line) in lines.split(|b| *b == b'\n').enumerate() {
+            let named = header_name(line).filter(|_| n > 0).and_then(|name| {
+                owned
+                    .iter()
+                    .position(|h| name.eq_ignore_ascii_case(h.secret.header.as_bytes()))
+            });
+            match named {
+                None => out.extend_from_slice(line),
+                Some(i) if contains(line, owned[i].placeholder.as_bytes()) => {
+                    placed[i] = true;
                     let h = owned[i];
                     replace(line, h.placeholder.as_bytes(), h.value.as_bytes(), &mut out);
                 }
-                None => out.extend_from_slice(line),
+                // A value the client chose would reach the owner in place of
+                // the secret: it is dropped, and the secret's line added below.
+                Some(_) => continue,
             }
+            out.extend_from_slice(b"\n");
         }
-        out.extend_from_slice(b"\n");
-        for (h, _) in owned.iter().zip(&present).filter(|(_, p)| !**p) {
+        for (h, _) in owned.iter().zip(&placed).filter(|(_, p)| !**p) {
             out.extend_from_slice(format!("{}: ", h.secret.header).as_bytes());
             out.extend_from_slice(h.value.as_bytes());
             out.extend_from_slice(b"\r\n");
@@ -249,6 +251,11 @@ fn replace(mut line: &[u8], from: &[u8], to: &[u8], out: &mut Vec<u8>) {
         line = &line[at + from.len()..];
     }
     out.extend_from_slice(line);
+}
+
+/// The name of a `Name: value` header line.
+fn header_name(line: &[u8]) -> Option<&[u8]> {
+    line.iter().position(|b| *b == b':').map(|at| &line[..at])
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {

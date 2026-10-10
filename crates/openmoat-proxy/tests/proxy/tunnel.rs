@@ -48,6 +48,23 @@ fn a_tunnel_that_is_not_tls_is_closed_unforwarded() {
 }
 
 #[test]
+fn a_tunnel_to_an_address_that_is_not_tls_is_closed_unforwarded() {
+    let h = start(None, Limits::default());
+    let mut s = h.connect();
+    // No SNI is required for an address, but a `ClientHello` still is.
+    write!(
+        s,
+        "CONNECT 127.0.0.1:{} HTTP/1.1\r\n\r\nGET / HTTP/1.0\r\n\r\n",
+        h.port()
+    )
+    .unwrap();
+    let reply = read_all(&mut s);
+    assert_eq!(reply, "HTTP/1.1 200 Connection Established\r\n\r\n");
+    assert!(h.nothing_forwarded());
+    assert_eq!(h.rows()[0].rules, ["proxy-sni"]);
+}
+
+#[test]
 fn a_connection_that_cannot_be_recorded_is_refused() {
     let failing: &'static FailingRecorder = Box::leak(Box::default());
     let h = start(Some(failing), Limits::default());

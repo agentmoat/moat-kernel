@@ -175,6 +175,37 @@ fn known_secret_values_are_masked_in_every_agent_text_and_the_chain_holds() {
 }
 
 #[test]
+fn known_secret_values_are_masked_in_the_host_ids_and_tool_name() {
+    /// Generated for the test; no real secret is used.
+    const FAKE: &str = "Zq81-fake-unknown-format-c3";
+    let store = Store::open_in_memory()
+        .unwrap()
+        .with_secrets(KnownSecrets::new([FAKE]).unwrap());
+    let d = decision(Verdict::Allow, "dev-shell", "ok");
+    let a = Action::Shell {
+        command: "git status".into(),
+    };
+    let [host, session, call, tool] = ["h", "s", "c", "t"].map(|f| format!("{f}-{FAKE}"));
+    let id = store
+        .record(&NewEvent {
+            host: &host,
+            session_id: &session,
+            call_id: Some(&call),
+            tool: &tool,
+            ..sample(&d, &a)
+        })
+        .unwrap();
+    let event = store.get(id).unwrap().unwrap();
+    assert_eq!(
+        [&event.host, &event.session_id, &event.tool],
+        ["h-[redacted]", "s-[redacted]", "t-[redacted]"]
+    );
+    assert_eq!(event.call_id.as_deref(), Some("c-[redacted]"));
+    assert_eq!(store.session(&session).unwrap(), [event]);
+    assert!(store.verify_chain().unwrap().broken.is_none());
+}
+
+#[test]
 fn recent_and_session_queries() {
     let store = Store::open_in_memory().unwrap();
     let d = decision(Verdict::Allow, "dev-shell", "ok");

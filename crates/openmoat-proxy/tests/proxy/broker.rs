@@ -150,6 +150,10 @@ fn with_plain_http_the_owner_host_gets_the_value_and_the_client_never_sees_it() 
             format!("x-api-key: k={VALUE}\r\n"),
         ),
         (String::new(), format!("X-Api-Key: {VALUE}\r\n")),
+        (
+            "X-Api-Key: chosen\r\n".to_owned(),
+            format!("X-Api-Key: {VALUE}\r\n"),
+        ),
     ];
     for (sent, expected) in cases {
         let reply = h.exchange(&format!(
@@ -159,11 +163,37 @@ fn with_plain_http_the_owner_host_gets_the_value_and_the_client_never_sees_it() 
         assert_no_value(&h, &reply);
         let head = String::from_utf8(h.received.recv_timeout(WAIT).unwrap()).unwrap();
         assert!(head.contains(&expected), "{head}");
-        assert!(!head.contains(PLACEHOLDER), "{head}");
+        assert!(
+            !head.contains(PLACEHOLDER) && !head.contains("chosen"),
+            "{head}"
+        );
     }
     assert!(h.rows().iter().all(|r| r.rules == ["test-hosts"]));
     let reply = h.exchange(&format!("GET http://allowed.test:{port}/ HTTP/1.1\r\n\r\n"));
     assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
     let head = String::from_utf8(h.received.recv_timeout(WAIT).unwrap()).unwrap();
     assert!(!head.to_ascii_lowercase().contains("x-api-key"), "{head}");
+}
+
+#[test]
+fn a_secret_split_between_the_head_read_and_the_body_is_caught() {
+    let h = brokered_to(sink(), false);
+    let port = h.port();
+    let mut s = h.connect();
+    // The head and the first part of the value arrive in one read.
+    let (first, second) = VALUE.split_at(9);
+    write!(
+        s,
+        "POST http://allowed.test:{port}/ HTTP/1.1\r\nContent-Length: 100\r\n\r\nk={first}"
+    )
+    .unwrap();
+    thread::sleep(Duration::from_millis(100));
+    let _ = s.write_all(second.as_bytes());
+    let reply = read_all(&mut s);
+    assert_no_value(&h, &reply);
+    let forwarded = String::from_utf8(h.received.recv_timeout(WAIT).unwrap()).unwrap();
+    assert!(forwarded.ends_with(&format!("k={first}")), "{forwarded}");
+    let rows = h.rows();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[1].rules, ["proxy-secret"]);
 }

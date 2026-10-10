@@ -205,3 +205,17 @@ ask:
         assert_eq!(named(&addresses, ip.parse().unwrap()), open, "{ip}");
     }
 }
+
+#[test]
+fn a_name_with_a_port_or_a_leading_digit_does_not_name_an_address() {
+    let yaml = r#"
+version: 1
+allow:
+  - { id: names, net: ["db.internal:5432", "1password.com", "10.0.0.5", "fd12::*"] }
+"#;
+    let named_policy = address_policy(&Policy::parse(yaml).unwrap());
+    assert_eq!(
+        named_policy.allow[0].patterns(Kind::Net),
+        ["10.0.0.5", "fd12::*"]
+    );
+}

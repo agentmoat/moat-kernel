@@ -43,6 +43,40 @@ pub struct Limits {
     pub max_connections: usize,
 }
 
+impl Limits {
+    /// Refuse limits under which no connection could be served: a zero limit,
+    /// or a timeout too large to set a deadline with.
+    fn check(&self) -> io::Result<()> {
+        let now = Instant::now();
+        let sizes = [
+            ("max_head_bytes", self.max_head_bytes),
+            ("max_connections", self.max_connections),
+        ];
+        let timeouts = [
+            ("handshake_timeout", self.handshake_timeout),
+            ("idle_timeout", self.idle_timeout),
+            ("connect_timeout", self.connect_timeout),
+        ];
+        let bad = sizes
+            .iter()
+            .find(|(_, n)| *n == 0)
+            .map(|(name, _)| name)
+            .or_else(|| {
+                timeouts
+                    .iter()
+                    .find(|(_, d)| d.is_zero() || now.checked_add(*d).is_none())
+                    .map(|(name, _)| name)
+            });
+        match bad {
+            Some(name) => Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("proxy limit `{name}` is zero or too large"),
+            )),
+            None => Ok(()),
+        }
+    }
+}
+
 impl Default for Limits {
     fn default() -> Self {
         Self {
@@ -85,7 +119,9 @@ impl std::fmt::Debug for Proxy<'_> {
 
 impl Proxy<'_> {
     /// Serve connections from `listener` until accepting fails.
+    /// Fails at once when the [`Limits`] are zero or too large.
     pub fn serve(&self, listener: &TcpListener) -> io::Result<()> {
+        self.limits.check()?;
         let address_policy = decide::address_policy(self.policy.policy());
         let addresses = CompiledPolicy::compile(&address_policy, self.policy.context())
             .map_err(io::Error::other)?;
@@ -131,6 +167,9 @@ impl Proxy<'_> {
                 return;
             }
         };
+        // `buf` holds the head and any body bytes read with it. Watching all of
+        // it before `rest` is split off leaves its end in the watch's tail, so a
+        // secret split between `rest` and the next body chunk is still found.
         let mut watch = Watch::new(self.broker, request.host());
         if let Some(leak) = watch.next(&buf) {
             let decision = leak.decision(request.host());
@@ -207,7 +246,9 @@ impl Proxy<'_> {
     }
 
     /// Answer the CONNECT, then hold the tunnel's first bytes until its SNI
-    /// is known to name the CONNECT host. Returns the bytes to forward.
+    /// is known to name the CONNECT host. Returns the bytes to forward. Every
+    /// outcome is recorded, a client that cannot be answered too: the
+    /// upstream connection is already open.
     fn check_tunnel(
         &self,
         client: &TcpStream,
@@ -217,19 +258,18 @@ impl Proxy<'_> {
         request: &Request,
         started: Instant,
     ) -> Option<Vec<u8>> {
-        if (&*client)
-            .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-            .is_err()
-        {
-            return None;
-        }
+        let answered = (&*client).write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n");
         let deadline = Instant::now() + self.limits.handshake_timeout;
-        let refusal = match read_hello(client, &mut hello, deadline) {
+        let read = answered
+            .map_err(|e| format!("answering the CONNECT: {e}"))
+            .and_then(|()| read_hello(client, &mut hello, deadline));
+        let refusal = match read {
             Ok(Some(name)) if name == host => None,
             Ok(Some(name)) => Some(format!(
                 "TLS server name {name} does not match CONNECT {host}"
             )),
-            // An IP literal is never sent as SNI (RFC 6066 §3).
+            // An IP literal is never sent as SNI (RFC 6066 §3). The bytes are
+            // still a complete `ClientHello`: anything else is an `Err`.
             Ok(None) if host.parse::<std::net::IpAddr>().is_ok() => None,
             Ok(None) => Some(format!(
                 "TLS ClientHello for CONNECT {host} has no server name"
@@ -389,6 +429,11 @@ fn respond(client: &TcpStream, status: u16, message: &str) {
         502 => "Bad Gateway",
         _ => "Service Unavailable",
     };
+    // The message may quote the request; no control byte of it is echoed.
+    let message: String = message
+        .chars()
+        .map(|c| if c.is_control() { '?' } else { c })
+        .collect();
     let body = format!("moat proxy: {message}\n");
     let response = format!(
         "HTTP/1.1 {status} {reason}\r\nContent-Type: text/plain; charset=utf-8\r\n\
@@ -404,3 +449,6 @@ fn is_transient(e: &io::Error) -> bool {
         ErrorKind::Interrupted | ErrorKind::ConnectionAborted | ErrorKind::ConnectionReset
     )
 }
+
+#[cfg(test)]
+mod tests;

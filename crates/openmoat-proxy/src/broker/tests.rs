@@ -126,3 +126,21 @@ fn without_plain_http_the_owner_head_is_left_alone() {
     assert_eq!(b.withheld("api.github.com"), ["gh"]);
     assert!(b.withheld("github.com").is_empty());
 }
+
+#[test]
+fn a_secret_header_without_the_placeholder_is_replaced_by_the_secret() {
+    let b = broker_with(VALUE, true).unwrap();
+    let head = b"GET / HTTP/1.1\r\nAuthorization: Bearer chosen-by-client\r\n\
+                 authorization: Bearer moat-secret:gh:placeholder\r\nX-Other: 1\r\n\r\n";
+    let out = String::from_utf8(b.inject("api.github.com", head).unwrap().to_vec()).unwrap();
+    assert_eq!(
+        out,
+        format!("GET / HTTP/1.1\r\nauthorization: Bearer {VALUE}\r\nX-Other: 1\r\n\r\n")
+    );
+    let head = b"GET / HTTP/1.1\r\nAUTHORIZATION: chosen-by-client\r\n\r\n";
+    let out = String::from_utf8(b.inject("api.github.com", head).unwrap().to_vec()).unwrap();
+    assert_eq!(
+        out,
+        format!("GET / HTTP/1.1\r\nAuthorization: {VALUE}\r\n\r\n")
+    );
+}
