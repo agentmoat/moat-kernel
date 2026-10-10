@@ -1,0 +1,10 @@
+{
+  "session_id": "codex-9a02",
+  "turn_id": "t-19",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "apply_patch",
+  "tool_use_id": "call_79",
+  "tool_input": {
+    "command": "*** Begin Patch\n*** Add File: notes.txt\n+hello\n  *** Delete File: ~/.ssh/id_rsa\n*** End Patch\n"
+  }
+}

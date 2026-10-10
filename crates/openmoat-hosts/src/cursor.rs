@@ -129,9 +129,9 @@ const PATH_KEYS: &[&str] = &[
 ///
 /// Cursor documents tool names but no file tool's arguments
 /// (`tests/fixtures/hosts/cursor/README.md`, #138). A search reads every path
-/// key it carries (a captured `Grep` sends `file_path`, not `path`), and any
-/// other tool that names a path is read as reading it, so an unlisted file or
-/// search tool is checked instead of passed.
+/// key it carries (a captured `Grep` sends `file_path`, not `path`). Any other
+/// tool that names a path is checked instead of passed: as writing it when its
+/// name is write-shaped (`DeleteDirectory`, `Rename`), else as reading it.
 fn pre_tool_action(
     tool: &str,
     input: &Value,
@@ -150,8 +150,14 @@ fn pre_tool_action(
         "Grep" | "Glob" => {
             Some(reads(read_paths(tool, input)?).unwrap_or_else(|| crate::search_root(input, cwd)))
         }
+        _ if is_write_shaped(tool) => writes(read_paths(tool, input)?),
         _ => reads(read_paths(tool, input)?),
     })
+}
+
+fn is_write_shaped(tool: &str) -> bool {
+    let tool = tool.to_ascii_lowercase();
+    crate::WRITE_VERBS.iter().any(|verb| tool.contains(verb))
 }
 
 /// Every non-empty path under [`PATH_KEYS`]. A path key holding anything but a
@@ -184,6 +190,16 @@ fn reads(mut paths: Vec<String>) -> Option<Action> {
         0 => None,
         1 => paths.pop().map(|path| Action::FsRead { path }),
         _ => Some(Action::ReadFiles { paths }),
+    }
+}
+
+/// One path is an `FsWrite`; several a `Patch`, the action that writes many
+/// files at once; none no action.
+fn writes(mut paths: Vec<String>) -> Option<Action> {
+    match paths.len() {
+        0 => None,
+        1 => paths.pop().map(|path| Action::FsWrite { path }),
+        _ => Some(Action::Patch { writes: paths }),
     }
 }
 
@@ -304,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_tool_use_unlisted_tools_read_the_paths_they_name() {
+    fn pre_tool_use_unlisted_tools_check_the_paths_they_name() {
         let parse = |tool: &str, input: &str| {
             Host::Cursor.parse_request(&format!(
                 r#"{{"hook_event_name":"preToolUse","workspace_roots":["/p"],
@@ -334,7 +350,26 @@ mod tests {
             parse("ListDir", r#"{"target_directory":7}"#),
             Err(HostError::MalformedArguments { .. })
         ));
+        assert_eq!(
+            Host::Cursor
+                .parse_request(&fixture("preToolUse-delete-directory"))
+                .unwrap()
+                .action,
+            Some(Action::FsWrite {
+                path: "/Users/me/.ssh".into()
+            }),
+            "a write-shaped tool writes what it names"
+        );
+        assert_eq!(
+            parse("Rename", r#"{"file_path":"/p/a","target_file":"/p/.env"}"#)
+                .unwrap()
+                .action,
+            Some(Action::Patch {
+                writes: vec!["/p/a".into(), "/p/.env".into()]
+            })
+        );
         for (tool, input) in [
+            ("TodoWrite", r#"{"todos":[]}"#),
             ("WebSearch", r#"{"query":"rust"}"#),
             ("Task", r#"{"prompt":"read /Users/me/.ssh"}"#),
             ("MCP:read_file", r#"{"path":"/Users/me/.ssh/id_rsa"}"#),

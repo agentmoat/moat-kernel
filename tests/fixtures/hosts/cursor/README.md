@@ -29,6 +29,8 @@ What each fixture is based on, so a guess is never mistaken for a capture.
   workspace root.
 - `Glob`, `Edit`, `MultiEdit` and `StrReplace` are not Cursor hook tool names in the
   docs. The adapter maps them in case a build sends them.
-- Any other tool that names a path under one of those keys is read as reading it.
+- Any other tool that names a path under one of those keys is read as reading it,
+  or as writing it when its name is write-shaped (`Delete`, `Rename`, `Move`, …).
+  `preToolUse-delete-directory.json` is not a capture: it stands for such a tool.
 
 Replace these fixtures with a captured Cursor IDE payload once one is available.

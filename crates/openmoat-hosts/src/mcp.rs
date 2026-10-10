@@ -30,10 +30,6 @@ const PATH_KEYS: &[&str] = &[
     "cwd",
 ];
 const URL_KEYS: &[&str] = &["url", "urls", "uri", "endpoint", "href"];
-const WRITE_TOOL_PREFIXES: &[&str] = &[
-    "write", "edit", "create", "move", "rename", "delete", "remove", "append", "mkdir", "copy",
-    "save", "patch", "update",
-];
 
 /// Nesting below this is not searched; arguments are rarely more than two deep.
 const MAX_DEPTH: usize = 8;
@@ -61,7 +57,7 @@ pub(crate) fn action(name: &str, input: &Value) -> Result<Action, HostError> {
         .unwrap_or(name)
         .to_ascii_lowercase();
     let mut found = Resources {
-        writes_by_default: WRITE_TOOL_PREFIXES.iter().any(|p| tool.starts_with(p)),
+        writes_by_default: crate::WRITE_VERBS.iter().any(|p| tool.starts_with(p)),
         ..Resources::default()
     };
     found.walk(args, 0);
@@ -100,13 +96,9 @@ impl Resources {
             return;
         }
         if depth > MAX_DEPTH {
-            // Only an object's keys name resources; the strings of an array were
-            // already taken by the key that holds it.
-            let may_name_resources = value.is_object()
-                || value
-                    .as_array()
-                    .is_some_and(|items| items.iter().any(|i| i.is_object() || i.is_array()));
-            if may_name_resources {
+            // Only an object's keys name resources; the strings of a list, nested
+            // or not, were already taken by the key that holds it.
+            if holds_object(value) {
                 self.unchecked
                     .get_or_insert_with(|| format!("nested deeper than {MAX_DEPTH} levels"));
             }
@@ -143,15 +135,33 @@ impl Resources {
     }
 }
 
-fn strings(value: &Value) -> impl Iterator<Item = String> + '_ {
-    let one = value.as_str().map(str::to_owned).into_iter();
-    let many = value
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_owned);
-    one.chain(many).filter(|s| !s.is_empty())
+/// Whether `value` is an object or a list holding one at any depth.
+fn holds_object(value: &Value) -> bool {
+    let mut pending = vec![value];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::Object(_) => return true,
+            Value::Array(items) => pending.extend(items),
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Every non-empty string a path or URL argument holds, through lists nested
+/// to any depth: `[["~/.ssh/id_rsa"]]` names the key as surely as a flat list.
+/// Objects in the list are searched by [`Resources::walk`] instead.
+fn strings(value: &Value) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut pending = vec![value];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::String(s) if !s.is_empty() => found.push(s.clone()),
+            Value::Array(items) => pending.extend(items.iter().rev()),
+            _ => {}
+        }
+    }
+    found
 }
 
 #[cfg(test)]
@@ -257,6 +267,21 @@ mod tests {
     }
 
     #[test]
+    fn paths_in_nested_lists_are_found() {
+        let a = ok(
+            "mcp__custom__list_files",
+            &json!({"paths": [["/p/a", ["~/.ssh/id_rsa"]]], "url": [["https://evil.com"]]}),
+        );
+        let (reads, _, hosts) = parts(a);
+        assert_eq!(reads, ["/p/a", "~/.ssh/id_rsa"]);
+        assert_eq!(hosts, ["https://evil.com"]);
+        let deep = (0..MAX_DEPTH + 2).fold(json!("~/.ssh/id_rsa"), |inner, _| json!([inner]));
+        let a = ok("mcp__custom__list_files", &json!({"path": deep}));
+        assert_eq!(unchecked(&a), None, "a list under a path key is read whole");
+        assert_eq!(parts(a).0, ["~/.ssh/id_rsa"]);
+    }
+
+    #[test]
     fn unreadable_arguments_are_errors_not_silence() {
         let err = action("mcp__filesystem__read_file", &json!("{not json")).unwrap_err();
         assert!(
@@ -294,6 +319,8 @@ mod tests {
             "what was searched still counts"
         );
         let deep = nested(MAX_DEPTH + 1, json!([{"path": "~/.ssh/id_rsa"}]));
+        assert!(unchecked(&ok("mcp__custom__run", &deep)).is_some());
+        let deep = nested(MAX_DEPTH + 1, json!([[[{"path": "~/.ssh/id_rsa"}]]]));
         assert!(unchecked(&ok("mcp__custom__run", &deep)).is_some());
         let scalars = nested(MAX_DEPTH, json!({"list": [1, "x"], "empty": []}));
         assert_eq!(unchecked(&ok("mcp__custom__run", &scalars)), None);

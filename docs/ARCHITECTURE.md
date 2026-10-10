@@ -120,8 +120,9 @@ unrecorded, and exits 2, since a host that times the hook out runs the call
   there is no PowerShell parser.
 - **ReadFiles** (Claude Code `SendFile`, absolute Glob patterns). One `fs.read` per
   path; an empty list asks.
-- **Patch** (Codex `apply_patch`). One `fs.write` per added, updated, deleted or
-  moved-to file; a patch naming no file asks.
+- **Patch** (Codex `apply_patch`, a write-shaped Cursor tool naming several paths). One
+  `fs.write` per added, updated, deleted or moved-to file; a patch naming no file asks.
+  A header line is matched trimmed and in any case, as Codex reads it, wherever it is.
 - **McpTool.** An `mcp` atom for the tool name, plus `fs.*` and `net` atoms for path-
   and URL-shaped arguments found down to 8 levels of nesting (`openmoat-hosts/src/mcp.rs`).
   When deeper nesting stops the search, the adapter names the limit in `unchecked`, and
@@ -144,6 +145,7 @@ the engine merges its `ask` with their decisions, so the failing part cannot hid
 | Claude Code `LSP` | `filePath` | `FsRead` |
 | Claude Code `Glob`, `Grep` | `path`, else the working directory; an absolute or `~` Glob `pattern` also reads its directory part (Claude Code searches that instead of `path`) | `FsRead`, `ReadFiles` |
 | Cursor `preToolUse` `Grep`, `Glob` | every path in `path`, `file_path`, `target_file`, `target_directory`, `target_directories`, else the working directory | `FsRead`, `ReadFiles` |
+| Cursor `preToolUse`, any other write-shaped tool (name contains `write`, `edit`, `create`, `move`, `rename`, `delete`, `remove`, `append`, `mkdir`, `copy`, `save`, `patch` or `update`) that names a path under those keys | every such path | `FsWrite`, `Patch` |
 | Cursor `preToolUse`, any other tool that names a path under those keys | every such path | `FsRead`, `ReadFiles` |
 | Claude Code `SendFile` | every path in `files` (the contents go to another session; an empty or non-string list is an adapter error, so `deny`) | `ReadFiles` |
 | Claude Code `Edit`, `Write`, `MultiEdit`; `NotebookEdit` | `file_path`; `notebook_path` | `FsWrite` |

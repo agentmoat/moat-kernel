@@ -1,0 +1,6 @@
+{
+  "conversation_id": "conv-42", "generation_id": "gen-11", "hook_event_name": "preToolUse",
+  "cursor_version": "2.3.1", "workspace_roots": ["/p"], "cwd": "/p",
+  "tool_name": "DeleteDirectory", "tool_input": { "target_directory": "/Users/me/.ssh" },
+  "tool_use_id": "tu-2"
+}
