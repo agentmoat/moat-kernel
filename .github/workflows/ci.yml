@@ -165,6 +165,9 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: fuzz
+      - name: clippy on the fuzz targets
+        working-directory: fuzz
+        run: cargo clippy --locked -- -D warnings
       - run: cargo install cargo-fuzz --version 0.13.1 --locked
       - run: python3 fuzz/seed_corpus.py
       - name: run every target

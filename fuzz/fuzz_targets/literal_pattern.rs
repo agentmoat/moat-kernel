@@ -8,7 +8,8 @@ use std::collections::BTreeMap;
 
 use libfuzzer_sys::fuzz_target;
 use openmoat_core::{
-    Action, CompiledPolicy, Defaults, EvalContext, Policy, RuleGroup, Verdict, literal_shell_pattern,
+    Action, CompiledPolicy, Defaults, EvalContext, Policy, RuleGroup, Verdict,
+    literal_shell_pattern,
 };
 
 fuzz_target!(|data: &[u8]| {
@@ -61,9 +62,13 @@ fuzz_target!(|data: &[u8]| {
     // verdict or as context when another atom is stricter). Other shapes
     // (assignments, operators, substitutions) produce atoms the literal
     // pattern does not describe and are only checked for panics above.
-    let plain = command.chars().all(|c| {
-        c.is_ascii_alphanumeric() || " -_./:,+@%*?[]{}!".contains(c)
-    }) && command.split_whitespace().next().is_some_and(|w| !w.contains('='));
+    let plain = command
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || " -_./:,+@%*?[]{}!".contains(c))
+        && command
+            .split_whitespace()
+            .next()
+            .is_some_and(|w| !w.contains('='));
     // A command the classifier cannot parse asks before any rule is consulted
     // (unparseable ⇒ ask), so its approval cannot take part (`sh -ee.a`).
     let unparseable = decision.rules.iter().any(|r| r == "unparseable");
@@ -73,6 +78,9 @@ fuzz_target!(|data: &[u8]| {
             .iter()
             .chain(&decision.context)
             .any(|r| r.starts_with("approved: shell"));
-        assert!(mentioned, "pattern {pattern:?} did not match {command:?}: {decision:?}");
+        assert!(
+            mentioned,
+            "pattern {pattern:?} did not match {command:?}: {decision:?}"
+        );
     }
 });

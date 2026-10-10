@@ -12,7 +12,10 @@ fuzz_target!(|data: &[u8]| {
         assert!(request.head_len <= data.len());
         assert!(request.port() != 0);
         let host = request.host();
-        assert!(!host.is_empty() && host == host.to_ascii_lowercase(), "{host:?}");
+        assert!(
+            !host.is_empty() && host == host.to_ascii_lowercase(),
+            "{host:?}"
+        );
         if let Target::Http { head, .. } = &request.target {
             // The rewritten head is one complete head that ends the request
             // with `Connection: close`, whatever the client sent.

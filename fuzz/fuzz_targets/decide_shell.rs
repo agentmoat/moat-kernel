@@ -34,5 +34,8 @@ fuzz_target!(|data: &[u8]| {
     let decision = compiled().decide(&Action::Shell {
         command: command.to_owned(),
     });
-    assert!(!decision.rules.is_empty(), "a decision without a rule: {decision:?}");
+    assert!(
+        !decision.rules.is_empty(),
+        "a decision without a rule: {decision:?}"
+    );
 });
