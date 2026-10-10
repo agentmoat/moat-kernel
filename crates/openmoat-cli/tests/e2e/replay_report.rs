@@ -4,7 +4,7 @@ use std::process::Stdio;
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, bash_payload, stdout, text};
+use crate::common::{OK, Sandbox, USAGE, bash_payload, stdout, text};
 
 /// An installed sandbox with two sessions of recorded decisions.
 fn seeded() -> Sandbox {
@@ -25,7 +25,7 @@ fn seeded() -> Sandbox {
 fn replay_groups_sessions_into_a_timeline() {
     let sb = seeded();
     let out = sb.moat(&["replay"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let t = text(&out);
     assert!(t.contains("alpha"), "{t}");
     assert!(t.contains("beta"), "{t}");
@@ -61,9 +61,9 @@ fn replay_filters_by_session_host_and_window() {
     assert!(none.contains("no sessions"), "{none}");
 
     let missing = sb.moat(&["replay", "--session", "nope"]);
-    assert_eq!(missing.status.code(), Some(64));
+    assert_eq!(missing.status.code(), Some(USAGE));
     let bad = sb.moat(&["replay", "--since", "soon"]);
-    assert_eq!(bad.status.code(), Some(64));
+    assert_eq!(bad.status.code(), Some(USAGE));
     assert!(text(&bad).contains("time window"));
 }
 
@@ -71,7 +71,7 @@ fn replay_filters_by_session_host_and_window() {
 fn report_summarises_the_window() {
     let sb = seeded();
     let out = sb.moat(&["report"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let t = text(&out);
     assert!(t.contains("4 decisions"), "{t}");
     assert!(
@@ -117,6 +117,6 @@ fn show_aligns_columns_and_stops_quietly_when_the_reader_does() {
         .unwrap();
     drop(child.stdout.take());
     let out = child.wait_with_output().unwrap();
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(out.stderr.is_empty(), "{}", text(&out));
 }

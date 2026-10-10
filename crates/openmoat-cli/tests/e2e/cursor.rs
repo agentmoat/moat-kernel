@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, fixture as host_fixture, json, text};
+use crate::common::{DENY, OK, Sandbox, fixture as host_fixture, json, text};
 
 fn sandbox() -> Sandbox {
     Sandbox::installed(&[".cursor"])
@@ -45,7 +45,7 @@ fn init_installs_fail_closed_hooks_for_every_cursor_event() {
         );
     }
     let status = sb.moat(&["status"]);
-    assert_eq!(status.status.code(), Some(0), "{}", text(&status));
+    assert_eq!(status.status.code(), Some(OK), "{}", text(&status));
     assert!(text(&status).contains("Cursor"));
     let doctor = text(&sb.moat(&["doctor"]));
     let level = if cfg!(windows) {
@@ -72,7 +72,7 @@ fn init_installs_fail_closed_hooks_for_every_cursor_event() {
 fn shell_exfiltration_is_denied_in_cursor_format() {
     let sb = sandbox();
     let (code, doc) = guard(&sb, &fixture("beforeShellExecution.json"));
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     assert_eq!(doc["permission"], "deny");
     let msg = doc["user_message"].as_str().unwrap();
     assert!(msg.contains("secrets-paths"), "{msg}");
@@ -91,7 +91,7 @@ fn secret_file_read_and_safe_mcp_tool() {
     })
     .to_string();
     let (code, doc) = guard(&sb, &read);
-    assert_eq!(code, Some(2), "{doc}");
+    assert_eq!(code, Some(DENY), "{doc}");
     assert_eq!(doc["permission"], "deny");
     assert!(
         doc["user_message"]
@@ -102,7 +102,7 @@ fn secret_file_read_and_safe_mcp_tool() {
     );
 
     let (code, doc) = guard(&sb, &fixture("beforeMCPExecution.json"));
-    assert_eq!(code, Some(0));
+    assert_eq!(code, Some(OK));
     assert_eq!(doc["permission"], "allow", "{doc}");
 }
 
@@ -110,7 +110,7 @@ fn secret_file_read_and_safe_mcp_tool() {
 fn mcp_fetch_to_an_unlisted_host_is_denied() {
     let sb = sandbox();
     let (code, doc) = guard(&sb, &fixture("beforeMCPExecution-fetch.json"));
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     assert_eq!(doc["permission"], "deny");
     let msg = doc["agent_message"].to_string();
     assert!(msg.contains("default.net"), "{msg}");
@@ -122,7 +122,7 @@ fn mcp_fetch_to_an_unlisted_host_is_denied() {
 fn mcp_arguments_that_do_not_parse_fail_closed() {
     let sb = sandbox();
     let (code, doc) = guard(&sb, &fixture("beforeMCPExecution-malformed.json"));
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     assert_eq!(doc["permission"], "deny");
     let msg = doc["agent_message"].to_string();
     assert!(msg.contains("arguments cannot be checked"), "{msg}");
@@ -142,11 +142,11 @@ fn pre_tool_use_write_inside_the_workspace_is_allowed() {
     })
     .to_string();
     let (code, doc) = guard(&sb, &payload);
-    assert_eq!(code, Some(0));
+    assert_eq!(code, Some(OK));
     assert_eq!(doc["permission"], "allow", "{doc}");
 
     let (code, doc) = guard(&sb, &fixture("preToolUse-shell.json"));
-    assert_eq!(code, Some(0));
+    assert_eq!(code, Some(OK));
     assert_eq!(doc["permission"], "allow");
     assert!(doc["user_message"].as_str().unwrap().contains("ungoverned"));
 }
@@ -163,7 +163,7 @@ fn pre_tool_use_grep_of_a_secret_is_denied() {
     })
     .to_string();
     let (code, doc) = guard(&sb, &payload);
-    assert_eq!(code, Some(2), "{doc}");
+    assert_eq!(code, Some(DENY), "{doc}");
     assert!(
         doc["user_message"]
             .as_str()
@@ -186,7 +186,7 @@ fn pre_tool_use_grep_by_file_path_of_a_secret_is_denied() {
     })
     .to_string();
     let (code, doc) = guard(&sb, &payload);
-    assert_eq!(code, Some(2), "{doc}");
+    assert_eq!(code, Some(DENY), "{doc}");
     assert!(
         doc["user_message"].to_string().contains("secrets-paths"),
         "{doc}"
@@ -206,7 +206,7 @@ fn pre_tool_use_unlisted_search_of_a_secret_is_denied() {
     })
     .to_string();
     let (code, doc) = guard(&sb, &payload);
-    assert_eq!(code, Some(2), "{doc}");
+    assert_eq!(code, Some(DENY), "{doc}");
     assert!(
         doc["user_message"].to_string().contains("secrets-paths"),
         "{doc}"
@@ -234,7 +234,7 @@ fn pre_tool_use_ask_is_denied_and_allow_last_approves_the_file() {
     let sb = sandbox();
     let notes = sb.home.join("notes").join("todo.md");
     let (code, doc) = guard(&sb, &write_payload(&sb, &notes));
-    assert_eq!(code, Some(2), "{doc}");
+    assert_eq!(code, Some(DENY), "{doc}");
     assert_eq!(doc["permission"], "deny");
     let message = doc["agent_message"].to_string();
     assert!(message.contains("run `moat`"), "{doc}");
@@ -243,14 +243,14 @@ fn pre_tool_use_ask_is_denied_and_allow_last_approves_the_file() {
     assert!(log.contains("\"verdict\":\"ask\""), "{log}");
 
     let allow = sb.moat_as_person(&["allow", "--last"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", text(&allow));
     assert!(text(&allow).contains("may write"), "{}", text(&allow));
     let (code, doc) = guard(&sb, &write_payload(&sb, &notes));
-    assert_eq!(code, Some(0), "{doc}");
+    assert_eq!(code, Some(OK), "{doc}");
     assert_eq!(doc["permission"], "allow", "{doc}");
     let other = sb.home.join("notes").join("other.md");
     let (code, _) = guard(&sb, &write_payload(&sb, &other));
-    assert_eq!(code, Some(2), "only the approved file");
+    assert_eq!(code, Some(DENY), "only the approved file");
 }
 
 /// Cursor prompts on a `beforeShellExecution` `ask`, so it keeps the `ask`, and
@@ -268,15 +268,15 @@ fn shell_ask_stays_an_ask_and_allow_last_approves_it() {
     let (code, doc) = guard(&sb, &payload);
     assert_eq!(
         (code, &doc["permission"]),
-        (Some(0), &Value::from("ask")),
+        (Some(OK), &Value::from("ask")),
         "{doc}"
     );
     let allow = sb.moat_as_person(&["allow", "--last"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", text(&allow));
     let (code, doc) = guard(&sb, &payload);
     assert_eq!(
         (code, &doc["permission"]),
-        (Some(0), &Value::from("allow")),
+        (Some(OK), &Value::from("allow")),
         "{doc}"
     );
 }
@@ -288,7 +288,7 @@ fn unknown_cursor_event_fails_closed() {
         &sb,
         r#"{"hook_event_name":"afterFileEdit","file_path":"/p/x"}"#,
     );
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     assert_eq!(doc["permission"], "deny");
     assert!(
         doc["user_message"]

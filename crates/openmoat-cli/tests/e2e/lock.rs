@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, fixture, hook_output, text};
+use crate::common::{DENY, OK, Sandbox, USAGE, fixture, hook_output, text};
 
 fn sandbox() -> Sandbox {
     Sandbox::installed(&[".claude"])
@@ -69,7 +69,7 @@ fn edited_policy_makes_guard_fail_closed_until_repinned() {
     assert!(reason.contains("policy.yaml"), "{reason}");
 
     let check = sb.moat(&["policy", "check", "git status"]);
-    assert_eq!(check.status.code(), Some(2), "{}", text(&check));
+    assert_eq!(check.status.code(), Some(DENY), "{}", text(&check));
     assert!(
         text(&check).contains("kernel-integrity"),
         "{}",
@@ -78,7 +78,7 @@ fn edited_policy_makes_guard_fail_closed_until_repinned() {
 
     assert_eq!(
         sb.moat(&["init", "--yes"]).status.code(),
-        Some(0),
+        Some(OK),
         "init re-pins"
     );
     assert_eq!(guard_read_src(&sb)["permissionDecision"], "allow");
@@ -106,7 +106,7 @@ fn policy_swapped_for_a_symlink_is_denied_even_with_identical_bytes() {
     assert!(reason.contains("policy.yaml"), "{reason}");
 
     let status = sb.moat(&["status"]);
-    assert_eq!(status.status.code(), Some(64));
+    assert_eq!(status.status.code(), Some(USAGE));
     assert!(text(&status).contains("policy.yaml"), "{}", text(&status));
 }
 
@@ -151,14 +151,14 @@ fn removed_hook_file_is_detected() {
 fn doctor_reports_health_drift_and_refuses_to_accept_outside_a_terminal() {
     let sb = sandbox();
     let out = sb.moat(&["doctor"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(text(&out).contains("healthy"), "{}", text(&out));
 
     let mut policy = std::fs::read_to_string(policy_path(&sb)).unwrap();
     policy.push_str("\n# edited by hand\n");
     std::fs::write(policy_path(&sb), policy).unwrap();
     let out = sb.moat(&["doctor"]);
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     let report = text(&out);
     assert!(report.contains("✗"), "{report}");
     assert!(report.contains("policy.yaml"), "{report}");
@@ -167,7 +167,7 @@ fn doctor_reports_health_drift_and_refuses_to_accept_outside_a_terminal() {
     let out = sb.moat(&["doctor", "--accept"]);
     assert_eq!(
         out.status.code(),
-        Some(64),
+        Some(USAGE),
         "stdin is a pipe, so --accept must refuse"
     );
     assert!(text(&out).contains("terminal"), "{}", text(&out));
@@ -179,7 +179,7 @@ fn doctor_reports_health_drift_and_refuses_to_accept_outside_a_terminal() {
 
     std::fs::remove_file(sb.home.join(".claude/settings.json")).unwrap();
     let out = sb.moat(&["doctor"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(text(&out).contains("settings.json"), "{}", text(&out));
 }
 
@@ -196,7 +196,7 @@ fn doctor_and_accept_name_the_keys_that_changed() {
     let expected = "settings.json was modified: changed hooks; added model";
 
     let out = sb.moat(&["doctor"]);
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(text(&out).contains(expected), "{}", text(&out));
 
     let out = sb.moat_as_person(&["doctor", "--accept"]);
@@ -223,11 +223,11 @@ fn missing_lock_denies_and_points_to_init() {
 fn status_reports_lock_state() {
     let sb = sandbox();
     let out = sb.moat(&["status"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(text(&out).contains("lock"));
     std::fs::write(policy_path(&sb), "version: 1\n").unwrap();
     let out = sb.moat(&["status"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(text(&out).contains("was modified"));
 }
 
@@ -258,7 +258,7 @@ fn planted_binary_earlier_on_the_search_path_is_denied() {
             Some(stdin),
         )
     };
-    assert_eq!(run(&["init", "--yes"], "").status.code(), Some(0));
+    assert_eq!(run(&["init", "--yes"], "").status.code(), Some(OK));
     let payload = serde_json::json!({
         "session_id": "pin", "cwd": home.to_string_lossy(), "tool_name": "Bash",
         "tool_input": {"command": "git status --short"}, "tool_use_id": "t"
@@ -313,7 +313,7 @@ fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
     };
     std::fs::create_dir_all(&agent).unwrap();
     std::fs::create_dir_all(&shell).unwrap();
-    assert_eq!(run(&agent, &["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(run(&agent, &["init", "--yes"]).status.code(), Some(OK));
     // The other shell's directory holds an OpenMoat hook the lock never pinned.
     std::fs::copy(agent.join("settings.json"), shell.join("settings.json")).unwrap();
 
@@ -331,7 +331,7 @@ fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
         !pinned(&shell),
         "doctor --accept adopted an unpinned hook file"
     );
-    assert_eq!(out.status.code(), Some(64), "{report}");
+    assert_eq!(out.status.code(), Some(USAGE), "{report}");
     assert!(
         report.contains("CLAUDE_CONFIG_DIR is") && report.contains("which moat uses"),
         "{report}"
@@ -343,7 +343,7 @@ fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
     assert!(!report.contains("not pinned"), "{report}");
 
     let out = run(&shell, &["allow", "npm install left-pad", "--always"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(
         pinned(&agent),
         "allow --always dropped the agent's hook file"
@@ -366,6 +366,6 @@ fn repin_from_another_config_dir_keeps_the_pinned_hook_file() {
     let reason = d["permissionDecisionReason"].as_str().unwrap();
     assert!(reason.contains("settings.json was modified"), "{reason}");
 
-    assert_eq!(run(&shell, &["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(run(&shell, &["init", "--yes"]).status.code(), Some(OK));
     assert!(pinned(&agent) && pinned(&shell), "init keeps and adopts");
 }

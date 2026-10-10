@@ -8,7 +8,9 @@ use std::process::Output;
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, output, stdout, text};
+#[cfg(not(windows))]
+use crate::common::DENY;
+use crate::common::{OK, Sandbox, output, stdout, text};
 
 const USER_FILE: &str = "{\"enableSharedBuildCache\": true}\n";
 
@@ -35,7 +37,7 @@ fn sandbox_json(dir: &Path) -> Value {
 fn init_writes_and_pins_sandbox_json_and_uninstall_gives_it_back() {
     let (sb, dir) = moved_cursor();
     let init = moat(&sb, &dir, &["init", "--yes"]);
-    assert_eq!(init.status.code(), Some(0), "{}", text(&init));
+    assert_eq!(init.status.code(), Some(OK), "{}", text(&init));
     assert!(
         stdout(&init).contains("sandbox.json (sandbox updated;"),
         "{}",
@@ -65,7 +67,7 @@ fn init_writes_and_pins_sandbox_json_and_uninstall_gives_it_back() {
         assert!(status.contains(line), "{line:?} in {status}");
     }
     let doctor = sb.moat(&["doctor", "--verbose"]);
-    assert_eq!(doctor.status.code(), Some(0), "{}", text(&doctor));
+    assert_eq!(doctor.status.code(), Some(OK), "{}", text(&doctor));
     for line in [
         "Cursor           sandbox matches the policy",
         "wider:    shell `cursor.unsandboxed`",
@@ -82,7 +84,7 @@ fn init_writes_and_pins_sandbox_json_and_uninstall_gives_it_back() {
 
     let before = fs::read(dir.join("sandbox.json")).unwrap();
     let sync = sb.moat_as_person(&["sandbox", "sync"]);
-    assert_eq!(sync.status.code(), Some(0), "{}", text(&sync));
+    assert_eq!(sync.status.code(), Some(OK), "{}", text(&sync));
     assert!(
         stdout(&sync).contains("sandbox.json (sandbox unchanged)"),
         "{}",
@@ -91,7 +93,7 @@ fn init_writes_and_pins_sandbox_json_and_uninstall_gives_it_back() {
     assert_eq!(fs::read(dir.join("sandbox.json")).unwrap(), before);
 
     let uninstall = sb.moat_as_person(&["uninstall"]);
-    assert_eq!(uninstall.status.code(), Some(0), "{}", text(&uninstall));
+    assert_eq!(uninstall.status.code(), Some(OK), "{}", text(&uninstall));
     assert_eq!(
         fs::read_to_string(dir.join("sandbox.json")).unwrap(),
         USER_FILE
@@ -105,7 +107,7 @@ fn a_weakened_sandbox_json_denies_every_call_and_drops_to_hook_only() {
     let (sb, dir) = moved_cursor();
     fs::remove_file(dir.join("sandbox.json")).unwrap();
     let init = moat(&sb, &dir, &["init", "--yes"]);
-    assert_eq!(init.status.code(), Some(0), "{}", text(&init));
+    assert_eq!(init.status.code(), Some(OK), "{}", text(&init));
     let mut file = sandbox_json(&dir);
     file["readBoundary"] = "system".into();
     fs::write(dir.join("sandbox.json"), file.to_string()).unwrap();
@@ -114,7 +116,7 @@ fn a_weakened_sandbox_json_denies_every_call_and_drops_to_hook_only() {
         "cursor",
         &crate::common::fixture("cursor/beforeReadFile.json"),
     );
-    assert_eq!(read.status.code(), Some(2), "{}", text(&read));
+    assert_eq!(read.status.code(), Some(DENY), "{}", text(&read));
     assert!(text(&read).contains("kernel-integrity"), "{}", text(&read));
     let status = stdout(&sb.moat(&["status"]));
     assert!(
@@ -131,12 +133,12 @@ fn a_weakened_sandbox_json_denies_every_call_and_drops_to_hook_only() {
         text(&accepted)
     );
     let sync = sb.moat_as_person(&["sandbox", "sync"]);
-    assert_eq!(sync.status.code(), Some(0), "{}", text(&sync));
+    assert_eq!(sync.status.code(), Some(OK), "{}", text(&sync));
     assert_eq!(sandbox_json(&dir)["readBoundary"], "workspace");
-    assert_eq!(sb.moat(&["doctor"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["doctor"]).status.code(), Some(OK));
 
     let uninstall = sb.moat_as_person(&["uninstall"]);
-    assert_eq!(uninstall.status.code(), Some(0), "{}", text(&uninstall));
+    assert_eq!(uninstall.status.code(), Some(OK), "{}", text(&uninstall));
     assert!(!dir.join("sandbox.json").exists(), "moat init created it");
 }
 
@@ -147,13 +149,13 @@ fn a_weakened_sandbox_json_denies_every_call_and_drops_to_hook_only() {
 fn native_windows_leaves_cursor_sandbox_json_alone() {
     let (sb, dir) = moved_cursor();
     let init = moat(&sb, &dir, &["init", "--yes"]);
-    assert_eq!(init.status.code(), Some(0), "{}", text(&init));
+    assert_eq!(init.status.code(), Some(OK), "{}", text(&init));
     assert_eq!(
         sandbox_json(&dir),
         serde_json::json!({"enableSharedBuildCache": true})
     );
     for out in [sb.moat(&["status"]), sb.moat(&["doctor"])] {
-        assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+        assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
         assert!(
             stdout(&out).contains("Cursor's sandbox runs on macOS and Linux only"),
             "{}",

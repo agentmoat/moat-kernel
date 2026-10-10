@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, bash_payload, hook_output, text};
+use crate::common::{OK, Sandbox, USAGE, bash_payload, hook_output, text};
 
 /// The hook decision for one Bash call in the sandbox's project.
 fn decide(sb: &Sandbox, session: &str, command: &str) -> Value {
@@ -49,7 +49,7 @@ fn session_grants_expire_and_are_pruned_on_write() {
     write_grant(&sb, command, Some(now_ms() - DAY_MS - 60_000));
     assert_eq!(
         sb.moat(&["init", "--yes"]).status.code(),
-        Some(0),
+        Some(OK),
         "init re-pins"
     );
     let d = decide(&sb, "s1", command);
@@ -61,7 +61,7 @@ fn session_grants_expire_and_are_pruned_on_write() {
     assert!(status.contains("no active session grants"), "{status}");
 
     write_grant(&sb, command, None);
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
     let d = decide(&sb, "s1", command);
     assert_eq!(
         d["permissionDecision"], "ask",
@@ -69,7 +69,7 @@ fn session_grants_expire_and_are_pruned_on_write() {
     );
 
     write_grant(&sb, command, Some(now_ms() - DAY_MS + 3_600_000));
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
     assert_eq!(decide(&sb, "s1", command)["permissionDecision"], "allow");
     let status = text(&sb.moat(&["status"]));
     assert!(
@@ -79,7 +79,7 @@ fn session_grants_expire_and_are_pruned_on_write() {
 
     // Writing approvals.json drops the expired grants it holds.
     write_grant(&sb, command, Some(now_ms() - 2 * DAY_MS));
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
     let out = crate::common::output(
         person.args([
             "allow",
@@ -91,7 +91,7 @@ fn session_grants_expire_and_are_pruned_on_write() {
         ]),
         None,
     );
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let file = std::fs::read_to_string(sb.home.join(".moat/approvals.json")).unwrap();
     assert!(!file.contains(command), "expired grant kept: {file}");
     assert!(file.contains("ls -la"), "{file}");
@@ -142,7 +142,7 @@ fn session_grant_turns_ask_into_allow_for_that_session_only() {
 
     assert_eq!(
         sb.moat(&["init", "--yes"]).status.code(),
-        Some(0),
+        Some(OK),
         "init re-pins"
     );
     let granted = decide(&sb, "s1", "npm install left-pad-pro");
@@ -176,7 +176,7 @@ fn permanent_overlay_rules_merge_into_the_policy() {
         "policy.d/approved.yaml",
         "version: 1\nallow:\n  - id: approved-1\n    reason: test\n    shell: ['pip install requests']\n",
     );
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
     let d = decide(&sb, "any", "pip install requests");
     assert_eq!(d["permissionDecision"], "allow", "{d}");
     assert!(
@@ -191,7 +191,7 @@ fn permanent_overlay_rules_merge_into_the_policy() {
         "policy.d/approved.yaml",
         "version: 1\nallow:\n  - id: evil\n    shell: ['*']\n",
     );
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
     let d = decide(&sb, "any", "terraform apply");
     assert_eq!(
         d["permissionDecision"], "deny",
@@ -203,7 +203,7 @@ fn permanent_overlay_rules_merge_into_the_policy() {
 fn allow_requires_a_terminal() {
     let sb = Sandbox::installed(&[".claude"]);
     let out = sb.moat(&["allow", "npm install x", "--always"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(text(&out).contains("must be run by a person in a terminal"));
     assert!(
         !sb.home.join(".moat/policy.d/approved.yaml").exists()
