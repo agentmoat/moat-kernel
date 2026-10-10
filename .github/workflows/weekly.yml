@@ -5,7 +5,7 @@ name: weekly
 # - toolchain canary: clippy and the tests on the latest stable and beta, so a new
 #   compiler or clippy release surfaces before the pinned toolchain moves to it.
 # - coverage: line coverage of the workspace on the pinned toolchain, kept as an
-#   artifact (lcov and HTML) with a per-crate table in the job summary. No service.
+#   artefact (lcov and HTML) with a per-crate table in the job summary. No service.
 on:
   schedule:
     - cron: "41 6 * * 1" # Mondays, after the weekly ci run

@@ -2,7 +2,7 @@
 """Print line coverage per crate from an lcov file, as a Markdown table.
 
 The weekly workflow (`.github/workflows/weekly.yml`) appends the table to the job
-summary; the lcov file and the HTML report are the downloadable artifact.
+summary; the lcov file and the HTML report are the downloadable artefact.
 
     python3 scripts/ci/coverage-summary.py lcov.info
 """
