@@ -16,7 +16,7 @@
 //!   refused connection.
 //!
 //! Plain `std::net` and one thread per connection, capped by [`Limits`]; the
-//! choice is explained in `docs/notes/proxy-evaluation.md`.
+//! choice is explained in `docs/ARCHITECTURE.md` §12.
 
 #![warn(missing_docs)]
 // A library reports to its caller; only the `moat` binary prints.
