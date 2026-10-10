@@ -12,4 +12,4 @@ Event ids are shown as hex (`moat show 1f`). Events form a SHA-256 hash chain
 and `moat doctor` check.
 
 Schema changes bump `SCHEMA_VERSION` and ship a migration; a newer database than
-the binary understands is refused rather than mis-read.
+the binary understands is refused rather than misread.

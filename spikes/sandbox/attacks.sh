@@ -42,4 +42,5 @@ run "node --version" node --version
 run "cargo --version" cargo --version
 run "git status + commit" sh -c 'git status --short && git -c user.name=s -c user.email=s@example.invalid commit -qam edit && git log --oneline | head -2'
 run "cargo run (build.rs payload runs too; project binary works)" cargo run
+# shellcheck disable=SC2016 # the inner shell expands $t
 run "temp dir write" sh -c 't=$(mktemp) && echo x > "$t" && rm "$t" && echo ok'

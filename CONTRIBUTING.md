@@ -117,6 +117,28 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
   pass expressions to `run:` blocks through `env:`, and give tokens only the permissions
   they use. CI runs `actionlint` and `zizmor` on `.github/workflows/`.
 
+## Checks beyond the Rust gate
+
+CI runs these on every pull request. `scripts/ci/quality-gate.sh` runs each one whose
+tool is installed and prints a skip line for the others, so nothing extra is required
+locally.
+
+- **Shell scripts:** `shellcheck` 0.11.0 on every `*.sh` file and `.githooks/pre-push`.
+  Fix the finding; a `# shellcheck disable=SCxxxx` comment needs the reason on the same
+  line.
+- **Markdown links:** `python3 scripts/ci/check-links.py` fails on a relative link to a
+  missing file or heading. It is offline: links to websites are not fetched.
+- **Spelling:** [`typos`](https://github.com/crate-ci/typos) 1.51.1
+  (`cargo install typos-cli --version 1.51.1 --locked`) with `_typos.toml`. The project
+  writes British English (`behaviour`, `licence`); an American spelling that is someone
+  else's name (`Serialize`, the `Authorization` header, `--color`) goes in the
+  allow-list with a comment saying whose it is. Never "fix" a deliberate misspelling in
+  a fixture; allow-list it.
+- **Unused dependencies:** `cargo machete` (`cargo install cargo-machete --version 0.9.2
+  --locked`) fails on a dependency in a `Cargo.toml` that no source file uses. Remove
+  it; if it is used in a way machete cannot see, list it under
+  `[package.metadata.cargo-machete] ignored` with a comment saying where it is used.
+
 ## Fuzzing
 
 `fuzz/` holds `cargo fuzz` targets for every surface that takes untrusted input:
@@ -153,6 +175,9 @@ touch the manifests or the workflow run `dist plan` only. Running the workflow b
    `crates/openmoat-cli/README.md` and `docs/ROADMAP.md` "Where it is today". The
    release fails without that CHANGELOG section; its text becomes the release notes,
    after a line saying what the operating system does and does not enforce (ADR-013).
+   `python3 scripts/ci/check-versions.py` (in the quality gate and the `crates package`
+   CI job) fails until the manifests, both lockfiles, the README and ROADMAP "The latest
+   release is" lines and the CHANGELOG headings agree.
 3. After the merge, tag the merge commit: `git tag -s vX.Y.Z-pre.N -m vX.Y.Z-pre.N`
    and `git push origin vX.Y.Z-pre.N`.
 4. Check the GitHub release and the tap commit, then approve the `release` environment in
@@ -188,6 +213,26 @@ token after the `release` environment is approved.
 One-time repository setup: a `release` environment with the maintainer as required
 reviewer and deployments limited to `v*` tags, and `HOMEBREW_TAP_TOKEN`, a fine-grained
 token with contents write on `crocodile-labs/homebrew-tap` only (the tap needs one commit).
+
+## API changes
+
+`openmoat-core`, `openmoat-hosts`, `openmoat-audit` and `openmoat-proxy` are published
+libraries. While the version is 0.x, a breaking change to their public API needs a minor
+bump (0.1.x → 0.2.0) and anything else a patch bump. The `semver of the library crates`
+CI job runs [cargo-semver-checks](https://github.com/obi1kenobi/cargo-semver-checks)
+0.51.0 twice:
+
+- **against the PR's base commit**, blocking: a PR that breaks the API fails. If the
+  break is intended, say so in the PR's **Release note** (what breaks and what to use
+  instead), ask a maintainer to add the `breaking` label, and re-run the job; it then
+  passes with a warning. Under `[Unreleased]` in `CHANGELOG.md` the entry goes in
+  `### Changed` or `### Removed` and starts with **Breaking** and the crate.
+- **against the latest crates.io release**, reporting only, except on a release PR
+  (`build: release …`), where it blocks until the version bump covers every break
+  since that release.
+
+Locally: `cargo install cargo-semver-checks --version 0.51.0 --locked`, then
+`cargo semver-checks check-release -p openmoat-core --baseline-rev origin/main`.
 
 ## Decisions
 

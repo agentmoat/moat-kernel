@@ -25,13 +25,13 @@ SBX_PASS="" in_sbx "claude --version (fake HOME, no state dir)" "$CLAUDE_BIN" --
 SBX_PASS="NO_PROXY ANTHROPIC_API_KEY ANTHROPIC_BASE_URL" \
   in_sbx "claude -p 'say ok' with the default state dir (~/.claude in the fake HOME)" \
   "$CLAUDE_BIN" -p "say ok"
-echo "fake HOME after: $(cd "$W/home" && ls -A | tr '\n' ' ')"
+echo "fake HOME after: $(find "$W/home" -mindepth 1 -maxdepth 1 -exec basename {} \; | tr '\n' ' ')"
 
 export CLAUDE_CONFIG_DIR="$W/home/.agent-state/claude"
 SBX_PASS="NO_PROXY ANTHROPIC_API_KEY ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR" \
   in_sbx "claude -p 'say ok' with CLAUDE_CONFIG_DIR in the writable state dir" \
   "$CLAUDE_BIN" -p "say ok"
-echo "state dir after: $(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && ls -A | tr '\n' ' ')"
+echo "state dir after: $(find "$CLAUDE_CONFIG_DIR" -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null | tr '\n' ' ')"
 
 SBX_PASS="NO_PROXY ANTHROPIC_API_KEY ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR" \
   in_sbx "claude --bare -p 'say ok' (no keychain reads, no background prefetches)" \
