@@ -32,9 +32,10 @@ if command -v python3 >/dev/null; then
 else
     echo "▷ python3 not installed; Markdown link check skipped (CI runs it)"
 fi
-if command -v python3 >/dev/null; then
+# tomllib, which reads the manifests, is in the standard library from Python 3.11.
+if python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
     run python3 scripts/ci/check-versions.py
 else
-    echo "▷ python3 not installed; release version check skipped (CI runs it)"
+    echo "▷ python3 ≥ 3.11 needed; release version check skipped (CI runs it)"
 fi
 echo "✔ quality gate passed"
