@@ -94,21 +94,22 @@ pub fn home_spellings() -> Result<(String, Option<String>)> {
 pub fn moved_dirs() -> Result<Vec<(String, String)>> {
     let recorded = crate::install::Recorded::load(&home::Home::locate()?)?;
     let mut out = Vec::new();
-    for (default, var, host) in [
-        ("~/.moat", "MOAT_HOME", None),
-        ("~/.claude", "CLAUDE_CONFIG_DIR", Some(Host::ClaudeCode)),
-        ("~/.codex", "CODEX_HOME", Some(Host::Codex)),
-        ("~/.cursor", "CURSOR_CONFIG_DIR", Some(Host::Cursor)),
-    ] {
+    let mut dirs = vec![(home::ENV, home::DIR_NAME, None)];
+    for host in Host::ALL {
+        let (var, name) = crate::install::dir_variable(host)?;
+        dirs.push((var, name, Some(host)));
+    }
+    for (var, name, host) in dirs {
+        let default = format!("~/{name}");
         let from_env = std::env::var_os(var)
             .filter(|v| !v.is_empty())
             .map(PathBuf::from);
-        let at_home = home::user_home()?.join(&default[2..]);
+        let at_home = home::user_home()?.join(name);
         let from_record = host.and_then(|h| recorded.dir(h)).filter(|d| *d != at_home);
         for dir in from_env.into_iter().chain(from_record) {
             let dir = path_string(&absolute(&dir)?);
             for spelling in real_root(&dir).into_iter().chain([dir]) {
-                let pair = (default.to_owned(), spelling);
+                let pair = (default.clone(), spelling);
                 if !out.contains(&pair) {
                     out.push(pair);
                 }

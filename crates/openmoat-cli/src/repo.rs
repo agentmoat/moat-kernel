@@ -14,7 +14,7 @@ use anyhow::{Context as _, Result, bail};
 use openmoat_core::{EvalContext, Policy, RepoPolicy};
 
 use crate::context;
-use crate::home::Home;
+use crate::home::{self, Home};
 use crate::integrity::{Lock, sha256_hex};
 use crate::trust::Trust;
 
@@ -37,7 +37,7 @@ pub fn root_key(root: &Path) -> Result<String> {
 
 /// The project's repository policy, if it has one.
 pub fn find(home: &Home, root: &Path) -> Result<Option<Found>> {
-    let path = root.join(".moat").join("policy.yaml");
+    let path = root.join(home::DIR_NAME).join("policy.yaml");
     let meta = match fs::metadata(&path) {
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
         meta => meta.with_context(|| format!("reading repository policy {}", path.display()))?,

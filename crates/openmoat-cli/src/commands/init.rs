@@ -244,7 +244,7 @@ fn choose_hosts(args: &InitArgs, out: &mut Deferred) -> Result<Vec<Host>> {
 fn host_files(config: &HostConfig) -> Vec<PathBuf> {
     let mut files = vec![config.settings_path.clone()];
     if config.host == Host::Codex {
-        files.push(config.settings_path.with_file_name("config.toml"));
+        files.push(sandbox::codex_config_beside(&config.settings_path));
     }
     if config.host == Host::Cursor {
         files.push(config.settings_path.with_file_name("sandbox.json"));

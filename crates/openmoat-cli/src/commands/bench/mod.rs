@@ -25,6 +25,7 @@ use serde::Serialize;
 
 use crate::cli::{BenchArgs, Format};
 use crate::exit::Code;
+use crate::home::Home;
 use crate::render;
 use hook::Scratch;
 use hosts::{Answer, Place};
@@ -132,7 +133,7 @@ fn install(scratch: &Scratch) -> Result<Target> {
         "moat init in the throwaway home failed: {}",
         String::from_utf8_lossy(&out.stderr).trim()
     );
-    let path = scratch.home.join(".moat").join("audit.db");
+    let path = Home::under(&scratch.home).audit_path();
     let audit =
         Store::open_read_only(&path).with_context(|| format!("opening {}", path.display()))?;
     Ok(Target::OpenMoat {
