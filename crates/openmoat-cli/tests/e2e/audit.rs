@@ -1,7 +1,7 @@
 //! The audit hash chain end to end: concurrent `guard` processes, `show` and
 //! `doctor` after an edit.
 
-use crate::common::{Sandbox, bash_payload, json, stdout, text};
+use crate::common::{OK, Sandbox, USAGE, bash_payload, json, stdout, text};
 
 /// Run `count` `guard` calls at once, as parallel tool calls do.
 fn guard_concurrently(sb: &Sandbox, count: usize) {
@@ -15,7 +15,7 @@ fn guard_concurrently(sb: &Sandbox, count: usize) {
             .collect();
         for call in calls {
             let out = call.join().unwrap();
-            assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+            assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
         }
     });
 }
@@ -25,7 +25,7 @@ fn concurrent_guards_build_one_chain_that_doctor_verifies() {
     let sb = Sandbox::installed(&[".claude"]);
     guard_concurrently(&sb, 12);
     let doctor = sb.moat(&["doctor"]);
-    assert_eq!(doctor.status.code(), Some(0), "{}", text(&doctor));
+    assert_eq!(doctor.status.code(), Some(OK), "{}", text(&doctor));
     assert!(
         stdout(&doctor).contains("12 events, hash chain intact"),
         "{}",
@@ -55,7 +55,7 @@ fn doctor_reports_an_edited_event_with_exit_64() {
     .unwrap();
 
     let doctor = sb.moat(&["doctor"]);
-    assert_eq!(doctor.status.code(), Some(64), "{}", text(&doctor));
+    assert_eq!(doctor.status.code(), Some(USAGE), "{}", text(&doctor));
     assert!(
         stdout(&doctor).contains("hash chain broken at event 3: its contents do not match"),
         "{}",
@@ -63,5 +63,5 @@ fn doctor_reports_an_edited_event_with_exit_64() {
     );
     // Recording continues after the edit; the break stays reported.
     guard_concurrently(&sb, 1);
-    assert_eq!(sb.moat(&["doctor"]).status.code(), Some(64));
+    assert_eq!(sb.moat(&["doctor"]).status.code(), Some(USAGE));
 }

@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::common::{Sandbox, hook_output, stderr, text, verdict};
+use crate::common::{DENY, OK, Sandbox, hook_output, stderr, text, verdict};
 
 fn patch(sb: &Sandbox, file: &str) -> String {
     serde_json::json!({
@@ -31,13 +31,13 @@ fn read(sb: &Sandbox, session: &str, path: &Path) -> String {
 fn codex_apply_patch_ask_is_approved_with_allow_last() {
     let sb = Sandbox::installed(&[".codex"]);
     let out = sb.guard("codex", &patch(&sb, "../notes/plan.md"));
-    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", stderr(&out));
     let reason = hook_output(&out)["permissionDecisionReason"].to_string();
     assert!(reason.contains("run `moat`"), "{reason}");
     assert!(reason.contains("moat allow --last"), "{reason}");
 
     let allow = sb.moat_as_person(&["allow", "--last"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", text(&allow));
     let shown = text(&allow);
     assert!(
         shown.contains("session codex-s1 on codex may write"),
@@ -67,7 +67,7 @@ fn claude_code_read_ask_is_approved_for_good() {
     assert_eq!(verdict(&sb.guard("claude-code", &plan)), "ask");
 
     let allow = sb.moat_as_person(&["allow", "--last", "--always"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", text(&allow));
     let shown = text(&allow);
     assert!(shown.contains("wanted to read"), "{shown}");
     assert!(shown.contains("fs.read"), "{shown}");
@@ -106,7 +106,7 @@ fn an_approved_path_that_leads_into_ssh_is_still_denied() {
         "ask"
     );
     let allow = sb.moat_as_person(&["allow", "--last", "--always"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", text(&allow));
     assert_eq!(
         verdict(&sb.guard("claude-code", &read(&sb, "s1", &key))),
         "allow"
@@ -116,6 +116,6 @@ fn an_approved_path_that_leads_into_ssh_is_still_denied() {
     std::os::unix::fs::symlink(ssh.join("id_rsa"), &key).unwrap();
     let out = sb.guard("claude-code", &read(&sb, "s1", &key));
     let reason = hook_output(&out)["permissionDecisionReason"].to_string();
-    assert_eq!(out.status.code(), Some(2), "{reason}");
+    assert_eq!(out.status.code(), Some(DENY), "{reason}");
     assert!(reason.contains("secrets-paths"), "{reason}");
 }

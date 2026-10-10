@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, json};
+use crate::common::{DENY, OK, Sandbox, json};
 
 fn sandbox() -> Sandbox {
     Sandbox::installed(&[".claude"])
@@ -47,7 +47,7 @@ fn init_registers_the_config_change_hook() {
 fn untouched_pinned_file_loads() {
     let sb = sandbox();
     let (code, doc) = config_change(&sb, &settings(&sb), "modified");
-    assert_eq!(code, Some(0));
+    assert_eq!(code, Some(OK));
     assert_eq!(doc, serde_json::json!({}));
 }
 
@@ -60,7 +60,7 @@ fn tampered_pinned_file_is_blocked() {
     std::fs::write(settings(&sb), root.to_string()).unwrap();
 
     let (code, doc) = config_change(&sb, &settings(&sb), "modified");
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     assert_eq!(doc["decision"], "block");
     let reason = doc["reason"].as_str().unwrap();
     assert!(reason.contains("kernel-integrity"), "{reason}");
@@ -77,7 +77,7 @@ fn deleted_pinned_file_is_blocked() {
     let sb = sandbox();
     std::fs::remove_file(settings(&sb)).unwrap();
     let (code, doc) = config_change(&sb, &settings(&sb), "deleted");
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     assert_eq!(doc["decision"], "block");
 }
 
@@ -89,7 +89,7 @@ fn unpinned_project_settings_load_and_are_audited() {
     let file = project.join("settings.json");
     std::fs::write(&file, "{}").unwrap();
     let (code, doc) = config_change(&sb, &file, "created");
-    assert_eq!(code, Some(0));
+    assert_eq!(code, Some(OK));
     assert_eq!(doc, serde_json::json!({}));
     let shown = sb.moat(&["show", "--recent", "1"]);
     assert!(String::from_utf8_lossy(&shown.stdout).contains("allow"));
@@ -119,10 +119,10 @@ fn tamper(sb: &Sandbox) {
 fn current_payload_without_change_type_is_decided() {
     let sb = sandbox();
     let (code, doc) = current_payload(&sb, "user_settings", Some(&settings(&sb)));
-    assert_eq!((code, doc), (Some(0), serde_json::json!({})));
+    assert_eq!((code, doc), (Some(OK), serde_json::json!({})));
     tamper(&sb);
     let (code, doc) = current_payload(&sb, "user_settings", Some(&settings(&sb)));
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     assert_eq!(doc["decision"], "block");
 }
 
@@ -130,10 +130,10 @@ fn current_payload_without_change_type_is_decided() {
 fn change_without_a_file_is_checked_against_every_pin() {
     let sb = sandbox();
     let (code, doc) = current_payload(&sb, "project_settings", None);
-    assert_eq!((code, doc), (Some(0), serde_json::json!({})));
+    assert_eq!((code, doc), (Some(OK), serde_json::json!({})));
     tamper(&sb);
     let (code, doc) = current_payload(&sb, "project_settings", None);
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     let reason = doc["reason"].as_str().unwrap();
     assert!(reason.contains("kernel-integrity"), "{reason}");
     assert!(reason.contains("settings.json"), "{reason}");
@@ -146,7 +146,7 @@ fn unreadable_payload_is_blocked_in_config_change_shape() {
         "claude-code",
         r#"{"hook_event_name":"ConfigChange","source":["user_settings"]}"#,
     );
-    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(out.status.code(), Some(DENY));
     let doc = json(&out);
     assert_eq!(doc["decision"], "block");
     assert!(doc["reason"].as_str().unwrap().contains("kernel-error"));
@@ -163,13 +163,13 @@ fn settings_review_copy_is_judged_as_its_pinned_target() {
 
     std::fs::write(&copy, &pinned).unwrap();
     let (code, doc) = current_payload(&sb, "user_settings", Some(&copy));
-    assert_eq!((code, doc), (Some(0), serde_json::json!({})), "no change");
+    assert_eq!((code, doc), (Some(OK), serde_json::json!({})), "no change");
 
     let mut root: Value = serde_json::from_str(&pinned).unwrap();
     root["hooks"].as_object_mut().unwrap().remove("PreToolUse");
     std::fs::write(&copy, root.to_string()).unwrap();
     let (code, doc) = current_payload(&sb, "user_settings", Some(&copy));
-    assert_eq!(code, Some(2));
+    assert_eq!(code, Some(DENY));
     let reason = doc["reason"].as_str().unwrap();
     assert!(reason.contains("kernel-integrity"), "{reason}");
     assert!(reason.contains("would change"), "{reason}");
@@ -177,12 +177,12 @@ fn settings_review_copy_is_judged_as_its_pinned_target() {
     std::fs::write(&copy, &pinned).unwrap();
     tamper(&sb);
     let (code, doc) = current_payload(&sb, "user_settings", Some(&copy));
-    assert_eq!(code, Some(2), "the target itself drifted: {doc}");
+    assert_eq!(code, Some(DENY), "the target itself drifted: {doc}");
 
     let local = sb
         .home
         .join(".claude/settings.local.json.proposed-0a1b2c3d");
     std::fs::write(&local, "{}").unwrap();
     let (code, doc) = current_payload(&sb, "local_settings", Some(&local));
-    assert_eq!((code, doc), (Some(0), serde_json::json!({})), "unpinned");
+    assert_eq!((code, doc), (Some(OK), serde_json::json!({})), "unpinned");
 }

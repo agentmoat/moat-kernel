@@ -13,6 +13,16 @@ use std::process::{Child, ChildStdout, Command, Output, Stdio};
 use serde_json::Value;
 use tempfile::TempDir;
 
+// The exit codes of `moat` (ADR-004, `src/exit.rs`).
+/// Success, or verdict `allow`.
+pub const OK: i32 = 0;
+/// Verdict `deny`; also every error in `moat guard`.
+pub const DENY: i32 = 2;
+/// Verdict `ask` that `moat policy check` could not resolve.
+pub const ASK: i32 = 3;
+/// Usage or configuration error from a command a person ran.
+pub const USAGE: i32 = 64;
+
 /// A throwaway home directory.
 pub struct Sandbox {
     _dir: TempDir,

@@ -4,7 +4,7 @@
 //! (see `terminal.rs`), which these tests set only for the commands a person
 //! would type; `guard` runs without it, exactly as a hook does.
 
-use crate::common::{Sandbox, text};
+use crate::common::{ASK, DENY, OK, Sandbox, USAGE, text};
 
 /// The hook's verdict and reason for one Bash call in the sandbox's project.
 fn guard(sb: &Sandbox, session: &str, command: &str) -> (String, String) {
@@ -19,7 +19,7 @@ fn allow_last_grants_the_session_and_repins() {
     assert_eq!(guard(&sb, "s1", INSTALL).0, "ask");
 
     let out = sb.moat_as_person(&["allow", "--last"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(
         text(&out).contains("session s1 on claude-code may run"),
         "{}",
@@ -42,7 +42,7 @@ fn allow_last_grants_the_session_and_repins() {
 fn allow_explicit_session_grant() {
     let sb = Sandbox::installed(&[".claude"]);
     let out = sb.moat_as_person(&["allow", INSTALL, "--host", "claude-code", "--session", "s9"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert_eq!(guard(&sb, "s9", INSTALL).0, "allow");
     assert_eq!(guard(&sb, "s1", INSTALL).0, "ask");
 }
@@ -52,7 +52,7 @@ fn allow_always_writes_the_overlay_and_keeps_the_lock_intact() {
     let sb = Sandbox::installed(&[".claude"]);
     assert_eq!(guard(&sb, "s1", INSTALL).0, "ask");
     let out = sb.moat_as_person(&["allow", "--last", "--always"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let shown = text(&out);
     assert!(
         shown.contains(&format!(
@@ -84,7 +84,7 @@ fn allow_always_writes_the_overlay_and_keeps_the_lock_intact() {
 fn allow_explains_missing_flags_and_shadowed_rules() {
     let sb = Sandbox::installed(&[".claude"]);
     let out = sb.moat_as_person(&["allow", "ls"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(
         text(&out).contains("--always for a permanent rule"),
         "{}",
@@ -93,7 +93,7 @@ fn allow_explains_missing_flags_and_shadowed_rules() {
 
     // A shell deny pattern shadows the new allow, so the linter names it.
     let out = sb.moat_as_person(&["allow", "git reset --hard", "--always"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(
         text(&out).contains("warning: rule `approved-1`") && text(&out).contains("unreachable"),
         "{}",
@@ -130,7 +130,7 @@ fn doctor_accept_refuses_to_pin_a_policy_that_does_not_lint() {
     let policy = sb.home.join(".moat/policy.yaml");
     std::fs::write(&policy, "version: 1\ndeny:\n  - id: broken\n").unwrap();
     let out = sb.moat_as_person(&["doctor", "--accept"]);
-    assert_ne!(out.status.code(), Some(0));
+    assert_ne!(out.status.code(), Some(OK));
     assert!(
         text(&out).contains("refusing to pin a policy that does not lint"),
         "{}",
@@ -144,7 +144,7 @@ fn doctor_accept_refuses_to_pin_a_policy_that_does_not_lint() {
 fn hooks_without_a_terminal_are_still_refused() {
     let sb = Sandbox::installed(&[".claude"]);
     let out = sb.moat(&["allow", INSTALL, "--always"]);
-    assert_ne!(out.status.code(), Some(0));
+    assert_ne!(out.status.code(), Some(OK));
     assert!(text(&out).contains("must be run by a person in a terminal"));
 }
 
@@ -168,7 +168,7 @@ fn assert_allow_refuses_after_tampering(pinned: &str, args: &[&str]) {
 
     let out = sb.moat_as_person(args);
     let message = text(&out);
-    assert_eq!(out.status.code(), Some(64), "{message}");
+    assert_eq!(out.status.code(), Some(USAGE), "{message}");
     assert!(
         message.contains("kernel-integrity") && message.contains("was modified"),
         "{message}"
@@ -217,7 +217,7 @@ fn allow_on_a_clean_lock_pins_only_the_overlay_it_wrote() {
     };
     let (before, overlay_before) = others(&sb);
     let out = sb.moat_as_person(&["allow", INSTALL, "--always"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
 
     let (after, overlay_after) = others(&sb);
     assert_eq!(after, before, "only the overlay's pin changes");
@@ -238,11 +238,15 @@ fn check(sb: &Sandbox, kind: &str, action: &str) -> Option<i32> {
 #[test]
 fn allow_site_adds_a_net_rule_and_remove_takes_it_back() {
     let sb = Sandbox::installed(&[".claude"]);
-    assert_eq!(check(&sb, "net", "docs.rs"), Some(2), "default.net denies");
+    assert_eq!(
+        check(&sb, "net", "docs.rs"),
+        Some(DENY),
+        "default.net denies"
+    );
 
     let out = sb.moat_as_person(&["allow", "--site", "Docs.rs"]);
     let message = text(&out);
-    assert_eq!(out.status.code(), Some(0), "{message}");
+    assert_eq!(out.status.code(), Some(OK), "{message}");
     assert!(
         message.contains("added to")
             && message.contains("- docs.rs")
@@ -250,19 +254,19 @@ fn allow_site_adds_a_net_rule_and_remove_takes_it_back() {
             && message.contains("lock re-pinned"),
         "{message}"
     );
-    assert_eq!(check(&sb, "net", "docs.rs"), Some(0));
-    assert_eq!(check(&sb, "fetch", "https://docs.rs/serde"), Some(0));
-    assert_eq!(check(&sb, "net", "evil.docs.rs"), Some(2), "no wildcard");
+    assert_eq!(check(&sb, "net", "docs.rs"), Some(OK));
+    assert_eq!(check(&sb, "fetch", "https://docs.rs/serde"), Some(OK));
+    assert_eq!(check(&sb, "net", "evil.docs.rs"), Some(DENY), "no wildcard");
 
     let out = sb.moat_as_person(&["allow", "--remove", "approved-1"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(text(&out).contains("removed from"), "{}", text(&out));
-    assert_eq!(check(&sb, "net", "docs.rs"), Some(2));
+    assert_eq!(check(&sb, "net", "docs.rs"), Some(DENY));
     let doctor = sb.moat(&["doctor"]);
     assert!(text(&doctor).contains("all intact"), "{}", text(&doctor));
 
     let out = sb.moat_as_person(&["allow", "--remove", "approved-1"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(text(&out).contains("rules there: none"), "{}", text(&out));
 }
 
@@ -294,7 +298,7 @@ fn allow_site_and_dir_refuse_dangerous_input_and_write_nothing() {
         ),
     ] {
         let out = sb.moat_as_person(&args);
-        assert_ne!(out.status.code(), Some(0), "{args:?}");
+        assert_ne!(out.status.code(), Some(OK), "{args:?}");
         assert!(text(&out).contains(says), "{args:?}: {}", text(&out));
     }
     assert_eq!(approval_state(&sb), before, "nothing written");
@@ -315,20 +319,20 @@ fn allow_dir_opens_the_directory_but_deny_rules_still_win() {
 
     let out = sb.moat_as_person(&["allow", "--dir", shared.to_str().unwrap()]);
     let message = text(&out);
-    assert_eq!(out.status.code(), Some(0), "{message}");
+    assert_eq!(out.status.code(), Some(OK), "{message}");
     assert!(
         message.contains("fs.write:")
             && message.contains("/**")
             && message.contains("deny rules still win"),
         "{message}"
     );
-    assert_eq!(check(&sb, "fs-write", &notes), Some(0));
-    assert_eq!(check(&sb, "fs-read", &notes), Some(0));
+    assert_eq!(check(&sb, "fs-write", &notes), Some(OK));
+    assert_eq!(check(&sb, "fs-read", &notes), Some(OK));
     assert_eq!(
         check(&sb, "fs-read", &env),
         Some(2),
         "secrets-paths still denies"
     );
     let sibling = sb.home.join("work/other.md");
-    assert_eq!(check(&sb, "fs-write", sibling.to_str().unwrap()), Some(3));
+    assert_eq!(check(&sb, "fs-write", sibling.to_str().unwrap()), Some(ASK));
 }

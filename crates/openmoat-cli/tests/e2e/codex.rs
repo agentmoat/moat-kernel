@@ -1,6 +1,6 @@
 //! Codex: its `PreToolUse` cannot ask, so an `ask` must still stop the call.
 
-use crate::common::{Sandbox, fixture, hook_output, stderr};
+use crate::common::{DENY, OK, Sandbox, fixture, hook_output, stderr};
 
 fn shell(session: &str, command: &str) -> String {
     serde_json::json!({
@@ -22,11 +22,11 @@ fn shell(session: &str, command: &str) -> String {
 fn an_ask_blocks_codex_until_a_person_approves_it() {
     let sb = Sandbox::bare(&[".claude"]);
     std::fs::create_dir_all(sb.home.join(".codex")).unwrap();
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
 
     let command = "npm install left-pad";
     let out = sb.guard("codex", &shell("codex-s1", command));
-    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", stderr(&out));
     let d = hook_output(&out);
     assert_eq!(d["permissionDecision"], "deny", "{d}");
     let reason = d["permissionDecisionReason"].as_str().unwrap();
@@ -34,9 +34,9 @@ fn an_ask_blocks_codex_until_a_person_approves_it() {
     assert!(reason.contains("moat allow --last"), "{reason}");
 
     let allow = sb.moat_as_person(&["allow", "--last"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", stderr(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", stderr(&allow));
     let out = sb.guard("codex", &shell("codex-s1", command));
-    assert_eq!(out.status.code(), Some(0), "approved for the session");
+    assert_eq!(out.status.code(), Some(OK), "approved for the session");
     assert_eq!(hook_output(&out)["permissionDecision"], "allow");
 
     // Claude Code can ask, so it still receives the `ask` itself.
@@ -46,7 +46,7 @@ fn an_ask_blocks_codex_until_a_person_approves_it() {
         "tool_input": { "command": command }, "tool_use_id": "t1"
     });
     let out = sb.guard("claude-code", &claude.to_string());
-    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.status.code(), Some(OK));
     assert_eq!(hook_output(&out)["permissionDecision"], "ask");
 }
 
@@ -59,6 +59,6 @@ fn an_ask_blocks_codex_until_a_person_approves_it() {
 fn a_codex_permission_request_is_refused_never_approved() {
     let sb = Sandbox::installed(&[".codex"]);
     let out = sb.guard("codex", &fixture("codex/permission-request-shell.json"));
-    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", stderr(&out));
     assert!(stderr(&out).contains("moat: deny"), "{}", stderr(&out));
 }
