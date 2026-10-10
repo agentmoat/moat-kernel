@@ -5,7 +5,7 @@
 //! (`allow` | `deny` | `ask`) and a reason the model gets to see.
 
 use openmoat_core::{Action, Decision};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{HookEvent, HookRequest, Host, HostError};
@@ -23,20 +23,6 @@ struct Payload {
     tool_name: String,
     #[serde(default)]
     tool_input: Value,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Response<'a> {
-    hook_specific_output: Output<'a>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Output<'a> {
-    hook_event_name: &'static str,
-    permission_decision: &'static str,
-    permission_decision_reason: &'a str,
 }
 
 pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError> {
@@ -136,16 +122,16 @@ fn send_file(input: &Value) -> Result<Vec<String>, HostError> {
 }
 
 pub(crate) fn render(decision: &Decision) -> String {
-    let permission = decision.verdict.as_str();
-    let reason = crate::reason_line(decision);
-    let response = Response {
-        hook_specific_output: Output {
-            hook_event_name: EVENT,
-            permission_decision: permission,
-            permission_decision_reason: &reason,
-        },
-    };
-    serde_json::to_string(&response).expect("response is plain data")
+    // A `Value` always renders, unlike serializing a struct; its keys sort,
+    // and these are already in order.
+    serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": EVENT,
+            "permissionDecision": decision.verdict.as_str(),
+            "permissionDecisionReason": crate::reason_line(decision),
+        }
+    })
+    .to_string()
 }
 
 #[cfg(test)]
@@ -462,6 +448,16 @@ mod tests {
         let reason = out["permissionDecisionReason"].as_str().unwrap();
         assert!(reason.starts_with("moat: deny [secrets-paths]"));
         assert!(reason.contains("id_rsa"));
+    }
+
+    #[test]
+    fn response_bytes_are_exact_and_escaped() {
+        let mut decision = Decision::new(Verdict::Ask);
+        decision.reasons.push("say \"hi\"\n\\".into());
+        assert_eq!(
+            render(&decision),
+            r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"moat: ask — say \"hi\"\n\\"}}"#
+        );
     }
 
     #[test]

@@ -8,7 +8,7 @@
 //! `failClosed`, which the installer does.
 
 use openmoat_core::{Action, Decision};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{HookEvent, HookRequest, Host, HostError};
@@ -43,13 +43,6 @@ struct Payload {
     mcp_server_name: Option<String>,
     #[serde(default)]
     tool_use_id: Option<String>,
-}
-
-#[derive(Serialize)]
-struct Response<'a> {
-    permission: &'static str,
-    user_message: &'a str,
-    agent_message: &'a str,
 }
 
 pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError> {
@@ -195,14 +188,11 @@ fn reads(mut paths: Vec<String>) -> Option<Action> {
 }
 
 pub(crate) fn render(decision: &Decision) -> String {
-    let permission = decision.verdict.as_str();
-    let message = crate::reason_line(decision);
-    serde_json::to_string(&Response {
-        permission,
-        user_message: &message,
-        agent_message: &message,
-    })
-    .expect("response is plain data")
+    // Each `Value` always renders, unlike serializing a struct; the members
+    // keep the order the hooks documentation shows.
+    let permission = Value::from(decision.verdict.as_str());
+    let message = Value::from(crate::reason_line(decision));
+    format!(r#"{{"permission":{permission},"user_message":{message},"agent_message":{message}}}"#)
 }
 
 #[cfg(test)]
@@ -396,6 +386,19 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ask["permission"], "ask");
+    }
+
+    #[test]
+    fn response_bytes_are_exact_and_escaped() {
+        let mut deny = Decision::new(Verdict::Deny);
+        deny.reasons.push("say \"hi\"\n\\".into());
+        let message = r#""moat: deny — say \"hi\"\n\\""#;
+        assert_eq!(
+            render(&deny),
+            format!(
+                r#"{{"permission":"deny","user_message":{message},"agent_message":{message}}}"#
+            )
+        );
     }
 
     #[test]

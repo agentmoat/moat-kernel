@@ -16,38 +16,43 @@ use crate::StoreError;
 
 const REPLACEMENT: &str = "[redacted]";
 
-static PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
-    let rules: &[(&str, &str)] = &[
-        // Named credentials in key=value or key: value form; keep the key.
-        (
-            r"(?i)\b((?:api[_-]?key|access[_-]?key|secret(?:[_-]?key)?|token|passw(?:or)?d|authorization|private[_-]?key)\s*[=:]\s*)(['\x22]?)((?:bearer|basic)\s+)?[^\s'\x22&;]+(['\x22]?)",
-            "${1}${2}${3}[redacted]${4}",
-        ),
-        (
-            r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}",
-            "Bearer [redacted]",
-        ),
-        (r"(?i)\bbasic\s+[A-Za-z0-9+/=]{8,}", "Basic [redacted]"),
-        // Well-known token shapes.
-        (r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b", REPLACEMENT),
-        (r"\bgithub_pat_[A-Za-z0-9_]{20,}\b", REPLACEMENT),
-        (r"\bsk-(?:[a-z]+-)?[A-Za-z0-9]{16,}\b", REPLACEMENT),
-        (r"\bAKIA[0-9A-Z]{16}\b", REPLACEMENT),
-        (r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b", REPLACEMENT),
-        (r"\bAIza[0-9A-Za-z_-]{30,}\b", REPLACEMENT),
-        (r"\bnpm_[A-Za-z0-9]{30,}\b", REPLACEMENT),
-        (r"\bglpat-[A-Za-z0-9_-]{20,}\b", REPLACEMENT),
-        (
-            r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b",
-            REPLACEMENT,
-        ),
-        // Credentials embedded in URLs.
-        (r"(://[^/\s:@]+:)[^@/\s]+@", "${1}[redacted]@"),
-    ];
-    rules
+/// Credential patterns and what replaces each match.
+const RULES: &[(&str, &str)] = &[
+    // Named credentials in key=value or key: value form; keep the key.
+    (
+        r"(?i)\b((?:api[_-]?key|access[_-]?key|secret(?:[_-]?key)?|token|passw(?:or)?d|authorization|private[_-]?key)\s*[=:]\s*)(['\x22]?)((?:bearer|basic)\s+)?[^\s'\x22&;]+(['\x22]?)",
+        "${1}${2}${3}[redacted]${4}",
+    ),
+    (
+        r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}",
+        "Bearer [redacted]",
+    ),
+    (r"(?i)\bbasic\s+[A-Za-z0-9+/=]{8,}", "Basic [redacted]"),
+    // Well-known token shapes.
+    (r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b", REPLACEMENT),
+    (r"\bgithub_pat_[A-Za-z0-9_]{20,}\b", REPLACEMENT),
+    (r"\bsk-(?:[a-z]+-)?[A-Za-z0-9]{16,}\b", REPLACEMENT),
+    (r"\bAKIA[0-9A-Z]{16}\b", REPLACEMENT),
+    (r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b", REPLACEMENT),
+    (r"\bAIza[0-9A-Za-z_-]{30,}\b", REPLACEMENT),
+    (r"\bnpm_[A-Za-z0-9]{30,}\b", REPLACEMENT),
+    (r"\bglpat-[A-Za-z0-9_-]{20,}\b", REPLACEMENT),
+    (
+        r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b",
+        REPLACEMENT,
+    ),
+    // Credentials embedded in URLs.
+    (r"(://[^/\s:@]+:)[^@/\s]+@", "${1}[redacted]@"),
+];
+
+/// [`RULES`] compiled; `None` when one does not compile, which a test rules
+/// out. Every text is then redacted whole rather than masked by fewer patterns.
+static PATTERNS: LazyLock<Option<Vec<(Regex, &'static str)>>> = LazyLock::new(|| {
+    RULES
         .iter()
-        .map(|(pattern, replacement)| (Regex::new(pattern).expect("static pattern"), *replacement))
-        .collect()
+        .map(|(pattern, replacement)| Regex::new(pattern).map(|re| (re, *replacement)))
+        .collect::<Result<_, _>>()
+        .ok()
 });
 
 /// Values shorter than this many bytes are not masked by exact match: a short
@@ -107,11 +112,7 @@ impl KnownSecrets {
             Some(re) => re.replace_all(text, REPLACEMENT),
             None => Cow::Borrowed(text),
         };
-        PATTERNS
-            .iter()
-            .fold(masked.into_owned(), |acc, (re, replacement)| {
-                re.replace_all(&acc, *replacement).into_owned()
-            })
+        mask_patterns(PATTERNS.as_deref(), masked.into_owned())
     }
 
     /// [`redact_value`] after masking the known values.
@@ -132,6 +133,16 @@ impl KnownSecrets {
     }
 }
 
+/// Run `patterns` over `text`; with none, nothing of `text` is kept.
+fn mask_patterns(patterns: Option<&[(Regex, &str)]>, text: String) -> String {
+    let Some(patterns) = patterns else {
+        return REPLACEMENT.to_owned();
+    };
+    patterns.iter().fold(text, |acc, (re, replacement)| {
+        re.replace_all(&acc, *replacement).into_owned()
+    })
+}
+
 /// Replace credential-looking substrings. Idempotent.
 #[must_use]
 pub fn redact(text: &str) -> String {
@@ -148,8 +159,19 @@ pub fn redact_value(value: Value) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{KnownSecrets, redact, redact_value};
+    use super::{KnownSecrets, PATTERNS, RULES, mask_patterns, redact, redact_value};
     use serde_json::json;
+
+    #[test]
+    fn every_pattern_compiles() {
+        assert!(PATTERNS.as_ref().is_some_and(|p| p.len() == RULES.len()));
+    }
+
+    #[test]
+    fn without_patterns_nothing_is_kept() {
+        let text = "export TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123".to_owned();
+        assert_eq!(mask_patterns(None, text), "[redacted]");
+    }
 
     #[test]
     fn redacts_string_leaves_of_a_document() {
