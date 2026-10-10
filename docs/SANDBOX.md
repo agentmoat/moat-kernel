@@ -8,7 +8,13 @@ OpenMoat decides each tool call in the agent's hook. The sandboxes below make th
 (ADR-018). Commands the agent runs, and every script they start (`npm test`,
 `build.rs`, `make`), are then confined by the operating system: no secrets, no reads
 outside the project and `sandbox.read_roots`, no writes outside the project, and
-network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
+network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)). On
+macOS a write outside the project fails. On Linux both sandboxes build the command's
+view of the home in memory, with only the project and the read roots mounted from
+disk, so a write elsewhere in the home that is not refused outright (`~/stolen.txt`,
+and under Claude Code also `~/.zshrc`) completes in memory and is gone when the
+command ends; the file on disk does not change (`contained` in
+[EVIDENCE.md](EVIDENCE.md)).
 
 - **Claude Code** (`settings.json`): the `sandbox` block (`enabled`,
   `failIfUnavailable: true`, `allowUnsandboxedCommands: false`, `excludedCommands: []`,

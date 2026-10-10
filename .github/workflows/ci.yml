@@ -65,10 +65,8 @@ jobs:
         include:
           - os: macos-14
             tests: differential sandbox_exec
-          # The hostile scripts only, until the Linux host layers agree with
-          # scenarios.yaml (#421).
           - os: ubuntu-latest
-            tests: hostile_scripts
+            tests: differential sandbox_exec
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
