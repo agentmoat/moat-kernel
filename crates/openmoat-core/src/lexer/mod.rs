@@ -26,6 +26,7 @@
 
 mod brace;
 mod heredoc;
+mod operator;
 #[cfg(test)]
 mod tests;
 
@@ -222,6 +223,10 @@ impl Lexer {
 
     fn run(mut self) -> Result<Vec<Token>, LexError> {
         while let Some(c) = self.peek() {
+            if let Some(first) = operator::First::of(c) {
+                self.operator(first);
+                continue;
+            }
             match c {
                 ' ' | '\t' | '\r' => {
                     self.bump();
@@ -270,7 +275,6 @@ impl Lexer {
                     self.pos += 2;
                     self.dollar_paren()?;
                 }
-                '|' | '&' | ';' | '(' | ')' | '<' | '>' => self.operator(),
                 _ => {
                     self.bump();
                     let word = self.word();
@@ -294,89 +298,6 @@ impl Lexer {
             return Err(LexError::UnterminatedHereDoc { delimiter });
         }
         Ok(self.tokens)
-    }
-
-    fn operator(&mut self) {
-        // Optional leading descriptor digits belong to a redirect: `2>&1`, `3<file`.
-        if let Some(w) = &self.current {
-            let is_fd = !w.text.is_empty() && w.text.chars().all(|c| c.is_ascii_digit());
-            let next_is_redirect = matches!(self.peek(), Some('<' | '>'));
-            if is_fd && next_is_redirect && !w.quoted {
-                self.current = None;
-            }
-        }
-        let c = self.bump().expect("operator char present");
-        let next = self.peek();
-        let op = match (c, next) {
-            ('|', Some('|')) => {
-                self.bump();
-                Operator::Or
-            }
-            // `|&` pipes stderr too; for what reaches the next command it is a pipe.
-            ('|', Some('&')) => {
-                self.bump();
-                Operator::Pipe
-            }
-            ('|', _) => Operator::Pipe,
-            ('&', Some('&')) => {
-                self.bump();
-                Operator::And
-            }
-            ('&', Some('>')) => {
-                self.bump();
-                if self.peek() == Some('>') {
-                    self.bump();
-                    Operator::RedirectAppend
-                } else {
-                    Operator::RedirectOut
-                }
-            }
-            ('&', _) => Operator::Background,
-            (';', _) => {
-                while self.peek() == Some(';') {
-                    self.bump();
-                }
-                Operator::Sequence
-            }
-            ('(', _) => Operator::OpenParen,
-            (')', _) => Operator::CloseParen,
-            ('<', Some('<')) if self.peek_at(1) == Some('<') => {
-                self.pos += 2;
-                Operator::HereString
-            }
-            ('<', Some('<')) => {
-                self.bump();
-                let strip_tabs = if self.peek() == Some('-') {
-                    self.bump();
-                    true
-                } else {
-                    false
-                };
-                self.flush_word();
-                self.start_heredoc(strip_tabs);
-                return;
-            }
-            ('<' | '>', Some('&')) => {
-                self.bump();
-                Operator::DuplicateDescriptor
-            }
-            ('<', Some('>')) => {
-                self.bump();
-                Operator::RedirectReadWrite
-            }
-            ('<', _) => Operator::RedirectIn,
-            ('>', Some('>')) => {
-                self.bump();
-                Operator::RedirectAppend
-            }
-            ('>', Some('|')) => {
-                self.bump();
-                Operator::RedirectOut
-            }
-            ('>', _) => Operator::RedirectOut,
-            _ => unreachable!("operator dispatch covers all first characters"),
-        };
-        self.push_operator(op);
     }
 
     fn single_quoted(&mut self, ansi_c: bool) -> Result<(), LexError> {

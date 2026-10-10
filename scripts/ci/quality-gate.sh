@@ -13,6 +13,11 @@ run cargo fmt --all --check
 # targets on the pinned stable toolchain. CI's fuzz job runs clippy there.
 run rustfmt --check --edition 2024 fuzz/fuzz_targets/*.rs
 run cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+# Library and binary code may not unwrap, expect, panic or reach unreachable!;
+# tests may. Set here rather than in Cargo.toml so the helpers under `tests/`
+# keep their unwraps without an `#[allow]`.
+run cargo clippy --locked --workspace --lib --bins --all-features -- -D warnings \
+    -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::unreachable
 run cargo doc --locked --workspace --no-deps --document-private-items
 run cargo test --locked --workspace --all-features
 run cargo run -q --locked -p openmoat -- policy lint crates/openmoat-core/policies/default-v1.yaml

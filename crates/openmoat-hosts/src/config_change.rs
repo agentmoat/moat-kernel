@@ -9,7 +9,7 @@
 //! `change_type` came from earlier builds and is still accepted.
 
 use openmoat_core::{Action, Decision, Verdict};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{HookEvent, HookRequest, Host, HostError};
 
@@ -26,12 +26,6 @@ struct Payload {
     change_type: Option<String>,
     #[serde(default)]
     file_path: Option<String>,
-}
-
-#[derive(Serialize)]
-struct Block<'a> {
-    decision: &'static str,
-    reason: &'a str,
 }
 
 pub(crate) fn parse(host: Host, payload: &str) -> Result<HookRequest, HostError> {
@@ -83,14 +77,13 @@ pub fn proposal_target(path: &str) -> Option<String> {
 pub(crate) fn render(decision: &Decision) -> String {
     match decision.verdict {
         Verdict::Allow => "{}".to_owned(),
-        Verdict::Ask | Verdict::Deny => {
-            let reason = crate::reason_line(decision);
-            serde_json::to_string(&Block {
-                decision: "block",
-                reason: &reason,
-            })
-            .expect("response is plain data")
-        }
+        // A `Value` always renders, unlike serializing a struct; its keys
+        // sort, and these are already in order.
+        Verdict::Ask | Verdict::Deny => serde_json::json!({
+            "decision": "block",
+            "reason": crate::reason_line(decision),
+        })
+        .to_string(),
     }
 }
 
@@ -194,6 +187,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(out["decision"], "block");
+    }
+
+    #[test]
+    fn block_bytes_are_exact_and_escaped() {
+        let mut deny = Decision::new(Verdict::Deny);
+        deny.reasons.push("say \"hi\"\n\\".into());
+        assert_eq!(
+            render(&deny),
+            r#"{"decision":"block","reason":"moat: deny — say \"hi\"\n\\"}"#
+        );
     }
 
     #[test]

@@ -49,7 +49,7 @@ Each `crates/openmoat-<name>` directory holds the package `openmoat-<name>`; `cr
 
 ## 4. Engineering rules
 
-- **Errors:** `thiserror` enums in library crates; `anyhow` with `bail!`/`ensure!`/`.context()` in the CLI. `anyhow!` is banned by clippy. No `unwrap`/`expect` outside tests unless the invariant is stated in a comment.
+- **Errors:** `thiserror` enums in library crates; `anyhow` with `bail!`/`ensure!`/`.context()` in the CLI. `anyhow!` is banned by clippy. No `unwrap`, `expect`, `panic!` or `unreachable!` outside tests: the gate's second clippy run (`--lib --bins`) denies them. Restructure so the case cannot happen (a typed input, a total constructor) rather than asserting it.
 - **Size:** files ≤ 500 lines (architecture test), functions ≤ 200 lines, cognitive complexity ≤ 30 (clippy). Split by concern: `mod.rs` + one file per responsibility + `tests.rs`.
 - **Comments** explain *why* and *what the host/OS does*; names and types explain *what the code does*. No commented-out code, no TODO/FIXME on `main` (open an issue).
 - **Platform code** lives in dedicated files/modules selected by `cfg` in one place (`#[cfg(unix)]` helpers in `home.rs`, `commands/run/{macos,linux,unsupported}.rs` chosen in `run.rs`); never scatter `cfg` through business logic. Paths are handled in slash-separated canonical form everywhere (`paths.rs`).
