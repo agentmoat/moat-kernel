@@ -156,8 +156,9 @@ impl fmt::Display for Allowance {
 
 /// A secret the egress proxy or Claude Code's own broker injects (ADR-020).
 /// A copy of [`crate::Secret`]: the IR carries only the fields OS backends
-/// need, so a backend can read `ir.secrets` without the policy.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// need, so a backend can read `ir.secrets` without the policy. Its `Debug`
+/// output names only the id, as for [`crate::Secret`].
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct BrokeredSecret {
     /// Stable identifier (lowercase letters, digits and `-`).
     pub id: String,
@@ -169,6 +170,14 @@ pub struct BrokeredSecret {
     pub source: crate::SecretSource,
     /// Also inject into plain-HTTP requests; off unless the policy sets it.
     pub plain_http: bool,
+}
+
+impl std::fmt::Debug for BrokeredSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BrokeredSecret")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
+    }
 }
 
 /// A process limit. No value exists until the policy schema defines one.
