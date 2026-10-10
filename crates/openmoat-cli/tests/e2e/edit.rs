@@ -1,12 +1,12 @@
 //! `moat edit`, end to end, with a script standing in for the person's editor.
 
-use crate::common::{Sandbox, text};
+use crate::common::{Sandbox, USAGE, text};
 
 #[test]
 fn edit_without_a_terminal_is_refused() {
     let sb = Sandbox::installed(&[".claude"]);
     let out = sb.moat(&["edit"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(text(&out).contains("must be run by a person in a terminal"));
 }
 
@@ -15,7 +15,7 @@ mod with_editor {
     use std::os::unix::fs::PermissionsExt as _;
     use std::process::Output;
 
-    use crate::common::{Sandbox, output, text};
+    use crate::common::{OK, Sandbox, USAGE, output, text};
 
     /// Run `moat edit` as a person whose editor runs `script` on the file and
     /// who then types `answer`.
@@ -48,7 +48,7 @@ mod with_editor {
 
         let out = edit(&sb, APPEND, "n\n");
         let message = text(&out);
-        assert_eq!(out.status.code(), Some(0), "{message}");
+        assert_eq!(out.status.code(), Some(OK), "{message}");
         assert!(
             message.contains("+# edited by the owner") && message.contains("Apply? [y/N]"),
             "{message}"
@@ -58,7 +58,7 @@ mod with_editor {
 
         let out = edit(&sb, APPEND, "y\n");
         let message = text(&out);
-        assert_eq!(out.status.code(), Some(0), "{message}");
+        assert_eq!(out.status.code(), Some(OK), "{message}");
         assert!(
             message.contains("lock re-pinned") && message.contains("undo:"),
             "{message}"
@@ -78,7 +78,7 @@ mod with_editor {
         let sb = Sandbox::installed(&[".claude"]);
         let lock = std::fs::read(sb.home.join(".moat/policy.lock")).unwrap();
         let out = edit(&sb, "true", "");
-        assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+        assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
         assert!(text(&out).contains("no changes"), "{}", text(&out));
         assert_eq!(
             std::fs::read(sb.home.join(".moat/policy.lock")).unwrap(),
@@ -96,7 +96,7 @@ mod with_editor {
             "\n",
         );
         let message = text(&out);
-        assert_eq!(out.status.code(), Some(64), "{message}");
+        assert_eq!(out.status.code(), Some(USAGE), "{message}");
         assert!(
             message.contains("does not lint") && message.contains("Edit again?"),
             "{message}"
@@ -112,7 +112,7 @@ mod with_editor {
         let tampered = policy(&sb) + "\n# tampered\n";
         std::fs::write(&path, &tampered).unwrap();
         let out = edit(&sb, APPEND, "y\n");
-        assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+        assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
         assert!(text(&out).contains("kernel-integrity"), "{}", text(&out));
         assert_eq!(policy(&sb), tampered);
     }
