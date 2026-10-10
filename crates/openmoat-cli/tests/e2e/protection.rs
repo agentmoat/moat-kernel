@@ -137,3 +137,102 @@ fn claude_code_on_native_windows_is_hook_only() {
         "{home}"
     );
 }
+
+/// The first line of each section of `moat status` and `moat doctor`, in the
+/// order they print: the label column after `skip` leading characters (the
+/// check mark in `doctor`).
+fn sections(out: &str, skip: usize) -> Vec<String> {
+    const KNOWN: [&str; 9] = [
+        "state directory",
+        "policy",
+        "lock",
+        "approvals",
+        "environment",
+        "Claude Code",
+        "Codex",
+        "Cursor",
+        "audit log",
+    ];
+    let mut seen: Vec<String> = Vec::new();
+    for line in out.lines() {
+        let label = line.chars().skip(skip).take(16).collect::<String>();
+        let label = label.trim_end();
+        if KNOWN.contains(&label) && !seen.iter().any(|s| s == label) {
+            seen.push(label.to_owned());
+        }
+    }
+    seen
+}
+
+#[test]
+fn status_and_doctor_print_their_sections_in_order() {
+    let sb = Sandbox::installed(&[".codex"]);
+    let status = stdout(&sb.moat(&["status"]));
+    assert_eq!(
+        sections(&status, 0),
+        [
+            "state directory",
+            "policy",
+            "lock",
+            "approvals",
+            "Claude Code",
+            "Codex",
+            "Cursor",
+            "audit log"
+        ],
+        "{status}"
+    );
+    let doctor = stdout(&sb.moat(&["doctor"]));
+    assert_eq!(
+        sections(&doctor, 2),
+        [
+            "state directory",
+            "policy",
+            "lock",
+            "environment",
+            "Claude Code",
+            "Codex",
+            "Cursor",
+            "audit log"
+        ],
+        "{doctor}"
+    );
+    assert_eq!(doctor.lines().last(), Some("healthy"), "{doctor}");
+}
+
+#[test]
+fn status_and_doctor_report_a_missing_lock_and_audit_log() {
+    let sb = Sandbox::installed(&[".codex"]);
+    fs::remove_file(sb.home.join(".moat/policy.lock")).unwrap();
+    fs::remove_file(sb.home.join(".moat/audit.db")).unwrap();
+    let out = sb.moat(&["status"]);
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    let status = stdout(&out);
+    for line in [
+        "lock             ✗ missing (run `moat init`)",
+        "approvals        no active session grants",
+        "audit log        ✗ missing (run `moat init`)",
+    ] {
+        assert!(status.lines().any(|l| l == line), "{line:?} in {status}");
+    }
+    let out = sb.moat(&["doctor"]);
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    let doctor = stdout(&out);
+    assert!(
+        doctor
+            .lines()
+            .any(|l| l == "✗ lock             missing; run `moat init`"),
+        "{doctor}"
+    );
+    assert!(
+        doctor.lines().any(|l| l.starts_with("✗ audit log        ")),
+        "{doctor}"
+    );
+    assert!(
+        doctor
+            .lines()
+            .last()
+            .is_some_and(|l| l.starts_with("2 problem(s). ")),
+        "{doctor}"
+    );
+}
