@@ -2,7 +2,9 @@
 
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
-[Semantic Versioning](https://semver.org/).
+[Semantic Versioning](https://semver.org/). New entries are one line each, linked to
+their pull request (CONTRIBUTING.md "Changelog"); each version links to its compare
+view at the end of the file.
 
 ## [Unreleased]
 
@@ -344,3 +346,15 @@ First beta and first release that is not a GitHub pre-release.
 - Windows: canonical slash-separated paths keep `C:/` and UNC roots.
 - Documentation restructured for the decide-only alpha (#94). New `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md` and an ADR index (`docs/adr/README.md`). `docs/OVERVIEW.md`, `DESIGN.md`, `STRENGTH.md`, `PROGRESS.md`, `TECH_STACK.md` and `REPO_STRUCTURE.md` are retired; what was still true moved into the new documents. README: `git clone` install step, `CLAUDE_CONFIG_DIR`, examples checked against the default policy. SECURITY.md: supported versions (latest alpha only). `moat --help` says what the operating system does and does not enforce.
 
+[Unreleased]: https://github.com/crocodile-labs/openmoat/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/crocodile-labs/openmoat/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0-alpha.7...v0.1.0
+[0.1.0-alpha.7]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0-alpha.6...v0.1.0-alpha.7
+[0.1.0-alpha.6]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0-alpha.5...v0.1.0-alpha.6
+[0.1.0-alpha.5]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0-alpha.4...v0.1.0-alpha.5
+[0.1.0-alpha.4]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
+[0.1.0-alpha.3]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
+[0.1.0-alpha.2]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
+[0.1.0-alpha.1]: https://github.com/crocodile-labs/openmoat/compare/v0.1.0-alpha.0...v0.1.0-alpha.1
+[0.1.0-alpha.0]: https://github.com/crocodile-labs/openmoat/releases/tag/v0.1.0-alpha.0

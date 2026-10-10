@@ -26,6 +26,26 @@ scripts/ci/quality-gate.sh                 # fmt, clippy -D warnings, doc, tests
 
 Rust 1.95 (pinned in `rust-toolchain.toml`). No other tooling is required.
 
+## Toolchain and MSRV
+
+The minimum supported Rust version (MSRV) is the pinned toolchain: `rust-version =
+"1.95"` in `Cargo.toml`, `channel = "1.95"` in `rust-toolchain.toml`. It is raised on
+purpose and only in a minor release (0.2.x → 0.3.0), with a `### Changed` line in
+`CHANGELOG.md`, never in a patch release. The `weekly` workflow
+(`.github/workflows/weekly.yml`, also runnable by hand) runs clippy and the tests on
+the latest stable and beta, so a new compiler or clippy lint shows up there before the
+pin moves. It is not a required check; a failure becomes an issue.
+
+## Coverage
+
+The same `weekly` workflow measures line coverage of the workspace with
+[cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) on the pinned toolchain. The
+job summary shows a table per crate, and the `coverage` artifact holds `lcov.info` and
+the HTML report. No coverage service is used and no threshold is enforced. Locally:
+`cargo install cargo-llvm-cov --version 0.9.1 --locked`, then `cargo llvm-cov --workspace
+--open`. `docs/COVERAGE.md` is a different thing: which threats the conformance
+fixtures cover.
+
 ## Your first pull request
 
 Every change lands through a pull request, including maintainers' own work; nothing
@@ -48,6 +68,7 @@ is pushed to `main` directly.
 5. **Open the PR with the template.** The title follows Conventional Commits
    (`fix(cli): …`); **Testing** and **Security impact** are required sections, and the
    **Release note** line feeds `CHANGELOG.md`. Labels are set for you (below).
+   A user-visible change adds its line under `## [Unreleased]` (see "Changelog").
 6. **Answer the review.** `moat-reviewer` posts a first pass; address or answer its
    🔴 and 🟠 items. A maintainer makes the call.
 
@@ -117,6 +138,20 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
   pass expressions to `run:` blocks through `env:`, and give tokens only the permissions
   they use. CI runs `actionlint` and `zizmor` on `.github/workflows/`.
 
+## Changelog
+
+`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/):
+
+- One line per change, under `### Added`, `### Changed`, `### Fixed`, `### Removed` or
+  `### Security`, each heading once per version. Say what changed for the user, not how;
+  the detail belongs in the PR and the docs.
+- End the line with its pull request: `([#123](https://github.com/crocodile-labs/openmoat/pull/123))`.
+- Internal changes (CI, refactors, tests) get no line; write "none" as their Release note.
+- The version headings are links; the compare links at the end of the file name each
+  version's range (`[0.2.0]: …/compare/v0.1.1...v0.2.0`, `[Unreleased]: …/compare/v0.2.0...HEAD`).
+
+Entries of releases up to 0.2.0 predate this rule and stay as they are.
+
 ## Checks beyond the Rust gate
 
 CI runs these on every pull request. `scripts/ci/quality-gate.sh` runs each one whose
@@ -170,7 +205,8 @@ touch the manifests or the workflow run `dist plan` only. Running the workflow b
 2. In a PR (`build: release vX.Y.Z-pre.N`): bump `version` in `[workspace.package]` and
    the four `openmoat-*` entries of `[workspace.dependencies]` in `Cargo.toml`, run
    `cargo check` to update `Cargo.lock` (and `fuzz/Cargo.lock`), move the `[Unreleased]`
-   entries of `CHANGELOG.md` under `## [X.Y.Z-pre.N] - YYYY-MM-DD`, and update the
+   entries of `CHANGELOG.md` under `## [X.Y.Z-pre.N] - YYYY-MM-DD` (add its compare
+   link at the end of the file and point `[Unreleased]` at the new tag), and update the
    version in the README status line, the install commands of `docs/INSTALL.md`,
    `crates/openmoat-cli/README.md` and `docs/ROADMAP.md` "Where it is today". The
    release fails without that CHANGELOG section; its text becomes the release notes,
