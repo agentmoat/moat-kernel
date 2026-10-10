@@ -35,10 +35,15 @@ command ends; the file on disk does not change (`contained` in
   `Edit(./.envrc)` and `Edit(./.moat)`. Only names directly in the working directory
   get such a rule: where a denied path is missing, bubblewrap mounts its first
   missing component read-only for the command (an empty `.envrc` or `.moat` shows up
-  there meanwhile), and `Edit(./bin/moat)` would do that to a missing `bin`. Claude
-  Code itself keeps the working directory's `.git/hooks`, `.git/config` and
-  `.claude` settings read-only. Everything else the policy denies by a `**/` glob
-  (a `.env` in a subdirectory, `.env.local`, `.git/info/attributes`, submodule hooks,
+  there meanwhile), and `Edit(./bin/moat)` would do that to a missing `bin`. The
+  exception is a file below a directory the policy denies writing itself: `moat init`
+  also adds `Edit(./.cursor/hooks.json)`, `Edit(./.cursor/sandbox.json)` and
+  `Edit(./.codex/hooks.json)`, so sandboxed commands cannot plant another agent's
+  hooks there. A missing `.cursor` or `.codex` is read-only for the command, which
+  the policy denies creating anyway. Claude Code itself keeps the working directory's
+  `.git/hooks`, `.git/config` and `.claude` settings read-only. Everything else the
+  policy denies by a `**/` glob (a `.env` in a subdirectory, `.env.local`,
+  `.git/info/attributes`, submodule hooks, those hook files in a subdirectory,
   `bin/moat`) stays writable for sandboxed commands on Linux; `moat sandbox show`
   lists it (`claude-code.linux-write-globs`).
 - **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =

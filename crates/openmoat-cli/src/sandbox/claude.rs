@@ -34,6 +34,10 @@
 //! written as `Edit(./<name>)`. Bubblewrap mounts a missing deny path's first
 //! missing component read-only, so only a name directly in the working
 //! directory gets a rule: `Edit(./bin/moat)` would make a missing `bin` read-only.
+//! A path below a directory the policy denies writing itself is the exception
+//! (`Edit(./.cursor/hooks.json)`): a read-only missing `.cursor` withholds
+//! nothing the policy allows (#434). Claude Code keeps its own `.claude`
+//! settings read-only itself, so `.claude` gets no rule.
 
 mod credentials;
 mod git_internals;
@@ -51,6 +55,11 @@ pub use settings::{apply, in_sync, protect, remove, weaknesses};
 use super::Report;
 use super::patterns::{Spot, domain, has_glob, is_below, literal_tree, push_unique, split, spot};
 
+/// Claude Code's own directory, whose settings it keeps read-only in the
+/// working directory itself (the sandbox runtime's `.claude/settings.json`,
+/// `settings.local.json`, `hooks`, `commands`, … masks).
+const CLAUDE_DIR: &str = ".claude";
+
 /// The permissions key that closes reads outside the working directories.
 pub const BLOCK_READS: &str = "blockReadsOutsideWorkingDirectories";
 
@@ -63,8 +72,10 @@ pub struct Generated {
     /// Whether `permissions.blockReadsOutsideWorkingDirectories` must be on.
     pub block_reads: bool,
     /// The `permissions.deny` rules OpenMoat owns (Linux only): every
-    /// `Read(./**/…)` rule and every `Edit(./<name>)` rule naming one entry of
-    /// the working directory, spellings no other writer is expected to use.
+    /// `Read(./**/…)` rule, every `Edit(./<name>)` rule naming one entry of
+    /// the working directory and every `Edit(./.<dir>/<name>)` rule naming one
+    /// entry of a hidden directory there, spellings no other writer is expected
+    /// to use.
     pub deny_rules: Vec<String>,
     /// Losses and allowances of this backend.
     pub report: Report,
@@ -334,6 +345,15 @@ impl Filesystem {
     /// The `Edit(./<name>)` rules that make Linux deny each `/**/<name>` write
     /// deny directly in the working directory, and what Linux leaves out.
     fn edit_rules(&self, report: &mut Report) -> Vec<String> {
+        // The single names the policy denies writing anywhere, as a node
+        // (`/**/.cursor`) or a tree (`/**/.moat/**`).
+        let denied_dirs: Vec<&str> = self
+            .nodes
+            .iter()
+            .chain(&self.trees)
+            .filter_map(|e| e.strip_prefix("/**/"))
+            .filter(|name| !name.contains('/') && !has_glob(name) && *name != CLAUDE_DIR)
+            .collect();
         let mut rules = Vec::new();
         let mut dropped = Vec::new();
         for entry in &self.deny_write {
@@ -342,8 +362,10 @@ impl Filesystem {
                 continue;
             }
             if let Some(name) = path.strip_prefix("/**/")
-                && !name.contains('/')
                 && !has_glob(name)
+                && name
+                    .split_once('/')
+                    .is_none_or(|(dir, _)| denied_dirs.contains(&dir))
             {
                 push_unique(&mut rules, format!("Edit(./{name})"));
             }
@@ -355,10 +377,11 @@ impl Filesystem {
                 "claude-code.linux-write-globs",
                 dropped,
                 "on Linux Claude Code drops every glob in denyWrite, so sandboxed commands may \
-                 write these, except a name directly in the session's working directory, which \
-                 an `Edit(./…)` rule denies there (Claude Code's file tools obey it too), and \
-                 that directory's `.git` hooks and config and `.claude` settings, which Claude \
-                 Code keeps read-only itself",
+                 write these, except a name directly in the session's working directory and \
+                 another agent's hook file there (`.cursor/hooks.json`, `.codex/hooks.json`), \
+                 which an `Edit(./…)` rule denies there (Claude Code's file tools obey it too), \
+                 and that directory's `.git` hooks and config and `.claude` settings, which \
+                 Claude Code keeps read-only itself",
             );
         }
         rules

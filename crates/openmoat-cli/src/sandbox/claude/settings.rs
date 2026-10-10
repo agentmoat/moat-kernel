@@ -50,13 +50,18 @@ pub fn apply(root: &mut Value, generated: &Generated) -> Result<bool> {
 }
 
 /// Whether `rule` is spelled the way OpenMoat writes its `permissions.deny`
-/// rules: `Read(./**/…)`, or `Edit(./<name>)` naming one working-directory entry.
+/// rules: `Read(./**/…)`, `Edit(./<name>)` naming one working-directory entry,
+/// or `Edit(./.<dir>/<name>)` naming one entry of a hidden directory there.
 fn is_owned_rule(rule: &Value) -> bool {
+    let entry = |name: &str| !name.is_empty() && !name.contains(['/', ')', '*', '?', '[', '{']);
     rule.as_str().is_some_and(|r| {
         r.starts_with("Read(./**/")
             || r.strip_prefix("Edit(./")
                 .and_then(|r| r.strip_suffix(')'))
-                .is_some_and(|name| !name.is_empty() && !name.contains(['/', ')']))
+                .is_some_and(|path| match path.split_once('/') {
+                    None => entry(path),
+                    Some((dir, name)) => dir.starts_with('.') && entry(dir) && entry(name),
+                })
     })
 }
 
@@ -316,9 +321,15 @@ mod tests {
     #[test]
     fn linux_deny_rules_join_the_user_deny_list_and_leave_with_uninstall() {
         let out = generated_for(DEFAULT_POLICY, true);
-        let user = ["Read(~/secret)", "Edit(./src/**)", "Edit(//tmp/x)"];
+        let user = [
+            "Read(~/secret)",
+            "Edit(./src/**)",
+            "Edit(//tmp/x)",
+            "Edit(./src/main.rs)",
+            "Edit(./.vscode/a/b)",
+        ];
         let mut deny = user.to_vec();
-        deny.extend(["Read(./**/old)", "Edit(./old)"]);
+        deny.extend(["Read(./**/old)", "Edit(./old)", "Edit(./.old/hooks.json)"]);
         let mut root = json!({ "permissions": { "deny": deny } });
         assert!(apply(&mut root, &out).unwrap());
         assert!(!apply(&mut root, &out).unwrap(), "idempotent");

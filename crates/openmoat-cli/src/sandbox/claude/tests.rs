@@ -84,7 +84,13 @@ fn linux_adds_working_directory_rules_for_wildcard_denies() {
             "Edit(./.env)",
             "Edit(./.envrc)",
             "Edit(./.moat)",
-        ]
+            "Edit(./.cursor/hooks.json)",
+            "Edit(./.cursor/sandbox.json)",
+            "Edit(./.codex/hooks.json)",
+        ],
+        "another agent's hook file below a directory the policy denies writing \
+         (`.cursor`, `.codex`) is denied by path (#434); Claude Code keeps its own \
+         `.claude` settings read-only itself"
     );
     assert_eq!(linux.sandbox, mac.sandbox, "the sandbox block is the same");
     let dropped = linux
