@@ -10,7 +10,7 @@ use toml_edit::DocumentMut;
 
 use super::{Plan, Report, claude, codex, codex_config_path, cursor};
 use crate::home::write_private;
-use crate::install::{HostConfig, SANDBOX_BACKUP, backup_path, read_or_empty};
+use crate::install::{HostConfig, SANDBOX_BACKUP, read_or_empty};
 use crate::integrity::Lock;
 
 /// Hosts with a sandbox backend, in the order OpenMoat writes them.
@@ -89,10 +89,7 @@ pub fn write(host: Host, plan: &Plan, dry_run: bool) -> Result<bool> {
     if dry_run {
         return Ok(true);
     }
-    if path.exists() {
-        fs::copy(&path, backup_path(&path, SANDBOX_BACKUP))
-            .with_context(|| format!("backing up {}", path.display()))?;
-    }
+    crate::install::back_up(&path, SANDBOX_BACKUP)?;
     write_private(&path, text.as_bytes())?;
     Ok(true)
 }

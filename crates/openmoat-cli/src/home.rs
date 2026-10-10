@@ -158,8 +158,13 @@ impl Home {
 pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path.parent().context("path has no parent")?;
     create_private_dir(parent)?;
+    // The time keeps a temporary file left by a crashed run with the same
+    // process id from making this one fail.
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
     let tmp = parent.join(format!(
-        ".{}.tmp-{}",
+        ".{}.tmp-{}-{nanos}",
         path.file_name()
             .map(|n| n.to_string_lossy())
             .unwrap_or_default(),
@@ -245,6 +250,18 @@ mod tests {
         );
         let leftovers = fs::read_dir(file.parent().unwrap()).unwrap().count();
         assert_eq!(leftovers, 1, "no temporary file is left behind");
+    }
+
+    #[test]
+    fn a_temporary_file_left_by_a_crash_does_not_block_a_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("hosts.json");
+        let stale = dir
+            .path()
+            .join(format!(".hosts.json.tmp-{}", std::process::id()));
+        fs::write(&stale, b"old").unwrap();
+        write_private(&file, b"new").unwrap();
+        assert_eq!(fs::read(&file).unwrap(), b"new");
     }
 
     #[test]

@@ -4,9 +4,10 @@ mod binary;
 mod dirs;
 mod hook_file;
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
 use openmoat_hosts::Host;
 
 pub use binary::{hook_binary, stale_hint};
@@ -26,6 +27,19 @@ pub fn backup_path(path: &Path, suffix: &str) -> PathBuf {
     name.push(".");
     name.push(suffix);
     PathBuf::from(name)
+}
+
+/// Copy `path` to its `suffix` backup before OpenMoat edits it, unless that
+/// backup exists. The first one holds the file as it was before OpenMoat
+/// touched it; a later copy would replace it with an already edited file. A
+/// link at the backup's name counts as a backup, so the copy never follows it.
+pub fn back_up(path: &Path, suffix: &str) -> Result<()> {
+    let backup = backup_path(path, suffix);
+    if !path.exists() || fs::symlink_metadata(&backup).is_ok() {
+        return Ok(());
+    }
+    fs::copy(path, &backup).with_context(|| format!("backing up {}", path.display()))?;
+    Ok(())
 }
 
 /// The backups of `path` that exist, hook backup first.
