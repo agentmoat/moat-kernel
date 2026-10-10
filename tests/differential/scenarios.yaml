@@ -18,6 +18,13 @@
 # a benign commit or template read is narrowed there (documented losses). A `gap`
 # block marks a layer that falls short of a scenario, tracked by an issue, and
 # reported in the matrix instead of silently skipped.
+#
+# `contained: [claude-linux]` records how a layer blocks an attack where the
+# command does not fail: on Linux, Claude Code's sandbox mounts an empty
+# in-memory directory over the home (the working directory and read roots are
+# mounted back inside it), so a write to `~/…` completes there and is discarded
+# with the sandbox. The layer then proves that the host home did not change and
+# no secret was shown (#421).
 
 attacks:
   - id: read-ssh-key
@@ -59,6 +66,7 @@ attacks:
     hook: ask
     codex: deny
     claude: deny
+    contained: [claude-linux]
 
   - id: write-shell-rc
     threat: T7
@@ -67,6 +75,7 @@ attacks:
     hook: deny
     codex: deny
     claude: deny
+    contained: [claude-linux]
 
   - id: write-zshenv-worktree-escape
     threat: T7
@@ -76,6 +85,7 @@ attacks:
     hook: deny
     codex: deny
     claude: deny
+    contained: [claude-linux]
 
   - id: plant-git-hook
     threat: T6

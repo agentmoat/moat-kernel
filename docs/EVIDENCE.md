@@ -74,6 +74,7 @@ itself, not the sandbox (the CI runner's kernel has `dev.tty.legacy_tiocsti` at 
 The Standard tier columns cover the commands the agent runs and the processes they start.
 Not verified here: what the agent's own process does outside its sandbox (Claude Code's file
 tools and hooks), a real model choosing the command, and the opt-in `sandbox.proxy_port` mode
-(the command-level scenarios of the differential suite use it; CI does not run them under the
-host sandboxes). `scripts/ci/host-binaries.sh` fetches the pinned binaries, and
-`scripts/ci/differential.sh hostile_scripts` runs these rows under every layer the machine has.
+for these scripts (the command-level scenarios of the differential suite use it, and the
+`standard tier` jobs run them under both host sandboxes). `scripts/ci/host-binaries.sh` fetches the
+pinned binaries, and `scripts/ci/differential.sh hostile_scripts` runs these rows under every layer
+the machine has.

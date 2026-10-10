@@ -12,7 +12,14 @@
 //! `MOAT_FAKE_API` (else `python3`); without either the layer skips visibly,
 //! except in CI's `standard tier` job, which fails it (`skip_without_host_binary`).
 //!
-//! Scope: the layer asserts that every attack is **blocked**. Claude Code grants
+//! Scope: the layer asserts that every attack is **blocked**: the command fails,
+//! or, where `scenarios.yaml` records it `contained` for this OS, it completes
+//! inside the sandbox without changing the host home or showing a secret. On
+//! Linux Claude Code's sandbox mounts an empty in-memory directory over the
+//! home, so a write there completes and is discarded (#421). Every attack is
+//! also checked against the host home outside the project and for a fake
+//! secret in its output, so a sandbox that is not running fails the layer
+//! instead of passing it. Claude Code grants
 //! reads and writes in the session's working directories, which it establishes
 //! interactively; a headless `claude -p --bare` has none, so benign project work
 //! cannot be verified here and those rows are skipped with a notice (#238). A
@@ -28,6 +35,17 @@ use std::time::{Duration, Instant};
 use crate::common::{json, skip_without_host_binary, text};
 
 use super::{Fixtures, Verdict, scenarios};
+
+mod observe;
+
+use observe::{Run, Seen};
+
+/// This OS's name for the layer in `contained:` lists.
+const LAYER: &str = if cfg!(target_os = "linux") {
+    "claude-linux"
+} else {
+    "claude-macos"
+};
 
 /// What bounds each `claude` run (`claude_output`).
 const PERL: &str = "/usr/bin/perl";
@@ -55,18 +73,6 @@ fn which(var: &str, name: &str) -> Option<PathBuf> {
         .map(|dir| dir.join(name))
         .find(|p| p.is_file())
 }
-
-/// Markers Claude Code's sandbox (or the tools under it) emit when it blocks a
-/// command. Any one of them means the command did not complete: a `Deny`.
-const BLOCKED: &[&str] = &[
-    "peration not permitted",
-    "sandbox_violation",
-    "Failed to connect",
-    "Could not resolve host",
-    // Claude Code's Bash tool prefixes any non-zero exit with this; a sandbox
-    // that denies a file read, a write or a connection makes the command fail.
-    "Exit code ",
-];
 
 /// The fake Anthropic API, serving one Bash command, on a loopback port.
 struct FakeApi {
@@ -116,8 +122,7 @@ impl Fixtures {
         std::fs::write(dir.join("settings.json"), settings).unwrap();
     }
 
-    /// Run `command` under Claude Code's sandbox and return what the tool
-    /// reported: `Deny` if the sandbox blocked it, `Allow` if it completed.
+    /// Run `command` under Claude Code's sandbox, watching the home.
     fn claude_run(
         &self,
         claude: &Path,
@@ -125,14 +130,12 @@ impl Fixtures {
         script: &Path,
         id: &str,
         command: &str,
-    ) -> Verdict {
-        let perl = Command::new(PERL);
-        let reported = text(&self.claude_output(perl, claude, python, script, id, command));
-        if BLOCKED.iter().any(|m| reported.contains(m)) {
-            Verdict::Deny
-        } else {
-            Verdict::Allow
-        }
+    ) -> Run {
+        let project = self.tree(super::Project::Evil);
+        Run::observe(&self.sb.home, project, || {
+            let perl = Command::new(PERL);
+            text(&self.claude_output(perl, claude, python, script, id, command))
+        })
     }
 
     /// Run `command` in the evil project as the one Bash call of a `claude -p`
@@ -199,24 +202,40 @@ fn claude_layer_blocks_every_attack() {
 
     // Readiness: an allowed system read must run, or the sandbox is denying
     // everything and "blocked" would be meaningless.
+    // What it changes in the home is Claude Code's own doing (its state under
+    // `~/.claude` and `~/.config`), not a command's: left out below.
     let ready = fx.claude_run(&claude, &python, &script, "ready", "cat /etc/hosts");
+    let artefacts = ready.changed.iter().cloned().collect();
     assert_eq!(
-        ready,
-        Verdict::Allow,
+        ready.seen(&artefacts),
+        Seen::Contained,
         "claude sandbox denied an allowed read (harness broken)"
     );
 
     let mut matrix = String::from("\ndifferential matrix (claude code sandbox):\n");
     let mut mismatches = Vec::new();
     for s in scenarios().iter().filter(|s| s.is_attack()) {
-        let got = fx.claude_run(&claude, &python, &script, &s.id, &s.command);
-        let _ = writeln!(matrix, "  {:<30} claude={}", s.id, got.symbol());
-        // Every attack must be blocked; its recorded `claude` verdict is `deny`.
-        if got != Verdict::Deny || s.claude != Verdict::Deny {
+        let got = fx
+            .claude_run(&claude, &python, &script, &s.id, &s.command)
+            .seen(&artefacts);
+        let _ = writeln!(matrix, "  {:<30} claude={}", s.id, got.label());
+        // Every attack must be blocked, as recorded: refused, or contained
+        // where `scenarios.yaml` says so for this OS.
+        let expected = if s.contained.iter().any(|l| l == LAYER) {
+            Seen::Contained
+        } else {
+            Seen::Refused
+        };
+        if got != expected || s.claude != Verdict::Deny {
+            let detail = match &got {
+                Seen::Escaped(detail) => detail.as_str(),
+                _ => "",
+            };
             mismatches.push(format!(
-                "{}: claude {} (expected deny; scenarios.yaml says {})",
+                "{}: claude {} (expected {}; scenarios.yaml says {}) {detail}",
                 s.id,
-                got.symbol().trim(),
+                got.label(),
+                expected.label(),
                 s.claude.symbol().trim()
             ));
         }
@@ -239,7 +258,9 @@ fn claude_layer_blocks_every_attack() {
     }
     let _ = writeln!(
         matrix,
-        "  (benign rows skipped: headless claude has no working directory, #{BENIGN_GAP})"
+        "  (benign rows skipped: headless claude has no working directory, #{BENIGN_GAP})\n  \
+         (Claude Code's own writes, left out of the home check: {:?})",
+        ready.changed
     );
     eprintln!("{matrix}");
     assert!(

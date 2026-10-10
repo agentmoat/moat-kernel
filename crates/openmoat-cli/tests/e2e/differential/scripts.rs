@@ -255,10 +255,10 @@ fn evidence_table_is_current() {
          \nThe Standard tier columns cover the commands the agent runs and the processes they \
          start.\nNot verified here: what the agent's own process does outside its sandbox (Claude \
          Code's file\ntools and hooks), a real model choosing the command, and the opt-in \
-         `sandbox.proxy_port` mode\n(the command-level scenarios of the differential suite \
-         use it; CI does not run them under the\nhost sandboxes). \
-         `scripts/ci/host-binaries.sh` fetches the pinned binaries, and\n\
-         `scripts/ci/differential.sh hostile_scripts` runs these rows under every layer the \
+         `sandbox.proxy_port` mode\nfor these scripts (the command-level scenarios of the \
+         differential suite use it, and the\n`standard tier` jobs run them under both host \
+         sandboxes). `scripts/ci/host-binaries.sh` fetches the\npinned binaries, and \
+         `scripts/ci/differential.sh hostile_scripts` runs these rows under every layer\nthe \
          machine has.\n",
     );
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/EVIDENCE.md");
