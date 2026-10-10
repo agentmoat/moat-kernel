@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::common::{Sandbox, bash_payload, json, stdout, text};
+use crate::common::{OK, Sandbox, USAGE, bash_payload, json, stdout, text};
 
 const INSTALL: &str = "npm install left-pad-pro";
 const KEY: &str = "cat ~/.ssh/id_rsa";
@@ -16,7 +16,7 @@ fn machine(commands: &[&str], approve: bool) -> Sandbox {
         sb.guard("claude-code", &bash_payload("s1", &project, command));
         if approve && n == 0 {
             let out = sb.moat_as_person(&["allow", "--last"]);
-            assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+            assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
         }
     }
     sb
@@ -39,7 +39,7 @@ fn team_report_aggregates_verified_exports() {
 
     // a.jsonl twice: overlapping exports count each event once.
     let out = a.moat(&["audit", "report", &a_path, &b_path, &a_path]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let t = stdout(&out);
     assert!(t.contains("5 decisions"), "{t}");
     assert!(t.contains("claude-code  2 · 1 · 2"), "{t}");
@@ -66,7 +66,7 @@ fn team_report_refuses_an_export_that_does_not_verify() {
         .replacen("\"deny\"", "\"allow\"", 1);
     std::fs::write(&file, edited).unwrap();
     let out = a.moat(&["audit", "report", &file.to_string_lossy()]);
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(
         text(&out).contains("a.jsonl: line 2 does not verify"),
         "{}",

@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::common::{Sandbox, output, stdout, text};
+use crate::common::{OK, Sandbox, output, stdout, text};
 use crate::proxy::brokered;
 
 /// The brokered value: random, mixed case, no known format. Generated for the
@@ -85,7 +85,7 @@ fn planted_secrets_never_reach_the_audit_log_or_an_export() {
     proxy(&sb, &requests);
 
     let export = sb.moat(&["audit", "export"]);
-    assert_eq!(export.status.code(), Some(0), "{}", text(&export));
+    assert_eq!(export.status.code(), Some(OK), "{}", text(&export));
     let export = stdout(&export);
     let mut db = Vec::new();
     for file in ["audit.db", "audit.db-wal"] {

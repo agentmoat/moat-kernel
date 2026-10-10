@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::common::{Sandbox, output, stdout, text};
+use crate::common::{DENY, OK, Sandbox, USAGE, output, stdout, text};
 
 /// `moat init` as a person at a terminal answering `answers`.
 fn init_answering(sb: &Sandbox, answers: &str) -> std::process::Output {
@@ -29,7 +29,7 @@ fn backups_in(dir: &Path) -> Vec<String> {
 fn init_without_a_terminal_changes_no_agent() {
     let sb = Sandbox::bare(&[".claude", ".codex"]);
     let out = sb.moat(&["init"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(stdout(&out).contains("moat init --yes"), "{}", text(&out));
     assert!(sb.home.join(".moat/policy.yaml").is_file());
     assert!(!sb.home.join(".claude/settings.json").exists());
@@ -41,7 +41,7 @@ fn init_without_a_terminal_changes_no_agent() {
 fn init_asks_per_agent_and_changes_only_the_accepted_ones() {
     let sb = Sandbox::bare(&[".claude", ".codex"]);
     let out = init_answering(&sb, "\nn\n");
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let shown = stdout(&out);
     assert!(shown.contains("Protect Claude Code ("), "{shown}");
     assert!(shown.contains("Protect Codex ("), "{shown}");
@@ -60,7 +60,7 @@ fn init_asks_per_agent_and_changes_only_the_accepted_ones() {
 fn init_hosts_leaves_other_agents_untouched() {
     let sb = Sandbox::bare(&[".claude", ".codex"]);
     let out = sb.moat(&["init", "--hosts", "claude-code"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(sb.home.join(".claude/settings.json").is_file());
     assert!(
         fs::read_dir(sb.home.join(".codex"))
@@ -80,7 +80,7 @@ fn uninstall_restores_the_original_files_byte_for_byte() {
     fs::write(&settings, claude_original).unwrap();
     fs::write(&codex_config, codex_original).unwrap();
     let out = sb.moat(&["init", "--yes"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(
         stdout(&out).contains("settings.json.moat-backup"),
         "{}",
@@ -89,11 +89,11 @@ fn uninstall_restores_the_original_files_byte_for_byte() {
     assert!(pinned(&sb).contains("settings.json"));
 
     let refused = sb.moat(&["uninstall"]);
-    assert_eq!(refused.status.code(), Some(64), "{}", text(&refused));
+    assert_eq!(refused.status.code(), Some(USAGE), "{}", text(&refused));
     assert_ne!(fs::read_to_string(&settings).unwrap(), claude_original);
 
     let out = sb.moat_as_person(&["uninstall"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(stdout(&out).contains("restored from"), "{}", text(&out));
     assert_eq!(fs::read_to_string(&settings).unwrap(), claude_original);
     assert_eq!(fs::read_to_string(&codex_config).unwrap(), codex_original);
@@ -121,14 +121,14 @@ fn uninstall_keeps_changes_made_since_init() {
     let sb = Sandbox::bare(&[".claude"]);
     let settings = sb.home.join(".claude/settings.json");
     fs::write(&settings, "{\"theme\": \"dark\"}").unwrap();
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
     let mut doc: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
     doc["model"] = "opus".into();
     fs::write(&settings, doc.to_string()).unwrap();
 
     let out = sb.moat_as_person(&["uninstall", "--hosts", "claude-code"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(stdout(&out).contains("backup kept"), "{}", text(&out));
     let left: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
@@ -138,9 +138,9 @@ fn uninstall_keeps_changes_made_since_init() {
 #[test]
 fn uninstall_purge_deletes_the_state_directory() {
     let sb = Sandbox::bare(&[".claude"]);
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
     let out = sb.moat_as_person(&["uninstall", "--purge"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(!sb.home.join(".moat").exists());
     assert!(!sb.home.join(".claude/settings.json").exists());
 }
@@ -158,7 +158,7 @@ fn commands_follow_the_recorded_config_dir() {
             .env("CLAUDE_CONFIG_DIR", &custom),
         None,
     );
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(custom.join("settings.json").is_file());
     let recorded = fs::read_to_string(sb.home.join(".moat/hosts.json")).unwrap();
     assert!(recorded.contains("custom-claude"), "{recorded}");
@@ -172,7 +172,7 @@ fn commands_follow_the_recorded_config_dir() {
     assert!(!sb.home.join(".claude/settings.json").exists());
 
     let out = sb.moat_as_person(&["uninstall"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(!custom.join("settings.json").exists(), "{}", text(&out));
     let recorded = fs::read_to_string(sb.home.join(".moat/hosts.json")).unwrap();
     assert!(!recorded.contains("custom-claude"), "{recorded}");
@@ -194,7 +194,7 @@ fn kernel_self_covers_the_recorded_and_the_env_config_dir() {
             .env("CLAUDE_CONFIG_DIR", &recorded),
         None,
     );
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     for dir in [&recorded, &other] {
         let target = dir.join("settings.json");
         let out = output(
@@ -207,7 +207,7 @@ fn kernel_self_covers_the_recorded_and_the_env_config_dir() {
             ]),
             None,
         );
-        assert_eq!(out.status.code(), Some(2), "{}", text(&out));
+        assert_eq!(out.status.code(), Some(DENY), "{}", text(&out));
         assert!(stdout(&out).contains("kernel-self"), "{}", text(&out));
     }
 }

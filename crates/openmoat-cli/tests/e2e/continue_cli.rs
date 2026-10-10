@@ -6,7 +6,7 @@ use std::process::Output;
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, bash_payload, fixture, hook_output, output, stderr, text};
+use crate::common::{DENY, OK, Sandbox, bash_payload, fixture, hook_output, output, stderr, text};
 
 /// Run the Claude Code hook as `cn` does: with `CONTINUE_PROJECT_DIR` set.
 fn guard_under_cn(sb: &Sandbox, payload: &str) -> Output {
@@ -18,12 +18,12 @@ fn guard_under_cn(sb: &Sandbox, payload: &str) -> Output {
 
 fn recorded(sb: &Sandbox, session: &str) -> Value {
     let shown = sb.moat(&["show", "--session", session, "--format", "json"]);
-    assert_eq!(shown.status.code(), Some(0), "{}", stderr(&shown));
+    assert_eq!(shown.status.code(), Some(OK), "{}", stderr(&shown));
     serde_json::from_slice(&shown.stdout).unwrap()
 }
 
 fn assert_blocked_ask(out: &Output) {
-    assert_eq!(out.status.code(), Some(2), "{}", stderr(out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", stderr(out));
     let d = hook_output(out);
     assert_eq!(d["permissionDecision"], "deny", "{d}");
     let reason = d["permissionDecisionReason"].as_str().unwrap();
@@ -47,15 +47,15 @@ fn an_ask_blocks_cn_until_a_person_approves_it() {
     assert_eq!(events[0]["verdict"], "ask", "{events}");
 
     let allow = sb.moat_as_person(&["allow", "--last"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", stderr(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", stderr(&allow));
     let out = guard_under_cn(&sb, &cn);
-    assert_eq!(out.status.code(), Some(0), "approved for the session");
+    assert_eq!(out.status.code(), Some(OK), "approved for the session");
     assert_eq!(hook_output(&out)["permissionDecision"], "allow");
 
     // Claude Code can ask, so it still receives the `ask` itself.
     let claude = bash_payload("s-claude", &sb.home, "npm install left-pad");
     let out = sb.guard("claude-code", &claude);
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stderr(&out));
     assert_eq!(hook_output(&out)["permissionDecision"], "ask");
     assert_eq!(recorded(&sb, "s-claude")[0]["host"], "claude-code");
 }

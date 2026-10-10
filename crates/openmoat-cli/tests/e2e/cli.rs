@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::process::Output;
 
-use crate::common::{Sandbox, output, stderr, stdout};
+use crate::common::{ASK, DENY, OK, Sandbox, USAGE, output, stderr, stdout};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -35,7 +35,7 @@ fn check(sb: &Sandbox, action: &str, extra: &[&str]) -> Output {
 fn lint_accepts_default_policy() {
     let sb = Sandbox::bare(&[]);
     let out = sb.moat(&["policy", "lint", default_policy().to_str().unwrap()]);
-    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.status.code(), Some(OK));
     assert!(stdout(&out).starts_with("ok: "));
     assert!(!stdout(&out).contains("warning"), "{}", stdout(&out));
 }
@@ -52,7 +52,7 @@ fn lint_warns_about_unreachable_rules_without_failing() {
     )
     .unwrap();
     let out = sb.moat(&["policy", "lint", file.to_str().unwrap()]);
-    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.status.code(), Some(OK));
     let text = stdout(&out);
     assert!(
         text.contains("warning: rule `defaults`: unknown kind `netw`"),
@@ -89,7 +89,7 @@ fn project_flag_matches_paths_written_the_same_way() {
         "--cwd",
         &project,
     ]);
-    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stdout(&out));
     assert!(stdout(&out).contains("project-fs"), "{}", stdout(&out));
 }
 
@@ -104,7 +104,7 @@ fn reserved_blocks_from_older_policies_still_lint() {
         + "\napproval:\n  channel: terminal\n  remember: session\n  timeout_s: 300\n";
     std::fs::write(&file, old).unwrap();
     let out = sb.moat(&["policy", "lint", file.to_str().unwrap()]);
-    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stdout(&out));
     assert!(
         stdout(&out).contains("`approval` is reserved"),
         "{}",
@@ -136,7 +136,7 @@ fn check_resolves_symlinks_like_guard() {
         "--cwd",
         &project,
     ]);
-    assert_eq!(out.status.code(), Some(2), "{}", stdout(&out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", stdout(&out));
     assert!(stdout(&out).contains("secrets-paths"), "{}", stdout(&out));
 }
 
@@ -144,19 +144,19 @@ fn check_resolves_symlinks_like_guard() {
 fn lint_rejects_missing_and_invalid_files() {
     let sb = Sandbox::bare(&[]);
     let out = sb.moat(&["policy", "lint", "/definitely/not/here.yaml"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(String::from_utf8_lossy(&out.stderr).contains("opening policy"));
 
     let dir = tempfile::tempdir().unwrap();
     let bad = dir.path().join("bad.yaml");
     std::fs::write(&bad, "version: 9\n").unwrap();
     let out = sb.moat(&["policy", "lint", bad.to_str().unwrap()]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(String::from_utf8_lossy(&out.stderr).contains("unsupported policy version"));
 
     std::fs::write(&bad, "rules: [x\n").unwrap();
     let out = sb.moat(&["policy", "lint", bad.to_str().unwrap()]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     let err = stderr(&out);
     assert_eq!(err.matches("unknown field").count(), 1, "{err}");
 }
@@ -212,13 +212,13 @@ fn non_shell_kinds() {
         check(&sb, "~/.aws/credentials", &["--kind", "fs-read"])
             .status
             .code(),
-        Some(2)
+        Some(DENY)
     );
     assert_eq!(
         check(&sb, "https://api.github.com/x", &["--kind", "net"])
             .status
             .code(),
-        Some(0)
+        Some(OK)
     );
     for (kind, code) in [("fetch", 3), ("net", 2)] {
         assert_eq!(
@@ -233,15 +233,15 @@ fn non_shell_kinds() {
         check(&sb, "mcp__shell__run", &["--kind", "mcp"])
             .status
             .code(),
-        Some(3)
+        Some(ASK)
     );
 }
 
 #[test]
 fn help_and_version_exit_zero() {
     let sb = Sandbox::bare(&[]);
-    assert_eq!(sb.moat(&["--help"]).status.code(), Some(0));
-    assert_eq!(sb.moat(&["--version"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["--help"]).status.code(), Some(OK));
+    assert_eq!(sb.moat(&["--version"]).status.code(), Some(OK));
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn unknown_kind_is_a_usage_error() {
     let out = check(&sb, "x", &["--kind", "teleport"]);
     assert_eq!(
         out.status.code(),
-        Some(64),
+        Some(USAGE),
         "usage errors must not look like `deny`"
     );
     assert!(String::from_utf8_lossy(&out.stderr).contains("invalid value"));
@@ -279,7 +279,7 @@ fn compile_prints_the_enforcement_ir_and_its_losses() {
         ])
     };
     let out = compile("json");
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stderr(&out));
     let ir: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
     let allow = &ir["fs"]["write"]["allow"][0];
     assert_eq!(allow["id"], "project-fs");
@@ -301,7 +301,7 @@ fn compile_prints_the_enforcement_ir_and_its_losses() {
     assert_eq!(ir["allowances"][0]["rule"], "sandbox.read_roots");
 
     let out = compile("text");
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("  fetch: default deny"), "{text}");
     assert!(
@@ -336,7 +336,7 @@ fn kernel_self_covers_moved_config_directories() {
             ]),
             None,
         );
-        assert_eq!(out.status.code(), Some(2), "{var}: {}", stdout(&out));
+        assert_eq!(out.status.code(), Some(DENY), "{var}: {}", stdout(&out));
         assert!(
             stdout(&out).contains("kernel-self"),
             "{var}: {}",
@@ -358,7 +358,7 @@ fn init_names_a_config_dir_variable_whose_directory_is_missing() {
             .args(["init", "--yes"]),
         None,
     );
-    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stdout(&out));
     let expected = format!(
         "Claude Code: CLAUDE_CONFIG_DIR is {}, which does not exist yet; start Claude Code \
          once to create it, then run moat init again",

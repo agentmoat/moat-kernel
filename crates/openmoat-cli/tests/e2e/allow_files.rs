@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::common::{Sandbox, hook_output, stderr, text};
+use crate::common::{DENY, OK, Sandbox, hook_output, stderr, text, verdict};
 
 fn patch(sb: &Sandbox, file: &str) -> String {
     serde_json::json!({
@@ -25,26 +25,19 @@ fn read(sb: &Sandbox, session: &str, path: &Path) -> String {
     .to_string()
 }
 
-fn verdict(sb: &Sandbox, host: &str, payload: &str) -> String {
-    hook_output(&sb.guard(host, payload))["permissionDecision"]
-        .as_str()
-        .unwrap_or_default()
-        .to_owned()
-}
-
 /// Codex cannot ask, so a patch that writes outside the project is denied with
 /// how to approve it; `moat allow --last` grants that exact patch to the session.
 #[test]
 fn codex_apply_patch_ask_is_approved_with_allow_last() {
     let sb = Sandbox::installed(&[".codex"]);
     let out = sb.guard("codex", &patch(&sb, "../notes/plan.md"));
-    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", stderr(&out));
     let reason = hook_output(&out)["permissionDecisionReason"].to_string();
     assert!(reason.contains("run `moat`"), "{reason}");
     assert!(reason.contains("moat allow --last"), "{reason}");
 
     let allow = sb.moat_as_person(&["allow", "--last"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", text(&allow));
     let shown = text(&allow);
     assert!(
         shown.contains("session codex-s1 on codex may write"),
@@ -52,11 +45,11 @@ fn codex_apply_patch_ask_is_approved_with_allow_last() {
     );
     assert!(shown.contains("notes/plan.md"), "{shown}");
     assert_eq!(
-        verdict(&sb, "codex", &patch(&sb, "../notes/plan.md")),
+        verdict(&sb.guard("codex", &patch(&sb, "../notes/plan.md"))),
         "allow"
     );
     assert_eq!(
-        verdict(&sb, "codex", &patch(&sb, "../notes/other.md")),
+        verdict(&sb.guard("codex", &patch(&sb, "../notes/other.md"))),
         "deny",
         "only the approved files"
     );
@@ -71,10 +64,10 @@ fn claude_code_read_ask_is_approved_for_good() {
     std::fs::create_dir_all(&notes).unwrap();
     std::fs::write(notes.join("plan.md"), "plan").unwrap();
     let plan = read(&sb, "s1", &notes.join("plan.md"));
-    assert_eq!(verdict(&sb, "claude-code", &plan), "ask");
+    assert_eq!(verdict(&sb.guard("claude-code", &plan)), "ask");
 
     let allow = sb.moat_as_person(&["allow", "--last", "--always"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
+    assert_eq!(allow.status.code(), Some(OK), "{}", text(&allow));
     let shown = text(&allow);
     assert!(shown.contains("wanted to read"), "{shown}");
     assert!(shown.contains("fs.read"), "{shown}");
@@ -92,9 +85,9 @@ fn claude_code_read_ask_is_approved_for_good() {
     assert!(rules.contains("plan.md") && !rules.contains('*'), "{rules}");
 
     let later = read(&sb, "s2", &notes.join("plan.md"));
-    assert_eq!(verdict(&sb, "claude-code", &later), "allow");
+    assert_eq!(verdict(&sb.guard("claude-code", &later)), "allow");
     let other = read(&sb, "s2", &notes.join("other.md"));
-    assert_eq!(verdict(&sb, "claude-code", &other), "ask");
+    assert_eq!(verdict(&sb.guard("claude-code", &other)), "ask");
 }
 
 /// Deny rules still win over an approved path: once it leads into `~/.ssh`, the
@@ -108,15 +101,21 @@ fn an_approved_path_that_leads_into_ssh_is_still_denied() {
     std::fs::write(ssh.join("id_rsa"), "key").unwrap();
     let key = sb.home.join("key");
     std::fs::write(&key, "not yet").unwrap();
-    assert_eq!(verdict(&sb, "claude-code", &read(&sb, "s1", &key)), "ask");
+    assert_eq!(
+        verdict(&sb.guard("claude-code", &read(&sb, "s1", &key))),
+        "ask"
+    );
     let allow = sb.moat_as_person(&["allow", "--last", "--always"]);
-    assert_eq!(allow.status.code(), Some(0), "{}", text(&allow));
-    assert_eq!(verdict(&sb, "claude-code", &read(&sb, "s1", &key)), "allow");
+    assert_eq!(allow.status.code(), Some(OK), "{}", text(&allow));
+    assert_eq!(
+        verdict(&sb.guard("claude-code", &read(&sb, "s1", &key))),
+        "allow"
+    );
 
     std::fs::remove_file(&key).unwrap();
     std::os::unix::fs::symlink(ssh.join("id_rsa"), &key).unwrap();
     let out = sb.guard("claude-code", &read(&sb, "s1", &key));
     let reason = hook_output(&out)["permissionDecisionReason"].to_string();
-    assert_eq!(out.status.code(), Some(2), "{reason}");
+    assert_eq!(out.status.code(), Some(DENY), "{reason}");
     assert!(reason.contains("secrets-paths"), "{reason}");
 }

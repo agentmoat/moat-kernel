@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, fixture, hook_output, output, text};
+use crate::common::{OK, Sandbox, USAGE, fixture, hook_output, output, text};
 
 /// Install `version` into the Cellar and point `<prefix>/bin/moat` at it.
 fn brew_install(prefix: &Path, version: &str) {
@@ -45,7 +45,7 @@ fn hooks_survive_a_package_manager_upgrade() {
     // facts on both.
     let versioned = prefix.join("Cellar/moat/0.1.0/bin/moat");
     let out = run(&versioned, &["init", "--yes"], None);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let command = hook_command(&sb);
     assert!(command.ends_with("homebrew/bin/moat"), "{command}");
     assert!(
@@ -70,7 +70,7 @@ fn hooks_survive_a_package_manager_upgrade() {
         text(&out)
     );
     let out = run(&moat, &["doctor"], None);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(text(&out).contains("healthy"), "{}", text(&out));
 }
 
@@ -82,10 +82,10 @@ fn doctor_and_status_name_a_missing_or_different_hook_binary() {
     let moat = prefix.join("bin/moat");
 
     // Hooks installed by another moat (here the build output) are not this one.
-    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["init", "--yes"]).status.code(), Some(OK));
     for args in [["doctor"], ["status"]] {
         let out = output(sb.command_at(&moat).args(args), None);
-        assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+        assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
         assert!(
             text(&out).contains("a different moat than this one"),
             "{}",
@@ -101,7 +101,7 @@ fn doctor_and_status_name_a_missing_or_different_hook_binary() {
         .replace(env!("CARGO_BIN_EXE_moat"), &gone.to_string_lossy());
     fs::write(&settings, edited).unwrap();
     let out = output(sb.command_at(&moat).args(["doctor"]), None);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(
         text(&out).contains("which does not exist; run `moat init`"),
         "{}",
@@ -109,11 +109,11 @@ fn doctor_and_status_name_a_missing_or_different_hook_binary() {
     );
 
     let out = output(sb.command_at(&moat).args(["init", "--yes"]), None);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let out = output(sb.command_at(&moat).args(["doctor"]), None);
     assert_eq!(
         out.status.code(),
-        Some(0),
+        Some(OK),
         "init repairs it: {}",
         text(&out)
     );

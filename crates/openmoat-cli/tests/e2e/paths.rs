@@ -3,22 +3,12 @@
 
 use std::path::Path;
 
-use crate::common::{Sandbox, bash_payload, hook_output, stderr};
-
-/// The verdict and reason `guard` gives a Bash command run in `cwd`.
-fn verdict(sb: &Sandbox, cwd: &Path, command: &str) -> (String, String) {
-    let out = sb.guard("claude-code", &bash_payload("s-paths", cwd, command));
-    let d = hook_output(&out);
-    let verdict = d["permissionDecision"]
-        .as_str()
-        .unwrap_or_default()
-        .to_owned();
-    assert!(!verdict.is_empty(), "{command}: {}", stderr(&out));
-    (verdict, d["permissionDecisionReason"].to_string())
-}
+use crate::common::{Sandbox, USAGE, bash_payload, hook_output, stderr, verdict_and_reason};
 
 fn assert_verdict(sb: &Sandbox, cwd: &Path, command: &str, expected: &str, rule: &str) {
-    let (verdict, reason) = verdict(sb, cwd, command);
+    let out = sb.guard("claude-code", &bash_payload("s-paths", cwd, command));
+    let (verdict, reason) = verdict_and_reason(&out);
+    assert!(!verdict.is_empty(), "{command}: {}", stderr(&out));
     assert_eq!(verdict, expected, "{command}: {reason}");
     assert!(reason.contains(rule), "{command}: {reason}");
 }
@@ -62,7 +52,7 @@ fn an_explicit_home_project_is_a_usage_error() {
     let sb = Sandbox::installed(&[]);
     let home = sb.home.to_string_lossy().into_owned();
     let out = sb.moat(&["policy", "check", "ls", "--project", &home, "--cwd", &home]);
-    assert_eq!(out.status.code(), Some(64), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", stderr(&out));
     assert!(
         stderr(&out).contains("cannot be a project root"),
         "{}",

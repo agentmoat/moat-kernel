@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
-use crate::common::{Sandbox, output, stderr, text};
+use crate::common::{OK, Sandbox, USAGE, output, stderr, text};
 
 /// `moat run -- /bin/sh -c <script>` in the project, with the temp directory
 /// outside the home so that writing the home is not a temp-directory write.
@@ -32,7 +32,7 @@ fn installed_with_secret() -> (Sandbox, PathBuf) {
     };
     let sb = Sandbox::bare_in(&parent, &[]);
     let out = sb.moat(&["init", "--yes"]);
-    assert_eq!(out.status.code(), Some(0), "moat init: {}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "moat init: {}", text(&out));
     std::fs::create_dir_all(sb.home.join(".ssh")).unwrap();
     std::fs::write(sb.home.join(".ssh/id_rsa"), "FAKE-SSH-KEY").unwrap();
     let project = sb.project();
@@ -46,7 +46,7 @@ fn refuses_to_start_over_a_drifted_lock() {
     let edited = std::fs::read_to_string(&policy).unwrap() + "\n# edited\n";
     std::fs::write(&policy, edited).unwrap();
     let out = run_sh(&sb, &project, "echo ran");
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(stderr(&out).contains("drift"), "{}", text(&out));
     assert!(!text(&out).contains("ran\n"));
 }
@@ -74,7 +74,7 @@ fn run_isolated(path: &str) -> Output {
 #[test]
 fn isolate_is_refused_on_macos() {
     let out = run_isolated("/usr/bin:/bin");
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(stderr(&out).contains("#175"), "{}", text(&out));
     assert!(!text(&out).contains("ran\n"), "{}", text(&out));
 }
@@ -84,7 +84,7 @@ fn isolate_is_refused_on_macos() {
 #[test]
 fn isolate_without_bubblewrap_is_refused() {
     let out = run_isolated("/nonexistent");
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(stderr(&out).contains("needs bubblewrap"), "{}", text(&out));
     assert!(!text(&out).contains("ran\n"), "{}", text(&out));
 }
@@ -101,7 +101,7 @@ fn refuses_where_no_sandbox_can_be_generated() {
             .args(["run", "--", agent, "--version"]),
         None,
     );
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(
         stderr(&out).contains("needs an operating-system sandbox"),
         "{}",
@@ -121,7 +121,7 @@ pub mod confined {
     use std::process::Command;
 
     use super::*;
-    use crate::common::stdout;
+    use crate::common::{FAILED, stdout};
 
     /// False, saying so, on a Linux kernel without Landlock ABI 4: `moat run`
     /// refuses there, which `refuses_*` cases cover. CI kernels have it, so
@@ -229,7 +229,7 @@ pub mod confined {
             return;
         }
         let shown = text(&out);
-        assert_eq!(out.status.code(), Some(0), "{shown}");
+        assert_eq!(out.status.code(), Some(OK), "{shown}");
         for expected in ["read=1", "project=0", "git=0"] {
             assert!(stdout(&out).contains(expected), "{expected}: {shown}");
         }
@@ -316,7 +316,7 @@ print("io_uring=" + str(ctypes.get_errno()))
         let (sb, project) = installed_with_secret();
         let out = run_sh(&sb, &project, "exit 2");
         if ran(&out) {
-            assert_eq!(out.status.code(), Some(1), "{}", text(&out));
+            assert_eq!(out.status.code(), Some(FAILED), "{}", text(&out));
         }
     }
 }

@@ -6,6 +6,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 E="$HERE/evidence"
 mkdir -p "$E"
 redact() {
+  # shellcheck disable=SC2016 # "$SPIKE" and "$REALHOME" are literal placeholders
   python3 -c 'import os,sys; s=sys.stdin.read(); s=s.replace(sys.argv[1], "$SPIKE").replace(os.path.expanduser("~"), "$REALHOME"); sys.stdout.write(s)' "$HERE"
 }
 for job in q1-nesting q2-sbpl-network-probe "attacks baseline" "attacks sandbox" q2-proxy q3-claude q4-codex q4-claude demo; do

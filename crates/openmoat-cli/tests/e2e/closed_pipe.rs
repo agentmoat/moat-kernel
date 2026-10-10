@@ -7,7 +7,7 @@
 use std::io::Write as _;
 use std::process::{Command, Output, Stdio};
 
-use crate::common::{Sandbox, bash_payload, stderr, text};
+use crate::common::{DENY, OK, Sandbox, bash_payload, stderr, text};
 
 /// Run `cmd` with its standard output already closed by the reader.
 fn closed_stdout(cmd: &mut Command, stdin: &str) -> Output {
@@ -26,7 +26,7 @@ fn closed_stdout(cmd: &mut Command, stdin: &str) -> Output {
 }
 
 fn assert_quiet_success(out: &Output, what: &str) {
-    assert_eq!(out.status.code(), Some(0), "{what}: {}", text(out));
+    assert_eq!(out.status.code(), Some(OK), "{what}: {}", text(out));
     assert!(!stderr(out).contains("panicked"), "{what}: {}", text(out));
 }
 
@@ -57,7 +57,7 @@ fn init_finishes_its_work_before_stopping() {
     let out = closed_stdout(sb.command().args(["init", "--yes"]), "");
     assert_quiet_success(&out, "init");
     let status = sb.moat(&["status"]);
-    assert_eq!(status.status.code(), Some(0), "{}", text(&status));
+    assert_eq!(status.status.code(), Some(OK), "{}", text(&status));
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn allow_finishes_its_work_before_stopping() {
     assert_quiet_success(&out, "allow");
     // The overlay was written and the lock re-pinned: the kernel is healthy.
     let doctor = sb.moat(&["doctor"]);
-    assert_eq!(doctor.status.code(), Some(0), "{}", text(&doctor));
+    assert_eq!(doctor.status.code(), Some(OK), "{}", text(&doctor));
 }
 
 #[test]
@@ -84,5 +84,5 @@ fn guard_denies_when_it_cannot_answer() {
         sb.command().args(["guard", "--host", "claude-code"]),
         &payload,
     );
-    assert_eq!(out.status.code(), Some(2), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", text(&out));
 }

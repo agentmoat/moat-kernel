@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, json, output, stdout, text};
+use crate::common::{OK, Sandbox, json, output, stdout, text};
 
 #[cfg(not(windows))] // #327: no Claude Code sandbox on native Windows
 #[test]
@@ -11,7 +11,7 @@ fn show_prints_the_settings_and_their_losses_without_writing() {
     let settings = sb.home.join(".claude/settings.json");
     let before = std::fs::read(&settings).unwrap();
     let out = sb.moat(&["sandbox", "show"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let shown = stdout(&out);
     for expected in [
         "\"failIfUnavailable\": true",
@@ -72,7 +72,7 @@ fn settings_json(host: &Value) -> Value {
 fn show_says_claude_code_has_no_sandbox_on_native_windows() {
     let sb = Sandbox::installed(&[".claude"]);
     let out = sb.moat(&["sandbox", "show"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let shown = stdout(&out);
     assert!(
         shown.contains("Claude Code  sandbox not available on native Windows"),
@@ -96,7 +96,7 @@ fn a_policy_without_read_roots_uses_the_default_list() {
     let sb = Sandbox::installed(&[".claude"]);
     std::fs::write(sb.home.join(".moat/policy.yaml"), "version: 1\n").unwrap();
     let out = sb.moat(&["sandbox", "show", "--format", "json"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let doc = json(&out);
     assert_eq!(doc["default_read_roots"], Value::Bool(true));
     let settings = settings_json(&doc["hosts"]["claude-code"]);
@@ -148,7 +148,7 @@ fn show_prints_the_seatbelt_profile_for_the_project_here() {
             .current_dir(&project),
         None,
     );
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let seatbelt = &json(&out)["lightweight"]["seatbelt"];
     let profile = seatbelt["profile"].as_str().unwrap_or_default();
     // The child's working directory comes back resolved (`/private/var/…`).
@@ -185,7 +185,7 @@ fn show_grants_codex_its_own_executable_on_linux() {
                 .env("PATH", path),
             None,
         );
-        assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+        assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
         json(&out)["hosts"]["codex"].clone()
     };
     let rule = |list: &Value| {

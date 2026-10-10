@@ -6,12 +6,12 @@
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, json, stderr, stdout};
+use crate::common::{OK, Sandbox, USAGE, json, stderr, stdout};
 
 /// Run `moat bench` with `args` in an isolated home; exits 0 whatever the scores.
 fn bench(sb: &Sandbox, args: &[&str]) -> (Value, String) {
     let out = sb.moat(&[&["bench", "--format", "json"], args].concat());
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stderr(&out));
     (json(&out), stderr(&out))
 }
 
@@ -112,7 +112,7 @@ fn moatbench_hook_that_denies_everything_blocks_attacks_and_work() {
         "echo denied 1>&2\r\nexit /b 2",
     );
     let out = sb.moat(&["bench", "--hook", &hook, "--host", "codex"]);
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.starts_with("MoatBench mini: "), "{text}");
     assert!(
@@ -132,5 +132,5 @@ fn moatbench_hook_that_denies_everything_blocks_attacks_and_work() {
 fn moatbench_hook_needs_a_host() {
     let sb = Sandbox::bare(&[]);
     let out = sb.moat(&["bench", "--hook", "true"]);
-    assert_eq!(out.status.code(), Some(64), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", stderr(&out));
 }
