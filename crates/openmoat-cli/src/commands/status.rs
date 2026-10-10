@@ -24,11 +24,28 @@ pub fn run(args: &StatusArgs) -> Result<Code> {
         render::json(&serde_json::json!({ "agents": protection::report(&home, &binary)? }))?;
         return Ok(Code::Ok);
     }
-    let mut healthy = true;
     let mut out = io::stdout().lock();
 
     writeln!(out, "state directory  {}", home.root().display())?;
+    let mut healthy = policies(&mut out, &home)?;
+    healthy &= lock(&mut out, &home, &binary)?;
+    healthy &= approvals(&mut out, &home)?;
+    let recorded = Recorded::load(&home).unwrap_or_default();
+    healthy &= hooks(&mut out, &binary, &recorded)?;
+    if let Ok(policy) = home.load_policy() {
+        healthy &= sandboxes(&mut out, &Plan::new(&policy)?, &home.lock_path(), &recorded)?;
+    }
+    // Derived from the hook and sandbox lines above, so it leaves `healthy` alone.
+    protection_lines(&mut out, &home, &binary)?;
+    healthy &= audit(&mut out, &home)?;
 
+    Ok(if healthy { Code::Ok } else { Code::Usage })
+}
+
+/// The policy line and, in a project with one, the repository policy line;
+/// `false` on any problem.
+fn policies(out: &mut impl io::Write, home: &Home) -> Result<bool> {
+    let mut healthy = true;
     let policy_path = home.policy_path();
     match home.load_policy() {
         Ok(policy) => {
@@ -46,7 +63,7 @@ pub fn run(args: &StatusArgs) -> Result<Code> {
             writeln!(out, "policy           ✗ {error:#}")?;
         }
     }
-    match crate::repo::summary(&home) {
+    match crate::repo::summary(home) {
         Ok(Some(line)) => writeln!(out, "repo policy      {line}")?,
         Ok(None) => {}
         Err(error) => {
@@ -57,76 +74,89 @@ pub fn run(args: &StatusArgs) -> Result<Code> {
             )?;
         }
     }
+    Ok(healthy)
+}
 
+/// The lock lines: drift, and hook files the lock does not pin; `false` on any
+/// problem.
+fn lock(out: &mut impl io::Write, home: &Home, binary: &Path) -> Result<bool> {
     let lock_path = home.lock_path();
-    match Lock::load(&lock_path) {
-        Ok(lock) => {
-            let drift = lock.verify();
-            if drift.is_empty() {
-                writeln!(
-                    out,
-                    "lock             ✔ {} files pinned, intact",
-                    lock.entries.len()
-                )?;
-            } else {
-                healthy = false;
-                for d in drift {
-                    writeln!(out, "lock             ✗ {d} (run `moat doctor`)")?;
-                }
-            }
-            let installed = integrity::installed_hook_files(&binary)?;
-            let gap = HookPinGap::new(&lock, &home, &installed);
-            for path in gap.unpinned {
-                healthy = false;
-                writeln!(
-                    out,
-                    "lock             ✗ {} is not pinned (run `moat init` to pin it)",
-                    path.display()
-                )?;
-            }
-            for path in gap.elsewhere {
-                writeln!(
-                    out,
-                    "lock             · {} is pinned but not this shell's hook file (CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR differ)",
-                    path.display()
-                )?;
-            }
-        }
+    let lock = match Lock::load(&lock_path) {
+        Ok(lock) => lock,
         Err(_) if !lock_path.exists() => {
-            healthy = false;
             writeln!(out, "lock             ✗ missing (run `moat init`)")?;
+            return Ok(false);
         }
         Err(error) => {
-            healthy = false;
             writeln!(out, "lock             ✗ {error:#}")?;
+            return Ok(false);
+        }
+    };
+    let mut healthy = true;
+    let drift = lock.verify();
+    if drift.is_empty() {
+        writeln!(
+            out,
+            "lock             ✔ {} files pinned, intact",
+            lock.entries.len()
+        )?;
+    } else {
+        healthy = false;
+        for d in drift {
+            writeln!(out, "lock             ✗ {d} (run `moat doctor`)")?;
         }
     }
+    let installed = integrity::installed_hook_files(binary)?;
+    let gap = HookPinGap::new(&lock, home, &installed);
+    for path in gap.unpinned {
+        healthy = false;
+        writeln!(
+            out,
+            "lock             ✗ {} is not pinned (run `moat init` to pin it)",
+            path.display()
+        )?;
+    }
+    for path in gap.elsewhere {
+        writeln!(
+            out,
+            "lock             · {} is pinned but not this shell's hook file (CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR differ)",
+            path.display()
+        )?;
+    }
+    Ok(healthy)
+}
 
-    match Grants::load(&home.grants_path()) {
-        Ok(grants) => {
-            let now = time::now_ms();
-            let ages: Vec<i64> = grants.active(now).map(|g| now - g.granted_at_ms).collect();
-            match ages.iter().max() {
-                Some(oldest) => writeln!(
-                    out,
-                    "approvals        {} active session grant(s), oldest {} old (each expires after {})",
-                    ages.len(),
-                    time::duration(*oldest),
-                    time::duration(GRANT_TTL_MS)
-                )?,
-                None => writeln!(out, "approvals        no active session grants")?,
-            }
-        }
+/// The session grants line; `false` when the grants file is unreadable.
+fn approvals(out: &mut impl io::Write, home: &Home) -> Result<bool> {
+    let grants = match Grants::load(&home.grants_path()) {
+        Ok(grants) => grants,
         Err(error) => {
-            healthy = false;
             writeln!(out, "approvals        ✗ {error:#}")?;
+            return Ok(false);
         }
+    };
+    let now = time::now_ms();
+    let ages: Vec<i64> = grants.active(now).map(|g| now - g.granted_at_ms).collect();
+    match ages.iter().max() {
+        Some(oldest) => writeln!(
+            out,
+            "approvals        {} active session grant(s), oldest {} old (each expires after {})",
+            ages.len(),
+            time::duration(*oldest),
+            time::duration(GRANT_TTL_MS)
+        )?,
+        None => writeln!(out, "approvals        no active session grants")?,
     }
+    Ok(true)
+}
 
-    let recorded = Recorded::load(&home).unwrap_or_default();
+/// One line per host's hook, then the Continue CLI warning; `false` on any
+/// problem.
+fn hooks(out: &mut impl io::Write, binary: &Path, recorded: &Recorded) -> Result<bool> {
+    let mut healthy = true;
     for host in Host::ALL {
         let config = HostConfig::for_host(host)?;
-        let line = match config.state(&binary) {
+        let line = match config.state(binary) {
             HookState::Installed => "✔ installed".to_owned(),
             HookState::Missing if recorded.skipped(host) && config.host_present() => {
                 format!("· not set up (`moat init --hosts {}` adds it)", host.id())
@@ -161,12 +191,12 @@ pub fn run(args: &StatusArgs) -> Result<Code> {
             found.display()
         )?;
     }
+    Ok(healthy)
+}
 
-    if let Ok(policy) = home.load_policy() {
-        healthy &= sandboxes(&mut out, &Plan::new(&policy)?, &lock_path, &recorded)?;
-    }
-    // Derived from the hook and sandbox lines above, so it leaves `healthy` alone.
-    for agent in protection::report(&home, &binary)? {
+/// Each agent's protection level and known gaps.
+fn protection_lines(out: &mut impl io::Write, home: &Home, binary: &Path) -> Result<()> {
+    for agent in protection::report(home, binary)? {
         if let Some(summary) = agent.summary() {
             let mark = match agent.level {
                 protection::Level::HookAndOsSandbox => "✔",
@@ -177,27 +207,30 @@ pub fn run(args: &StatusArgs) -> Result<Code> {
             writeln!(out, "{:<16} · known gaps: {}", agent.name, agent.gaps)?;
         }
     }
+    Ok(())
+}
 
+/// The audit log line and the most recent events; `false` when the log is
+/// missing.
+fn audit(out: &mut impl io::Write, home: &Home) -> Result<bool> {
     let audit_path = home.audit_path();
-    if audit_path.is_file() {
-        let store = Store::open_read_only(&audit_path)?;
-        writeln!(
-            out,
-            "audit log        {}  ({} events)",
-            audit_path.display(),
-            store.count()?
-        )?;
-        let recent = store.recent(5)?;
-        if !recent.is_empty() {
-            writeln!(out)?;
-            render::event_table(&recent)?;
-        }
-    } else {
-        healthy = false;
+    if !audit_path.is_file() {
         writeln!(out, "audit log        ✗ missing (run `moat init`)")?;
+        return Ok(false);
     }
-
-    Ok(if healthy { Code::Ok } else { Code::Usage })
+    let store = Store::open_read_only(&audit_path)?;
+    writeln!(
+        out,
+        "audit log        {}  ({} events)",
+        audit_path.display(),
+        store.count()?
+    )?;
+    let recent = store.recent(5)?;
+    if !recent.is_empty() {
+        writeln!(out)?;
+        render::event_table(&recent)?;
+    }
+    Ok(true)
 }
 
 /// One line per present host's sandbox (Standard tier); `false` on any problem.
