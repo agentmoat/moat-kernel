@@ -116,6 +116,17 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
   pass expressions to `run:` blocks through `env:`, and give tokens only the permissions
   they use. CI runs `actionlint` and `zizmor` on `.github/workflows/`.
 
+## Checks beyond the Rust gate
+
+CI runs these on every pull request. `scripts/ci/quality-gate.sh` runs each one whose
+tool is installed and prints a skip line for the others, so nothing extra is required
+locally.
+
+- **Unused dependencies:** `cargo machete` (`cargo install cargo-machete --version 0.9.2
+  --locked`) fails on a dependency in a `Cargo.toml` that no source file uses. Remove
+  it; if it is used in a way machete cannot see, list it under
+  `[package.metadata.cargo-machete] ignored` with a comment saying where it is used.
+
 ## Fuzzing
 
 `fuzz/` holds `cargo fuzz` targets for every surface that takes untrusted input:

@@ -18,4 +18,9 @@ if rustup target list --installed 2>/dev/null | grep -q wasm32-unknown-unknown; 
 else
     echo "▷ wasm32-unknown-unknown target not installed; purity build skipped (CI runs it)"
 fi
+if command -v cargo-machete >/dev/null; then
+    run cargo machete
+else
+    echo "▷ cargo-machete not installed; unused-dependency check skipped (CI runs it)"
+fi
 echo "✔ quality gate passed"
