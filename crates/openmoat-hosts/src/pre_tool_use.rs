@@ -372,7 +372,7 @@ mod tests {
             })
         );
         let indented = Host::Codex
-            .parse_request(&fixture("codex", "pretooluse-apply-patch-indented-header"))
+            .parse_request(&fixture("codex", "pretooluse-patch-indented"))
             .unwrap();
         assert_eq!(
             indented.action,

@@ -478,10 +478,7 @@ fn codex_payloads_use_the_same_contract() {
     for (payload, rule) in [
         ("codex/pretooluse-shell.json", "env-poison"),
         ("codex/pretooluse-apply-patch.json", "shell-rc"),
-        (
-            "codex/pretooluse-apply-patch-indented-header.json",
-            "secrets-paths",
-        ),
+        ("codex/pretooluse-patch-indented.json", "secrets-paths"),
         ("codex/pretooluse-mcp.json", "secrets-paths"),
     ] {
         let out = sb.guard("codex", &fixture(payload));
