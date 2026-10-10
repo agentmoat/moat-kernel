@@ -1,6 +1,7 @@
 //! `moat doctor`: verify the installation and, from a terminal, accept changes.
 
 use std::io::Write as _;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 use openmoat_audit::{ChainReport, Store};
@@ -153,7 +154,42 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
         home.exists(),
         format!("state directory  {}", home.root().display()),
     );
+    let policy = policies(&mut report, &home);
+    let lock = load_lock(&mut report, &home);
+    let drift = lock
+        .as_ref()
+        .map(|lock| verify_lock(&mut report, lock, &binary))
+        .unwrap_or_default();
+    environment(&mut report, &home);
+    let hook_files = hooks(&mut report, &home, &binary)?;
+    if let Some(lock) = &lock {
+        hook_pins(&mut report, lock, &home, &hook_files);
+    }
+    if let Some(policy) = &policy {
+        let recorded = Recorded::load(&home).unwrap_or_default();
+        sandboxes(&mut report, policy, lock.as_ref(), &recorded, args.verbose);
+    }
+    service(&mut report, &home);
+    for agent in protection::report(&home, &binary)? {
+        if let Some(summary) = agent.summary() {
+            report.note(&format!("{:<16} protection: {summary}", agent.name));
+            report.note(&format!("{:<16} known gaps: {}", agent.name, agent.gaps));
+        }
+    }
+    match Store::open_read_only(&home.audit_path()).and_then(|store| store.verify_chain()) {
+        Ok(chain) => audit_line(&mut report, &chain),
+        Err(e) => report.line(Area::Audit, false, format!("audit log        {e}")),
+    }
+    if args.accept {
+        let intact = drift.is_empty() && lock.is_some();
+        accept(&mut report, &home, &binary, policy.is_some(), intact)?;
+    }
+    finish(report)
+}
 
+/// The policy line and, in a project with one, the repository policy line;
+/// the policy when it lints.
+fn policies(report: &mut Report, home: &Home) -> Option<Policy> {
     let policy = match home.load_policy() {
         Ok(policy) => {
             let (deny, allow, ask) = policy.rule_count();
@@ -169,8 +205,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
             None
         }
     };
-    let policy_lints = policy.is_some();
-    match crate::repo::summary(&home) {
+    match crate::repo::summary(home) {
         Ok(Some(line)) => report.note(&format!("repo policy      {line}")),
         Ok(None) => {}
         Err(e) => report.line(
@@ -179,9 +214,13 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
             format!("repo policy      {e:#}; every call in this project is denied"),
         ),
     }
+    policy
+}
 
+/// The lock, or the line saying why there is none.
+fn load_lock(report: &mut Report, home: &Home) -> Option<Lock> {
     let lock_path = home.lock_path();
-    let lock = match Lock::load(&lock_path) {
+    match Lock::load(&lock_path) {
         Ok(lock) => Some(lock),
         Err(_) if !lock_path.exists() => {
             report.line(
@@ -195,36 +234,42 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
             report.line(Area::Lock, false, format!("lock             {e:#}"));
             None
         }
-    };
-    let mut drift = Vec::new();
-    if let Some(lock) = &lock {
-        drift = lock.verify();
-        if drift.is_empty() {
-            report.line(
-                Area::Lock,
-                true,
-                format!(
-                    "lock             {} files pinned, all intact",
-                    lock.entries.len()
-                ),
-            );
-        }
-        for d in &drift {
-            report.line(Area::Lock, false, format!("lock             {d}"));
-        }
-        if lock.binary != binary.to_string_lossy() {
-            report.line(
-                Area::Binary,
-                false,
-                format!(
-                    "binary           lock expects {}, running {}; run `moat init`",
-                    lock.binary,
-                    binary.display()
-                ),
-            );
-        }
     }
+}
 
+/// The lock lines: what drifted, and whether the lock pins this binary;
+/// returns the drift.
+fn verify_lock(report: &mut Report, lock: &Lock, binary: &Path) -> Vec<integrity::Drift> {
+    let drift = lock.verify();
+    if drift.is_empty() {
+        report.line(
+            Area::Lock,
+            true,
+            format!(
+                "lock             {} files pinned, all intact",
+                lock.entries.len()
+            ),
+        );
+    }
+    for d in &drift {
+        report.line(Area::Lock, false, format!("lock             {d}"));
+    }
+    if lock.binary != binary.to_string_lossy() {
+        report.line(
+            Area::Binary,
+            false,
+            format!(
+                "binary           lock expects {}, running {}; run `moat init`",
+                lock.binary,
+                binary.display()
+            ),
+        );
+    }
+    drift
+}
+
+/// The search-path snapshot line.
+fn environment(report: &mut Report, home: &Home) {
     match crate::environment::Snapshot::load(&home.environment_path()) {
         Ok(snapshot) => report.line(
             Area::Environment,
@@ -241,72 +286,67 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
             format!("environment      {e:#}; run `moat init`"),
         ),
     }
+}
 
-    let hook_files = hooks(&mut report, &home, &binary)?;
-
-    if let Some(lock) = &lock {
-        let gap = HookPinGap::new(lock, &home, &hook_files);
-        for path in gap.unpinned {
-            report.line(
-                Area::Hook,
-                false,
-                format!(
-                    "hook file        {} is not pinned by the lock; run `moat init` to pin it",
-                    path.display()
-                ),
-            );
-        }
-        for path in gap.elsewhere {
-            report.note(&format!(
-                "hook file        {} is pinned but not this shell's (CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR differ); re-pinning keeps it",
+/// Installed hook files the lock does not pin, and pinned ones this shell
+/// does not use.
+fn hook_pins(report: &mut Report, lock: &Lock, home: &Home, hook_files: &[PathBuf]) {
+    let gap = HookPinGap::new(lock, home, hook_files);
+    for path in gap.unpinned {
+        report.line(
+            Area::Hook,
+            false,
+            format!(
+                "hook file        {} is not pinned by the lock; run `moat init` to pin it",
                 path.display()
-            ));
-        }
+            ),
+        );
     }
+    for path in gap.elsewhere {
+        report.note(&format!(
+            "hook file        {} is pinned but not this shell's (CLAUDE_CONFIG_DIR, CODEX_HOME or CURSOR_CONFIG_DIR differ); re-pinning keeps it",
+            path.display()
+        ));
+    }
+}
 
-    if let Some(policy) = &policy {
-        let recorded = Recorded::load(&home).unwrap_or_default();
-        sandboxes(&mut report, policy, lock.as_ref(), &recorded, args.verbose);
+/// `--accept`: re-pin from a terminal when the policy lints and the lock is
+/// not intact, clearing the problems a re-pin fixes.
+fn accept(
+    report: &mut Report,
+    home: &Home,
+    binary: &Path,
+    policy_lints: bool,
+    intact: bool,
+) -> Result<()> {
+    if !crate::terminal::interactive() {
+        bail!(
+            "`moat doctor --accept` must be run by a person in a terminal, not from a hook or script"
+        );
     }
-    service(&mut report, &home);
-    for agent in protection::report(&home, &binary)? {
-        if let Some(summary) = agent.summary() {
-            report.note(&format!("{:<16} protection: {summary}", agent.name));
-            report.note(&format!("{:<16} known gaps: {}", agent.name, agent.gaps));
-        }
+    if !policy_lints {
+        bail!(
+            "refusing to pin a policy that does not lint; fix it, then run `moat doctor --accept` again"
+        );
     }
+    if intact {
+        writeln!(report.out, "nothing to accept: lock is intact")?;
+        return Ok(());
+    }
+    let lock = integrity::repin(home, binary, HookPins::Keep)?;
+    writeln!(
+        report.out,
+        "✔ lock re-pinned for {} files",
+        lock.entries.len()
+    )?;
+    report
+        .problems
+        .retain(|(area, _)| !matches!(area, Area::Lock | Area::Binary));
+    Ok(())
+}
 
-    match Store::open_read_only(&home.audit_path()).and_then(|store| store.verify_chain()) {
-        Ok(chain) => audit_line(&mut report, &chain),
-        Err(e) => report.line(Area::Audit, false, format!("audit log        {e}")),
-    }
-
-    if args.accept {
-        if !crate::terminal::interactive() {
-            bail!(
-                "`moat doctor --accept` must be run by a person in a terminal, not from a hook or script"
-            );
-        }
-        if !policy_lints {
-            bail!(
-                "refusing to pin a policy that does not lint; fix it, then run `moat doctor --accept` again"
-            );
-        }
-        if drift.is_empty() && lock.is_some() {
-            writeln!(report.out, "nothing to accept: lock is intact")?;
-        } else {
-            let lock = integrity::repin(&home, &binary, HookPins::Keep)?;
-            writeln!(
-                report.out,
-                "✔ lock re-pinned for {} files",
-                lock.entries.len()
-            )?;
-            report
-                .problems
-                .retain(|(area, _)| !matches!(area, Area::Lock | Area::Binary));
-        }
-    }
-
+/// The closing line, the output and the exit code.
+fn finish(mut report: Report) -> Result<Code> {
     if report.problems.is_empty() {
         writeln!(report.out, "healthy")?;
         report.out.finish()?;
@@ -323,11 +363,7 @@ pub fn run(args: &DoctorArgs) -> Result<Code> {
 
 /// One line per host's hook, then the Continue CLI warning; returns the
 /// installed hook files.
-fn hooks(
-    report: &mut Report,
-    home: &Home,
-    binary: &std::path::Path,
-) -> Result<Vec<std::path::PathBuf>> {
+fn hooks(report: &mut Report, home: &Home, binary: &Path) -> Result<Vec<PathBuf>> {
     let recorded = Recorded::load(home)?;
     let mut hook_files = Vec::new();
     for host in Host::ALL {
