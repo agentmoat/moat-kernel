@@ -86,7 +86,7 @@ Milestone `v0.1.0-beta`.
 
 | Issue | Done |
 |---|---|
-| #119 | Spike: Seatbelt does not nest, host defaults leak; outcome in ADR-018, evidence in `spikes/sandbox/` |
+| #119 | Spike: Seatbelt does not nest, host defaults leak; outcome in ADR-018 |
 | #168, #169, #324 | Standard tier: generated and pinned Claude Code, Codex and Cursor sandbox settings (ADR-018) |
 | #176 | Lightweight tier: `moat run` with generated Seatbelt, or Landlock and seccomp |
 | #170, #335, #346 | Executing differential fixtures across the hook and the host sandboxes, and hostile project scripts under every OS layer ([EVIDENCE.md](EVIDENCE.md)) |

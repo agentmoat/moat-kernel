@@ -5,7 +5,6 @@
 [files]
 extend-exclude = [
     "LICENSE-*",               # licence texts are quoted verbatim
-    "spikes/sandbox/evidence/", # captured tool output
 ]
 
 [default]

@@ -3,6 +3,8 @@
 Each ADR records one decision that constrains the code: context, decision,
 consequences. Accepted ADRs are never edited; a later ADR supersedes, amends or
 refines them. To add one, copy the shape of ADR-004 and take the next number.
+The `spikes/` evidence that ADR-018 and ADR-023 cite was moved out of this repository;
+each ADR records the outcome it needs.
 
 | ADR | Decision | Status |
 |---|---|---|
