@@ -104,8 +104,9 @@ reviewer can read; a generated wall of text is a reason to ask for a rewrite, no
 
 - Commit and PR title types: `feat`, `fix`, `sec`, `policy`, `host(claude-code)`,
   `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, lowercase subject.
-- Library crates (`openmoat-core`, `openmoat-hosts`, `openmoat-audit`) use typed `thiserror`
-  errors and never print. `anyhow` and terminal output live only in `openmoat-cli`.
+- Library crates (`openmoat-core`, `openmoat-hosts`, `openmoat-audit`, `openmoat-proxy`) use
+  typed `thiserror` errors and never print. `anyhow` and terminal output live only in
+  `openmoat-cli`.
 - `openmoat-core` has no I/O, no `unsafe`, and no internal dependencies; CI builds it
   for `wasm32` to prove it.
 - Files stay under 500 lines; functions under 200 (clippy enforces the latter).
