@@ -268,11 +268,16 @@ impl Store {
 
     /// Append one decision with an explicit timestamp (milliseconds since the epoch).
     pub fn record_at(&self, event: &NewEvent<'_>, ts_ms: i64) -> Result<EventId, StoreError> {
-        // Every text the agent can influence is redacted here, in one place, so
-        // each writer (guard, proxy) and the export built from the rows are
-        // covered. The host, session and call ids and the tool name come from the
-        // host and stay as sent: the session's history is looked up by them.
+        // Every text is redacted here, in one place, so each writer (guard,
+        // proxy) and the export built from the rows are covered. That includes
+        // the host, session and call ids and the tool name: a host payload or
+        // an agent can put a secret in any of them. [`Store::session`] redacts
+        // its argument the same way, so a session is still found by its id.
         let secrets = &self.secrets;
+        let host = secrets.redact(event.host);
+        let session_id = secrets.redact(event.session_id);
+        let call_id = event.call_id.map(|c| secrets.redact(c));
+        let tool = secrets.redact(event.tool);
         let action_json = match event.action {
             Some(action) => {
                 serde_json::to_string(&secrets.redact_value(serde_json::to_value(action)?))?
@@ -297,11 +302,11 @@ impl Store {
         let fields = chain::Fields {
             id,
             ts_ms,
-            host: event.host,
-            session_id: event.session_id,
-            call_id: event.call_id,
+            host: &host,
+            session_id: &session_id,
+            call_id: call_id.as_deref(),
             cwd: cwd.as_deref(),
-            tool: event.tool,
+            tool: &tool,
             action: &action_json,
             verdict: event.decision.verdict.as_str(),
             rules: &rules,
@@ -357,12 +362,14 @@ impl Store {
         rows.collect::<Result<_, _>>().map_err(Into::into)
     }
 
-    /// All events of one session, oldest first.
+    /// All events of one session, oldest first. `session_id` is matched as
+    /// [`Store::record`] stored it, redacted.
     pub fn session(&self, session_id: &str) -> Result<Vec<Event>, StoreError> {
         let mut stmt = self.conn.prepare(&format!(
             "{} WHERE session_id = ?1 ORDER BY id",
             self.select()
         ))?;
+        let session_id = self.secrets.redact(session_id);
         let rows = stmt.query_map(params![session_id], row_to_event)?;
         rows.collect::<Result<_, _>>().map_err(Into::into)
     }

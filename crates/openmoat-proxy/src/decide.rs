@@ -173,9 +173,11 @@ fn forbidden_v6(ip: Ipv6Addr) -> Option<Forbidden> {
 
 /// The part of `policy` that can open a [`Forbidden::Private`] address: its
 /// deny rules, and the allow rules' `net` and `fetch` patterns that name an
-/// address: a pattern starting with a digit or containing `:`, and not with a
-/// glob metacharacter. Everything else is denied, so a wildcard such as `*`
-/// or `*.example` never reaches the local network by DNS.
+/// address: a pattern starting with a digit or containing `:`, not starting
+/// with a glob metacharacter, and made only of what an address's text and a
+/// glob use. Everything else is denied, so a wildcard such as `*` or
+/// `*.example`, or a name such as `db.internal:5432`, never reaches the
+/// local network by DNS.
 #[must_use]
 pub fn address_policy(policy: &Policy) -> Policy {
     let allow = policy
@@ -210,6 +212,9 @@ pub fn address_policy(policy: &Policy) -> Policy {
 fn names_address(pattern: &str) -> bool {
     !pattern.starts_with(['*', '?', '[', '{'])
         && (pattern.starts_with(|c: char| c.is_ascii_digit()) || pattern.contains(':'))
+        && pattern
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() || ".:*?[]{},!-".contains(c))
 }
 
 /// Whether `addresses` (compiled from [`address_policy`]) allows `ip`, matched

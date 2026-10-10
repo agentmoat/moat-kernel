@@ -17,7 +17,7 @@ version: 1
 defaults: { "*": deny, fetch: ask }
 allow:
   - id: test-hosts
-    net: ["allowed.test", "rebind.test", "mixed.test", "loop.test", "169.254.169.254", "owner.test"]
+    net: ["allowed.test", "rebind.test", "mixed.test", "loop.test", "169.254.169.254", "owner.test", "127.0.0.1"]
   - id: lan-names
     net: ["lan.test", "mixed-lan.test", "*.wild.test"]
 "#;

@@ -10,6 +10,7 @@ view at the end of the file.
 
 ### Security
 - `moat guard` now denies calls to tools outside the policy and blocks every Claude Code settings change while a pinned file has drifted; `moat init` keeps the first backup of a host file instead of replacing it with an already edited copy ([#447](https://github.com/crocodile-labs/openmoat/pull/447)).
+- `moat proxy` now records a CONNECT whose `200` answer cannot be written to the client, puts the brokered value in place of a secret header that holds no placeholder (a value the client chose), no longer treats names such as `db.internal:5432` as naming an address, refuses zero or overflowing limits at start, and strips control bytes from refusals; the audit log now also redacts the host, session and call ids and the tool name before they are stored (#443).
 
 ## [0.2.0] - 2026-10-10
 
