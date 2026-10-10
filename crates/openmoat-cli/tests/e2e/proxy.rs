@@ -266,6 +266,21 @@ fn install_refuses_on_windows_with_a_clear_hint() {
     );
 }
 
+/// Windows has no user service, so `moat proxy status` refuses with the way
+/// to keep the proxy up instead of reporting a state that cannot exist.
+#[cfg(target_os = "windows")]
+#[test]
+fn status_refuses_on_windows_with_a_clear_hint() {
+    let sb = Sandbox::installed(&[]);
+    let out = sb.command().args(["proxy", "status"]).output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(64), "{stderr}");
+    assert!(
+        stderr.contains("run `moat proxy` in a terminal"),
+        "{stderr}"
+    );
+}
+
 /// `moat sandbox sync` restarts the service when it is installed, so a changed
 /// policy reaches the proxy (which reads it once at start-up). The restart is
 /// a best-effort note, not a hard dependency: a stopped service also counts.
