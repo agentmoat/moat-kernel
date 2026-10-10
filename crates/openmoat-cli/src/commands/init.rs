@@ -27,6 +27,59 @@ pub fn run(args: &InitArgs) -> Result<Code> {
     // but OpenMoat's own state directory.
     let hosts = choose_hosts(args, &mut out)?;
 
+    state(&home, dry_run, &mut out)?;
+    if !dry_run {
+        home.ensure_approval_files()?;
+        // Recorded before the files are written: every command from here on,
+        // this one included, finds each agent where this shell says it is.
+        record(&home, &hosts)?;
+    }
+    for host in hosts.iter().copied() {
+        let config = HostConfig::for_init(host)?;
+        let outcome = config.install(&binary, dry_run)?;
+        let verb = match outcome {
+            Outcome::Installed => "installed",
+            Outcome::Updated => "updated",
+            Outcome::Unchanged => "unchanged",
+        };
+        let events: Vec<&str> = config.hooks.iter().map(|spec| spec.event).collect();
+        writeln!(
+            out,
+            "{prefix} {:<16} {} ({verb}: {} → {} guard --host {})",
+            host.display_name(),
+            config.settings_path.display(),
+            events.join(", "),
+            binary.display(),
+            host.id()
+        )?;
+    }
+
+    sandboxes(&home, &hosts, dry_run, &mut out)?;
+
+    if dry_run {
+        writeln!(out, "would lock             {}", home.lock_path().display())?;
+        writeln!(out, "dry run: nothing was written")?;
+    } else {
+        let lock = integrity::repin(&home, &binary, integrity::HookPins::Adopt)?;
+        writeln!(
+            out,
+            "✔ lock             {} ({} files pinned)",
+            home.lock_path().display(),
+            lock.entries.len()
+        )?;
+        if !hosts.is_empty() {
+            backups(&hosts, &mut out)?;
+        }
+        writeln!(out, "done. run `moat status` any time to verify.")?;
+    }
+    out.finish()?;
+    Ok(Code::Ok)
+}
+
+/// OpenMoat's own state: the directory, the default policy (kept when there is
+/// one), the audit log and the search-path snapshot.
+fn state(home: &Home, dry_run: bool, out: &mut Deferred) -> Result<()> {
+    let prefix = if dry_run { "would" } else { "✔" };
     if !dry_run {
         home.ensure()?;
     }
@@ -74,72 +127,28 @@ pub fn run(args: &InitArgs) -> Result<Code> {
             snapshot.programs.len()
         )?;
     }
+    Ok(())
+}
 
-    if !dry_run {
-        home.ensure_approval_files()?;
-        // Recorded before the files are written: every command from here on,
-        // this one included, finds each agent where this shell says it is.
-        record(&home, &hosts)?;
-    }
-    for host in hosts.iter().copied() {
-        let config = HostConfig::for_init(host)?;
-        let outcome = config.install(&binary, dry_run)?;
-        let verb = match outcome {
-            Outcome::Installed => "installed",
-            Outcome::Updated => "updated",
-            Outcome::Unchanged => "unchanged",
-        };
-        let events: Vec<&str> = config.hooks.iter().map(|spec| spec.event).collect();
-        writeln!(
-            out,
-            "{prefix} {:<16} {} ({verb}: {} → {} guard --host {})",
-            host.display_name(),
-            config.settings_path.display(),
-            events.join(", "),
-            binary.display(),
-            host.id()
-        )?;
-    }
-
-    sandboxes(&home, &hosts, dry_run, &mut out)?;
-
-    if dry_run {
-        writeln!(out, "would lock             {}", home.lock_path().display())?;
-    } else {
-        let lock = integrity::repin(&home, &binary, integrity::HookPins::Adopt)?;
-        writeln!(
-            out,
-            "✔ lock             {} ({} files pinned)",
-            home.lock_path().display(),
-            lock.entries.len()
-        )?;
-    }
-
-    if dry_run {
-        writeln!(out, "dry run: nothing was written")?;
-    } else {
-        if !hosts.is_empty() {
-            let mut backups = Vec::new();
-            for host in &hosts {
-                for file in host_files(&HostConfig::for_host(*host)?) {
-                    backups.extend(crate::install::backups(&file));
-                }
-            }
-            let backups: Vec<String> = backups.iter().map(|p| p.display().to_string()).collect();
-            if backups.is_empty() {
-                writeln!(
-                    out,
-                    "· backups          none: the agents had no files to back up"
-                )?;
-            } else {
-                writeln!(out, "✔ backups          {}", backups.join(", "))?;
-            }
-            writeln!(out, "Undo anytime: moat uninstall")?;
+/// The backups `init` made of `hosts`' files, and how to undo.
+fn backups(hosts: &[Host], out: &mut Deferred) -> Result<()> {
+    let mut backups = Vec::new();
+    for host in hosts {
+        for file in host_files(&HostConfig::for_host(*host)?) {
+            backups.extend(crate::install::backups(&file));
         }
-        writeln!(out, "done. run `moat status` any time to verify.")?;
     }
-    out.finish()?;
-    Ok(Code::Ok)
+    let backups: Vec<String> = backups.iter().map(|p| p.display().to_string()).collect();
+    if backups.is_empty() {
+        writeln!(
+            out,
+            "· backups          none: the agents had no files to back up"
+        )?;
+    } else {
+        writeln!(out, "✔ backups          {}", backups.join(", "))?;
+    }
+    writeln!(out, "Undo anytime: moat uninstall")?;
+    Ok(())
 }
 
 /// The hosts to set up: `--hosts` as given; else every host found, each confirmed

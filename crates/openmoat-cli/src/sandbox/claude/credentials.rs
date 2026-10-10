@@ -38,6 +38,24 @@ pub(super) fn credentials(
     // in a mixed block drop the `plain_http: true` entries from Claude Code's
     // mask list and route them through `moat proxy` instead, which honours
     // `plain_http` per secret (`openmoat-proxy/src/broker.rs`).
+    let mut entries = entries(secrets, &allowed, report);
+    if entries.is_empty() {
+        return None;
+    }
+    let can_lift_tls = entries.iter().all(|e| e.plain_http);
+    if !can_lift_tls {
+        drop_plain_http(&mut entries, report);
+    }
+    if entries.is_empty() {
+        return None;
+    }
+    network["tlsTerminate"] = json!({});
+    Some(block(entries, can_lift_tls, report))
+}
+
+/// One [`Entry`] per secret whose host is in `allowed` and whose source Claude
+/// Code can read; a loss for each of the others.
+fn entries(secrets: &[BrokeredSecret], allowed: &[String], report: &mut Report) -> Vec<Entry> {
     let mut entries: Vec<Entry> = Vec::new();
     for secret in secrets {
         if !allowed.iter().any(|h| h == &secret.host) {
@@ -87,31 +105,33 @@ pub(super) fn credentials(
             value,
         });
     }
-    if entries.is_empty() {
-        return None;
-    }
-    let can_lift_tls = entries.iter().all(|e| e.plain_http);
-    if !can_lift_tls {
-        entries.retain(|e| {
-            if e.plain_http {
-                report.loss(
-                    Kind::Net,
-                    &format!("secrets.{}", e.id),
-                    "mixing `plain_http: true` with `plain_http: false` secrets would widen the \
-                     others through Claude Code's block-scoped `allowPlaintextInject`; this secret \
-                     is routed through `moat proxy` instead"
-                        .into(),
-                );
-                false
-            } else {
-                true
-            }
-        });
-    }
-    if entries.is_empty() {
-        return None;
-    }
-    network["tlsTerminate"] = json!({});
+    entries
+}
+
+/// A mixed block: drop the `plain_http: true` entries, with a loss each, so
+/// the HTTPS-only ones are not widened (see [`credentials`]).
+fn drop_plain_http(entries: &mut Vec<Entry>, report: &mut Report) {
+    entries.retain(|e| {
+        if e.plain_http {
+            report.loss(
+                Kind::Net,
+                &format!("secrets.{}", e.id),
+                "mixing `plain_http: true` with `plain_http: false` secrets would widen the \
+                 others through Claude Code's block-scoped `allowPlaintextInject`; this secret \
+                 is routed through `moat proxy` instead"
+                    .into(),
+            );
+            false
+        } else {
+            true
+        }
+    });
+}
+
+/// The `credentials` block for `entries`, lifting TLS only when
+/// `can_lift_tls` (every entry is `plain_http: true`), with the allowances
+/// it grants.
+fn block(entries: Vec<Entry>, can_lift_tls: bool, report: &mut Report) -> Value {
     let mut env_vars = Vec::new();
     let mut files = Vec::new();
     let mut masked = Vec::new();
@@ -147,7 +167,7 @@ pub(super) fn credentials(
          (`sandbox.credentials` with `tlsTerminate`); on macOS a `file` source is denied \
          instead of masked, so the tool that reads it does not authenticate",
     );
-    Some(Value::Object(credentials))
+    Value::Object(credentials)
 }
 
 /// One mask entry prepared from a brokered secret, pending the mixed-block
