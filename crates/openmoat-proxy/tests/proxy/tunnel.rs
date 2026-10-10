@@ -49,7 +49,8 @@ fn a_tunnel_that_is_not_tls_is_closed_unforwarded() {
 
 #[test]
 fn a_connection_that_cannot_be_recorded_is_refused() {
-    let h = start(Some(&FailingRecorder), Limits::default());
+    let failing: &'static FailingRecorder = Box::leak(Box::default());
+    let h = start(Some(failing), Limits::default());
     let reply = h.exchange(&format!(
         "GET http://allowed.test:{}/ HTTP/1.1\r\n\r\n",
         h.port()
@@ -64,4 +65,9 @@ fn a_connection_that_cannot_be_recorded_is_refused() {
     while let Ok(bytes) = h.received.recv_timeout(Duration::from_millis(300)) {
         assert!(bytes.is_empty());
     }
+    // each failure is reported to the recorder, away from the failed log
+    assert_eq!(
+        *failing.0.lock().unwrap(),
+        ["audit log unavailable: disk full"; 2]
+    );
 }

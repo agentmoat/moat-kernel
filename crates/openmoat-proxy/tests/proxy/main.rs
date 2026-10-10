@@ -62,11 +62,17 @@ impl Recorder for MemoryRecorder {
     }
 }
 
-struct FailingRecorder;
+/// Fails every record, keeping the failures it is told about.
+#[derive(Default)]
+struct FailingRecorder(Mutex<Vec<String>>);
 
 impl Recorder for FailingRecorder {
     fn record(&self, _: &Connection<'_>) -> Result<(), RecordError> {
         Err(RecordError("disk full".to_owned()))
+    }
+
+    fn unrecorded(&self, error: &RecordError) {
+        self.0.lock().unwrap().push(error.to_string());
     }
 }
 
