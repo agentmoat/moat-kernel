@@ -25,8 +25,9 @@ const RESERVED_HEADERS: &[&str] = &[
     "upgrade",
 ];
 
-/// One brokered secret.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// One brokered secret. Its `Debug` output names only the id: where the value
+/// lives and where it goes say which secrets exist.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Secret {
     /// Stable identifier: lowercase letters, digits and `-`. It names the
@@ -63,6 +64,14 @@ pub enum Source {
         /// Account name of the item.
         account: String,
     },
+}
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Secret")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Secret {
@@ -216,6 +225,25 @@ mod tests {
         );
         assert_eq!(p.secrets[0].placeholder(), "moat-secret:gh:placeholder");
         assert!(Policy::parse("version: 1\n").unwrap().secrets.is_empty());
+    }
+
+    #[test]
+    fn debug_output_names_only_the_id() {
+        let policy = parse(&format!("{GH}    source: {{ file: ~/.config/moat/gh }}\n")).unwrap();
+        let secret = &policy.secrets[0];
+        let brokered = crate::ir::BrokeredSecret {
+            id: secret.id.clone(),
+            host: secret.host.clone(),
+            header: secret.header.clone(),
+            source: secret.source.clone(),
+            plain_http: false,
+        };
+        for shown in [format!("{policy:?}"), format!("{brokered:?}")] {
+            assert!(shown.contains("\"gh\""), "{shown}");
+            for hidden in ["~/.config/moat/gh", "api.github.com", "Authorization"] {
+                assert!(!shown.contains(hidden), "{hidden} in {shown}");
+            }
+        }
     }
 
     #[test]

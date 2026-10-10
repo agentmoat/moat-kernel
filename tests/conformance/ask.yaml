@@ -39,6 +39,11 @@
   threat: T7
   action: { shell: "echo $(whoami" }
   expect: { verdict: ask, rules: [unparseable] }
+- id: ask-glob-component-that-does-not-compile
+  threat: T1
+  action: { shell: "cat notes[*" }
+  files: ["/p/notes[1]"]
+  expect: { verdict: ask, rules: [unparseable] }
 - id: ask-unterminated-heredoc
   threat: T7
   action: { shell: "cat <<EOF\nno terminator" }

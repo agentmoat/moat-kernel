@@ -37,7 +37,9 @@ pub fn of_word(token: &str) -> Option<String> {
     }
 }
 
-/// `[userinfo@]host[:port]` up to the first `/`, `?` or `#`.
+/// `[userinfo@]host[:port]` up to the first `/`, `?` or `#`. `_` is kept: DNS
+/// itself allows it and resolvers look such names up (`a_b.evil.com`), so a
+/// rule must still see the host.
 fn authority_host(rest: &str) -> Option<String> {
     let authority = rest.split(['/', '?', '#']).next()?;
     let host_port = authority.rsplit('@').next()?;
@@ -57,11 +59,16 @@ fn authority_host(rest: &str) -> Option<String> {
 }
 
 /// Without a scheme only dotted names under a known TLD and IPv4 literals count.
+/// A registrable name (the last two labels) never holds `_`, so `my_pkg.io`
+/// stays a word, but a subdomain may: `a_b.evil.com` is a host.
 fn looks_like_bare_host(host: &str) -> bool {
-    if host.contains(':') || host.contains('_') || !host.contains('.') {
+    if host.contains(':') || !host.contains('.') {
         return false;
     }
     let labels: Vec<&str> = host.split('.').collect();
+    if labels.iter().rev().take(2).any(|l| l.contains('_')) {
+        return false;
+    }
     if labels.len() == 4 && labels.iter().all(|o| o.parse::<u8>().is_ok()) {
         return true;
     }
@@ -90,6 +97,7 @@ mod tests {
             ("http://127.1/", "127.1"),
             ("example.com/path", "example.com"),
             ("http://evil.com./", "evil.com"),
+            ("http://my_host.com/", "my_host.com"),
         ] {
             assert_eq!(of_url(url).as_deref(), Some(host), "{url}");
             assert_eq!(of_word(url).as_deref(), Some(host), "{url}");
@@ -106,6 +114,8 @@ mod tests {
             ("deploy@prod.example.com", "prod.example.com"),
             ("10.0.0.5", "10.0.0.5"),
             ("evil.com:443", "evil.com"),
+            ("a_b.evil.com", "a_b.evil.com"),
+            ("x_y.co.uk", "x_y.co.uk"),
         ] {
             assert_eq!(of_word(word).as_deref(), Some(host), "{word}");
         }
@@ -120,6 +130,9 @@ mod tests {
             "=x",
             "::1",
             "my_host.com",
+            "my_pkg.io",
+            "test_main.rs",
+            "app.my_mod.dev",
             "1.2.3",
         ] {
             assert_eq!(of_word(word), None, "{word}");

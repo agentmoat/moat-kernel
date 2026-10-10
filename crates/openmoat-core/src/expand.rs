@@ -16,7 +16,10 @@
 //!   classes do not match a leading `.` unless the component starts with one
 //!   (no `dotglob`), and `[^…]` negates like `[!…]`;
 //! - `**` matches any number of directories, as with `globstar` or in `zsh`,
-//!   which only adds paths to check.
+//!   which only adds paths to check;
+//! - a component the matcher cannot compile (an unclosed `[`, which the shell
+//!   takes literally while `*` and `?` beside it still match) is not
+//!   expanded, and the call asks.
 
 use globset::{GlobBuilder, GlobMatcher};
 
@@ -36,7 +39,7 @@ pub(crate) struct Expansion<'r> {
     matches: usize,
     listings: usize,
     exhausted: bool,
-    /// The first pattern that was not expanded in full.
+    /// Why the first pattern that was not expanded in full was not.
     overflow: Option<String>,
 }
 
@@ -58,20 +61,19 @@ impl<'r> Expansion<'r> {
         let mut out = Vec::new();
         self.walk(root, &components, 0, &mut out);
         if self.exhausted && self.overflow.is_none() {
-            self.overflow = Some(pattern.to_owned());
+            self.overflow = Some(format!(
+                "glob `{pattern}` names more than can be checked \
+                 ({MAX_MATCHES} paths, {MAX_LISTINGS} directories, {MAX_GLOBSTAR_DEPTH} levels of `**`)"
+            ));
         }
         out
     }
 
-    /// Why the expansion is incomplete, when a bound stopped it: what was not
-    /// listed may be a secret, so the call asks.
+    /// Why the expansion is incomplete, when a bound or a component that does
+    /// not compile stopped it: what was not listed may be a secret, so the
+    /// call asks.
     pub(crate) fn overflow(self) -> Option<String> {
-        self.overflow.map(|pattern| {
-            format!(
-                "glob `{pattern}` names more than can be checked \
-                 ({MAX_MATCHES} paths, {MAX_LISTINGS} directories, {MAX_GLOBSTAR_DEPTH} levels of `**`)"
-            )
-        })
+        self.overflow
     }
 
     fn walk(&mut self, dir: String, components: &[&str], depth: usize, out: &mut Vec<String>) {
@@ -101,8 +103,15 @@ impl<'r> Expansion<'r> {
             }
             return;
         }
-        let Some(glob) = component_glob(first) else {
+        if !first.contains(['*', '?', '[']) {
             return self.walk(join(&dir, first), rest, depth, out);
+        }
+        let Some(glob) = component_glob(first) else {
+            self.exhausted = true;
+            self.overflow.get_or_insert_with(|| {
+                format!("glob component `{first}` cannot be matched the way the shell does")
+            });
+            return;
         };
         for name in self.list(&dir) {
             let visible = first.starts_with('.') || !name.starts_with('.');
@@ -124,12 +133,9 @@ impl<'r> Expansion<'r> {
     }
 }
 
-/// The matcher for one path component, or `None` when the shell takes it
-/// literally: no `*`, `?` or `[`, or a class that is never closed.
+/// The matcher for one path component holding `*`, `?` or `[`, or `None` when
+/// it does not compile.
 fn component_glob(component: &str) -> Option<GlobMatcher> {
-    if !component.contains(['*', '?', '[']) {
-        return None;
-    }
     GlobBuilder::new(&component.replace("[^", "[!"))
         .literal_separator(true)
         .backslash_escape(false)
@@ -188,7 +194,6 @@ mod tests {
             ("/p/?rc/m*", &["/p/src/main.rs"]),
             ("/h/.ss?/id_rsa", &["/h/.ssh/id_rsa"]),
             ("/h/.ss?/authorized_keys", &["/h/.ssh/authorized_keys"]),
-            ("/p/.e[", &["/p/.e["]),
             ("/p/*.txt", &[]),
         ] {
             assert_eq!(expand(&fs, pattern), expected, "{pattern}");
@@ -207,6 +212,20 @@ mod tests {
     fn a_literal_name_under_a_glob_root_is_kept() {
         let fs = files(&["/w/a[1]/x.rs", "/w/a1/y.rs"]);
         assert_eq!(expand(&fs, "/w/a[1]/*.rs"), ["/w/a1/y.rs", "/w/a[1]/x.rs"]);
+    }
+
+    #[test]
+    fn a_component_that_does_not_compile_is_not_expanded() {
+        let fs = files(&["/p/.e[x", "/p/.env"]);
+        for pattern in ["/p/.e[*", "/p/.e[", "/p/[z-a]*"] {
+            let mut e = Expansion::new(&fs);
+            assert!(e.paths(pattern).is_empty(), "{pattern}");
+            assert!(
+                e.overflow()
+                    .is_some_and(|r| r.contains("cannot be matched")),
+                "{pattern}"
+            );
+        }
     }
 
     #[test]

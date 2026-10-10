@@ -54,6 +54,10 @@ pub fn warnings(policy: &Policy) -> Vec<Warning> {
     }
     shadowed(&policy.ask, &policy.allow, "ask", "allow", &mut out);
     shadowed(&policy.allow, &policy.deny, "allow", "deny", &mut out);
+    for group in policy.deny.iter().chain(&policy.allow).chain(&policy.ask) {
+        excluded_positives(group, &mut out);
+        fetch_exclusions_net_matches(group, &mut out);
+    }
     secrets(policy, &mut out);
     out
 }
@@ -167,6 +171,56 @@ fn shadowed(
     }
 }
 
+/// A positive pattern that an exclusion of the same list fully covers matches
+/// nothing: exclusions apply whatever their place in the list.
+fn excluded_positives(group: &RuleGroup, out: &mut Vec<Warning>) {
+    for kind in Kind::ALL {
+        let list = group.patterns(kind);
+        for target in list.iter().filter(|p| !p.starts_with('!')) {
+            let by = list.iter().find(|p| {
+                let (negated, body) = pattern::split_negation(p);
+                negated && covers(kind, body, target)
+            });
+            if let Some(by) = by {
+                out.push(Warning {
+                    rule: group.id.clone(),
+                    message: format!(
+                        "{kind} pattern `{target}` is unreachable: exclusion `{by}` in the same \
+                         list removes everything it matches, wherever it is placed"
+                    ),
+                });
+            }
+        }
+    }
+}
+
+/// A `fetch` exclusion does not narrow the group's `net` list, which matches
+/// fetches too: a fetch it names still matches a `net` pattern of the group.
+fn fetch_exclusions_net_matches(group: &RuleGroup, out: &mut Vec<Warning>) {
+    let net = group.patterns(Kind::Net);
+    for excluded in group.patterns(Kind::Fetch) {
+        let (true, body) = pattern::split_negation(excluded) else {
+            continue;
+        };
+        let net_excludes = net.iter().any(|p| {
+            let (negated, by) = pattern::split_negation(p);
+            negated && covers(Kind::Net, by, body)
+        });
+        let by = net
+            .iter()
+            .find(|p| !p.starts_with('!') && covers(Kind::Net, p, body));
+        if let Some(by) = by.filter(|_| !net_excludes) {
+            out.push(Warning {
+                rule: group.id.clone(),
+                message: format!(
+                    "fetch exclusion `{excluded}` does not stop fetches of `{body}`: net pattern \
+                     `{by}` of the same rule matches them too; add `{excluded}` to `net` as well"
+                ),
+            });
+        }
+    }
+}
+
 /// Does pattern `by` match everything pattern `target` matches?
 fn covers(kind: Kind, by: &str, target: &str) -> bool {
     if kind == Kind::Shell {
@@ -239,6 +293,39 @@ mod tests {
              ask:\n  - id: git\n    fs.write: ['${project}/.git/**']\n",
         );
         assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn a_positive_inside_an_exclusion_of_its_list_is_reported() {
+        let w = warn(
+            "version: 1\nallow:\n  - id: env\n    fs.read: ['!**/.env', '**/.env', '${project}/**']\n",
+        );
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(
+            w[0].contains("fs.read pattern `**/.env` is unreachable"),
+            "{w:?}"
+        );
+        assert!(w[0].contains("exclusion `!**/.env`"), "{w:?}");
+    }
+
+    #[test]
+    fn a_fetch_exclusion_a_net_pattern_still_matches_is_reported() {
+        let w = warn(
+            "version: 1\nallow:\n  - id: web\n    net: ['*.example']\n    fetch: ['!api.example']\n",
+        );
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(
+            w[0].contains("rule `web`: fetch exclusion `!api.example`"),
+            "{w:?}"
+        );
+        assert!(w[0].contains("net pattern `*.example`"), "{w:?}");
+        for quiet in [
+            "net: ['*.example', '!api.example']\n    fetch: ['!api.example']",
+            "net: ['docs.example']\n    fetch: ['!api.example']",
+        ] {
+            let w = warn(&format!("version: 1\nallow:\n  - id: web\n    {quiet}\n"));
+            assert!(w.is_empty(), "{quiet}: {w:?}");
+        }
     }
 
     #[test]
