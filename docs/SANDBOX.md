@@ -46,8 +46,14 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   files it matches when a command starts, so a command could create a missing match;
   on Linux the profile therefore also denies each `**/<name>` deny's name directly in
   the workspace roots (`.env`, `.envrc`): bubblewrap mounts an empty read-only file
-  over a missing one while the command runs. The rest (`.env.local`, a `.envrc` in a
-  subdirectory, `bin/moat`) can still be created by sandboxed commands on Linux;
+  over a missing one while the command runs. The policy also denies writing `.claude`
+  and `.cursor` themselves, so on Linux the profile makes them read-only in the
+  workspace roots: sandboxed commands cannot plant `.claude/settings.local.json` or
+  `.cursor/hooks.json` there, nor write anything else in those directories, and while
+  a command runs a missing `.claude` or `.cursor` shows up as an empty file
+  (`codex.linux-agent-dirs`). Codex keeps `.codex` read-only itself. The rest
+  (`.env.local`, a `.envrc` or `.claude` in a subdirectory, `bin/moat`) can still be
+  created by sandboxed commands on Linux;
   `moat sandbox show` lists it (`codex.linux-write-globs`). Codex on Linux also runs its
   own executable inside the sandbox, so on Linux the profile lets commands read the
   executable `codex` on `PATH` starts (through npm's launcher, the platform binary),

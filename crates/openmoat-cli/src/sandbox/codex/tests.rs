@@ -167,6 +167,27 @@ fn linux_denies_each_glob_name_directly_in_the_workspace_roots() {
         "a missing bin must stay creatable"
     );
     assert_eq!(mode(&out, &ws, ".env.*"), None);
+    // `.claude` itself is a write deny, so a missing one may be mounted over:
+    // a command cannot create the settings file Claude Code would load (#421).
+    // One entry per directory: two below a missing one break bubblewrap.
+    assert_eq!(mode(&out, &ws, ".claude"), Some("read"));
+    assert_eq!(mode(&out, &ws, ".cursor"), Some("read"));
+    for file in [".claude/settings.local.json", ".cursor/hooks.json"] {
+        assert_eq!(mode(&out, &ws, file), None, "{file}");
+    }
+    assert_eq!(
+        mode(&out, &ws, ".codex"),
+        None,
+        "Codex keeps `.codex` read-only itself"
+    );
+    assert_eq!(mode(&out, &ws, "bin/moat"), None, "`bin` is no write deny");
+    assert!(
+        out.report
+            .losses
+            .iter()
+            .any(|l| l.rule == "codex.linux-agent-dirs"),
+        "the read-only directories are reported"
+    );
     let globs = out
         .report
         .allowances

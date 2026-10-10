@@ -29,20 +29,26 @@
 //! that is missing when it starts (#377). A missing literal deny path inside a
 //! writable root is mounted over with an empty read-only file at its first
 //! missing component (`append_unreadable_root_args`), so on Linux each `**/<name>`
-//! deny is also written as `<name>` in the workspace roots (see [`deny_names`]).
+//! deny is also written as `<name>` in the workspace roots (see [`deny_names`]),
+//! and a directory the policy denies writing itself (`.claude`, `.cursor`) is
+//! made read-only there, so a command cannot plant `.claude/settings.local.json`:
+//! mounting over a missing `.claude` withholds nothing the policy allows. Codex
+//! removes those mount points after the command.
 
 use anyhow::Result;
 use openmoat_core::ir::{Access, Effect, Enforcement};
 use openmoat_core::{AtomicAction, Kind};
 use toml_edit::{Item, Table, value};
 
-use super::patterns::{Spot, domain, has_glob, is_below, literal_tree, push_unique, split, spot};
+use super::patterns::{Spot, domain, is_below, literal_tree, push_unique, split, spot};
 use super::{PROJECT, Report};
 
 mod config;
+mod names;
 mod own_binary;
 
 pub use config::{apply, in_sync, owned_part, protect, remove, weaknesses};
+pub use names::deny_names;
 pub use own_binary::{own_binary, read_own_binary};
 
 /// The profile name OpenMoat owns and sets as `default_permissions`.
@@ -73,6 +79,9 @@ pub struct Generated {
     pub profile: Table,
     /// Losses and allowances of this backend.
     pub report: Report,
+    /// The names the policy denies writing anywhere (`**/.claude`, `**/.moat/**`),
+    /// for [`deny_names`].
+    pub denied_dirs: Vec<String>,
 }
 
 /// Generate the profile for `ir`, lowered by [`super::lower_for_hosts`] for a
@@ -81,6 +90,7 @@ pub struct Generated {
 pub fn generate(ir: &Enforcement, homes: &[String], proxy_port: Option<u16>) -> Result<Generated> {
     let mut report = Report::default();
     let fs = Filesystem::build(ir, homes, &mut report)?;
+    let denied_dirs = names::denied_dirs(ir);
     let mut profile = Table::new();
     profile.insert(
         "description",
@@ -104,43 +114,11 @@ pub fn generate(ir: &Enforcement, homes: &[String], proxy_port: Option<u16>) -> 
         );
     }
     profile.insert("network", Item::Table(network));
-    Ok(Generated { profile, report })
-}
-
-/// On Linux, also deny each `**/<name>` workspace deny's name directly in the
-/// workspace roots, so a command cannot create it there. A name below a
-/// directory is left out: a missing `bin` would be mounted over for
-/// `bin/moat`, which breaks builds. What stays creatable is reported.
-pub fn deny_names(generated: &mut Generated) {
-    let Some(workspace) = generated
-        .profile
-        .get_mut("filesystem")
-        .and_then(|fs| fs.get_mut(":workspace_roots"))
-        .and_then(Item::as_table_mut)
-    else {
-        return;
-    };
-    let globs: Vec<String> = workspace
-        .iter()
-        .filter(|(key, mode)| key.starts_with("**/") && mode.as_str() == Some("deny"))
-        .map(|(key, _)| key.to_owned())
-        .collect();
-    for name in globs.iter().filter_map(|g| g.strip_prefix("**/")) {
-        if !name.contains('/') && !has_glob(name) {
-            workspace.insert(name, value(Mode::Deny.as_str()));
-        }
-    }
-    if !globs.is_empty() {
-        generated.report.allowance(
-            Kind::FsWrite,
-            "codex.linux-write-globs",
-            globs,
-            "Codex on Linux hides only the files a deny glob matches when a command starts, \
-             so sandboxed commands may create a missing match, except a name directly in a \
-             workspace root (`.env`, `.envrc`), which the profile also denies by name; the \
-             hook still denies the agent's own writes",
-        );
-    }
+    Ok(Generated {
+        profile,
+        report,
+        denied_dirs,
+    })
 }
 
 #[derive(Default)]
