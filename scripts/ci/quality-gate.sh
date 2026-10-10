@@ -9,6 +9,9 @@ run() {
 }
 
 run cargo fmt --all --check
+# fuzz/ is its own workspace (nightly, outside `--all`); rustfmt checks its
+# targets on the pinned stable toolchain. CI's fuzz job runs clippy there.
+run rustfmt --check --edition 2024 fuzz/fuzz_targets/*.rs
 run cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run cargo doc --locked --workspace --no-deps --document-private-items
 run cargo test --locked --workspace --all-features
