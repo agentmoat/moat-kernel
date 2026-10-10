@@ -1,3 +1,12 @@
+//! What a tool call asks to do, in two forms.
+//!
+//! [`Action`] is the call as a host adapter reports it: one per payload,
+//! before any classification. [`AtomicAction`] is one primitive operation the
+//! classifier derives from it (an argv, a path read or written, a host, an
+//! environment variable, an MCP tool name). Policy rules are matched against
+//! atoms, never against an `Action` directly; [`Action::kind`] and
+//! [`AtomicAction::kind`] map each to the rule [`Kind`] it belongs to.
+
 use serde::{Deserialize, Serialize};
 
 use crate::kind::Kind;

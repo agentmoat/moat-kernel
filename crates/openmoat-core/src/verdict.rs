@@ -1,3 +1,10 @@
+//! The outcome of a policy decision.
+//!
+//! [`Verdict`] is `allow`, `ask` or `deny`, ordered by strictness.
+//! [`Decision`] is a verdict plus the rule ids and reasons that produced it.
+//! When the atoms of one action are combined, the strictest verdict wins and
+//! the weaker matches are kept as `context`, not dropped (docs/POLICY.md §4).
+
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
