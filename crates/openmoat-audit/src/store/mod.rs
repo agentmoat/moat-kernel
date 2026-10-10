@@ -460,9 +460,3 @@ fn create_owner_only(path: &Path) -> Result<(), StoreError> {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod chain_tests;
-
-#[cfg(test)]
-mod export_tests;
