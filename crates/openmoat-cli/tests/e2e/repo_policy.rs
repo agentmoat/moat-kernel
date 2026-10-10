@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use crate::common::{Sandbox, stdout, text};
+use crate::common::{DENY, OK, Sandbox, stdout, text};
 
 /// An installed sandbox whose project carries `yaml` as its repository policy.
 fn with_repo_policy(yaml: &str) -> (Sandbox, PathBuf) {
@@ -88,7 +88,7 @@ fn policy_check_decides_with_the_repo_policy_unless_given_a_file() {
         with_repo_policy("version: 1\ndeny:\n  - id: no-log\n    shell: ['git log']\n");
     let cwd = project.to_string_lossy().into_owned();
     let out = sb.moat(&["policy", "check", "git log", "--cwd", &cwd]);
-    assert_eq!(out.status.code(), Some(2), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", text(&out));
     assert!(stdout(&out).contains("repo:no-log"), "{}", text(&out));
 
     let user = sb.home.join(".moat/policy.yaml");
@@ -96,5 +96,5 @@ fn policy_check_decides_with_the_repo_policy_unless_given_a_file() {
     let out = sb.moat(&[
         "policy", "check", "git log", "--cwd", &cwd, "--policy", &user,
     ]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
 }

@@ -5,12 +5,12 @@ use std::fs;
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, json, output, stdout, text};
+use crate::common::{OK, Sandbox, json, output, stdout, text};
 
 /// The `agents` entry of `moat status --format json` for `host`.
 fn agent(sb: &Sandbox, host: &str) -> Value {
     let out = sb.moat(&["status", "--format", "json"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     json(&out)["agents"]
         .as_array()
         .and_then(|agents| agents.iter().find(|a| a["host"] == host).cloned())

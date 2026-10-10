@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, fixture, stdout, text, verdict};
+use crate::common::{DENY, OK, Sandbox, USAGE, fixture, stdout, text, verdict};
 
 fn claude_settings(sb: &Sandbox) -> PathBuf {
     sb.home.join(".claude/settings.json")
@@ -26,7 +26,7 @@ fn installed() -> Sandbox {
     .unwrap();
     fs::write(codex_config(&sb), "# my settings\nmodel = \"o3\"\n").unwrap();
     let out = sb.moat(&["init", "--yes"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     sb
 }
 
@@ -83,7 +83,7 @@ fn init_writes_both_sandboxes_keeps_user_settings_and_pins_them() {
     );
 
     let doctor = sb.moat(&["doctor"]);
-    assert_eq!(doctor.status.code(), Some(0), "{}", text(&doctor));
+    assert_eq!(doctor.status.code(), Some(OK), "{}", text(&doctor));
     assert!(
         stdout(&doctor).contains("Codex            sandbox matches the policy"),
         "{}",
@@ -109,7 +109,7 @@ fn init_writes_both_sandboxes_keeps_user_settings_and_pins_them() {
 fn sync_is_person_only_and_idempotent() {
     let sb = installed();
     let refused = sb.moat(&["sandbox", "sync"]);
-    assert_eq!(refused.status.code(), Some(64), "{}", text(&refused));
+    assert_eq!(refused.status.code(), Some(USAGE), "{}", text(&refused));
     assert!(text(&refused).contains("must be run by a person"));
 
     let before = (
@@ -117,7 +117,7 @@ fn sync_is_person_only_and_idempotent() {
         fs::read(codex_config(&sb)).unwrap(),
     );
     let out = sb.moat_as_person(&["sandbox", "sync"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(
         stdout(&out).contains("(sandbox unchanged)"),
         "{}",
@@ -128,7 +128,7 @@ fn sync_is_person_only_and_idempotent() {
         fs::read(codex_config(&sb)).unwrap(),
     );
     assert_eq!(before, after, "sync after init changes nothing");
-    assert_eq!(sb.moat(&["status"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["status"]).status.code(), Some(OK));
 }
 
 #[cfg(not(windows))] // #327: no Claude Code sandbox on native Windows
@@ -140,11 +140,11 @@ fn a_tampered_sandbox_block_denies_every_call_and_sync_refuses_over_it() {
     fs::write(claude_settings(&sb), claude.to_string()).unwrap();
 
     let out = sb.guard("claude-code", &fixture("claude-code/read.json"));
-    assert_eq!(out.status.code(), Some(2), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(DENY), "{}", text(&out));
     assert!(text(&out).contains("kernel-integrity"), "{}", text(&out));
 
     let doctor = sb.moat(&["doctor"]);
-    assert_eq!(doctor.status.code(), Some(64));
+    assert_eq!(doctor.status.code(), Some(USAGE));
     assert!(
         stdout(&doctor).contains("sandbox.excludedCommands is not empty"),
         "{}",
@@ -152,7 +152,7 @@ fn a_tampered_sandbox_block_denies_every_call_and_sync_refuses_over_it() {
     );
 
     let sync = sb.moat_as_person(&["sandbox", "sync"]);
-    assert_eq!(sync.status.code(), Some(64), "{}", text(&sync));
+    assert_eq!(sync.status.code(), Some(USAGE), "{}", text(&sync));
     assert!(text(&sync).contains("drift"), "{}", text(&sync));
 }
 
@@ -173,7 +173,7 @@ fn codex_may_edit_its_own_keys_but_not_the_moat_profile() {
     );
     fs::write(&path, weakened).unwrap();
     let out = sb.guard("codex", &codex_shell("ls"));
-    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(out.status.code(), Some(DENY));
     assert!(text(&out).contains("kernel-integrity"), "{}", text(&out));
 
     let accepted = sb.moat_as_person(&["doctor", "--accept"]);
@@ -188,13 +188,13 @@ fn codex_may_edit_its_own_keys_but_not_the_moat_profile() {
         stdout(&accepted)
     );
     let out = sb.moat_as_person(&["sandbox", "sync"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(
         fs::read_to_string(&path)
             .unwrap()
             .contains("default_permissions = \"moat\"")
     );
-    assert_eq!(sb.moat(&["doctor"]).status.code(), Some(0));
+    assert_eq!(sb.moat(&["doctor"]).status.code(), Some(OK));
 }
 
 /// #327: Claude Code's sandbox cannot run on native Windows (with
@@ -207,7 +207,7 @@ fn native_windows_leaves_out_the_claude_code_sandbox() {
                 the hook still applies the policy (use WSL2 for OS confinement)";
     let sb = Sandbox::bare(&[".claude", ".codex"]);
     let init = sb.moat(&["init", "--yes"]);
-    assert_eq!(init.status.code(), Some(0), "{}", text(&init));
+    assert_eq!(init.status.code(), Some(OK), "{}", text(&init));
     assert!(stdout(&init).contains(note), "{}", text(&init));
     let claude = settings(&sb);
     assert!(claude.get("sandbox").is_none(), "{claude}");
@@ -222,7 +222,7 @@ fn native_windows_leaves_out_the_claude_code_sandbox() {
     let status = sb.moat(&["status"]);
     let sync = sb.moat_as_person(&["sandbox", "sync"]);
     for out in [doctor, status, sync] {
-        assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+        assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
         let shown = stdout(&out);
         assert!(
             shown.contains("sandbox not available on native Windows"),
@@ -250,7 +250,7 @@ fn native_windows_init_removes_an_old_claude_code_sandbox() {
     )
     .unwrap();
     let init = sb.moat(&["init", "--yes"]);
-    assert_eq!(init.status.code(), Some(0), "{}", text(&init));
+    assert_eq!(init.status.code(), Some(OK), "{}", text(&init));
     assert!(
         stdout(&init).contains("removed the sandbox settings an older moat wrote"),
         "{}",
@@ -267,7 +267,7 @@ fn native_windows_init_removes_an_old_claude_code_sandbox() {
     let doctor = sb.moat(&["doctor"]);
     assert_eq!(
         doctor.status.code(),
-        Some(0),
+        Some(OK),
         "re-pinned: {}",
         text(&doctor)
     );

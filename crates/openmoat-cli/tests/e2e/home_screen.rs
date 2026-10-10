@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use crate::common::{Sandbox, bash_payload, hook_output, output, text};
+use crate::common::{OK, Sandbox, USAGE, bash_payload, hook_output, output, text};
 
 const INSTALL: &str = "npm install left-pad";
 
@@ -32,7 +32,7 @@ fn lock(sb: &Sandbox) -> String {
 fn nothing_needs_a_person() {
     let sb = Sandbox::installed(&[".claude"]);
     let out = output(&mut sb.command(), Some(""));
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let shown = text(&out);
     assert!(shown.contains("Protecting Claude Code"), "{shown}");
     assert!(shown.contains("today: 0 decisions"), "{shown}");
@@ -135,7 +135,7 @@ fn without_a_terminal_nothing_changes() {
     edit_policy(&sb);
     let before = lock(&sb);
     let out = output(&mut sb.command(), Some("y\n"));
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(
         text(&out).contains("moat doctor --accept"),
         "{}",

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use crate::common::{Sandbox, fixture, json, stderr, text};
+use crate::common::{DENY, Sandbox, USAGE, fixture, json, stderr, text};
 
 /// One host payload shape: how `guard` is run for it and where its verdict is.
 struct Shape {
@@ -99,7 +99,12 @@ impl Shape {
 
 fn assert_denied(shape: &Shape, out: &Output, what: &str) {
     let name = shape.name;
-    assert_eq!(out.status.code(), Some(2), "{name} {what}: {}", text(out));
+    assert_eq!(
+        out.status.code(),
+        Some(DENY),
+        "{name} {what}: {}",
+        text(out)
+    );
     assert_eq!(shape.verdict(out), "deny", "{name} {what}: {}", text(out));
     assert!(
         stderr(out).contains("kernel-error"),
@@ -252,7 +257,7 @@ fn a_hook_whose_binary_is_gone_is_not_protected() {
     }
     for args in [["status"], ["doctor"]] {
         let out = sb.moat(&args);
-        assert_eq!(out.status.code(), Some(64), "{args:?}: {}", text(&out));
+        assert_eq!(out.status.code(), Some(USAGE), "{args:?}: {}", text(&out));
         assert_eq!(
             text(&out).matches("which does not exist").count(),
             3,

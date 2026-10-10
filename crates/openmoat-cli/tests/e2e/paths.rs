@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::common::{Sandbox, bash_payload, hook_output, stderr, verdict_and_reason};
+use crate::common::{Sandbox, USAGE, bash_payload, hook_output, stderr, verdict_and_reason};
 
 fn assert_verdict(sb: &Sandbox, cwd: &Path, command: &str, expected: &str, rule: &str) {
     let out = sb.guard("claude-code", &bash_payload("s-paths", cwd, command));
@@ -52,7 +52,7 @@ fn an_explicit_home_project_is_a_usage_error() {
     let sb = Sandbox::installed(&[]);
     let home = sb.home.to_string_lossy().into_owned();
     let out = sb.moat(&["policy", "check", "ls", "--project", &home, "--cwd", &home]);
-    assert_eq!(out.status.code(), Some(64), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", stderr(&out));
     assert!(
         stderr(&out).contains("cannot be a project root"),
         "{}",

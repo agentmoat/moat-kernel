@@ -9,13 +9,13 @@ use std::net::TcpStream;
 use std::process::Stdio;
 use std::time::Duration;
 
-use crate::common::{Sandbox, json, stderr, text};
+use crate::common::{OK, Sandbox, USAGE, json, stderr, text};
 
 #[test]
 fn refuses_a_non_loopback_listen_address() {
     let sb = Sandbox::installed(&[]);
     let out = sb.moat(&["proxy", "--listen", "0.0.0.0:0"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(
         stderr(&out).contains("not a loopback address"),
         "{}",
@@ -27,7 +27,7 @@ fn refuses_a_non_loopback_listen_address() {
 fn refuses_to_start_before_init() {
     let sb = Sandbox::bare(&[]);
     let out = sb.moat(&["proxy", "--listen", "127.0.0.1:0"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(stderr(&out).contains("moat init"), "{}", stderr(&out));
 }
 
@@ -39,7 +39,7 @@ fn refuses_to_start_over_a_drifted_lock() {
     text.push_str("\n# edited\n");
     std::fs::write(&policy, text).unwrap();
     let out = sb.moat(&["proxy", "--listen", "127.0.0.1:0"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(stderr(&out).contains("drift"), "{}", stderr(&out));
 }
 
@@ -100,7 +100,7 @@ fn doctor_and_status_warn_while_the_hosts_proxy_is_not_listening() {
     for args in [["doctor"], ["status"]] {
         let out = sb.moat(&args);
         assert!(text(&out).contains(&warning), "{args:?}: {}", text(&out));
-        assert_eq!(out.status.code(), Some(0), "a warning: {}", text(&out));
+        assert_eq!(out.status.code(), Some(OK), "a warning: {}", text(&out));
     }
 
     // Without --listen it serves the policy's port, the one the hosts use.
@@ -127,7 +127,7 @@ pub(crate) fn brokered() -> Sandbox {
     );
     std::fs::write(&policy, text).unwrap();
     let out = sb.moat_as_person(&["doctor", "--accept"]);
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", stderr(&out));
     sb
 }
 
@@ -135,7 +135,7 @@ pub(crate) fn brokered() -> Sandbox {
 fn a_secret_that_cannot_be_read_stops_the_proxy() {
     let sb = brokered();
     let out = sb.moat(&["proxy", "--listen", "127.0.0.1:0"]);
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(
         stderr(&out).contains("reading secret `gh`"),
         "{}",
@@ -174,7 +174,7 @@ fn install_writes_the_service_file_and_uninstall_removes_it() {
         .unwrap();
     assert_eq!(
         out.status.code(),
-        Some(0),
+        Some(OK),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -213,7 +213,7 @@ fn install_writes_the_service_file_and_uninstall_removes_it() {
         .unwrap();
     assert_eq!(
         out.status.code(),
-        Some(0),
+        Some(OK),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -239,7 +239,7 @@ fn install_refuses_without_a_terminal() {
         .env("MOAT_SERVICE_SKIP_EXEC", "1")
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("terminal"),
         "{}",
@@ -258,7 +258,7 @@ fn install_refuses_on_windows_with_a_clear_hint() {
         .env("MOAT_ASSUME_TTY", "1")
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(64));
+    assert_eq!(out.status.code(), Some(USAGE));
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("not supported"),
         "{}",
@@ -306,7 +306,7 @@ fn doctor_reports_the_service_state_once_installed() {
         .env("MOAT_SERVICE_SKIP_EXEC", "1")
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.status.code(), Some(OK));
 
     let out = sb
         .command()
@@ -334,7 +334,7 @@ fn moat_uninstall_also_removes_the_proxy_service() {
         .env("MOAT_SERVICE_SKIP_EXEC", "1")
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.status.code(), Some(OK));
     let path = service_file(&sb);
     assert!(path.exists());
 
@@ -347,7 +347,7 @@ fn moat_uninstall_also_removes_the_proxy_service() {
         .unwrap();
     assert_eq!(
         out.status.code(),
-        Some(0),
+        Some(OK),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -367,7 +367,7 @@ fn sandbox_sync_notes_the_service_restart_when_installed() {
         .env("MOAT_SERVICE_SKIP_EXEC", "1")
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.status.code(), Some(OK));
 
     let out = sb
         .command()
@@ -378,7 +378,7 @@ fn sandbox_sync_notes_the_service_restart_when_installed() {
         .unwrap();
     assert_eq!(
         out.status.code(),
-        Some(0),
+        Some(OK),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );

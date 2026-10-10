@@ -4,7 +4,7 @@ use std::process::Output;
 
 use serde_json::Value;
 
-use crate::common::{Sandbox, bash_payload, json, stdout, text};
+use crate::common::{OK, Sandbox, USAGE, bash_payload, json, stdout, text};
 
 const TOKEN: &str = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -28,7 +28,7 @@ fn seeded() -> Sandbox {
 /// Run `moat audit export` with `args` and parse every output line.
 fn export(sb: &Sandbox, args: &[&str]) -> Vec<Value> {
     let out = sb.moat(&[&["audit", "export"], args].concat());
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     stdout(&out)
         .lines()
         .map(|line| serde_json::from_str(line).unwrap_or_else(|e| panic!("{e}: {line}")))
@@ -62,7 +62,7 @@ fn export_filters_by_session_host_and_window() {
         3
     );
     let bad = sb.moat(&["audit", "export", "--since", "soon"]);
-    assert_eq!(bad.status.code(), Some(64), "{}", text(&bad));
+    assert_eq!(bad.status.code(), Some(USAGE), "{}", text(&bad));
 }
 
 /// Write `contents` to a file in the sandbox and run `moat audit verify` on it.
@@ -87,7 +87,7 @@ fn verify_checks_an_export_offline_and_anchors_its_head() {
     let head = doctor_head(&sb);
 
     let ok = verify(&sb, &export, &["--anchor", &head]);
-    assert_eq!(ok.status.code(), Some(0), "{}", text(&ok));
+    assert_eq!(ok.status.code(), Some(OK), "{}", text(&ok));
     let t = stdout(&ok);
     assert!(
         t.contains("3 events (ids 1–3), hash chain intact from the start"),
@@ -104,7 +104,7 @@ fn verify_checks_an_export_offline_and_anchors_its_head() {
 
     let dropped = export.lines().take(2).collect::<Vec<_>>().join("\n");
     let truncated = verify(&sb, &dropped, &["--anchor", &head]);
-    assert_eq!(truncated.status.code(), Some(64), "{}", text(&truncated));
+    assert_eq!(truncated.status.code(), Some(USAGE), "{}", text(&truncated));
     assert!(stdout(&truncated).contains("is not in this export"));
 }
 
@@ -115,12 +115,12 @@ fn verify_names_the_edited_line() {
     let edited = export.replacen("git status --short", "git status --long", 1);
     assert_ne!(edited, export);
     let out = verify(&sb, &edited, &[]);
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(
         stdout(&out).contains("line 1 (event 1): its contents do not match its hash"),
         "{}",
         text(&out)
     );
     let missing = sb.moat(&["audit", "verify", "no-such-file.jsonl"]);
-    assert_eq!(missing.status.code(), Some(64), "{}", text(&missing));
+    assert_eq!(missing.status.code(), Some(USAGE), "{}", text(&missing));
 }

@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::common::{Sandbox, output, stdout, text};
+use crate::common::{OK, Sandbox, USAGE, output, stdout, text};
 
 const DEPLOY: &str = "version: 1\nallow:\n  - id: deploy\n    shell: ['make deploy']\n";
 
@@ -36,7 +36,7 @@ fn trust_applies_allow_rules_until_the_file_changes() {
     assert_eq!(deploy(&sb, &project).0, "ask");
 
     let out = trust(&sb, &[&dir]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert!(text(&out).contains("allow repo:deploy: shell: make deploy"));
     assert!(text(&out).contains("lock re-pinned"), "{}", text(&out));
     let (verdict, reason) = deploy(&sb, &project);
@@ -51,10 +51,10 @@ fn trust_applies_allow_rules_until_the_file_changes() {
     );
 
     let out = trust(&sb, &[&dir]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert_eq!(deploy(&sb, &project).0, "allow");
     let out = trust(&sb, &[&dir, "--revoke"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert_eq!(deploy(&sb, &project).0, "ask", "revoked");
 }
 
@@ -63,7 +63,7 @@ fn trust_applies_allow_rules_until_the_file_changes() {
 fn trust_is_bound_to_the_checkout() {
     let (sb, project) = repo();
     let out = trust(&sb, &[&project.to_string_lossy()]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     let fork = sb.home.join("fork");
     std::fs::create_dir_all(fork.join(".git")).unwrap();
     write_policy(&fork, DEPLOY);
@@ -77,7 +77,7 @@ fn trust_is_person_only_and_refused_over_drift() {
     let (sb, project) = repo();
     let dir = project.to_string_lossy().into_owned();
     let out = sb.moat(&["trust", &dir]);
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(
         text(&out).contains("must be run by a person"),
         "{}",
@@ -88,7 +88,7 @@ fn trust_is_person_only_and_refused_over_drift() {
     let edited = std::fs::read_to_string(&policy).unwrap() + "# edited\n";
     std::fs::write(&policy, edited).unwrap();
     let out = trust(&sb, &[&dir]);
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(
         text(&out).contains("refusing to change trust"),
         "{}",
@@ -123,7 +123,7 @@ fn an_unpinned_trust_record_is_ignored() {
 
     // The record itself is right: once a person pins it, it applies.
     let out = sb.moat_as_person(&["init", "--yes"]);
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(OK), "{}", text(&out));
     assert_eq!(deploy(&sb, &project).0, "allow");
 }
 
@@ -132,7 +132,7 @@ fn trust_refuses_a_repo_policy_that_does_not_parse() {
     let (sb, project) = repo();
     write_policy(&project, "version: 1\ndefaults: allow\n");
     let out = trust(&sb, &[&project.to_string_lossy()]);
-    assert_eq!(out.status.code(), Some(64), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(USAGE), "{}", text(&out));
     assert!(
         text(&out).contains("invalid repository policy"),
         "{}",
@@ -156,7 +156,7 @@ fn status_and_doctor_say_which_form_applies() {
         assert!(out.contains("repo policy"), "{out}");
         assert!(out.contains("not trusted: tightening only"), "{out}");
     }
-    assert_eq!(trust(&sb, &[&dir]).status.code(), Some(0));
+    assert_eq!(trust(&sb, &[&dir]).status.code(), Some(OK));
     for (_, out) in reports(&sb, &project) {
         assert!(out.contains("trusted (0 deny, 0 ask, 1 allow)"), "{out}");
     }
@@ -166,7 +166,7 @@ fn status_and_doctor_say_which_form_applies() {
     }
     write_policy(&project, "version: 1\ndeny: [\n");
     for (code, out) in reports(&sb, &project) {
-        assert_eq!(code, Some(64), "{out}");
+        assert_eq!(code, Some(USAGE), "{out}");
         assert!(
             out.contains("every call in this project is denied"),
             "{out}"
