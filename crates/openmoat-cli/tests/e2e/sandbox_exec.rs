@@ -1,7 +1,8 @@
 //! The generated Codex profile, executed by Codex's own sandbox when a `codex`
 //! binary is available (`MOAT_CODEX_BIN`, else `codex` on `PATH`). Without one
-//! the test says so and passes; CI's `standard tier` job sets `MOAT_CODEX_BIN`
-//! to a pinned binary and fails it if the binary is missing.
+//! the test says so and passes; CI's `standard tier` job (macOS; Linux waits
+//! on #421) sets `MOAT_CODEX_BIN` to a pinned binary and fails it if the binary
+//! is missing.
 
 use std::fs;
 use std::path::{Path, PathBuf};
