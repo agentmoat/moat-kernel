@@ -9,6 +9,9 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result};
+use openmoat_hosts::Host;
+
+use crate::install::dir_variable;
 
 /// How long the hook may take for one call before it counts as failed.
 pub const TIMEOUT: Duration = Duration::from_secs(10);
@@ -69,7 +72,11 @@ impl Scratch {
             home,
             project,
         };
-        for dir in [".claude", ".codex", ".cursor", "proj/.git"] {
+        let mut dirs = vec!["proj/.git"];
+        for host in Host::ALL {
+            dirs.push(dir_variable(host)?.1);
+        }
+        for dir in dirs {
             let path = scratch.home.join(dir);
             std::fs::create_dir_all(&path)
                 .with_context(|| format!("creating {}", path.display()))?;

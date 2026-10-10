@@ -170,7 +170,12 @@ pub fn bwrap_mounts(
 /// Codex's `config.toml`, next to the hook file (`$CODEX_HOME` or `~/.codex`).
 pub fn codex_config_path() -> anyhow::Result<std::path::PathBuf> {
     let hooks = crate::install::HostConfig::for_host(openmoat_hosts::Host::Codex)?.settings_path;
-    Ok(hooks.with_file_name("config.toml"))
+    Ok(codex_config_beside(&hooks))
+}
+
+/// Codex's `config.toml` next to its hook file `hooks`.
+pub fn codex_config_beside(hooks: &std::path::Path) -> std::path::PathBuf {
+    hooks.with_file_name("config.toml")
 }
 
 impl Plan {

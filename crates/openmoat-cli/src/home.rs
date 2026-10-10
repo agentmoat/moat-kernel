@@ -9,6 +9,13 @@ use openmoat_core::{DEFAULT_POLICY, Policy};
 
 use crate::context;
 
+/// The state directory's name under the home directory, and under a project
+/// for its repository policy (`repo.rs`).
+pub const DIR_NAME: &str = ".moat";
+
+/// The environment variable that moves the state directory.
+pub const ENV: &str = "MOAT_HOME";
+
 #[derive(Debug, Clone)]
 pub struct Home {
     root: PathBuf,
@@ -17,11 +24,19 @@ pub struct Home {
 impl Home {
     /// Locate the state directory without creating it.
     pub fn locate() -> Result<Self> {
-        let root = match std::env::var_os("MOAT_HOME").filter(|v| !v.is_empty()) {
-            Some(custom) => PathBuf::from(custom),
-            None => user_home()?.join(".moat"),
-        };
-        Ok(Self { root })
+        match std::env::var_os(ENV).filter(|v| !v.is_empty()) {
+            Some(custom) => Ok(Self {
+                root: PathBuf::from(custom),
+            }),
+            None => Ok(Self::under(&user_home()?)),
+        }
+    }
+
+    /// The default state directory of a person whose home directory is `home`.
+    pub fn under(home: &Path) -> Self {
+        Self {
+            root: home.join(DIR_NAME),
+        }
     }
 
     /// A state directory at `root`, for unit tests.
