@@ -18,7 +18,7 @@ use zeroize::Zeroizing;
 
 use crate::audit::{Connection, Recorder};
 use crate::broker::{Broker, Watch};
-use crate::decide::{self, RULE_AUDIT, RULE_REQUEST, RULE_SNI};
+use crate::decide::{self, RULE_REQUEST, RULE_SNI};
 use crate::request::{self, Request, Target};
 use crate::sni::{self, Hello};
 use crate::tunnel;
@@ -257,9 +257,9 @@ impl Proxy<'_> {
         match self.recorder.record(&connection) {
             Ok(()) => true,
             Err(error) => {
-                // The caller refuses the connection; the failure itself can
-                // only go to stderr, since the audit log is what failed.
-                eprintln!("moat proxy: {RULE_AUDIT}: {error}");
+                // The caller refuses the connection; the recorder reports the
+                // failure elsewhere, since the audit log is what failed.
+                self.recorder.unrecorded(&error);
                 false
             }
         }

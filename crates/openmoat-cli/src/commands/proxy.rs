@@ -18,7 +18,9 @@ use std::sync::Mutex;
 use anyhow::{Context as _, Result, bail};
 use openmoat_audit::{NewEvent, Store};
 use openmoat_core::{Action, CompiledPolicy, EvalContext, Policy, Secret};
-use openmoat_proxy::{Broker, Connection, Limits, Proxy, RecordError, Recorder, SystemResolver};
+use openmoat_proxy::{
+    Broker, Connection, Limits, Proxy, RULE_AUDIT, RecordError, Recorder, SystemResolver,
+};
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::cli::Format;
@@ -353,5 +355,29 @@ impl Recorder for AuditLog {
             .record(&event)
             .map(drop)
             .map_err(|e| RecordError(e.to_string()))
+    }
+
+    fn unrecorded(&self, error: &RecordError) {
+        // The proxy has refused the connection; stderr is the one place left
+        // to say why, since the audit log is what failed.
+        eprintln!("{}", unrecorded_line(error));
+    }
+}
+
+fn unrecorded_line(error: &RecordError) -> String {
+    format!("moat proxy: {RULE_AUDIT}: {error}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_record_is_reported_as_before() {
+        let error = RecordError("disk full".to_owned());
+        assert_eq!(
+            unrecorded_line(&error),
+            "moat proxy: proxy-audit: audit log unavailable: disk full"
+        );
     }
 }

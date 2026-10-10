@@ -23,6 +23,13 @@ pub struct Connection<'a> {
 pub trait Recorder: Send + Sync {
     /// Record one decision.
     fn record(&self, connection: &Connection<'_>) -> Result<(), RecordError>;
+
+    /// Told when [`record`](Self::record) failed. The connection is refused
+    /// either way; this is where the failure is reported, somewhere other than
+    /// the audit log that just failed. The default does nothing.
+    fn unrecorded(&self, error: &RecordError) {
+        let _ = error;
+    }
 }
 
 /// A decision could not be recorded.
