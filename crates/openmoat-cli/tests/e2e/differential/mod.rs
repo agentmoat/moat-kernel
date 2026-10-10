@@ -85,6 +85,12 @@ pub struct Scenario {
     /// the matrix (never silently skipped) but not asserted, pending the issue.
     #[serde(default)]
     pub gap: Option<Gap>,
+    /// Host layers (`claude-linux`) where this attack completes inside the
+    /// sandbox and what it wrote is discarded there, so the host never sees it.
+    /// That layer's verdict stays `deny`; the layer proves the host unchanged
+    /// instead of expecting the command to fail.
+    #[serde(default)]
+    pub contained: Vec<String>,
 }
 
 /// A documented known gap at one layer, tracked by an issue.
@@ -275,6 +281,18 @@ fn scenario_file_is_well_formed() {
             );
             assert!(gap.issue > 0, "{}: gap has no issue", s.id);
             assert!(!gap.why.trim().is_empty(), "{}: gap has no why", s.id);
+        }
+        for layer in &s.contained {
+            let verdict = match layer.as_str() {
+                "claude-linux" | "claude-macos" => s.claude,
+                "codex-linux" | "codex-macos" => s.codex,
+                _ => panic!("{}: contained layer {layer}", s.id),
+            };
+            assert!(
+                s.is_attack() && verdict == Verdict::Deny,
+                "{}: only a blocked attack can be contained at {layer}",
+                s.id
+            );
         }
         // A host sandbox expected to let an attack run is a known gap, never a
         // silent expectation; this holds on hosts that cannot run that layer too.

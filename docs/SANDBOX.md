@@ -8,7 +8,13 @@ OpenMoat decides each tool call in the agent's hook. The sandboxes below make th
 (ADR-018). Commands the agent runs, and every script they start (`npm test`,
 `build.rs`, `make`), are then confined by the operating system: no secrets, no reads
 outside the project and `sandbox.read_roots`, no writes outside the project, and
-network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
+network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)). On
+macOS a write outside the project fails. On Linux both sandboxes build the command's
+view of the home in memory, with only the project and the read roots mounted from
+disk, so a write elsewhere in the home that is not refused outright (`~/stolen.txt`,
+and under Claude Code also `~/.zshrc`) completes in memory and is gone when the
+command ends; the file on disk does not change (`contained` in
+[EVIDENCE.md](EVIDENCE.md)).
 
 - **Claude Code** (`settings.json`): the `sandbox` block (`enabled`,
   `failIfUnavailable: true`, `allowUnsandboxedCommands: false`, `excludedCommands: []`,
@@ -29,10 +35,15 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   `Edit(./.envrc)` and `Edit(./.moat)`. Only names directly in the working directory
   get such a rule: where a denied path is missing, bubblewrap mounts its first
   missing component read-only for the command (an empty `.envrc` or `.moat` shows up
-  there meanwhile), and `Edit(./bin/moat)` would do that to a missing `bin`. Claude
-  Code itself keeps the working directory's `.git/hooks`, `.git/config` and
-  `.claude` settings read-only. Everything else the policy denies by a `**/` glob
-  (a `.env` in a subdirectory, `.env.local`, `.git/info/attributes`, submodule hooks,
+  there meanwhile), and `Edit(./bin/moat)` would do that to a missing `bin`. The
+  exception is a file below a directory the policy denies writing itself: `moat init`
+  also adds `Edit(./.cursor/hooks.json)`, `Edit(./.cursor/sandbox.json)` and
+  `Edit(./.codex/hooks.json)`, so sandboxed commands cannot plant another agent's
+  hooks there. A missing `.cursor` or `.codex` is read-only for the command, which
+  the policy denies creating anyway. Claude Code itself keeps the working directory's
+  `.git/hooks`, `.git/config` and `.claude` settings read-only. Everything else the
+  policy denies by a `**/` glob (a `.env` in a subdirectory, `.env.local`,
+  `.git/info/attributes`, submodule hooks, those hook files in a subdirectory,
   `bin/moat`) stays writable for sandboxed commands on Linux; `moat sandbox show`
   lists it (`claude-code.linux-write-globs`).
 - **Codex** (`config.toml`): a `[permissions.moat]` profile, `default_permissions =
@@ -46,8 +57,14 @@ network only to allowlisted hosts, through a proxy ([POLICY.md §9](POLICY.md)).
   files it matches when a command starts, so a command could create a missing match;
   on Linux the profile therefore also denies each `**/<name>` deny's name directly in
   the workspace roots (`.env`, `.envrc`): bubblewrap mounts an empty read-only file
-  over a missing one while the command runs. The rest (`.env.local`, a `.envrc` in a
-  subdirectory, `bin/moat`) can still be created by sandboxed commands on Linux;
+  over a missing one while the command runs. The policy also denies writing `.claude`
+  and `.cursor` themselves, so on Linux the profile makes them read-only in the
+  workspace roots: sandboxed commands cannot plant `.claude/settings.local.json` or
+  `.cursor/hooks.json` there, nor write anything else in those directories, and while
+  a command runs a missing `.claude` or `.cursor` shows up as an empty file
+  (`codex.linux-agent-dirs`). Codex keeps `.codex` read-only itself. The rest
+  (`.env.local`, a `.envrc` or `.claude` in a subdirectory, `bin/moat`) can still be
+  created by sandboxed commands on Linux;
   `moat sandbox show` lists it (`codex.linux-write-globs`). Codex on Linux also runs its
   own executable inside the sandbox, so on Linux the profile lets commands read the
   executable `codex` on `PATH` starts (through npm's launcher, the platform binary),
