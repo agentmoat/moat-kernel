@@ -148,6 +148,51 @@ jobs:
       - run: cargo install cargo-machete --version 0.9.2 --locked
       - run: cargo machete
 
+  # The published library crates against their last state (CONTRIBUTING "API
+  # changes"). While the version is 0.x, a break needs a minor bump.
+  semver:
+    name: semver of the library crates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read # the `breaking` label
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the base commit is the baseline
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: "1.95"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo install cargo-semver-checks --version 0.51.0 --locked
+      - name: this pull request against its base
+        # Blocking, unless the PR is labelled `breaking`: an intended break
+        # says so in its Release note, and the next release bumps the minor.
+        # The label is read now, not from the event, so re-running the job
+        # after labelling is enough.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if cargo semver-checks check-release -p openmoat-core -p openmoat-hosts -p openmoat-audit -p openmoat-proxy --baseline-rev "$BASE_SHA"; then
+            exit 0
+          fi
+          if gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx breaking; then
+            echo "::warning::breaking API change, accepted by the 'breaking' label; the next release bumps the minor version"
+            exit 0
+          fi
+          echo "::error::breaking API change; see CONTRIBUTING 'API changes' (label the PR 'breaking' if it is intended)"
+          exit 1
+      - name: the workspace against the latest crates.io release
+        # Reports what the next release must bump. Blocking only on a release
+        # PR (`build: release …`), whose version bump must cover every break.
+        continue-on-error: ${{ !startsWith(github.event.pull_request.title, 'build: release') }}
+        run: cargo semver-checks check-release -p openmoat-core -p openmoat-hosts -p openmoat-audit -p openmoat-proxy
+
   deny:
     name: cargo-deny
     runs-on: ubuntu-latest

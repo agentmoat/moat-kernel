@@ -214,6 +214,26 @@ One-time repository setup: a `release` environment with the maintainer as requir
 reviewer and deployments limited to `v*` tags, and `HOMEBREW_TAP_TOKEN`, a fine-grained
 token with contents write on `crocodile-labs/homebrew-tap` only (the tap needs one commit).
 
+## API changes
+
+`openmoat-core`, `openmoat-hosts`, `openmoat-audit` and `openmoat-proxy` are published
+libraries. While the version is 0.x, a breaking change to their public API needs a minor
+bump (0.1.x → 0.2.0) and anything else a patch bump. The `semver of the library crates`
+CI job runs [cargo-semver-checks](https://github.com/obi1kenobi/cargo-semver-checks)
+0.51.0 twice:
+
+- **against the PR's base commit**, blocking: a PR that breaks the API fails. If the
+  break is intended, say so in the PR's **Release note** (what breaks and what to use
+  instead), ask a maintainer to add the `breaking` label, and re-run the job; it then
+  passes with a warning. Under `[Unreleased]` in `CHANGELOG.md` the entry goes in
+  `### Changed` or `### Removed` and starts with **Breaking** and the crate.
+- **against the latest crates.io release**, reporting only, except on a release PR
+  (`build: release …`), where it blocks until the version bump covers every break
+  since that release.
+
+Locally: `cargo install cargo-semver-checks --version 0.51.0 --locked`, then
+`cargo semver-checks check-release -p openmoat-core --baseline-rev origin/main`.
+
 ## Decisions
 
 Non-obvious decisions are recorded as ADRs in `docs/adr/`. Propose one in the PR
