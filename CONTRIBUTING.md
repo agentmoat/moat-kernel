@@ -40,7 +40,7 @@ pin moves. It is not a required check; a failure becomes an issue.
 
 The same `weekly` workflow measures line coverage of the workspace with
 [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) on the pinned toolchain. The
-job summary shows a table per crate, and the `coverage` artifact holds `lcov.info` and
+job summary shows a table per crate, and the `coverage` artefact holds `lcov.info` and
 the HTML report. No coverage service is used and no threshold is enforced. Locally:
 `cargo install cargo-llvm-cov --version 0.9.1 --locked`, then `cargo llvm-cov --workspace
 --open`. `docs/COVERAGE.md` is a different thing: which threats the conformance
